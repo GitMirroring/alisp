@@ -1,0 +1,17 @@
+Copyright (C) 2022 Andrea G. Monaco
+
+Copying and distribution of this file, with or without modification,
+are permitted in any medium without royalty provided the copyright
+notice and this notice are preserved.  This file is offered as-is,
+without any warranty.
+
+
+
+al is a Lisp implementation.
+
+It implements part of Common Lisp and aims for full compatibility.
+
+Currently it depends on a standard C library and on GNU Readline.  It
+uses autotools for building.
+
+You can reach me at andrea.monaco@autistici.org.
