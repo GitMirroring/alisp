@@ -18,45 +18,28 @@
 
 
 
-#define _GNU_SOURCE
+#include "config.h"
 
+
+#define _GNU_SOURCE
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <ctype.h>
 #include <string.h>
 
 #include <getopt.h>
 
+#include <gmp.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 
 
+#define CAR(list) ((list)->value_ptr.cons_pair->car)
 
-/* this is a slight abuse of terminology: commas, quotes and
- * backquotes are not Lisp objects.  But by treating them as objects, we
- * can implement them as a linked list before the proper object */
+#define CDR(list) ((list)->value_ptr.cons_pair->cdr)
 
-
-struct
-comma
-{
-  struct object *next;
-};
-
-
-struct
-quote
-{
-  struct object *next;
-};
-
-
-struct
-backquote
-{
-  struct object *next;
-};
 
 
 /* not a C string. not null-terminated and explicit size. null bytes are allowed inside */
@@ -80,20 +63,39 @@ symbol
 
 
 struct
+symbol_name
+{
+  char *value;
+  size_t alloc_size;
+  size_t used_size;
+  struct object *sym;
+};
+
+  
+struct
 binding
 {
-  struct symbol *symbol;
-  struct object *object;
+  struct object *sym;
+  struct object *obj;
+  struct binding *next;
 };
 
 
 struct
 environment
 {
-  struct binding *bindings;
-  size_t alloc_size;
-  size_t used_size;
+  struct binding *bind;
+  struct environment *next;
 };
+
+
+enum
+parse_lambda_list_outcome
+  {
+    EMPTY_LAMBDA_LIST,
+    NOT_NIL_NOR_CONS,
+    LAMBDA_LIST_OK
+  };
 
 
 enum
@@ -110,10 +112,10 @@ struct
 parameter
 {
   enum parameter_type type;
-  struct string *name;
+  struct symbol_name *name;
 
   struct object *init_form;
-  struct string *supplied_p_param;
+  struct symbol_name *supplied_p_param;
   
   struct parameter *next;
 };
@@ -124,34 +126,8 @@ function
 {
   struct parameter *lambda_list;
   int allow_other_keys;
-  struct object *body;
-  size_t body_alloc_size;
-  size_t body_used_size;
+  struct object_list *body;
 };
-
-
-enum
-object_type
-  {
-    TYPE_NIL,
-    TYPE_COMMA,
-    TYPE_QUOTE,
-    TYPE_BACKQUOTE,
-    TYPE_SYMBOL,
-    TYPE_NUMBER,
-    TYPE_CONS_PAIR,
-    TYPE_CHARACTER,
-    TYPE_STRING,
-    TYPE_ARRAY,
-    TYPE_HASHTABLE,
-    TYPE_ENVIRONMENT,
-    TYPE_PACKAGE,
-    TYPE_PATHNAME,
-    TYPE_STREAM,
-    TYPE_STRUCTURE,
-    TYPE_CONDITION,
-    TYPE_T
-  };
 
 
 struct
@@ -163,35 +139,65 @@ cons_pair
 };
 
 
+/* a slight abuse of terminology: commas, quotes, backquotes and ats
+ * are not Lisp objects.  But treating them as objects of type prefix,
+ * we can implement them as a linked list before the proper object */
+
+enum
+object_type
+  {
+    TYPE_NIL,
+    TYPE_QUOTE,
+    TYPE_BACKQUOTE,
+    TYPE_COMMA,
+    TYPE_AT,
+    TYPE_SYMBOL_NAME,
+    TYPE_SYMBOL,
+    TYPE_INTEGER,
+    TYPE_RATIO,
+    TYPE_FLOAT,
+    TYPE_CONS_PAIR,
+    TYPE_CHARACTER,
+    TYPE_STRING,
+    TYPE_ARRAY,
+    TYPE_HASHTABLE,
+    TYPE_ENVIRONMENT,
+    TYPE_PACKAGE,
+    TYPE_PATHNAME,
+    TYPE_STREAM,
+    TYPE_STRUCTURE,
+    TYPE_CONDITION,
+    TYPE_FUNCTION,
+    TYPE_T
+  };
+
+
 union
 object_ptr_union
 {
-  struct comma *comma;
-  struct quote *quote;
-  struct backquote *backquote;
+  struct object *next;
+  struct symbol_name *symbol_name;
   struct symbol *symbol;
+  mpz_t integer;
+  mpq_t ratio;
+  mpf_t floating;
   struct cons_pair *cons_pair;
   struct string *string;
   struct environment *environment;
+  struct package *package;
+  struct function *function;
 };
 
 
 struct
 object
 {
-  int quoted;
   int refcount;
+  const char *begin;
+  const char *end;
   enum object_type type;
   union object_ptr_union value_ptr;  /* only when type is TYPE_NIL, this is allowed to be NULL */
 };  
-
-
-struct
-object_list
-{
-  struct object *obj;
-  struct object_list *next;
-};
 
 
 enum
@@ -202,7 +208,6 @@ package_record_visibility
   };
 
 
-/* a single record in a package */
 struct
 package_record
 {
@@ -225,34 +230,27 @@ package
 
 
 enum
-number_type
+typespecs
   {
-    NUMBER_REAL,
-    NUMBER_COMPLEX
+    TYPESPEC_SYMBOL,
+    TYPESPEC_CLASS,
+    TYPESPEC_LIST,
+    TYPESPEC_OR,
+    TYPESPEC_AND,
+    TYPESPEC_NOT,
+    TYPESPEC_SATISFIES
   };
-
-
-union
-number_union
-{
-  double real;
-  double complex [2];
-};
 
 
 struct
-number
+typespec
 {
-  enum number_type number_type;
-  union number_union number;
+  enum typespecs type;
+  enum object_type int_value;
+  struct object *obj_value;
+  struct typespec *first;
+  struct typespec *second;
 };
-
-
-enum
-eval_outcome
-  {
-    EVAL_OK
-  };
 
 
 enum
@@ -265,6 +263,7 @@ element
     QUOTE,
     BACKQUOTE,
     COMMA,
+    AT,
     SEMICOLON,
     DOT,
     TOKEN,
@@ -280,36 +279,99 @@ read_outcome
     NO_OBJECT = 0,
     
     COMPLETE_OBJECT = 1,
-    
-    CLOSING_PARENTHESIS = 1 << 1,
 
-    INCOMPLETE_LIST = 1 << 2,
-    INCOMPLETE_STRING = 1 << 3,
-    INCOMPLETE_SYMBOL = 1 << 4,
+    OPENING_PARENTHESIS = 1 << 2,
+    CLOSING_PARENTHESIS = 1 << 3,
+    CLOSING_PARENTHESIS_AFTER_PREFIX = 1 << 4,
+
+    JUST_PREFIX = 1 << 5,
+    INCOMPLETE_LIST = 1 << 6,
+    INCOMPLETE_STRING = 1 << 7,
+    INCOMPLETE_SYMBOL_NAME = 1 << 8,
+    INCOMPLETE_SHARP_MACRO_CALL = 1 << 9,
+
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 10,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 11,
     
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 5,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 6
+    COMMA_WITHOUT_BACKQUOTE = 1 << 12,
+
+    SINGLE_DOT = 1 << 13,
+    
+    MULTIPLE_DOTS = 1 << 14,
+
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 15,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 16,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 17
   };
 
 
+enum
+eval_outcome
+  {
+    EVAL_OK,
+    UNBOUND_SYMBOL,
+    CANT_EVALUATE_LISTS_YET,
+    EVAL_NOT_IMPLEMENTED
+  };
 
-enum read_outcome read_object (struct object **object, const char *input, size_t size, const char **obj_begin, const char **obj_end,
-			       int *out_arg);
-enum read_outcome read_list (struct object **object, const char *input, size_t size, const char **list_end, int *out_arg);
-enum read_outcome read_string (struct object **object, const char *input, size_t size, const char **string_end);
-enum read_outcome read_symbol (struct object **object, const char *input, size_t size, const char **symbol_end);
-enum read_outcome read_sharp_macro (struct object **object, const char *input, size_t size, const char **macro_end);
 
-enum element find_element (const char *input, size_t size, const char **elem_begin);
-const char *find_string_delimiter (const char *input, size_t size);
+struct
+line_list
+{
+  int refcount;
+  char *line;
+  size_t size;
+  struct line_list *next;
+};
 
-const char *jump_to_end_of_space_block (const char *input, size_t size, size_t *new_size);
-const char *find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_size);
-const char *jump_to_end_of_multiline_comment (const char *input, size_t size, size_t *depth_or_new_size);
+
+struct
+object_list
+{
+  struct object *obj;
+  struct object_list *next;
+};
+
+
+
+int input_needs_continuation (const char *input, size_t size);
+
+char *read_line_interactively (const char prompt []);
+
+enum read_outcome read_object_continued (struct object **obj, const char *input, size_t size, const char **obj_begin,
+					 const char **obj_end, struct object_list **symbol_list, size_t *out_arg);
+struct object *complete_object_interactively (struct object *obj, struct object_list **symbol_list, size_t multiline_comm_depth,
+					      const char **input_left, size_t *input_left_size);
+struct object *read_object_interactively_continued (const char *input, size_t input_size, struct object_list **symbol_list,
+						    const char **input_left, size_t *input_left_size);
+struct object *read_object_interactively (struct object_list **symbol_list, const char **input_left, size_t *input_left_size);
+
+const char *skip_space_block (const char *input, size_t size, size_t *new_size);
 const char *jump_to_end_of_line (const char *input, size_t size, size_t *new_size);
+const char *find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_size);
+const char *jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth, size_t *depth_or_new_size);
 
-int is_number (const char *token, const char *end, int radix);
-struct object *alloc_number (const char *begin, const char *end, int radix);
+struct line_list *append_line_to_list (char *line, size_t size, struct line_list *list, int do_copy);
+struct object_list *append_object_to_list (struct object *obj, struct object_list *list);
+
+enum read_outcome read_object (struct object **obj, const char *input, size_t size, const char **obj_begin,
+			       const char **obj_end, struct object_list **symbol_list, size_t *out_arg);
+
+enum read_outcome read_list (struct object **obj, const char *input, size_t size, const char **list_end,
+			     struct object_list **symbol_list, size_t *out_arg);
+
+enum read_outcome read_string (struct object **obj, const char *input, size_t size, const char **string_end);
+
+enum read_outcome read_symbol_name (struct object **obj, const char *input, size_t size, const char **symbol_end);
+
+enum read_outcome read_prefix (struct object **obj, const char *input, size_t size, struct object **last, const char **prefix_end);
+
+enum read_outcome read_sharp_macro_call (struct object **obj, const char *input, size_t size, const char **macro_end);
+
+enum element find_next_element (const char *input, size_t size, const char **elem_begin);
+
+int is_number (const char *token, size_t size, int radix, enum object_type *numtype, const char **number_end, const char **token_end);
+struct object *alloc_number (const char *token, size_t size, int radix, enum object_type numtype);
 
 void print_range (const char *begin, const char *end);
 char *append_newline (char *string);
@@ -317,27 +379,59 @@ char *append_newline (char *string);
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
 
-struct object *alloc_empty_string (void);
+struct object *alloc_object (void);
+struct object *alloc_prefix (enum element type);
 struct object *alloc_empty_cons_pair (void);
-struct object *alloc_environment (size_t size);
 
-char *normalize_symbol_name (const char *input, size_t size, const char **symbol_name_end, size_t *name_size);
+const char *find_end_of_string (const char *input, size_t size, size_t *new_size, size_t *string_length);
+void normalize_string (char *output, const char *input, size_t size);
+
+struct object *alloc_string (size_t size);
+void resize_string (struct object *string, size_t size);
+
+struct object *alloc_symbol_name (size_t size);
+void resize_symbol_name (struct object *symname, size_t size);
+
+const char *find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, size_t *name_length, enum read_outcome *outcome);
+void normalize_symbol_name (char *output, const char *input, size_t size);
+
 struct object *create_symbol (char *name, size_t size);
-struct object *intern_symbol (char *name, size_t size, struct object_list **symbols);
-void add_binding (struct symbol *sym, struct object *obj, struct environment *env);
+struct object *intern_symbol_name (struct object *symname, struct object_list **symbol_list);
 
-struct parameter *parse_lambda_list (const char *input, size_t size);
+struct binding *create_binding (struct object *sym, struct object *obj);
+struct binding *add_binding (struct binding *bin, struct binding *env);
+struct binding *find_binding (struct symbol *sym, struct binding *env);
+
+struct object *skip_prefix (struct object *prefix, struct object **last_prefix);
+struct object *append_prefix (struct object *obj, enum element type);
+
+struct object *nth (unsigned int ind, struct object *list);
+unsigned int list_length (const struct object *list);
+
+void copy_symbol_name (char *out, const struct symbol_name *name);
+struct parameter *alloc_parameter (enum parameter_type type, struct symbol_name *sym);
+struct parameter *parse_required_parameters (struct object *obj, struct parameter **last, struct object **next,
+					     enum parse_lambda_list_outcome *out);
+struct parameter *parse_optional_parameters (struct object *obj, struct parameter **last, struct object **next,
+					     enum parse_lambda_list_outcome *out);
+struct parameter *parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out);
 struct object *call_function (const struct function *func, const struct cons_pair *arglist);
 
-struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome);
+struct object *evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
+int symname_equals (const struct symbol_name *sym, const char *s);
+int symname_is_among (const struct symbol_name *sym, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
 
 void print_symbol (const struct symbol *sym);
 void print_string (const struct string *str);
 void print_list (const struct cons_pair *list);
 void print_object (const struct object *obj);
+
+void print_read_error (enum read_outcome err, const char *input, size_t size, const char *begin, const char *end);
+void print_eval_error (enum eval_outcome err, struct object *arg);
 
 int decrement_refcount (struct object *obj);
 
@@ -360,28 +454,30 @@ const struct option long_options[] =
   };
 
 
+struct object nil_object = {1, NULL, NULL, TYPE_NIL};
+
+struct symbol _nil_symbol = {"NIL", 3};
+
+struct object nil_symbol = {1, NULL, NULL, TYPE_SYMBOL, .value_ptr.symbol = &_nil_symbol};
+
+
 
 int
 main (int argc, char *argv [])
 {
-  int end_repl = 0, input_exhausted = 0;
-  int need_another_line = 0;
-  char *line;
-  const char *begin, *end;
+  int end_repl = 0;
 
-  int list_depth = 0, multiline_comment_depth = 0;
-  int input_needs_continuation = 0;
-
-  int out_arg;
+  struct object *result, *cursor, *obj;
+  struct object_list *read_objs = NULL, *sym_list = NULL;;
+  struct binding *env = NULL;
   
-  struct package current_package;
+  enum eval_outcome eval_out;
 
-  struct object *form;
-
-  enum read_outcome out;
-  
+  const char *input_left = NULL;
+  size_t input_left_s = 0;
   
   int c, option_index = 0;
+
   
   while ((c = getopt_long (argc, argv, "vh",
 			   long_options, &option_index)) != -1)
@@ -397,32 +493,35 @@ main (int argc, char *argv [])
 	}
     }
 
-
   print_welcome_message ();
-  
+
   while (!end_repl)
     {
-      line = readline ("al> ");
-      line = append_newline (line);
+      obj = read_object_interactively (&sym_list, &input_left, &input_left_s);
       
-      form = NULL;
-      out = read_object (&form, line, strlen (line), &begin, &end, &out_arg);
-      
-      while (out ==  INCOMPLETE_LIST
-	     || out == INCOMPLETE_STRING
-	     || out == INCOMPLETE_SYMBOL
-	     || out == UNFINISHED_SINGLELINE_COMMENT
-	     || out == UNFINISHED_MULTILINE_COMMENT)
+      while (obj && input_left && input_left_s > 0)
 	{
-	  if (line && *line)
-	    {
-	      line [strlen (line)-1] = 0;
-	      add_history (line);
-	    }
+	  read_objs = append_object_to_list (obj, read_objs);
 
-	  line = readline ("> ");
-	  line = append_newline (line);
-	  out = read_object (&form, line, strlen (line), &begin, &end, &out_arg);
+	  obj = read_object_interactively_continued (input_left, input_left_s, &sym_list, &input_left, &input_left_s);
+	}
+
+      if (obj)
+	read_objs = append_object_to_list (obj, read_objs);
+
+      while (read_objs)
+	{
+	  result = evaluate_object (read_objs->obj, env, &eval_out, &cursor);
+      
+	  if (eval_out == EVAL_OK)
+	    {
+	      print_object (result);
+	      printf ("\n");
+	    }
+	  else
+	    print_eval_error (eval_out, cursor);
+	  
+	  read_objs = read_objs->next;
 	}
     }
   
@@ -430,8 +529,166 @@ main (int argc, char *argv [])
 }
 
 
+int
+input_needs_continuation (const char *input, size_t size)
+{
+  return 0;
+}
+
+
+char *
+read_line_interactively (const char prompt [])
+{
+  char *line = readline (prompt);
+      
+  if (line && *line)
+    add_history (line);
+  
+  line = append_newline (line);
+
+  return line;
+}
+
+
+enum read_outcome
+read_object_continued (struct object **obj, const char *input, size_t size, const char **obj_begin,
+		       const char **obj_end, struct object_list **symbol_list, size_t *out_arg)
+{
+  enum read_outcome out;
+  struct object *last_pref, *ob = skip_prefix (*obj, &last_pref);
+
+  if (*out_arg)
+    {
+      input = jump_to_end_of_multiline_comment (input, size, *out_arg, out_arg);
+
+      if (!input)
+	return UNFINISHED_MULTILINE_COMMENT;
+
+      input++;
+      size = --(*out_arg);
+    }
+
+  if (!ob)
+    {
+      out = read_object (&ob, input, size, obj_begin, obj_end, symbol_list, out_arg);
+    }
+  else if (ob->type == TYPE_STRING)
+    {
+      out = read_string (&ob, input, size, obj_end);
+    }
+  else if (ob->type == TYPE_SYMBOL_NAME)
+    {
+      out = read_symbol_name (&ob, input, size, obj_end);
+
+      if (out == COMPLETE_OBJECT)
+	intern_symbol_name (ob, symbol_list);
+    }
+  else if (ob->type == TYPE_CONS_PAIR)
+    {
+      out = read_list (&ob, input, size, obj_end, symbol_list, out_arg);
+    }
+
+  if (last_pref)
+    last_pref->value_ptr.next = ob;
+  else
+    *obj = ob;
+  
+  return out;
+}
+
+
+struct object *
+complete_object_interactively (struct object *obj, struct object_list **symbol_list, size_t multiline_comm_depth,
+			       const char **input_left, size_t *input_left_size)  
+{
+  char *line;
+  enum read_outcome read_out;
+  const char *begin, *end;
+  size_t len;
+
+  
+  line = read_line_interactively ("> ");
+  len = strlen (line);
+  
+  read_out = read_object_continued (&obj, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
+
+  while (read_out & (INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
+		     | INCOMPLETE_SHARP_MACRO_CALL | UNFINISHED_MULTILINE_COMMENT))
+    {
+      line = read_line_interactively ("> ");
+      len = strlen (line);
+      
+      read_out = read_object_continued (&obj, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
+    }
+
+  *input_left = end + 1;
+  *input_left_size = (line + len) - end - 1;
+  
+  return obj;
+}
+
+
+struct object *
+read_object_interactively_continued (const char *input, size_t input_size, struct object_list **symbol_list,
+				     const char **input_left, size_t *input_left_size)
+{
+  enum read_outcome read_out;
+  struct object *obj = NULL;
+  const char *begin, *end;
+  size_t mult_comm_depth = 0;
+
+  
+  read_out = read_object (&obj, input, input_size, &begin, &end, symbol_list, &mult_comm_depth);
+  
+  if (read_out == COMPLETE_OBJECT)
+    {
+      *input_left = end + 1;
+      *input_left_size = (input + input_size) - end - 1;
+      
+      return obj;
+    }
+  else if (read_out == NO_OBJECT)
+    {
+      *input_left = NULL;
+      *input_left_size = 0;
+      
+      return NULL;
+    }
+  else if (read_out == SINGLE_DOT)
+    {
+      printf ("read error: single dot is only allowed inside a list and must be followed by exactly one object\n");
+
+      return NULL;
+    }
+  else if (read_out ==  MULTIPLE_DOTS)
+    return NULL;
+  else if (read_out == CLOSING_PARENTHESIS)
+    {
+      print_read_error (read_out, input, input_size, begin, end);
+      
+      return NULL;
+    }
+  else if (read_out ==  NO_OBJ_BEFORE_DOT_IN_LIST || read_out == NO_OBJ_AFTER_DOT_IN_LIST
+	   || read_out == MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
+    {
+      return NULL;
+    }
+  else
+    return complete_object_interactively (obj, symbol_list, mult_comm_depth, input_left, input_left_size);
+}
+
+
+struct object *
+read_object_interactively (struct object_list **symbol_list, const char **input_left, size_t *input_left_size)
+{
+  char *line = read_line_interactively ("al> ");
+
+  return read_object_interactively_continued (line, strlen (line), symbol_list, input_left, input_left_size);
+}
+
+
 const char *
-jump_to_end_of_space_block (const char *input, size_t size, size_t *new_size)
+skip_space_block (const char *input, size_t size, size_t *new_size)
 {
   int i;
 
@@ -444,289 +701,26 @@ jump_to_end_of_space_block (const char *input, size_t size, size_t *new_size)
 	}
     }
   
-  *new_size = 1;
-  return input+size-1;
-}
-
-
-enum read_outcome 
-read_object (struct object **object, const char *input, size_t size, const char **obj_begin,
-	     const char **obj_end, int *out_arg)
-{
-  enum read_outcome out = NO_OBJECT;
-  int end_loop = 0;
-  //const char *list_end;
-  struct object *obj;
-
-  obj = NULL;
-  
-  while (!end_loop)
-    {
-      input = jump_to_end_of_space_block (input, size, &size);
-
-      if (!input)
-	return out;
-
-      if (*input == ')')
-	{
-	  *obj_end = input;
-	  return CLOSING_PARENTHESIS;
-	}
-      else if (*input == '(')
-	{
-	  *obj_begin = input;
-	  out = read_list (&obj, input+1, size-1, obj_end, out_arg);
-	  return out;
-	}
-      else if (*input == '"')
-	{
-	  *obj_begin = input;
-	  out = read_string (&obj, input+1, size-1, obj_end);
-	  return out;
-	}
-      else if (*input == '\'')
-	{
-	  
-	}
-      else if (*input == ';')
-	{
-	  input = jump_to_end_of_line (input, size, &size);
-
-	  if (!input)
-	    return UNFINISHED_SINGLELINE_COMMENT;
-	}
-    }
-
-  return 0;
-}
-
-
-enum read_outcome 
-read_list (struct object **object, const char *input, size_t size, const char **list_end, int *out_arg)
-{
-  struct object *obj;
-  const char *obj_beg, *obj_end;
-  enum read_outcome out;
-
-  while (*object)
-    {
-      if ((*object)->value_ptr.cons_pair->filling_car)
-	{
-	  out = read_list (&(*object)->value_ptr.cons_pair->car, input, size, list_end, out_arg);
-	}
-
-      *object = (*object)->value_ptr.cons_pair->cdr;      
-    }
-  
-  obj = NULL;
-
-  out = read_object (&obj, input, size, &obj_beg, &obj_end, out_arg);
-
-  while (out != NO_OBJECT)
-    {
-      if (out == CLOSING_PARENTHESIS)
-	{
-	  *list_end = obj_end;
-	  
-	  return COMPLETE_OBJECT;
-	}
-      else if (out == COMPLETE_OBJECT)
-	{
-	  *object = alloc_empty_cons_pair ();
-	  (*object)->value_ptr.cons_pair->car = obj;
-	}
-
-      if (obj_end == input + size)
-	break;
-      
-      obj = NULL;
-      out = read_object (&obj, obj_end+1, size, &obj_beg, &obj_end, out_arg);
-    }
-
-  (*object)->value_ptr.cons_pair->filling_car = 1;
-  
-  return INCOMPLETE_LIST;
-}
-
-
-enum read_outcome 
-read_string (struct object **object, const char *input, size_t size, const char **string_end)
-{
-  int i, j;
-  size_t length;
-  struct string *str;
-  enum read_outcome out = COMPLETE_OBJECT;
-  
-  if (!*object)
-    {
-      *object = alloc_empty_string ();
-    }
-
-  str = (*object)->value_ptr.string;
-  
-  if (*input == '"')
-    {
-      *string_end = input;
-      return out;
-    }
-
-  i = length = 1;
-  
-  while (i < size)
-    {
-      if (input [i] == '"' && input [i-1] != '\\')
-	break;
-
-      if (input [i] != '\\')
-	length++;	
-    }
-
-  if (i == size)
-    out = INCOMPLETE_STRING;
-
-  str->value = realloc_and_check (str->value, str->alloc_size + sizeof (char) * length);
-
-  for (i = 0, j = 0; i < length; i++)
-    {
-      if (input [i] == '\\')
-	i++;
-      else
-	str->value [j++] = input [i];
-    }
-  
-  return out;
-}
-
-
-enum read_outcome 
-read_symbol (struct object **object, const char *input, size_t size, const char **symbol_end)
-{
-  size_t name_size;
-  
-  char *name = normalize_symbol_name (input, size, symbol_end, &name_size);
-  
-  if (!*object)
-    {
-      *object = malloc_and_check (sizeof (**object));
-      (*object)->type = TYPE_SYMBOL;
-      (*object)->refcount = 1;
-      (*object)->value_ptr.symbol = malloc_and_check (sizeof (struct symbol));
-      (*object)->value_ptr.symbol->name_len = 0;
-    }
-
-  if ((*object)->value_ptr.symbol->name_len == 0)
-    {
-      (*object)->value_ptr.symbol->name = name;
-      (*object)->value_ptr.symbol->name_len = name_size;
-    }
-  else
-    {
-      (*object)->value_ptr.symbol->name = realloc_and_check ((*object)->value_ptr.symbol->name,
-							     (*object)->value_ptr.symbol->name_len + name_size);
-      (*object)->value_ptr.symbol->name_len = (*object)->value_ptr.symbol->name_len + name_size;
-      memcpy ((*object)->value_ptr.symbol->name + (*object)->value_ptr.symbol->name_len,
-	      name, name_size);
-    }
-
-  if (*symbol_end)
-    return COMPLETE_OBJECT;
-  else
-    return INCOMPLETE_SYMBOL;
-}
-  
-
-enum read_outcome 
-read_sharp_macro (struct object **object, const char *input, size_t size, const char **macro_end)
-{
-  return 0;
-}
-
-
-enum element
-find_element (const char *input, size_t size, const char **elem_begin)
-{
-  int i = 0;
-  int single_escape = 0;
-  enum element el = NONE;
-  
-  while (i < size && el == NONE)
-    {
-      if (!single_escape)
-	{
-	  switch (input [i])
-	    {
-	    case '\\':
-	      single_escape = 1;
-	      break;
-	    case '(':
-	      el = BEGIN_LIST;
-	      break;
-	    case ')':
-	      el = END_LIST;
-	      break;
-	    case '"':
-	      el = STRING_DELIMITER;
-	      break;
-	    case '\'':
-	      el = QUOTE;
-	      break;
-	    case '`':
-	      el = BACKQUOTE;
-	      break;
-	    case ',':
-	      el = COMMA;
-	      break;
-	    case ';':
-	      el = SEMICOLON;
-	      break;
-	    case '.':
-	      el = DOT;
-	      break;
-	    case '#':
-	      if (i+1 < size && input [i+1] == '|')
-		el = BEGIN_MULTILINE_COMMENT;
-	      else
-		el = SHARP;
-	      break;
-	    case '|':
-	      el = VERTICAL_BAR;
-	      break;
-	    default:
-	      if (!isspace (input [i]))
-		{
-		  *elem_begin = input;
-		  return TOKEN;
-		}
-	    }
-	}
-      else
-	{
-	  el = TOKEN;
-	}
-
-      *elem_begin = input;
-      i++;
-    }
-  
-  return el;
+  return NULL;
 }
 
 
 const char *
-find_string_delimiter (const char *input, size_t size)
+jump_to_end_of_line (const char *input, size_t size, size_t *new_size)
 {
-  int i;
+  const char *eol;
+  
+  if (!size)
+    return NULL;
+  
+  eol =  memmem (input, size, "\n", 1);
+  
+  if (!eol)
+    return NULL;
 
-  if (size > 0 && *input == '"')
-    return input;
+  *new_size = size - (sizeof (char) * (eol - input));
 
-  for (i = 1; i < size; i++)
-    {
-      if (input [i] == '"' && input [i-1] != '\\')
-	return input+i;
-    }
-
-  return NULL;
+  return eol;
 }
 
 
@@ -735,6 +729,9 @@ find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_si
 {
   const char *comm_begin, *comm_end, *delim;
 
+  if (!size)
+    return NULL;
+  
   comm_begin = memmem (input, size, "#|", 2);
   comm_end = memmem (input, size, "|#", 2);
   
@@ -759,110 +756,591 @@ find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_si
 
 
 const char *
-jump_to_end_of_multiline_comment (const char *input, size_t size, size_t *depth_or_new_size)
+jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth, size_t *depth_or_new_size)
 {
-  int comm_depth = 1;
-  const char *delim = NULL;
+  const char *delim, *ret;
 
+  if (!size)
+    return NULL;
+    
   delim = find_multiline_comment_delimiter (input, size, &size);
 
-  while (delim)
+  while (delim && depth)
     {
+      ret = delim;
+      
       if (*delim == '#')
-	comm_depth++;
+	depth++;
       else
-	comm_depth--;
+	depth--;
 
-      delim = find_multiline_comment_delimiter (delim+1, size-1, &size);
+      delim = find_multiline_comment_delimiter (delim+2, size-2, &size);
     }
 
-  if (!comm_depth)
+  if (!depth)
     {
       *depth_or_new_size = size-1;
-      return delim+1;
+      return ret+1;
     }
 
-  *depth_or_new_size = comm_depth;
+  *depth_or_new_size = depth;
   
   return NULL;    
 }
 
 
-const char *
-jump_to_end_of_line (const char *input, size_t size, size_t *new_size)
+struct line_list *
+append_line_to_list (char *line, size_t size, struct line_list *list, int do_copy)
 {
-  const char *eol =  memmem (input, size, "\n", 1);
+  struct line_list *l, *prev, *beg = list;
 
-  if (!eol)
-    return NULL;
+  l = malloc_and_check (sizeof (*l));
 
-  *new_size = size - (sizeof (char) * (eol - input));
+  if (do_copy)
+    {
+      l->line = malloc_and_check (size);
+      memcpy (l->line, line, size);
+    }
+  else
+    l->line = line;
 
-  return eol;
+  l->size = size;
+  l->refcount = 0;
+  l->next = NULL;
+  
+  if (!list)
+    return l;      
+
+  while (list)
+    {
+      prev = list;
+      list = list->next;
+    }
+
+  prev->next = l;
+  
+  return beg;
+}
+
+
+struct object_list *
+append_object_to_list (struct object *obj, struct object_list *list)
+{
+  struct object_list *l, *prev, *beg = list;
+
+  l = malloc_and_check (sizeof (*l));
+  l->obj = obj;
+  l->next = NULL;
+  
+  if (!list)
+    return l;      
+
+  while (list)
+    {
+      prev = list;
+      list = list->next;
+    }
+
+  prev->next = l;
+  
+  return beg;
+}
+
+
+enum read_outcome
+read_object (struct object **obj, const char *input, size_t size, const char **obj_begin,
+	     const char **obj_end, struct object_list **symbol_list, size_t *out_arg)
+{
+  int found_prefix = 0;
+  struct object *last_pref, *ob = NULL;
+  enum object_type numtype;
+  enum read_outcome out = NO_OBJECT;
+  const char *num_end;
+  
+  input = skip_space_block (input, size, &size);
+
+  if (!input)
+    return NO_OBJECT;
+
+  while (1)
+    {
+      if (*input == ';')
+	{
+	  if (!(input = jump_to_end_of_line (input, size, &size)))
+	    return UNFINISHED_SINGLELINE_COMMENT;
+	}
+      else if (*input == '#' && size > 1 && *(input+1) == '|')
+	{
+	  if (!(input = jump_to_end_of_multiline_comment (input+2, size-2, 1, out_arg)))
+	    return UNFINISHED_MULTILINE_COMMENT;
+	  else
+	    size = *out_arg;
+	}
+      else if (*input == '\'' || *input == '`' || *input == ',' || *input == '@')
+ 	{
+	  read_prefix (obj, input, size, &last_pref, obj_end);
+	  size = size - (*obj_end - input);
+	  input = *obj_end;
+	  found_prefix = 1;
+	}
+      else if (*input == ')')
+	{
+	  *obj_end = input;
+	  return found_prefix ? CLOSING_PARENTHESIS_AFTER_PREFIX : CLOSING_PARENTHESIS;
+	}
+      else if (*input == '(')
+	{
+	  *obj_begin = input;
+	  out = read_list (&ob, input+1, size-1, obj_end, symbol_list, out_arg);
+	  break;
+	}
+      else if (*input == '"')
+	{
+	  *obj_begin = input;
+	  out = read_string (&ob, input+1, size-1, obj_end);
+	  break;
+	}
+      else if (*input == '#')
+	{
+	  *obj_begin = input;
+	  out = read_sharp_macro_call (&ob, input+1, size-1, obj_end);
+	  break;
+	}
+      else
+	{
+	  *obj_begin = input;
+	  
+	  if (is_number (input, size, 10, &numtype, &num_end, obj_end))
+	    {
+	      ob = alloc_number (input, num_end - input + 1, 10, numtype);
+	      out = COMPLETE_OBJECT;
+	    }
+	  else
+	    {
+	      out = read_symbol_name (&ob, input, size, obj_end);
+
+	      if (out == COMPLETE_OBJECT)
+		intern_symbol_name (ob, symbol_list);
+	    }
+
+	  break;
+	}
+
+      input = skip_space_block (++input, --size, &size);
+
+      if (!input)
+	return found_prefix ? JUST_PREFIX : NO_OBJECT;
+    }
+
+  if (found_prefix)
+    last_pref->value_ptr.next = ob;
+  else
+    *obj = ob;
+    
+  return out;
+}
+
+
+enum read_outcome 
+read_list (struct object **obj, const char *input, size_t size, const char **list_end,
+	   struct object_list **symbol_list, size_t *out_arg)
+{
+  struct object *prev_cons = NULL, *car, *ob, *last_pref, *cons;
+  const char *obj_beg, *obj_end;
+  enum read_outcome out;
+  int found_dot = 0, dotted_list_full = 0;
+  
+
+  if (!size)
+    return INCOMPLETE_LIST;
+
+  ob = skip_prefix (*obj, &last_pref);
+  
+  while (ob)
+    {
+      if (ob->value_ptr.cons_pair->filling_car)
+	{
+	  out = read_list (&ob->value_ptr.cons_pair->car, input, size, list_end, symbol_list, out_arg);
+	}
+
+      prev_cons = ob;
+      ob = ob->value_ptr.cons_pair->cdr;      
+    }
+  
+  car = NULL;
+  out = read_object (&car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+
+  if (out == CLOSING_PARENTHESIS && !ob)
+    {
+      *list_end = obj_end;
+      *obj = &nil_object;
+      return COMPLETE_OBJECT;
+    }
+
+  while (out != NO_OBJECT)
+    {
+      if (out == CLOSING_PARENTHESIS)
+	{
+	  if (found_dot && !dotted_list_full)
+	    {
+	      print_read_error (NO_OBJ_AFTER_DOT_IN_LIST, input, size, obj_beg, obj_end);
+	      return NO_OBJ_AFTER_DOT_IN_LIST;
+	    }
+	  
+	  *list_end = obj_end;
+	  return COMPLETE_OBJECT;
+	}
+      else if (out == SINGLE_DOT)
+	{
+	  found_dot = 1;
+	}
+      else if (out == COMPLETE_OBJECT)
+	{
+	  if (dotted_list_full)
+	    {
+	      print_read_error (MULTIPLE_OBJS_AFTER_DOT_IN_LIST, input, size, obj_beg, obj_end);
+	      return MULTIPLE_OBJS_AFTER_DOT_IN_LIST;
+	    }
+	  else if (found_dot)
+	    {
+	      if (prev_cons)
+		{
+		  prev_cons->value_ptr.cons_pair->cdr = car;
+		  dotted_list_full = 1;
+		}
+	      else
+		{
+		  print_read_error (NO_OBJ_BEFORE_DOT_IN_LIST, input, size, obj_beg, obj_end);
+		  return NO_OBJ_BEFORE_DOT_IN_LIST;
+		}
+	    }
+	  else
+	    {
+	      cons = alloc_empty_cons_pair ();
+	      cons->value_ptr.cons_pair->car = car;
+	      
+	      if (prev_cons)
+		prev_cons = prev_cons->value_ptr.cons_pair->cdr = cons;
+	      else
+		*obj = prev_cons = cons;
+	    }
+	}
+      
+      if (obj_end == input + size)
+	break;
+      
+      car = NULL;
+      out = read_object (&car, obj_end + 1, size - (input - obj_end + 1), &obj_beg, &obj_end, symbol_list, out_arg);
+    }
+
+  ob->value_ptr.cons_pair->filling_car = 1;
+  
+  return INCOMPLETE_LIST;
+}
+
+
+enum read_outcome 
+read_string (struct object **obj, const char *input, size_t size, const char **string_end)
+{
+  size_t length, new_size;
+  struct string *str;
+  enum read_outcome out = COMPLETE_OBJECT;
+  struct object *last_pref, *ob;
+
+
+  *string_end = find_end_of_string (input, size, &new_size, &length);
+
+  if (!*string_end)
+    out = INCOMPLETE_STRING;
+    
+  ob = skip_prefix (*obj, &last_pref);
+  
+  if (!ob)
+    {
+      ob = alloc_string (length);
+      if (last_pref)
+	last_pref->value_ptr.next = ob;
+      else
+	*obj = ob;
+    }
+  else
+    resize_string (ob, ob->value_ptr.string->used_size + length);  
+
+  if (!length)
+    return COMPLETE_OBJECT;
+    
+  str = ob->value_ptr.string;
+  
+  normalize_string (str->value + str->used_size, input, size);
+  
+  str->used_size += length;
+  
+  return out;
+}
+
+
+enum read_outcome 
+read_symbol_name (struct object **obj, const char *input, size_t size, const char **symbol_end)
+{
+  struct symbol_name *sym;
+  size_t length, new_size;
+  struct object *last_pref, *ob;
+  enum read_outcome out;
+  
+  
+  *symbol_end = find_end_of_symbol_name (input, size, &new_size, &length, &out);
+
+  if (out == SINGLE_DOT)
+    return out;
+  else if (out == MULTIPLE_DOTS)
+    {
+      print_read_error (out, input, size, input, *symbol_end);
+      return out;
+    }
+  
+  
+  ob = skip_prefix (*obj, &last_pref);
+
+  if (!ob)
+    {
+      ob = alloc_symbol_name (length);
+      if (last_pref)
+	last_pref->value_ptr.next = ob;
+      else
+	*obj = ob;
+    }
+  else
+    resize_symbol_name (ob, ob->value_ptr.symbol_name->used_size + length);  
+
+  if (!length)
+    return COMPLETE_OBJECT;
+    
+  sym = ob->value_ptr.symbol_name;
+
+  normalize_symbol_name (sym->value + sym->used_size, input, size);
+
+  sym->used_size += length;
+
+  if (!*symbol_end)
+    return INCOMPLETE_SYMBOL_NAME;
+  else
+    return COMPLETE_OBJECT;
+}
+
+
+enum read_outcome
+read_prefix (struct object **obj, const char *input, size_t size, struct object **last, const char **prefix_end)
+{
+  const char *n = input;
+  enum element el;
+  
+  if (!size)
+    return NO_OBJECT;
+
+  skip_prefix (*obj, last);
+  
+  el = find_next_element (input, size, &n);
+  
+  while (el == QUOTE || el == BACKQUOTE || el == COMMA || el == AT)
+    {
+      *prefix_end = n;
+      
+      if (!*last)
+	*obj = *last = alloc_prefix (el);
+      else
+	*last = (*last)->value_ptr.next = alloc_prefix (el);
+      
+      el = find_next_element (n+1, size - (n + 1 - input), &n);
+    }
+
+  return JUST_PREFIX;
+}
+
+
+enum read_outcome 
+read_sharp_macro_call (struct object **obj, const char *input, size_t size, const char **macro_end)
+{
+  return 0;
+}
+
+
+enum element
+find_next_element (const char *input, size_t size, const char **elem_begin)
+{
+  input = skip_space_block (input, size, &size);
+
+  if (!input)
+    return NONE;
+
+  *elem_begin = input;
+  
+  switch (*input)
+    {
+    case '(':
+      return BEGIN_LIST;
+    case ')':
+      return END_LIST;
+    case '"':
+      return STRING_DELIMITER;
+      break;
+    case '\'':
+      return QUOTE;
+    case '`':
+      return BACKQUOTE;
+    case ',':
+      return COMMA;
+    case '@':
+      return AT;
+    case ';':
+      return SEMICOLON;
+    case '.':
+      return DOT;
+    case '#':
+      if (size > 1 && *(++input) == '|')
+	return BEGIN_MULTILINE_COMMENT;
+      else
+	return SHARP;
+    case '|':
+      return VERTICAL_BAR;
+    case '\\':
+    default:
+      return TOKEN;
+    }
 }
 
 
 int
-is_number (const char *token, const char *end, int radix)
+is_number (const char *token, size_t size, int radix, enum object_type *numtype, const char **number_end, const char **token_end)
 {
-  int response = 1, i = 0;
-  int found_decimal_point = 0;
-  char *exponent_marker = 0;
-  //int found_digit_after_exponent_marker = 0;
-  int found_slash = 0;
-
+  int i = 0;
+  
+  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0,
+    found_digit = 0, found_digit_after_slash = 0, found_digit_after_exp_marker = 0, need_decimal_digit = 0;
+  
   char decimal_digits [] = "0123456789";
   char digits [] = "00112233445566778899aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ";
   char exponent_markers [] = "dDeEfFlLsS";
 
-  digits [radix * 2] = 0;
+  int digits_len = radix * 2;
   
-  while (token < end && response)
+  *numtype = TYPE_INTEGER;
+ 
+  while (i < size)
     {
-      if (strchr (decimal_digits, *token))
+      if (strchr (decimal_digits, token [i]))
 	{
-
-	}
-      else if (strchr (digits, *token))
-	{
-
-	}
-      else if (*token == '+' && *token == '-')
-	{
-	  if (i > 0 && token - exponent_marker > 0)
-	    response = 0;
-	}
-      else if (*token == '/')
-	{
-	  if (found_slash)
-	    response = 0;
-	  else
-	    found_slash = 1;
-	}
-      else if (*token == '.')
-	{
-	  if (found_decimal_point)
-	    response = 0;
-	  else
-	    found_decimal_point = 1;
-	}
-      else if ((exponent_marker = strchr (exponent_markers, *token)))
-	{
-	  if (!found_decimal_point)
-	    response = 0;
+	  found_dec_digit = 1, need_decimal_digit = 0;
 	}
       
-      token++, i++;
+      if (memchr (digits, token [i], digits_len))
+	{
+	  found_digit = 1;
+
+	  found_exp_marker && (found_digit_after_exp_marker = 1);
+	  found_slash && (found_digit_after_slash = 1);
+	}
+      else if (strchr (exponent_markers, token [i]))
+	{
+	  if (found_exp_marker || !found_dec_digit)
+	    return 0;
+	  else
+	    {
+	      found_exp_marker = 1;
+	      exp_marker_pos = i;
+	      *numtype = TYPE_FLOAT;
+	    }
+	}      
+      else if (token [i] == '+' || token [i] == '-')
+	{
+	  if (i > 0 && found_exp_marker && i - exp_marker_pos > 1)
+	    return 0;
+	}
+      else if (token [i] == '/')
+	{
+	  if (found_slash || found_dec_point || found_exp_marker || !found_digit)
+	    return 0;
+	  else
+	    {
+	      found_slash = 1;
+	      *numtype = TYPE_RATIO;
+	    }
+	}
+      else if (token [i] == '.')
+	{
+	  if (found_dec_point || found_exp_marker || found_slash)
+	    return 0;
+	  else if (found_digit && !found_dec_digit)
+	    return 0;
+	  else
+	    {
+	      found_dec_point = 1;
+
+	      if (!found_dec_digit)
+		{
+		  *numtype = TYPE_FLOAT;
+		  need_decimal_digit = 1;
+		}
+	    }
+	}
+      else if (i == 0)
+	return 0;
+      else
+	break;
+      
+      i++;
     }
 
-  return response;
+  if (found_slash && !found_digit_after_slash)
+    return 0;
+  if (found_exp_marker && !found_digit_after_exp_marker)
+    return 0;
+  if (need_decimal_digit)
+    return 0;
+
+  if (token [i-1] == '.')
+    {
+      *number_end = token + i - 2;
+      *token_end = *number_end + 1;
+    }
+  else
+    *number_end = *token_end = token + i - 1;
+  
+  
+  return 1;
 }
 
 
 struct object *
-alloc_number (const char *begin, const char *end, int radix)
+alloc_number (const char *token, size_t size, int radix, enum object_type numtype)
 {
-  return NULL;
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  char *buf = malloc_and_check (size + 1);
+  
+  obj->type = numtype;
+  obj->refcount = 1;
+  
+  memcpy (buf, token, size);
+  buf [size] = 0;
+  
+  if (numtype == TYPE_INTEGER)
+    {
+      mpz_init (obj->value_ptr.integer);
+      mpz_set_str (obj->value_ptr.integer, buf, radix);
+    }
+  else if (numtype == TYPE_RATIO)
+    {
+      mpq_init (obj->value_ptr.ratio);
+      mpq_set_str (obj->value_ptr.ratio, buf, radix);
+    }
+  else if (numtype == TYPE_FLOAT)
+    {
+      mpf_init (obj->value_ptr.floating);
+      mpf_set_str (obj->value_ptr.floating, buf, radix);
+    }
+
+  free (buf);
+  
+  return obj;
 }
 
 
@@ -882,6 +1360,7 @@ append_newline (char *string)
 {
   size_t len = strlen (string);
   char *newstring = realloc (string, len + 2);
+  
   newstring [len] = '\n';
   newstring [len+1] = 0;
 
@@ -920,15 +1399,42 @@ realloc_and_check (void *ptr, size_t size)
 
 
 struct object *
-alloc_empty_string (void)
+alloc_object (void)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  
+  obj->refcount = 1;
+  
+  return obj;
+}
+
+
+struct object *
+alloc_prefix (enum element type)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
 
-  obj->type = TYPE_STRING;
-  obj->refcount = 0;
+  switch (type)
+    {
+    case QUOTE:
+      obj->type = TYPE_QUOTE;
+      break;
+    case BACKQUOTE:
+      obj->type = TYPE_BACKQUOTE;
+      break;
+    case COMMA:
+      obj->type = TYPE_COMMA;
+      break;
+    case AT:
+      obj->type = TYPE_AT;
+      break;
+    default:
+      break;
+    }
+	
+  obj->refcount = 1;
 
-  obj->value_ptr.string = malloc_and_check (sizeof (*obj->value_ptr.string));
-  obj->value_ptr.string->alloc_size = obj->value_ptr.string->used_size = 0;
+  obj->value_ptr.next = NULL;
 
   return obj;
 }
@@ -942,10 +1448,11 @@ alloc_empty_cons_pair (void)
   struct object *car = malloc_and_check (sizeof (*car));
   
   obj->type = TYPE_CONS_PAIR;
-  obj->refcount = 0;
+  obj->refcount = 1;
   obj->value_ptr.cons_pair = cons;
   
   car->type = TYPE_NIL;
+  car->refcount = 1;
   
   obj->value_ptr.cons_pair->car = car;
   obj->value_ptr.cons_pair->cdr = NULL;
@@ -954,37 +1461,134 @@ alloc_empty_cons_pair (void)
 }
 
 
+const char *
+find_end_of_string (const char *input, size_t size, size_t *new_size, size_t *string_length)
+{
+  int i = 0, escape = 0;
+
+  *string_length = 0;
+  
+  while (i < size)
+    {
+      if (input [i] == '"' && !escape)
+	break;
+
+      if (input [i] != '\\' || escape)
+	(*string_length)++, escape = 0;
+      else
+	escape = 1;
+
+      i++;
+    }
+
+  if (i == size)
+    return NULL;
+
+  *new_size = size-i+1;
+ 
+  return input+i;
+}
+
+
+void
+normalize_string (char *output, const char *input, size_t size)
+{
+  int escape = 0, i = 0, j = 0;
+
+  while (i < size)
+    {
+      if (input [i] == '\\' && !escape)
+	escape = 1;
+      else if (input [i] == '"' && !escape)
+	break;
+      else
+	{
+	  output [j++] = input [i];
+	  escape = 0;
+	}
+      
+      i++;
+    }
+}
+
+
 struct object *
-alloc_environment (size_t size)
+alloc_string (size_t size)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
-  struct environment *env = malloc_and_check (sizeof (*env));
-  struct binding *bins = malloc_and_check (sizeof (*bins) * size);
-  
-  obj->type = TYPE_ENVIRONMENT;
-  obj->value_ptr.environment = env;
 
-  obj->value_ptr.environment->bindings = bins;
-  obj->value_ptr.environment->alloc_size = size;
-  obj->value_ptr.environment->used_size = 0;
-  
+  obj->type = TYPE_STRING;
+  obj->refcount = 1;
+
+  obj->value_ptr.string = malloc_and_check (sizeof (*obj->value_ptr.string));
+
+  obj->value_ptr.string->value = malloc_and_check (sizeof (char) * size);
+  obj->value_ptr.string->alloc_size = sizeof (char) * size;
+  obj->value_ptr.string->used_size = 0;
+
   return obj;
 }
 
 
-char *
-normalize_symbol_name (const char *input, size_t size, const char **symbol_name_end, size_t *name_size)
+void
+resize_string (struct object *string, size_t size)
 {
-  char *name;
-  int i = 0, j;
+  string->value_ptr.string->value = realloc_and_check (string->value_ptr.string->value,
+						      sizeof (char) * size);
+
+  if (size < string->value_ptr.string->used_size)
+    string->value_ptr.string->used_size = size;
+
+  string->value_ptr.string->alloc_size = sizeof (char) * size;
+}
+
+
+struct object *
+alloc_symbol_name (size_t size)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+
+  obj->type = TYPE_SYMBOL_NAME;
+  obj->refcount = 1;
+
+  obj->value_ptr.symbol_name = malloc_and_check (sizeof (*obj->value_ptr.symbol_name));
+
+  obj->value_ptr.symbol_name->value = malloc_and_check (sizeof (char) * size);
+  obj->value_ptr.symbol_name->alloc_size = sizeof (char) * size;
+  obj->value_ptr.symbol_name->used_size = 0;
+  obj->value_ptr.symbol_name->sym = NULL;
+
+  return obj;
+}
+
+
+void
+resize_symbol_name (struct object *symname, size_t size)
+{
+  symname->value_ptr.symbol_name->value = realloc_and_check (symname->value_ptr.symbol_name->value,
+							     sizeof (char) * size);
   
-  int single_escape = 0;
-  int multiple_escape = 0;
-    
+  if (size < symname->value_ptr.symbol_name->used_size)
+    symname->value_ptr.symbol_name->used_size = size;
+
+  symname->value_ptr.symbol_name->alloc_size = sizeof (char) * size;
+}
+
+
+const char *
+find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, size_t *name_length, enum read_outcome *outcome)
+{
+  int i = 0, single_escape = 0, multiple_escape = 0, just_dots = 1;
+  const char term_macro_chars [] = "()';\"`,";
+  
+  *name_length = 0;
+  
   while (i < size)
     {
       if (input [i] == '\\')
 	{
+	  just_dots = 0;
+	  
 	  if (!single_escape)
 	    {
 	      single_escape = 1;
@@ -992,37 +1596,49 @@ normalize_symbol_name (const char *input, size_t size, const char **symbol_name_
 	  else
 	    {
 	      single_escape = 0;
-	      (*name_size)++;
+	      (*name_length)++;
 	    }
 	}
       else if (input [i] == '|' && !single_escape)
 	{
+	  just_dots = 0;
+	  
 	  multiple_escape = (multiple_escape ? 0 : 1);
 	}
       else
 	{
-	  if (isspace (input [i]) && !single_escape && !multiple_escape)
+	  if ((isspace (input [i]) || strchr (term_macro_chars, input [i]))
+	      && !single_escape && !multiple_escape)
 	    {
-	      *symbol_name_end = input+i;
-	      break;
+	      if (just_dots && *name_length == 1)
+		*outcome = SINGLE_DOT;
+	      else if (just_dots)
+		*outcome = MULTIPLE_DOTS;
+	      
+	      *new_size = size-i+1;
+	      return input+i-1;
 	    }
 
-	  (*name_size)++;
+	  if (input [i] != '.')
+	    just_dots = 0;
+	  
+	  (*name_length)++;
+	  single_escape = 0;
 	}
       i++;
     }
 
-  if (i == size || single_escape || multiple_escape)
-    {
-      *symbol_name_end = NULL;
-    }
-  
-  name = malloc_and_check (*name_size * sizeof (char));
+  return NULL;
+}
 
-  single_escape = 0;
-  multiple_escape = 0;
+
+void
+normalize_symbol_name (char *output, const char *input, size_t size)
+{
+  int i, j, single_escape = 0, multiple_escape = 0;
+  const char term_macro_chars [] = "()';\"`,";
   
-  for (i = 0, j = 0; i < *name_size; i++)
+  for (i = 0, j = 0; i < size; i++)
     {
       if (input [i] == '\\')
 	{
@@ -1032,7 +1648,7 @@ normalize_symbol_name (const char *input, size_t size, const char **symbol_name_
 	    }
 	  else
 	    {
-	      name [j++] = '\\';
+	      output [j++] = '\\';
 	      single_escape = 0;
 	    }
 	}
@@ -1040,16 +1656,19 @@ normalize_symbol_name (const char *input, size_t size, const char **symbol_name_
 	{
 	  multiple_escape = (multiple_escape ? 0 : 1);
 	}
+      else if ((isspace (input [i]) || strchr (term_macro_chars, input [i]))
+	       && !single_escape && !multiple_escape)
+	{
+	  break;
+	}
       else
 	{
 	  if (single_escape || multiple_escape)
-	    name [j++] = input [i];
+	    output [j++] = input [i];
 	  else
-	    name [j++] = toupper (input [i]);
+	    output [j++] = toupper (input [i]);
 	}
     }
-
-  return name;  
 }
 
 
@@ -1074,64 +1693,276 @@ create_symbol (char *name, size_t size)
 
 
 struct object *
-intern_symbol (char *name, size_t size, struct object_list **symbols)
+intern_symbol_name (struct object *symname, struct object_list **symbol_list)
 {
-  struct object *obj, *sym;
+  struct object *sym;
   struct object_list *cur, *new_sym;
   
-  if (!*symbols)
-    {
-      *symbols = malloc_and_check (sizeof (**symbols));
-      obj = create_symbol (name, size);
-      (*symbols)->obj = obj;
-      (*symbols)->next = NULL;
-
-      return obj;
-    }
-  
-  cur = *symbols;
+  cur = *symbol_list;
 
   while (cur)
     {
-      if (eqmem (cur->obj->value_ptr.symbol->name, cur->obj->value_ptr.symbol->name_len, name, size))
-	return cur->obj;
-
+      if (eqmem (cur->obj->value_ptr.symbol->name, cur->obj->value_ptr.symbol->name_len,
+		 symname->value_ptr.symbol_name->value, symname->value_ptr.symbol_name->used_size))
+	{
+	  symname->value_ptr.symbol_name->sym = cur->obj;
+	  return cur->obj;
+	}
+      
       cur = cur->next;
     }
 
-  sym = create_symbol (name, size);
+  sym = create_symbol (symname->value_ptr.symbol_name->value, symname->value_ptr.symbol_name->used_size);
+
+  symname->value_ptr.symbol_name->sym = sym;
   
   new_sym = malloc_and_check (sizeof (*new_sym));
   new_sym->obj = sym;
-  new_sym->next = *symbols;
+  new_sym->next = *symbol_list;
 
-  *symbols = new_sym;
-
+  *symbol_list = new_sym;
+  
   return sym;  
 }
 
 
-void
-add_binding (struct symbol *sym, struct object *obj, struct environment *env)
+struct binding *
+create_binding (struct object *sym, struct object *obj)
 {
-  struct object *b = malloc_and_check (sizeof (*b));
+  struct binding *bin = malloc_and_check (sizeof (*bin));
 
-  if (env->alloc_size <= env->used_size)
+  bin->sym = sym;
+  bin->obj = obj;
+  bin->next = NULL;
+
+  return bin;
+}
+
+
+struct binding *
+add_binding (struct binding *bin, struct binding *env)
+{
+  bin->next = env;
+
+  return bin;
+}
+
+
+struct binding *
+find_binding (struct symbol *sym, struct binding *env)
+{
+  while (env)
     {
-      env->bindings = realloc_and_check (env->bindings, env->used_size + 1);
-      env->alloc_size = env->used_size + 1;
+      if (env->sym->value_ptr.symbol == sym)
+	return env;
+
+      env = env->next;
     }
 
-  env->bindings [env->used_size].symbol = sym;
-  env->bindings [env->used_size].object = obj;
-  env->used_size++;
+  return NULL;
+}
+
+
+struct object *
+skip_prefix (struct object *prefix, struct object **last_prefix)
+{
+  if (last_prefix)
+    *last_prefix = NULL;
+  
+  while (prefix &&
+	 (prefix->type == TYPE_QUOTE
+	  || prefix->type == TYPE_BACKQUOTE
+	  || prefix->type == TYPE_COMMA))
+    {
+      if (last_prefix)
+	*last_prefix = prefix;
+      prefix = prefix->value_ptr.next;
+    }
+
+  return prefix;
+}
+
+
+struct object *
+append_prefix (struct object *obj, enum element type)
+{
+  struct object *prev, *curr;
+  
+  if (!obj)
+    return alloc_prefix (type);
+
+  prev = curr = obj;
+  
+  if (curr->type == TYPE_QUOTE
+      || curr->type == TYPE_BACKQUOTE
+      || curr->type == TYPE_COMMA)
+    curr = curr->value_ptr.next;
+
+  while (curr &&
+	 (curr->type == TYPE_QUOTE
+	  || curr->type == TYPE_BACKQUOTE
+	  || curr->type == TYPE_COMMA))
+    {
+      prev = curr;
+      curr = curr->value_ptr.next;
+    }
+  
+  prev->value_ptr.next = alloc_prefix (type);
+  prev->value_ptr.next->value_ptr.next = curr;
+  
+  return obj;
+}
+
+
+struct object *
+nth (unsigned int ind, struct object *list)
+{  
+  for (int i = 0; i < ind; i++)
+    list = list->value_ptr.cons_pair->cdr;
+  
+  return list->value_ptr.cons_pair->car;
+}
+
+
+unsigned int
+list_length (const struct object *list)
+{
+  unsigned int l = 0;
+  
+  while (list && list->type == TYPE_CONS_PAIR)
+    {
+      l++;
+      list = list->value_ptr.cons_pair->cdr;
+    }
+
+  if (list)
+    l++;
+
+  return l;
+}
+
+
+void
+copy_symbol_name (char *out, const struct symbol_name *name)
+{
+  
 }
 
 
 struct parameter *
-parse_lambda_list (const char *input, size_t size)
+alloc_parameter (enum parameter_type type, struct symbol_name *sym)
 {
-  return NULL;
+  struct parameter *par = malloc_and_check (sizeof (*par));
+  par->type = type;
+  par->name = sym;
+  par->next = NULL;
+  
+  return par;
+}
+
+
+struct parameter *
+parse_required_parameters (struct object *obj, struct parameter **last, struct object **next, enum parse_lambda_list_outcome *out)
+{
+  struct object *car;
+  struct parameter *first = NULL;
+
+  *last = NULL;
+  
+  while (obj && (car = obj->value_ptr.cons_pair->car)
+	 && car->type == TYPE_SYMBOL_NAME 
+	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST", "&KEYWORD", "&AUX",
+			       "&ALLOW_OTHER_KEYS", NULL))
+    {
+      if (!first)
+	*last = first = alloc_parameter (REQUIRED_PARAM, car->value_ptr.symbol_name);
+      else
+	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, car->value_ptr.symbol_name);
+      
+      obj = obj->value_ptr.cons_pair->cdr;
+    }
+
+  *next = obj;
+  
+  return first;
+}
+
+
+struct parameter *
+parse_optional_parameters (struct object *obj, struct parameter **last, struct object **next, enum parse_lambda_list_outcome *out)
+{
+  struct object *car;
+  struct parameter *first = NULL;
+
+  *last = NULL;
+  
+  while (obj && (car = obj->value_ptr.cons_pair->car))
+    {
+      if (car->type == TYPE_SYMBOL_NAME 
+	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST", "&KEYWORD", "&AUX",
+			       "&ALLOW_OTHER_KEYS", NULL))
+	{
+	  break;
+	}
+      else if (car->type == TYPE_SYMBOL_NAME)
+	{
+	  if (!first)
+	    *last = first = alloc_parameter (OPTIONAL_PARAM, car->value_ptr.symbol_name);
+	  else
+	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, car->value_ptr.symbol_name);
+
+	  (*last)->init_form = NULL;
+	  (*last)->supplied_p_param = NULL;
+	}
+      else if (car->type == TYPE_CONS_PAIR)
+	{
+	  if (!first)
+	    *last = first = alloc_parameter (OPTIONAL_PARAM, CAR (car)->value_ptr.symbol_name);
+	  else
+	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, CAR (car)->value_ptr.symbol_name);
+
+	  (*last)->init_form = NULL;
+	  (*last)->supplied_p_param = NULL;
+	  
+	  if (list_length (car) == 2)
+	    (*last)->init_form = nth (1, car);
+	  
+	  if (list_length (car) == 3)
+	    (*last)->supplied_p_param = nth (2, car)->value_ptr.symbol_name;
+	}
+      
+      obj = obj->value_ptr.cons_pair->cdr;
+    }
+  
+  *next = obj;
+  
+  return first;
+}
+
+
+struct parameter *
+parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
+{
+  struct parameter *first = NULL, *last = NULL, *newlast = NULL;
+  
+  if (obj->type == TYPE_NIL)
+    return NULL;
+  
+  if (obj->type != TYPE_CONS_PAIR)
+    return NULL;
+
+  first = parse_required_parameters (obj, &last, &obj, out);
+
+  if (obj && obj->type == TYPE_SYMBOL_NAME
+      && symname_equals (obj->value_ptr.symbol_name, "&OPTIONAL"))
+    {
+      if (last)
+	last->next = parse_optional_parameters (obj, &newlast, &obj, out);
+      else
+	first = parse_optional_parameters (obj, &last, &obj, out);
+    }
+  
+  return first;
 }
 
 
@@ -1143,32 +1974,51 @@ call_function (const struct function *func, const struct cons_pair *arglist)
 
 
 struct object *
-evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome)
+evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  if (obj->type == TYPE_T || obj->type == TYPE_NIL ||
-      obj->type == TYPE_NUMBER || obj->type == TYPE_CHARACTER ||
-      obj->type == TYPE_STRING)
+  if (obj->type == TYPE_T || obj->type == TYPE_NIL || obj->type == TYPE_INTEGER
+      || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT || obj->type == TYPE_CHARACTER
+      || obj->type == TYPE_STRING)
     {
+      obj->refcount++;
+      *outcome = EVAL_OK;
       return obj;
     }
-  else if (obj->type == TYPE_QUOTE)
+  else if (obj->type == TYPE_QUOTE || obj->type == TYPE_BACKQUOTE)
     {
-      return obj->value_ptr.quote->next;
+      obj->value_ptr.next->refcount++;
+      *outcome = EVAL_OK;
+      return obj->value_ptr.next;
     }
-  else if (obj->type == TYPE_SYMBOL)
+  else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
-      if (obj->value_ptr.symbol->name [0] == ':')
-	return obj;
+      if (obj->type == TYPE_SYMBOL)
+	env = find_binding (obj->value_ptr.symbol, env);
+      else
+	env = find_binding (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
 
-      for (int i = 0; i < env->used_size; i++)
+      if (env)
+	return env->obj;
+      else
 	{
-	  if (eqmem (env->bindings [i].symbol->name, env->bindings [i].symbol->name_len,
-		     obj->value_ptr.symbol->name, obj->value_ptr.symbol->name_len))
-	    return env->bindings [i].object;
+	  *outcome = UNBOUND_SYMBOL;
+	  *cursor = obj;
+	  return NULL;
 	}
-
-      return NULL;
     }
+  else if (obj->type == TYPE_CONS_PAIR)
+    {
+      return evaluate_list (obj, env, outcome, cursor); 
+    }
+  
+  return NULL;
+}
+
+
+struct object *
+evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  *outcome = CANT_EVALUATE_LISTS_YET;
   
   return NULL;
 }
@@ -1187,6 +2037,35 @@ eqmem (const char *s1, size_t n1, const char *s2, size_t n2)
       return 0;
 
   return 1;
+}
+
+
+int
+symname_equals (const struct symbol_name *sym, const char *s)
+{
+  return eqmem (sym->value, sym->used_size, s, strlen (s));
+}
+
+
+int
+symname_is_among (const struct symbol_name *sym, ...)
+{
+  va_list valist;
+  char *s;
+  
+  va_start (valist, sym);
+
+  while ((s = va_arg (valist, char *)))
+    {
+      if (symname_equals (sym, s))
+	{
+	  va_end (valist);
+	  return 1;
+	}
+    }
+  
+  va_end (valist);
+  return 0;
 }
 
   
@@ -1211,13 +2090,13 @@ print_symbol (const struct symbol *sym)
 {  
   int i;
   char *nm = sym->name;
-  char need_escape [] = "().,;'#\"\n";
+  char need_escape [] = "().,;'#\"\n\\";
   int do_need_escape = 0;
 
-  /* first we make a pass to understand if we need vertical quotes */
+  /* first we make a pass to understand if we need vertical escape */
   for (i = 0; i < sym->name_len && !do_need_escape; i++)
     {
-      if (strchr (need_escape, nm [i]) || !nm [i])
+      if (strchr (need_escape, nm [i]) || !nm [i] || islower (nm [i]))
 	do_need_escape = 1;
     }
 
@@ -1226,7 +2105,7 @@ print_symbol (const struct symbol *sym)
 
   for (i = 0; i < sym->name_len; i++)
     {
-      if (nm [i] == '|' && do_need_escape)
+      if (nm [i] == '|' || nm [i] == '\\')
 	putchar ('\\');
       
       putchar (nm [i]);
@@ -1246,7 +2125,7 @@ print_string (const struct string *str)
 
   for (i = 0; i < str->used_size; i++)
     {
-      if (str->value [i] == '"')
+      if (str->value [i] == '"' || str->value [i] == '\\')
 	putchar ('\\');
       
       putchar (str->value [i]);
@@ -1292,8 +2171,31 @@ print_object (const struct object *obj)
 {
   if (obj->type == TYPE_NIL)
     printf ("()");
+  else if (obj->type == TYPE_QUOTE)
+    {
+      printf ("'");
+      print_object (obj->value_ptr.next);
+    }
+  else if (obj->type == TYPE_BACKQUOTE)
+    {
+      printf ("`");
+      print_object (obj->value_ptr.next);
+    }
+  else if (obj->type == TYPE_COMMA)
+    {
+      printf (",");
+      print_object (obj->value_ptr.next);
+    }
+  else if (obj->type == TYPE_INTEGER)
+    mpz_out_str (NULL, 10, obj->value_ptr.integer);
+  else if (obj->type == TYPE_RATIO)
+    mpq_out_str (NULL, 10, obj->value_ptr.ratio);
+  else if (obj->type == TYPE_FLOAT)
+    mpf_out_str (NULL, 10, 0, obj->value_ptr.floating);
   else if (obj->type == TYPE_STRING)
     print_string (obj->value_ptr.string);
+  else if (obj->type == TYPE_SYMBOL_NAME)
+    print_symbol (obj->value_ptr.symbol_name->sym->value_ptr.symbol);
   else if (obj->type == TYPE_SYMBOL)
     print_symbol (obj->value_ptr.symbol);
   else if (obj->type == TYPE_CONS_PAIR)
@@ -1303,9 +2205,56 @@ print_object (const struct object *obj)
 }
 
 
+void
+print_read_error (enum read_outcome err, const char *input, size_t size, const char *begin, const char *end)
+{
+  if (err == CLOSING_PARENTHESIS)
+    {
+      printf ("read error: mismatched closing parenthesis\n");
+    }
+  else if (err == MULTIPLE_DOTS)
+    {
+      printf ("read error: symbol names made of non-escaped dots only are not allowed\n");
+    }
+  else if (err == NO_OBJ_BEFORE_DOT_IN_LIST)
+    {
+      printf ("read error: no object before dot in list\n");
+    }
+  else if (err == NO_OBJ_AFTER_DOT_IN_LIST)
+    {
+      printf ("read error: no object follows dot in list\n");
+    }
+  else if (err == MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
+    {
+      printf ("read error: more than one object follows dot in list\n");
+    }
+}
+
+
+void
+print_eval_error (enum eval_outcome err, struct object *arg)
+{
+  if (err == UNBOUND_SYMBOL)
+    {
+      printf ("eval error: symbol ");
+      print_symbol (arg->value_ptr.symbol);
+      printf (" not bound to any object\n");
+    }
+  else if (err == CANT_EVALUATE_LISTS_YET)
+    printf ("eval error: can't evaluate lists yet!\n");
+}
+
+
 int
 decrement_refcount (struct object *obj)
 {
+  if (!obj)
+    return 0;
+
+  if (obj == &nil_object
+      || obj == &nil_symbol)
+    return 0;
+  
   obj->refcount--;
 
   if (obj->refcount <= 0)
@@ -1370,7 +2319,7 @@ free_list_recursively (struct object *obj)
 void
 print_welcome_message (void)
 {
-  puts ("al  Copyright (C) 2022 Andrea G. Monaco\n"
+  puts ("al Copyright (C) 2022 Andrea G. Monaco\n"
 	"This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.\n"
 	"This is free software, and you are welcome to redistribute it\n"
 	"under certain conditions; type `show c' for details.\n");
@@ -1380,7 +2329,7 @@ print_welcome_message (void)
 void
 print_version (void)
 {
-  puts ("al 0.1\n"
+  puts ("al " PACKAGE_VERSION "\n"
 	"Copyright (C) 2022 Andrea G. Monaco\n"
 	"License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/gpl.html>\n"
 	"This is free software: you are free to change and redistribute it.\n"
