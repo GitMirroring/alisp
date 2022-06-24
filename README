@@ -7,11 +7,25 @@ without any warranty.
 
 
 
-al is a Lisp implementation.
+al is a lisp implementation.  Right now it is just an interpreter, but
+I will add some compilation later.  I aim for Common Lisp conformance,
+but I'm not religious about it.
 
-It implements part of Common Lisp and aims for full compatibility.
 
-Currently it depends on a standard C library and on GNU Readline.  It
-uses autotools for building.
+Currently it depends on GNU Readline and on GNU Multiple Precision
+Arithmetic Library.  It uses autotools for building.
+
+
+To build, start with
+
+  $ autoreconf -fi
+
+and then run the usual
+
+  $ ./configure
+
+  $ make
+
+
 
 You can reach me at andrea.monaco@autistici.org.
