@@ -298,18 +298,20 @@ read_outcome
     INCOMPLETE_SYMBOL_NAME = 1 << 8,
     INCOMPLETE_SHARP_MACRO_CALL = 1 << 9,
 
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 10,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 11,
-    
-    COMMA_WITHOUT_BACKQUOTE = 1 << 12,
+    INVALID_SHARP_DISPATCH = 1 << 10,
 
-    SINGLE_DOT = 1 << 13,
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 11,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 12,
     
-    MULTIPLE_DOTS = 1 << 14,
+    COMMA_WITHOUT_BACKQUOTE = 1 << 13,
 
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 15,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 16,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 17
+    SINGLE_DOT = 1 << 14,
+    
+    MULTIPLE_DOTS = 1 << 15,
+
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 16,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 17,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 18
   };
 
 
@@ -1195,6 +1197,12 @@ read_sharp_macro_call (const char *input, size_t size, const char **macro_end, e
     call->dispatch_ch = input [i];
   else
     return NULL;
+
+  if (strchr ("\b\t\n\r\f ", call->dispatch_ch))
+    {
+      *outcome = INVALID_SHARP_DISPATCH;
+      return NULL;
+    }
   
   return call;
 }
