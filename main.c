@@ -146,30 +146,34 @@ cons_pair
 enum
 object_type
   {
-    TYPE_NIL,
-    TYPE_QUOTE,
-    TYPE_BACKQUOTE,
-    TYPE_COMMA,
-    TYPE_AT,
-    TYPE_SYMBOL_NAME,
-    TYPE_SYMBOL,
-    TYPE_INTEGER,
-    TYPE_RATIO,
-    TYPE_FLOAT,
-    TYPE_CONS_PAIR,
-    TYPE_CHARACTER,
-    TYPE_STRING,
-    TYPE_ARRAY,
-    TYPE_HASHTABLE,
-    TYPE_ENVIRONMENT,
-    TYPE_PACKAGE,
-    TYPE_PATHNAME,
-    TYPE_STREAM,
-    TYPE_STRUCTURE,
-    TYPE_CONDITION,
-    TYPE_FUNCTION,
-    TYPE_T
+    TYPE_NIL = 0,
+    TYPE_QUOTE = 1,
+    TYPE_BACKQUOTE = 1 << 1,
+    TYPE_COMMA = 1 << 2,
+    TYPE_AT = 1 << 3,
+    TYPE_SYMBOL_NAME = 1 << 4,
+    TYPE_SYMBOL = 1 << 5,
+    TYPE_INTEGER = 1 << 6,
+    TYPE_RATIO = 1 << 7,
+    TYPE_FLOAT = 1 << 8,
+    TYPE_CONS_PAIR = 1 << 9,
+    TYPE_CHARACTER = 1 << 10,
+    TYPE_STRING = 1 << 11,
+    TYPE_ARRAY = 1 << 12,
+    TYPE_HASHTABLE = 1 << 13,
+    TYPE_ENVIRONMENT = 1 << 14,
+    TYPE_PACKAGE = 1 << 15,
+    TYPE_PATHNAME = 1 << 16,
+    TYPE_STREAM = 1 << 17,
+    TYPE_STRUCTURE = 1 << 18,
+    TYPE_CONDITION = 1 << 19,
+    TYPE_FUNCTION = 1 << 20,
+    TYPE_T = 1 << 21
   };
+
+
+#define TYPE_REAL (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT)
+#define TYPE_NUMBER (TYPE_REAL)
 
 
 union
@@ -226,6 +230,29 @@ package
   struct package_record *records;
   size_t recs_alloc_size;
   size_t recs_used_size;
+};
+
+
+struct
+structure_slot
+{
+  struct object *name;
+  struct object *initform;
+  struct typespec *type;
+  int read_only;
+
+  struct structure_slot *next;
+};
+
+
+struct
+structure
+{
+  char *conc_name;
+  size_t initial_offset;
+  int named;
+
+  struct structure_slot *slots;
 };
 
 
