@@ -229,6 +229,14 @@ package
 };
 
 
+struct
+sharp_macro_call
+{
+  int arg;
+  int dispatch_ch;
+};
+
+
 enum
 typespecs
   {
@@ -366,7 +374,8 @@ enum read_outcome read_symbol_name (struct object **obj, const char *input, size
 
 enum read_outcome read_prefix (struct object **obj, const char *input, size_t size, struct object **last, const char **prefix_end);
 
-enum read_outcome read_sharp_macro_call (struct object **obj, const char *input, size_t size, const char **macro_end);
+struct sharp_macro_call *read_sharp_macro_call (const char *input, size_t size, const char **macro_end, enum read_outcome *outcome);
+struct object *call_sharp_macro (struct sharp_macro_call *macro_call, enum read_outcome *outcome);
 
 enum element find_next_element (const char *input, size_t size, const char **elem_begin);
 
@@ -856,6 +865,7 @@ read_object (struct object **obj, const char *input, size_t size, const char **o
   enum object_type numtype;
   enum read_outcome out = NO_OBJECT;
   const char *num_end;
+  struct sharp_macro_call *sharp_m;
   
   input = skip_space_block (input, size, &size);
 
@@ -903,7 +913,7 @@ read_object (struct object **obj, const char *input, size_t size, const char **o
       else if (*input == '#')
 	{
 	  *obj_begin = input;
-	  out = read_sharp_macro_call (&ob, input+1, size-1, obj_end);
+	  sharp_m = read_sharp_macro_call (input+1, size-1, obj_end, &out);
 	  break;
 	}
       else
@@ -1157,10 +1167,43 @@ read_prefix (struct object **obj, const char *input, size_t size, struct object 
 }
 
 
-enum read_outcome 
-read_sharp_macro_call (struct object **obj, const char *input, size_t size, const char **macro_end)
+struct sharp_macro_call *
+read_sharp_macro_call (const char *input, size_t size, const char **macro_end, enum read_outcome *outcome)
 {
-  return 0;
+  int arg, i = 0;
+  struct sharp_macro_call *call;
+
+  if (!size)
+    return NULL;
+
+  call = malloc_and_check (sizeof (*call));
+  
+  if (isdigit (input [i]))
+    arg = input [i++] - '0';
+  else
+    arg = -1;
+  
+  while (i < size && isdigit (input [i]))
+    {
+      arg *= 10;
+      arg += input [i++] - '0';
+    }
+
+  call->arg = arg;
+  
+  if (i < size)
+    call->dispatch_ch = input [i];
+  else
+    return NULL;
+  
+  return call;
+}
+
+
+struct object *
+call_sharp_macro (struct sharp_macro_call *macro_call, enum read_outcome *outcome)
+{
+  return NULL;
 }
 
 
