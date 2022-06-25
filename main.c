@@ -349,7 +349,10 @@ eval_outcome
     UNBOUND_SYMBOL,
     ILLEGAL_FUNCTION_CALL,
     CANT_EVALUATE_LISTS_YET,
-    EVAL_NOT_IMPLEMENTED
+    UNKNOWN_FUNCTION,
+    EVAL_NOT_IMPLEMENTED,
+    MALFORMED_IF,
+    MISSING_OR_MALFORMED_BINDING_FORMS
   };
 
 
@@ -460,6 +463,7 @@ struct object *evaluate_object (struct object *obj, struct binding *env, enum ev
 struct object *evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_progn (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -1899,7 +1903,10 @@ struct object *
 nth (unsigned int ind, struct object *list)
 {  
   for (int i = 0; i < ind; i++)
-    list = list->value_ptr.cons_pair->cdr;
+    if (!list->value_ptr.cons_pair->cdr)
+      return NULL;
+    else
+      list = list->value_ptr.cons_pair->cdr;
   
   return list->value_ptr.cons_pair->car;
 }
@@ -2112,14 +2119,19 @@ evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outc
 
   if (symname_equals (symname, "LET"))
     {
-      return evaluate_let (list, env, outcome, cursor);
+      return evaluate_let (CDR (list), env, outcome, cursor);
     }
   else if (symname_equals (symname, "IF"))
     {
-      return evaluate_if (list, env, outcome, cursor);
+      return evaluate_if (CDR (list), env, outcome, cursor);
+    }
+  else if (symname_equals (symname, "PROGN"))
+    {
+      return evaluate_progn (CDR (list), env, outcome, cursor);
     }
 
-  *outcome = CANT_EVALUATE_LISTS_YET;
+  *outcome = UNKNOWN_FUNCTION;
+  *cursor = CAR (list);
   
   return NULL;
 }
@@ -2128,6 +2140,12 @@ evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outc
 struct object *
 evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
 {
+  if (!list || list->type != TYPE_CONS_PAIR)
+    {
+      *outcome = MISSING_OR_MALFORMED_BINDING_FORMS;
+      return NULL;
+    }
+
   return NULL;
 }
 
@@ -2135,7 +2153,63 @@ evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outco
 struct object *
 evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  return NULL;
+  struct object *if_clause;
+
+  if (!list)
+    {
+      *outcome = MALFORMED_IF;
+      return NULL;
+    }
+
+  if_clause = evaluate_object (CAR (list), env, outcome, cursor);
+
+  if (if_clause && if_clause != &nil_object)
+    {
+      if (!CDR (list))
+	{
+	  *outcome = MALFORMED_IF;
+	  return NULL;
+	}
+
+      return evaluate_object (CAR (CDR (list)), env, outcome, cursor);
+    }
+  else
+    {
+      if (!nth (2, list))
+	{
+	  return &nil_object;
+	}
+      else
+	return evaluate_object (nth (2, list), env, outcome, cursor);
+    }
+}
+
+
+struct object *
+evaluate_progn (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *res;
+
+  if (!list)
+    {
+      *outcome = EVAL_OK;
+      return &nil_object;
+    }
+
+  if (list->type != TYPE_CONS_PAIR)
+    return evaluate_object (list, env, outcome, cursor);
+
+  res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
+
+  while (res && (list = list->value_ptr.cons_pair->cdr))
+    {
+      if (list->type != TYPE_CONS_PAIR)
+	return evaluate_object (list, env, outcome, cursor);
+      else
+	res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
+    }
+
+  return res;
 }
 
 
@@ -2354,6 +2428,12 @@ print_eval_error (enum eval_outcome err, struct object *arg)
       printf ("eval error: symbol ");
       print_symbol (arg->value_ptr.symbol);
       printf (" not bound to any object\n");
+    }
+  else if (err == UNKNOWN_FUNCTION)
+    {
+      printf ("eval error: symbol ");
+      print_symbol (arg->value_ptr.symbol);
+      printf (" not bound to any function\n");
     }
   else if (err == ILLEGAL_FUNCTION_CALL)
     {
