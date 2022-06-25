@@ -546,18 +546,8 @@ main (int argc, char *argv [])
       
       while (obj && input_left && input_left_s > 0)
 	{
-	  read_objs = append_object_to_list (obj, read_objs);
+	  result = evaluate_object (obj, env, &eval_out, &cursor);
 
-	  obj = read_object_interactively_continued (input_left, input_left_s, &sym_list, &input_left, &input_left_s);
-	}
-
-      if (obj)
-	read_objs = append_object_to_list (obj, read_objs);
-
-      while (read_objs)
-	{
-	  result = evaluate_object (read_objs->obj, env, &eval_out, &cursor);
-      
 	  if (eval_out == EVAL_OK)
 	    {
 	      print_object (result);
@@ -565,8 +555,27 @@ main (int argc, char *argv [])
 	    }
 	  else
 	    print_eval_error (eval_out, cursor);
-	  
-	  read_objs = read_objs->next;
+
+	  decrement_refcount (result);
+	  decrement_refcount (obj);
+
+	  obj = read_object_interactively_continued (input_left, input_left_s, &sym_list, &input_left, &input_left_s);
+	}
+
+      if (obj)
+	{
+	  result = evaluate_object (obj, env, &eval_out, &cursor);
+
+	  if (eval_out == EVAL_OK)
+	    {
+	      print_object (result);
+	      printf ("\n");
+	    }
+	  else
+	    print_eval_error (eval_out, cursor);
+
+	  decrement_refcount (result);
+	  decrement_refcount (obj);
 	}
     }
   
