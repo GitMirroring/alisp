@@ -347,6 +347,7 @@ eval_outcome
   {
     EVAL_OK,
     UNBOUND_SYMBOL,
+    ILLEGAL_FUNCTION_CALL,
     CANT_EVALUATE_LISTS_YET,
     EVAL_NOT_IMPLEMENTED
   };
@@ -457,6 +458,8 @@ struct object *call_function (const struct function *func, const struct cons_pai
 
 struct object *evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -2096,8 +2099,42 @@ evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *out
 struct object *
 evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
 {
+  struct symbol_name *symname;
+
+  if (CAR (list)->type != TYPE_SYMBOL_NAME)
+    {
+      *outcome = ILLEGAL_FUNCTION_CALL;
+      *cursor = CAR (list);
+      return NULL;
+    }
+
+  symname = CAR (list)->value_ptr.symbol_name;
+
+  if (symname_equals (symname, "LET"))
+    {
+      return evaluate_let (list, env, outcome, cursor);
+    }
+  else if (symname_equals (symname, "IF"))
+    {
+      return evaluate_if (list, env, outcome, cursor);
+    }
+
   *outcome = CANT_EVALUATE_LISTS_YET;
   
+  return NULL;
+}
+
+
+struct object *
+evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  return NULL;
+}
+
+
+struct object *
+evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+{
   return NULL;
 }
 
@@ -2317,6 +2354,10 @@ print_eval_error (enum eval_outcome err, struct object *arg)
       printf ("eval error: symbol ");
       print_symbol (arg->value_ptr.symbol);
       printf (" not bound to any object\n");
+    }
+  else if (err == ILLEGAL_FUNCTION_CALL)
+    {
+      printf ("eval error: illegal function call\n");
     }
   else if (err == CANT_EVALUATE_LISTS_YET)
     printf ("eval error: can't evaluate lists yet!\n");
