@@ -71,10 +71,19 @@ symbol_name
   struct object *sym;
 };
 
-  
+
+enum
+binding_type
+  {
+    LEXICAL_BINDING,
+    DYNAMIC_BINDING
+  };
+
+
 struct
 binding
 {
+  enum binding_type type;
   struct object *sym;
   struct object *obj;
   struct binding *next;
@@ -85,7 +94,7 @@ struct
 global_environment
 {
   struct binding *dyn_vars;
-  struct binding *const_vars;
+  /*struct binding *const_vars;*/
   struct binding *funcs;
   struct binding *macros;
   struct binding *spec_ops;
@@ -117,6 +126,12 @@ lexical_environment
 struct
 environment
 {
+  struct binding *const_vars;
+  struct binding *vars;
+  struct binding *funcs;
+  struct binding *macros;
+  struct binding *spec_ops;
+
   struct global_environment *glob_env;
   struct dynamic_environment *dyn_env;
   struct lexical_environment *lex_env;
@@ -478,9 +493,10 @@ void normalize_symbol_name (char *output, const char *input, size_t size);
 struct object *create_symbol (char *name, size_t size);
 struct object *intern_symbol_name (struct object *symname, struct object_list **symbol_list);
 
-struct binding *create_binding (struct object *sym, struct object *obj);
+struct binding *create_binding (struct object *sym, struct object *obj, enum binding_type type);
 struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *find_binding (struct symbol *sym, struct binding *env);
+struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
 
 struct object *skip_prefix (struct object *prefix, struct object **last_prefix);
 struct object *append_prefix (struct object *obj, enum element type);
@@ -497,11 +513,11 @@ struct parameter *parse_optional_parameters (struct object *obj, struct paramete
 struct parameter *parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out);
 struct object *call_function (const struct function *func, const struct cons_pair *arglist);
 
-struct object *evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_progn (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -552,7 +568,7 @@ main (int argc, char *argv [])
 
   struct object *result, *cursor, *obj;
   struct object_list *read_objs = NULL, *sym_list = NULL;;
-  struct binding *env = NULL;
+  struct environment env = {NULL};
   
   enum eval_outcome eval_out;
 
@@ -584,7 +600,7 @@ main (int argc, char *argv [])
       
       while (obj && input_left && input_left_s > 0)
 	{
-	  result = evaluate_object (obj, env, &eval_out, &cursor);
+	  result = evaluate_object (obj, &env, &eval_out, &cursor);
 
 	  if (eval_out == EVAL_OK)
 	    {
@@ -602,7 +618,7 @@ main (int argc, char *argv [])
 
       if (obj)
 	{
-	  result = evaluate_object (obj, env, &eval_out, &cursor);
+	  result = evaluate_object (obj, &env, &eval_out, &cursor);
 
 	  if (eval_out == EVAL_OK)
 	    {
@@ -1866,10 +1882,11 @@ intern_symbol_name (struct object *symname, struct object_list **symbol_list)
 
 
 struct binding *
-create_binding (struct object *sym, struct object *obj)
+create_binding (struct object *sym, struct object *obj, enum binding_type type)
 {
   struct binding *bin = malloc_and_check (sizeof (*bin));
 
+  bin->type = type;
   bin->sym = sym;
   bin->obj = obj;
   bin->next = NULL;
@@ -1899,6 +1916,18 @@ find_binding (struct symbol *sym, struct binding *env)
     }
 
   return NULL;
+}
+
+
+struct binding *
+find_variable_binding (struct symbol *sym, struct environment *env)
+{
+  struct binding *b = find_binding (sym, env->const_vars);
+
+  if (b)
+    return b;
+  else
+    return find_binding (sym, env->vars);
 }
 
 
@@ -2116,8 +2145,10 @@ call_function (const struct function *func, const struct cons_pair *arglist)
 
 
 struct object *
-evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
+  struct binding *bind;
+
   if (obj->type == TYPE_T || obj->type == TYPE_NIL || obj->type == TYPE_INTEGER
       || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT || obj->type == TYPE_CHARACTER
       || obj->type == TYPE_STRING)
@@ -2135,12 +2166,12 @@ evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *out
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
       if (obj->type == TYPE_SYMBOL)
-	env = find_binding (obj->value_ptr.symbol, env);
+	bind = find_variable_binding (obj->value_ptr.symbol, env);
       else
-	env = find_binding (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
+	bind = find_variable_binding (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
 
-      if (env)
-	return env->obj;
+      if (bind)
+	return bind->obj;
       else
 	{
 	  *outcome = UNBOUND_SYMBOL;
@@ -2158,7 +2189,7 @@ evaluate_object (struct object *obj, struct binding *env, enum eval_outcome *out
 
 
 struct object *
-evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   struct symbol_name *symname;
 
@@ -2192,7 +2223,7 @@ evaluate_list (struct object *list, struct binding *env, enum eval_outcome *outc
 
 
 struct object *
-evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   if (!list || list->type != TYPE_CONS_PAIR)
     {
@@ -2205,7 +2236,7 @@ evaluate_let (struct object *list, struct binding *env, enum eval_outcome *outco
 
 
 struct object *
-evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *if_clause;
 
@@ -2240,7 +2271,7 @@ evaluate_if (struct object *list, struct binding *env, enum eval_outcome *outcom
 
 
 struct object *
-evaluate_progn (struct object *list, struct binding *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *res;
 
