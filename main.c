@@ -376,6 +376,10 @@ read_outcome
   };
 
 
+#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME |\
+			   INCOMPLETE_SHARP_MACRO_CALL)
+
+
 enum
 eval_outcome
   {
@@ -1034,8 +1038,8 @@ enum read_outcome
 read_list (struct object **obj, const char *input, size_t size, const char **list_end,
 	   struct object_list **symbol_list, size_t *out_arg)
 {
-  struct object *prev_cons = NULL, *car, *ob, *last_pref, *cons;
-  const char *obj_beg, *obj_end;
+  struct object *last_cons = NULL, *car = NULL, *ob, *last_pref, *cons;
+  const char *obj_beg, *obj_end = NULL;
   enum read_outcome out;
   int found_dot = 0, dotted_list_full = 0;
   
@@ -1049,17 +1053,19 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
     {
       if (ob->value_ptr.cons_pair->filling_car)
 	{
-	  out = read_list (&ob->value_ptr.cons_pair->car, input, size, list_end, symbol_list, out_arg);
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
 	}
 
-      prev_cons = ob;
+      last_cons = ob;
       ob = ob->value_ptr.cons_pair->cdr;      
     }
   
-  car = NULL;
-  out = read_object (&car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+  if (obj_end)
+    out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), &obj_beg, &obj_end, symbol_list, out_arg);
+  else
+    out = read_object (&car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
 
-  if (out == CLOSING_PARENTHESIS && !ob)
+  if (out == CLOSING_PARENTHESIS && !last_cons)
     {
       *list_end = obj_end;
       *obj = &nil_object;
@@ -1083,7 +1089,7 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 	{
 	  found_dot = 1;
 	}
-      else if (out == COMPLETE_OBJECT)
+      else if (out == COMPLETE_OBJECT || out & INCOMPLETE_OBJECT)
 	{
 	  if (dotted_list_full)
 	    {
@@ -1092,9 +1098,9 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 	    }
 	  else if (found_dot)
 	    {
-	      if (prev_cons)
+	      if (last_cons)
 		{
-		  prev_cons->value_ptr.cons_pair->cdr = car;
+		  last_cons->value_ptr.cons_pair->cdr = car;
 		  dotted_list_full = 1;
 		}
 	      else
@@ -1108,10 +1114,17 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 	      cons = alloc_empty_cons_pair ();
 	      cons->value_ptr.cons_pair->car = car;
 
-	      if (prev_cons)
-		prev_cons = prev_cons->value_ptr.cons_pair->cdr = cons;
+	      if (last_cons)
+		last_cons = last_cons->value_ptr.cons_pair->cdr = cons;
 	      else
-		*obj = prev_cons = cons;
+		*obj = last_cons = cons;
+
+	      if (out & INCOMPLETE_OBJECT)
+		{
+		  last_cons->value_ptr.cons_pair->filling_car = 1;
+
+		  return INCOMPLETE_LIST;
+		}
 	    }
 	}
       
