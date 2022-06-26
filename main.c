@@ -405,7 +405,8 @@ eval_outcome
     UNKNOWN_FUNCTION,
     EVAL_NOT_IMPLEMENTED,
     MALFORMED_IF,
-    MISSING_OR_MALFORMED_BINDING_FORMS
+    MISSING_OR_MALFORMED_BINDING_FORMS,
+    CANT_REDEFINE_CONSTANT
   };
 
 
@@ -491,12 +492,18 @@ const char *find_end_of_symbol_name (const char *input, size_t size, size_t *new
 void normalize_symbol_name (char *output, const char *input, size_t size);
 
 struct object *create_symbol (char *name, size_t size);
+struct object *intern_symbol (char *name, size_t len, struct object_list **symbol_list);
 struct object *intern_symbol_name (struct object *symname, struct object_list **symbol_list);
 
 struct binding *create_binding (struct object *sym, struct object *obj, enum binding_type type);
 struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *find_binding (struct symbol *sym, struct binding *env);
 struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
+
+struct binding *define_constant (struct object *sym, struct object *form, struct environment *env,
+				 enum eval_outcome *outcome, struct object **cursor);
+struct binding *define_constant_by_name (char *name, size_t size, struct object_list **symbol_list,struct object *form,
+					 struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct object *skip_prefix (struct object *prefix, struct object **last_prefix);
 struct object *append_prefix (struct object *obj, enum element type);
@@ -518,6 +525,7 @@ struct object *evaluate_list (struct object *list, struct environment *env, enum
 struct object *evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -567,7 +575,7 @@ main (int argc, char *argv [])
   int end_repl = 0;
 
   struct object *result, *cursor, *obj;
-  struct object_list *read_objs = NULL, *sym_list = NULL;;
+  struct object_list *read_objs = NULL, *sym_list = NULL;
   struct environment env = {NULL};
   
   enum eval_outcome eval_out;
@@ -591,6 +599,8 @@ main (int argc, char *argv [])
 	  exit (0);
 	}
     }
+
+  define_constant_by_name ("NIL", strlen ("NIL"), &sym_list, &nil_object, &env, &eval_out, &cursor);
 
   print_welcome_message ();
 
@@ -1848,7 +1858,7 @@ create_symbol (char *name, size_t size)
 
 
 struct object *
-intern_symbol_name (struct object *symname, struct object_list **symbol_list)
+intern_symbol (char *name, size_t len, struct object_list **symbol_list)
 {
   struct object *sym;
   struct object_list *cur, *new_sym;
@@ -1857,20 +1867,14 @@ intern_symbol_name (struct object *symname, struct object_list **symbol_list)
 
   while (cur)
     {
-      if (eqmem (cur->obj->value_ptr.symbol->name, cur->obj->value_ptr.symbol->name_len,
-		 symname->value_ptr.symbol_name->value, symname->value_ptr.symbol_name->used_size))
-	{
-	  symname->value_ptr.symbol_name->sym = cur->obj;
-	  return cur->obj;
-	}
+      if (eqmem (cur->obj->value_ptr.symbol->name, cur->obj->value_ptr.symbol->name_len, name, len))
+	return cur->obj;
       
       cur = cur->next;
     }
-
-  sym = create_symbol (symname->value_ptr.symbol_name->value, symname->value_ptr.symbol_name->used_size);
-
-  symname->value_ptr.symbol_name->sym = sym;
   
+  sym = create_symbol (name, len);
+
   new_sym = malloc_and_check (sizeof (*new_sym));
   new_sym->obj = sym;
   new_sym->next = *symbol_list;
@@ -1878,6 +1882,15 @@ intern_symbol_name (struct object *symname, struct object_list **symbol_list)
   *symbol_list = new_sym;
   
   return sym;  
+}
+
+
+struct object *
+intern_symbol_name (struct object *symname, struct object_list **symbol_list)
+{
+  return (symname->value_ptr.symbol_name->sym = intern_symbol (symname->value_ptr.symbol_name->value,
+							       symname->value_ptr.symbol_name->used_size,
+							       symbol_list));
 }
 
 
@@ -1928,6 +1941,36 @@ find_variable_binding (struct symbol *sym, struct environment *env)
     return b;
   else
     return find_binding (sym, env->vars);
+}
+
+
+struct binding *
+define_constant (struct object *sym, struct object *form, struct environment *env,
+		 enum eval_outcome *outcome, struct object **cursor)
+{
+  struct binding *bind = find_binding (sym->value_ptr.symbol, env->const_vars);
+  struct object *val = evaluate_object (form, env, outcome, cursor);
+
+  if (!val)
+    return NULL;
+
+  if (!bind)
+    return (env->const_vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING), env->const_vars));
+  else
+    {
+      *outcome = CANT_REDEFINE_CONSTANT;
+      return NULL;
+    }
+}
+
+
+struct binding *
+define_constant_by_name (char *name, size_t size, struct object_list **symbol_list, struct object *form,
+			 struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *sym = intern_symbol (name, size, symbol_list);
+
+  return define_constant (sym, form, env, outcome, cursor);
 }
 
 
@@ -2171,7 +2214,10 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
 	bind = find_variable_binding (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
 
       if (bind)
-	return bind->obj;
+	{
+	  *outcome = EVAL_OK;
+	  return bind->obj;
+	}
       else
 	{
 	  *outcome = UNBOUND_SYMBOL;
@@ -2213,6 +2259,10 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   else if (symname_equals (symname, "PROGN"))
     {
       return evaluate_progn (CDR (list), env, outcome, cursor);
+    }
+  else if (symname_equals (symname, "DEFCONSTANT"))
+    {
+      return evaluate_defconstant (CDR (list), env, outcome, cursor);
     }
 
   *outcome = UNKNOWN_FUNCTION;
@@ -2295,6 +2345,18 @@ evaluate_progn (struct object *list, struct environment *env, enum eval_outcome 
     }
 
   return res;
+}
+
+
+struct object *
+evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct binding *b = define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)), env, outcome, cursor);
+
+  if (b)
+    return CAR (list);
+  else
+    return NULL;
 }
 
 
@@ -2525,7 +2587,13 @@ print_eval_error (enum eval_outcome err, struct object *arg)
       printf ("eval error: illegal function call\n");
     }
   else if (err == CANT_EVALUATE_LISTS_YET)
-    printf ("eval error: can't evaluate lists yet!\n");
+    {
+      printf ("eval error: can't evaluate lists yet!\n");
+    }
+  else if (err = CANT_REDEFINE_CONSTANT)
+    {
+      printf ("eval error: redefining constants is not allowed\n");
+    }
 }
 
 
