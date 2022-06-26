@@ -82,10 +82,44 @@ binding
 
 
 struct
+global_environment
+{
+  struct binding *dyn_vars;
+  struct binding *const_vars;
+  struct binding *funcs;
+  struct binding *macros;
+  struct binding *spec_ops;
+  struct binding *types;
+  struct binding *class_names;
+  struct binding *procls;
+};
+
+
+struct
+dynamic_environment
+{
+  struct binding *dyn_vars;
+};
+
+
+struct
+lexical_environment
+{
+  struct binding *lex_vars;
+  struct binding *sym_macros;
+  struct binding *funcs;
+  struct binding *macros;
+  struct binding *block_tags;
+  struct binding *go_tags;
+};
+
+
+struct
 environment
 {
-  struct binding *bind;
-  struct environment *next;
+  struct global_environment *glob_env;
+  struct dynamic_environment *dyn_env;
+  struct lexical_environment *lex_env;
 };
 
 
