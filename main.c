@@ -1107,7 +1107,7 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 	    {
 	      cons = alloc_empty_cons_pair ();
 	      cons->value_ptr.cons_pair->car = car;
-	      
+
 	      if (prev_cons)
 		prev_cons = prev_cons->value_ptr.cons_pair->cdr = cons;
 	      else
@@ -1119,11 +1119,9 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 	break;
       
       car = NULL;
-      out = read_object (&car, obj_end + 1, size - (input - obj_end + 1), &obj_beg, &obj_end, symbol_list, out_arg);
+      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), &obj_beg, &obj_end, symbol_list, out_arg);
     }
 
-  ob->value_ptr.cons_pair->filling_car = 1;
-  
   return INCOMPLETE_LIST;
 }
 
