@@ -314,11 +314,13 @@ sharp_macro_call
 
 
 enum
-typespecs
+typespec_type
   {
     TYPESPEC_SYMBOL,
     TYPESPEC_CLASS,
     TYPESPEC_LIST,
+    TYPESPEC_INTERNAL_OR,
+    TYPESPEC_INTERNAL_AND,
     TYPESPEC_OR,
     TYPESPEC_AND,
     TYPESPEC_NOT,
@@ -329,7 +331,7 @@ typespecs
 struct
 typespec
 {
-  enum typespecs type;
+  enum typespec_type type;
   enum object_type int_value;
   struct object *obj_value;
   struct typespec *first;
@@ -519,6 +521,8 @@ struct parameter *parse_optional_parameters (struct object *obj, struct paramete
 					     enum parse_lambda_list_outcome *out);
 struct parameter *parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out);
 struct object *call_function (const struct function *func, const struct cons_pair *arglist);
+
+int check_type (struct object *obj, struct typespec *type);
 
 struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
@@ -2184,6 +2188,24 @@ struct object *
 call_function (const struct function *func, const struct cons_pair *arglist)
 {
   return NULL;
+}
+
+
+int
+check_type (struct object *obj, struct typespec *type)
+{
+  if (type->type == TYPESPEC_INTERNAL_OR)
+    return obj->type & type->int_value;
+  else if (type->type == TYPESPEC_INTERNAL_AND)
+    {
+
+    }
+  else if (type->type == TYPESPEC_OR)
+    return check_type (obj, type->first) || check_type (obj, type->second);
+  else if (type->type == TYPESPEC_AND)
+    return check_type (obj, type->first) && check_type (obj, type->second);
+
+  return 0;
 }
 
 
