@@ -58,6 +58,11 @@ symbol
 {
   char *name;
   size_t name_len;
+
+  int is_const;
+  struct object *value_cell;
+  struct object *function_cell;
+
   struct package *package;  
 };
 
@@ -310,6 +315,7 @@ sharp_macro_call
 {
   int arg;
   int dispatch_ch;
+  struct object *obj;
 };
 
 
@@ -377,19 +383,20 @@ read_outcome
     INCOMPLETE_SHARP_MACRO_CALL = 1 << 9,
 
     INVALID_SHARP_DISPATCH = 1 << 10,
-
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 11,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 12,
+    UNKNOWN_SHARP_DISPATCH = 1 << 11,
     
-    COMMA_WITHOUT_BACKQUOTE = 1 << 13,
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 12,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 13,
 
-    SINGLE_DOT = 1 << 14,
-    
-    MULTIPLE_DOTS = 1 << 15,
+    COMMA_WITHOUT_BACKQUOTE = 1 << 14,
 
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 16,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 17,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 18
+    SINGLE_DOT = 1 << 15,
+
+    MULTIPLE_DOTS = 1 << 16,
+
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 17,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 18,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 19
   };
 
 
@@ -463,7 +470,8 @@ enum read_outcome read_symbol_name (struct object **obj, const char *input, size
 
 enum read_outcome read_prefix (struct object **obj, const char *input, size_t size, struct object **last, const char **prefix_end);
 
-struct sharp_macro_call *read_sharp_macro_call (const char *input, size_t size, const char **macro_end, enum read_outcome *outcome);
+struct sharp_macro_call *read_sharp_macro_call (const char *input, size_t size, const char **macro_end, struct object_list **symbol_list,
+						size_t *out_arg, enum read_outcome *outcome);
 struct object *call_sharp_macro (struct sharp_macro_call *macro_call, enum read_outcome *outcome);
 
 enum element find_next_element (const char *input, size_t size, const char **elem_begin);
@@ -1026,7 +1034,11 @@ read_object (struct object **obj, const char *input, size_t size, const char **o
       else if (*input == '#')
 	{
 	  *obj_begin = input;
-	  sharp_m = read_sharp_macro_call (input+1, size-1, obj_end, &out);
+	  sharp_m = read_sharp_macro_call (input+1, size-1, obj_end, symbol_list, out_arg, &out);
+
+	  if (out == COMPLETE_OBJECT)
+	    ob = call_sharp_macro (sharp_m, &out);
+
 	  break;
 	}
       else
@@ -1288,9 +1300,11 @@ read_prefix (struct object **obj, const char *input, size_t size, struct object 
 
 
 struct sharp_macro_call *
-read_sharp_macro_call (const char *input, size_t size, const char **macro_end, enum read_outcome *outcome)
+read_sharp_macro_call (const char *input, size_t size, const char **macro_end, struct object_list **symbol_list,
+		       size_t *out_arg, enum read_outcome *outcome)
 {
   int arg, i = 0;
+  const char *obj_b, *obj_e;
   struct sharp_macro_call *call;
 
   if (!size)
@@ -1321,6 +1335,15 @@ read_sharp_macro_call (const char *input, size_t size, const char **macro_end, e
       *outcome = INVALID_SHARP_DISPATCH;
       return NULL;
     }
+
+  if (!strchr ("'\\", call->dispatch_ch))
+    {
+      *outcome = UNKNOWN_SHARP_DISPATCH;
+      return NULL;
+    }
+
+  call->obj = NULL;
+  *outcome = read_object (&call->obj, input+i+1, size-i-1, &obj_b, &obj_e, symbol_list, out_arg);
   
   return call;
 }
@@ -1846,14 +1869,16 @@ create_symbol (char *name, size_t size)
 {
   struct object *obj;
   struct symbol *sym;
-  
+
   obj = malloc_and_check (sizeof (*obj));
   obj->type = TYPE_SYMBOL;
   obj->refcount = 1;
-  
+
   sym = malloc_and_check (sizeof (*sym));
   sym->name = name;
   sym->name_len = size;
+  sym->value_cell = NULL;
+  sym->function_cell = NULL;
 
   obj->value_ptr.symbol = sym;
 
