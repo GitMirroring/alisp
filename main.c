@@ -616,7 +616,7 @@ main (int argc, char *argv [])
 	{
 	  result = evaluate_object (obj, &env, &eval_out, &cursor);
 
-	  if (eval_out == EVAL_OK)
+	  if (result)
 	    {
 	      print_object (result);
 	      printf ("\n");
@@ -634,7 +634,7 @@ main (int argc, char *argv [])
 	{
 	  result = evaluate_object (obj, &env, &eval_out, &cursor);
 
-	  if (eval_out == EVAL_OK)
+	  if (result)
 	    {
 	      print_object (result);
 	      printf ("\n");
@@ -2219,13 +2219,11 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
       || obj->type == TYPE_STRING)
     {
       obj->refcount++;
-      *outcome = EVAL_OK;
       return obj;
     }
   else if (obj->type == TYPE_QUOTE || obj->type == TYPE_BACKQUOTE)
     {
       obj->value_ptr.next->refcount++;
-      *outcome = EVAL_OK;
       return obj->value_ptr.next;
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
@@ -2236,10 +2234,7 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
 	bind = find_variable_binding (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
 
       if (bind)
-	{
-	  *outcome = EVAL_OK;
-	  return bind->obj;
-	}
+	return bind->obj;
       else
 	{
 	  *outcome = UNBOUND_SYMBOL;
@@ -2251,7 +2246,8 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
     {
       return evaluate_list (obj, env, outcome, cursor); 
     }
-  
+
+  *outcome = EVAL_NOT_IMPLEMENTED;
   return NULL;
 }
 
@@ -2303,6 +2299,7 @@ evaluate_let (struct object *list, struct environment *env, enum eval_outcome *o
       return NULL;
     }
 
+  *outcome = EVAL_NOT_IMPLEMENTED;
   return NULL;
 }
 
@@ -2320,7 +2317,10 @@ evaluate_if (struct object *list, struct environment *env, enum eval_outcome *ou
 
   if_clause = evaluate_object (CAR (list), env, outcome, cursor);
 
-  if (if_clause && if_clause != &nil_object)
+  if (!if_clause)
+    return NULL;
+
+  if (if_clause != &nil_object)
     {
       if (!CDR (list))
 	{
@@ -2348,10 +2348,7 @@ evaluate_progn (struct object *list, struct environment *env, enum eval_outcome 
   struct object *res;
 
   if (!list)
-    {
-      *outcome = EVAL_OK;
-      return &nil_object;
-    }
+    return &nil_object;
 
   if (list->type != TYPE_CONS_PAIR)
     return evaluate_object (list, env, outcome, cursor);
