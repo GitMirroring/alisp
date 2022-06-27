@@ -579,7 +579,7 @@ main (int argc, char *argv [])
   int end_repl = 0;
 
   struct object *result, *cursor, *obj;
-  struct object_list *read_objs = NULL, *sym_list = NULL;
+  struct object_list *sym_list = NULL;
   struct environment env = {NULL};
   
   enum eval_outcome eval_out;
@@ -2609,9 +2609,13 @@ print_eval_error (enum eval_outcome err, struct object *arg)
     {
       printf ("eval error: can't evaluate lists yet!\n");
     }
-  else if (err = CANT_REDEFINE_CONSTANT)
+  else if (err == CANT_REDEFINE_CONSTANT)
     {
       printf ("eval error: redefining constants is not allowed\n");
+    }
+  else if (err == EVAL_NOT_IMPLEMENTED)
+    {
+      printf ("eval error: not implemente\n");
     }
 }
 
