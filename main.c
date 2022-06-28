@@ -588,6 +588,9 @@ struct symbol _nil_symbol = {"NIL", 3};
 struct object nil_symbol = {1, NULL, NULL, TYPE_SYMBOL, .value_ptr.symbol = &_nil_symbol};
 
 
+struct object t_object = {1, NULL, NULL, TYPE_T};
+
+
 
 int
 main (int argc, char *argv [])
@@ -621,6 +624,7 @@ main (int argc, char *argv [])
     }
 
   define_constant_by_name ("NIL", strlen ("NIL"), &sym_list, &nil_object, &env, &eval_out, &cursor);
+  define_constant_by_name ("T", strlen ("T"), &sym_list, &t_object, &env, &eval_out, &cursor);
 
   print_welcome_message ();
 
@@ -2656,6 +2660,8 @@ print_object (const struct object *obj)
 {
   if (obj->type == TYPE_NIL)
     printf ("()");
+  else if (obj->type == TYPE_T)
+    printf ("T");
   else if (obj->type == TYPE_QUOTE)
     {
       printf ("'");
