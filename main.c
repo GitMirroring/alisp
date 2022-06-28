@@ -509,6 +509,7 @@ struct object *intern_symbol_name (struct object *symname, struct object_list **
 
 struct binding *create_binding (struct object *sym, struct object *obj, enum binding_type type);
 struct binding *add_binding (struct binding *bin, struct binding *env);
+struct binding *chain_bindings (struct binding *bin, struct binding *env);
 struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env);
 struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
@@ -542,6 +543,7 @@ int check_type (struct object *obj, struct typespec *type);
 struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_let_star (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
@@ -1961,11 +1963,33 @@ add_binding (struct binding *bin, struct binding *env)
 
 
 struct binding *
+chain_bindings (struct binding *bin, struct binding *env)
+{
+  struct binding *last = bin, *b = bin;
+  
+  if (!bin)
+    return env;
+  
+  while (b)
+    {
+      last = b;
+      b = b->next;
+    }
+
+  last->next = env;
+  
+  return bin;
+}
+
+
+struct binding *
 remove_bindings (struct binding *env, int num)
 {
   struct binding *b;
 
-  if (num == 1)
+  if (!num)
+    return env;  
+  else if (num == 1)
     {
       b = env->next;
       free (env);
@@ -2131,7 +2155,7 @@ nth (unsigned int ind, struct object *list)
 {  
   for (int i = 0; i < ind; i++)
     if (!list->value_ptr.cons_pair->cdr)
-      return NULL;
+      return &nil_object;
     else
       list = list->value_ptr.cons_pair->cdr;
   
@@ -2373,6 +2397,10 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
     {
       return evaluate_let (CDR (list), env, outcome, cursor);
     }
+  else if (symname_equals (symname, "LET*"))
+    {
+      return evaluate_let_star (CDR (list), env, outcome, cursor);
+    }
   else if (symname_equals (symname, "IF"))
     {
       return evaluate_if (CDR (list), env, outcome, cursor);
@@ -2404,10 +2432,11 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 struct object *
 evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  struct object *bind_form, *res, *sym;
+  struct object *bind_form, *val, *res, *sym;
   int binding_num = 0;
+  struct binding *bin = NULL;
 
-  if (!list || list->type != TYPE_CONS_PAIR || CAR (list)->type != TYPE_CONS_PAIR)
+  if (!list || list->type != TYPE_CONS_PAIR || (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object))
     {
       *outcome = INCORRECT_BINDING_FORMS_IN_LET;
       return NULL;
@@ -2415,7 +2444,75 @@ evaluate_let (struct object *list, struct environment *env, enum eval_outcome *o
 
   bind_form = CAR (list);
 
-  while (bind_form)
+  while (bind_form && bind_form != &nil_object)
+    {
+      if (CAR (bind_form)->type == TYPE_SYMBOL_NAME || CAR (bind_form)->type == TYPE_SYMBOL)
+	{
+	  if (CAR (bind_form)->type == TYPE_SYMBOL_NAME)
+	    sym = CAR (bind_form)->value_ptr.symbol_name->sym;
+	  else
+	    sym = CAR (bind_form);
+
+	  bin = add_binding (create_binding (sym, &nil_object, LEXICAL_BINDING), bin);
+	}
+      else if (CAR (bind_form)->type == TYPE_CONS_PAIR)
+	{
+	  if (list_length (CAR (bind_form)) != 2
+	      || (CAR (CAR (bind_form))->type != TYPE_SYMBOL_NAME && CAR (CAR (bind_form))->type != TYPE_SYMBOL)) 
+	    {
+	      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
+	      return NULL;
+	    }
+
+	  if (CAR (CAR (bind_form))->type == TYPE_SYMBOL_NAME)
+	    sym = CAR (CAR (bind_form))->value_ptr.symbol_name->sym;
+	  else
+	    sym = CAR (CAR (bind_form));
+
+	  val = evaluate_object (CAR (CDR (CAR (bind_form))), env, outcome, cursor);
+
+	  if (!val)
+	    return NULL;
+	  
+	  bin = add_binding (create_binding (sym, val, LEXICAL_BINDING), bin);
+	}
+      else
+	{
+	  *outcome = INCORRECT_BINDING_FORMS_IN_LET;
+	  return NULL;
+	}
+      binding_num++;
+      
+      bind_form = CDR (bind_form);
+    }
+  
+  env->vars = chain_bindings (bin, env->vars);
+
+  res = evaluate_progn (nth (1, list), env, outcome, cursor);
+
+  env->vars = remove_bindings (env->vars, binding_num);
+
+  return res;
+}
+
+
+struct object *
+evaluate_let_star (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  return NULL;
+
+  /*struct object *bind_form, *res, *sym;
+  int binding_num = 0;
+
+  if (!list || list->type != TYPE_CONS_PAIR || (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object))
+    {
+      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
+      return NULL;
+    }
+
+  bind_form = CAR (list);
+
+  while (bind_form && bind_form != &nil_object)
     {
       if (CAR (bind_form)->type == TYPE_SYMBOL_NAME || CAR (bind_form)->type == TYPE_SYMBOL)
 	{
@@ -2452,11 +2549,11 @@ evaluate_let (struct object *list, struct environment *env, enum eval_outcome *o
       bind_form = CDR (bind_form);
     }
 
-  res = evaluate_progn (CAR (CDR (list)), env, outcome, cursor);
+  res = evaluate_progn (nth (1, list), env, outcome, cursor);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
-  return res;
+  return res;*/
 }
 
 
