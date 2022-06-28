@@ -416,7 +416,7 @@ eval_outcome
     UNKNOWN_FUNCTION,
     EVAL_NOT_IMPLEMENTED,
     MALFORMED_IF,
-    MISSING_OR_MALFORMED_BINDING_FORMS,
+    INCORRECT_BINDING_FORMS_IN_LET,
     CANT_REDEFINE_CONSTANT
   };
 
@@ -509,6 +509,7 @@ struct object *intern_symbol_name (struct object *symname, struct object_list **
 
 struct binding *create_binding (struct object *sym, struct object *obj, enum binding_type type);
 struct binding *add_binding (struct binding *bin, struct binding *env);
+struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env);
 struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
 
@@ -1960,6 +1961,24 @@ add_binding (struct binding *bin, struct binding *env)
 
 
 struct binding *
+remove_bindings (struct binding *env, int num)
+{
+  struct binding *b;
+
+  if (num == 1)
+    {
+      b = env->next;
+      free (env);
+      return b;
+    }
+  else
+    {
+      return remove_bindings (env->next, num-1);
+    }
+}
+
+
+struct binding *
 find_binding (struct symbol *sym, struct binding *env)
 {
   while (env)
@@ -2385,14 +2404,59 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 struct object *
 evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  if (!list || list->type != TYPE_CONS_PAIR)
+  struct object *bind_form, *res, *sym;
+  int binding_num = 0;
+
+  if (!list || list->type != TYPE_CONS_PAIR || CAR (list)->type != TYPE_CONS_PAIR)
     {
-      *outcome = MISSING_OR_MALFORMED_BINDING_FORMS;
+      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
       return NULL;
     }
 
-  *outcome = EVAL_NOT_IMPLEMENTED;
-  return NULL;
+  bind_form = CAR (list);
+
+  while (bind_form)
+    {
+      if (CAR (bind_form)->type == TYPE_SYMBOL_NAME || CAR (bind_form)->type == TYPE_SYMBOL)
+	{
+	  if (CAR (bind_form)->type == TYPE_SYMBOL_NAME)
+	    sym = CAR (bind_form)->value_ptr.symbol_name->sym;
+	  else
+	    sym = CAR (bind_form);
+
+	  env->vars = add_binding (create_binding (sym, &nil_object, LEXICAL_BINDING), env->vars);
+	}
+      else if (CAR (bind_form)->type == TYPE_CONS_PAIR)
+	{
+	  if (list_length (CAR (bind_form)) != 2
+	      || (CAR (CAR (bind_form))->type != TYPE_SYMBOL_NAME && CAR (CAR (bind_form))->type != TYPE_SYMBOL)) 
+	    {
+	      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
+	      return NULL;
+	    }
+
+	  if (CAR (CAR (bind_form))->type == TYPE_SYMBOL_NAME)
+	    sym = CAR (CAR (bind_form))->value_ptr.symbol_name->sym;
+	  else
+	    sym = CAR (CAR (bind_form));
+
+	  env->vars = add_binding (create_binding (sym, CAR (CDR (CAR (bind_form))), LEXICAL_BINDING), env->vars);
+	}
+      else
+	{
+	  *outcome = INCORRECT_BINDING_FORMS_IN_LET;
+	  return NULL;
+	}
+      binding_num++;
+
+      bind_form = CDR (bind_form);
+    }
+
+  res = evaluate_progn (CAR (CDR (list)), env, outcome, cursor);
+
+  env->vars = remove_bindings (env->vars, binding_num);
+
+  return res;
 }
 
 
@@ -2748,6 +2812,10 @@ print_eval_error (enum eval_outcome err, struct object *arg)
   else if (err == CANT_EVALUATE_LISTS_YET)
     {
       printf ("eval error: can't evaluate lists yet!\n");
+    }
+  else if (err == INCORRECT_BINDING_FORMS_IN_LET)
+    {
+      printf ("eval error: incorrect syntax of binding forms in let\n");
     }
   else if (err == CANT_REDEFINE_CONSTANT)
     {
