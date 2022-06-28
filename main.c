@@ -2499,9 +2499,7 @@ evaluate_let (struct object *list, struct environment *env, enum eval_outcome *o
 struct object *
 evaluate_let_star (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  return NULL;
-
-  /*struct object *bind_form, *res, *sym;
+  struct object *bind_form, *val, *res, *sym;
   int binding_num = 0;
 
   if (!list || list->type != TYPE_CONS_PAIR || (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object))
@@ -2537,7 +2535,12 @@ evaluate_let_star (struct object *list, struct environment *env, enum eval_outco
 	  else
 	    sym = CAR (CAR (bind_form));
 
-	  env->vars = add_binding (create_binding (sym, CAR (CDR (CAR (bind_form))), LEXICAL_BINDING), env->vars);
+	  val = evaluate_object (CAR (CDR (CAR (bind_form))), env, outcome, cursor);
+	  
+	  if (!val)
+	    return NULL;
+	  
+	  env->vars = add_binding (create_binding (sym, val, LEXICAL_BINDING), env->vars);
 	}
       else
 	{
@@ -2553,7 +2556,7 @@ evaluate_let_star (struct object *list, struct environment *env, enum eval_outco
 
   env->vars = remove_bindings (env->vars, binding_num);
 
-  return res;*/
+  return res;
 }
 
 
