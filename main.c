@@ -38,7 +38,7 @@
 
 #define CAR(list) ((list)->value_ptr.cons_pair->car)
 
-#define CDR(list) ((list)->value_ptr.cons_pair->cdr)
+#define CDR(list) ((list)->value_ptr.cons_pair->cdr ? (list)->value_ptr.cons_pair->cdr : &nil_object)
 
 #define SYMBOL(sym) ((sym)->type == TYPE_SYMBOL ? (sym) : (sym)->value_ptr.symbol_name->sym) 
 
@@ -2570,7 +2570,7 @@ evaluate_if (struct object *list, struct environment *env, enum eval_outcome *ou
 
   if (if_clause != &nil_object)
     {
-      if (!CDR (list))
+      if (CDR (list) == &nil_object)
 	{
 	  *outcome = MALFORMED_IF;
 	  return NULL;
