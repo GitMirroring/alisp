@@ -36,11 +36,12 @@
 #include <readline/history.h>
 
 
-#define CAR(list) ((list)->value_ptr.cons_pair->car)
+#define CAR(list) ((list) == &nil_object ? &nil_object : (list)->value_ptr.cons_pair->car)
 
-#define CDR(list) ((list)->value_ptr.cons_pair->cdr ? (list)->value_ptr.cons_pair->cdr : &nil_object)
+#define CDR(list) ((list) == &nil_object ? &nil_object :		\
+		   ((list)->value_ptr.cons_pair->cdr ? (list)->value_ptr.cons_pair->cdr : &nil_object))
 
-#define SYMBOL(sym) ((sym)->type == TYPE_SYMBOL ? (sym) : (sym)->value_ptr.symbol_name->sym) 
+#define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) : (s)->value_ptr.symbol_name->sym) 
 
 
 
@@ -229,6 +230,7 @@ object_type
   };
 
 
+#define TYPE_LIST (TYPE_NIL | TYPE_CONS_PAIR)
 #define TYPE_REAL (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT)
 #define TYPE_NUMBER (TYPE_REAL)
 
@@ -418,7 +420,8 @@ eval_outcome
     UNKNOWN_FUNCTION,
     EVAL_NOT_IMPLEMENTED,
     MALFORMED_IF,
-    INCORRECT_BINDING_FORMS_IN_LET,
+    INCORRECT_SYNTAX_IN_LET,
+    INCORRECT_SYNTAX_IN_PROGN,
     CANT_REDEFINE_CONSTANT
   };
 
@@ -529,6 +532,7 @@ struct object *skip_prefix (struct object *prefix, struct object **last_prefix);
 struct object *append_prefix (struct object *obj, enum element type);
 
 struct object *nth (unsigned int ind, struct object *list);
+struct object *nthcdr (unsigned int ind, struct object *list);
 unsigned int list_length (const struct object *list);
 
 void copy_symbol_name (char *out, const struct symbol_name *name);
@@ -544,8 +548,14 @@ int check_type (struct object *obj, struct typespec *type);
 
 struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_let_star (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+
+struct binding *create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome,
+					   struct object **cursor);
+struct object *evaluate_let (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
+			     struct object **cursor);
+struct object *evaluate_let_star (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
+				  struct object **cursor);
+
 struct object *evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
@@ -2144,14 +2154,33 @@ append_prefix (struct object *obj, enum element type)
 
 struct object *
 nth (unsigned int ind, struct object *list)
-{  
-  for (int i = 0; i < ind; i++)
+{
+  int i;
+
+  for (i = 0; i < ind; i++)
     if (!list->value_ptr.cons_pair->cdr)
       return &nil_object;
     else
       list = list->value_ptr.cons_pair->cdr;
-  
+
   return list->value_ptr.cons_pair->car;
+}
+
+
+struct object *
+nthcdr (unsigned int ind, struct object *list)
+{
+  int i;
+
+  for (i = 0; i < ind; i++)
+    {
+      list = list->value_ptr.cons_pair->cdr;
+
+      if (!list)
+	return &nil_object;
+    }
+
+  return list;
 }
 
 
@@ -2387,11 +2416,23 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 
   if (symname_equals (symname, "LET"))
     {
-      return evaluate_let (CDR (list), env, outcome, cursor);
+      if (!(CDR (list)->type & TYPE_LIST))
+	{
+	  *outcome = INCORRECT_SYNTAX_IN_LET;
+	  return NULL;
+	}
+
+      return evaluate_let (CAR (CDR (list)), CDR (CDR (list)), env, outcome, cursor);
     }
   else if (symname_equals (symname, "LET*"))
     {
-      return evaluate_let_star (CDR (list), env, outcome, cursor);
+      if (!(CDR (list)->type & TYPE_LIST))
+	{
+	  *outcome = INCORRECT_SYNTAX_IN_LET;
+	  return NULL;
+	}
+
+      return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)), env, outcome, cursor);
     }
   else if (symname_equals (symname, "IF"))
     {
@@ -2413,74 +2454,74 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
     {
       return evaluate_defvar (CDR (list), env, outcome, cursor);
     }
-  
+
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
-  
+
   return NULL;
 }
 
 
-struct object *
-evaluate_let (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+struct binding *
+create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  struct object *bind_form, *val, *res, *sym;
-  int binding_num = 0;
-  struct binding *bin = NULL;
+  struct object *sym, *val;
 
-  if (!list || list->type != TYPE_CONS_PAIR || (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object))
+  if (form->type == TYPE_SYMBOL_NAME || form->type == TYPE_SYMBOL)
     {
-      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
-      return NULL;
+      sym = SYMBOL (form);
+
+      return create_binding (sym, &nil_object, LEXICAL_BINDING);
     }
-
-  bind_form = CAR (list);
-
-  while (bind_form && bind_form != &nil_object)
+  else if (form->type == TYPE_CONS_PAIR)
     {
-      if (CAR (bind_form)->type == TYPE_SYMBOL_NAME || CAR (bind_form)->type == TYPE_SYMBOL)
+      if (list_length (form) != 2
+	  || (CAR (form)->type != TYPE_SYMBOL_NAME && CAR (form)->type != TYPE_SYMBOL)) 
 	{
-	  if (CAR (bind_form)->type == TYPE_SYMBOL_NAME)
-	    sym = CAR (bind_form)->value_ptr.symbol_name->sym;
-	  else
-	    sym = CAR (bind_form);
-
-	  bin = add_binding (create_binding (sym, &nil_object, LEXICAL_BINDING), bin);
-	}
-      else if (CAR (bind_form)->type == TYPE_CONS_PAIR)
-	{
-	  if (list_length (CAR (bind_form)) != 2
-	      || (CAR (CAR (bind_form))->type != TYPE_SYMBOL_NAME && CAR (CAR (bind_form))->type != TYPE_SYMBOL)) 
-	    {
-	      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
-	      return NULL;
-	    }
-
-	  if (CAR (CAR (bind_form))->type == TYPE_SYMBOL_NAME)
-	    sym = CAR (CAR (bind_form))->value_ptr.symbol_name->sym;
-	  else
-	    sym = CAR (CAR (bind_form));
-
-	  val = evaluate_object (CAR (CDR (CAR (bind_form))), env, outcome, cursor);
-
-	  if (!val)
-	    return NULL;
-	  
-	  bin = add_binding (create_binding (sym, val, LEXICAL_BINDING), bin);
-	}
-      else
-	{
-	  *outcome = INCORRECT_BINDING_FORMS_IN_LET;
+	  *outcome = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
 	}
-      binding_num++;
-      
-      bind_form = CDR (bind_form);
-    }
-  
-  env->vars = chain_bindings (bin, env->vars);
 
-  res = evaluate_progn (nth (1, list), env, outcome, cursor);
+      sym = SYMBOL (CAR (form));
+
+      val = evaluate_object (CAR (CDR (form)), env, outcome, cursor);
+
+      if (!val)
+	return NULL;
+
+      return create_binding (sym, val, LEXICAL_BINDING);
+    }
+  else
+    {
+      *outcome = INCORRECT_SYNTAX_IN_LET;
+      return NULL;
+    }
+}
+
+
+struct object *
+evaluate_let (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *res;
+  int binding_num = 0;
+  struct binding *bins = NULL, *bin;
+
+  while (bind_forms != &nil_object)
+    {
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, cursor);
+
+      if (!bin)
+	return NULL;
+
+      bins = add_binding (bin, bins);
+      binding_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  env->vars = chain_bindings (bins, env->vars);
+
+  res = evaluate_progn (body, env, outcome, cursor);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
@@ -2488,63 +2529,27 @@ evaluate_let (struct object *list, struct environment *env, enum eval_outcome *o
 }
 
 
-struct object *
-evaluate_let_star (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+struct object *evaluate_let_star (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
+				  struct object **cursor)
 {
-  struct object *bind_form, *val, *res, *sym;
+  struct object *res;
   int binding_num = 0;
+  struct binding *bin;
 
-  if (!list || list->type != TYPE_CONS_PAIR || (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object))
+  while (bind_forms != &nil_object)
     {
-      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
-      return NULL;
-    }
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, cursor);
 
-  bind_form = CAR (list);
+      if (!bin)
+	return NULL;
 
-  while (bind_form && bind_form != &nil_object)
-    {
-      if (CAR (bind_form)->type == TYPE_SYMBOL_NAME || CAR (bind_form)->type == TYPE_SYMBOL)
-	{
-	  if (CAR (bind_form)->type == TYPE_SYMBOL_NAME)
-	    sym = CAR (bind_form)->value_ptr.symbol_name->sym;
-	  else
-	    sym = CAR (bind_form);
-
-	  env->vars = add_binding (create_binding (sym, &nil_object, LEXICAL_BINDING), env->vars);
-	}
-      else if (CAR (bind_form)->type == TYPE_CONS_PAIR)
-	{
-	  if (list_length (CAR (bind_form)) != 2
-	      || (CAR (CAR (bind_form))->type != TYPE_SYMBOL_NAME && CAR (CAR (bind_form))->type != TYPE_SYMBOL)) 
-	    {
-	      *outcome = INCORRECT_BINDING_FORMS_IN_LET;
-	      return NULL;
-	    }
-
-	  if (CAR (CAR (bind_form))->type == TYPE_SYMBOL_NAME)
-	    sym = CAR (CAR (bind_form))->value_ptr.symbol_name->sym;
-	  else
-	    sym = CAR (CAR (bind_form));
-
-	  val = evaluate_object (CAR (CDR (CAR (bind_form))), env, outcome, cursor);
-	  
-	  if (!val)
-	    return NULL;
-	  
-	  env->vars = add_binding (create_binding (sym, val, LEXICAL_BINDING), env->vars);
-	}
-      else
-	{
-	  *outcome = INCORRECT_BINDING_FORMS_IN_LET;
-	  return NULL;
-	}
+      env->vars = add_binding (bin, env->vars);
       binding_num++;
 
-      bind_form = CDR (bind_form);
+      bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_progn (nth (1, list), env, outcome, cursor);
+  res = evaluate_progn (body, env, outcome, cursor);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
@@ -2595,11 +2600,15 @@ evaluate_progn (struct object *list, struct environment *env, enum eval_outcome 
 {
   struct object *res;
 
-  if (!list)
+  if (!list || list == &nil_object)
     return &nil_object;
 
   if (list->type != TYPE_CONS_PAIR)
-    return evaluate_object (list, env, outcome, cursor);
+    {
+      *outcome = INCORRECT_SYNTAX_IN_PROGN;
+
+      return NULL;
+    }
 
   res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
 
@@ -2900,9 +2909,13 @@ print_eval_error (enum eval_outcome err, struct object *arg)
     {
       printf ("eval error: can't evaluate lists yet!\n");
     }
-  else if (err == INCORRECT_BINDING_FORMS_IN_LET)
+  else if (err == INCORRECT_SYNTAX_IN_LET)
     {
-      printf ("eval error: incorrect syntax of binding forms in let\n");
+      printf ("eval error: incorrect syntax in let\n");
+    }
+  else if (err == INCORRECT_SYNTAX_IN_PROGN)
+    {
+      printf ("eval error: incorrect syntax in progn\n");
     }
   else if (err == CANT_REDEFINE_CONSTANT)
     {
