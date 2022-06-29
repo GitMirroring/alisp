@@ -561,6 +561,7 @@ struct object *evaluate_progn (struct object *list, struct environment *env, enu
 struct object *evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_defparameter (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_defvar (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_defun (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -2434,6 +2435,11 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 
       return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)), env, outcome, cursor);
     }
+  else if (symname_equals (symname, "QUOTE"))
+    {
+      CAR (CDR (list))->refcount++;
+      return CAR (CDR (list));
+    }
   else if (symname_equals (symname, "IF"))
     {
       return evaluate_if (CDR (list), env, outcome, cursor);
@@ -2453,6 +2459,10 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   else if (symname_equals (symname, "DEFVAR"))
     {
       return evaluate_defvar (CDR (list), env, outcome, cursor);
+    }
+  else if (symname_equals (symname, "DEFUN"))
+    {
+      return evaluate_defun (CDR (list), env, outcome, cursor);
     }
 
   *outcome = UNKNOWN_FUNCTION;
@@ -2529,8 +2539,9 @@ evaluate_let (struct object *bind_forms, struct object *body, struct environment
 }
 
 
-struct object *evaluate_let_star (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
-				  struct object **cursor)
+struct object *
+evaluate_let_star (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
+		   struct object **cursor)
 {
   struct object *res;
   int binding_num = 0;
@@ -2670,6 +2681,13 @@ evaluate_defvar (struct object *list, struct environment *env, enum eval_outcome
     }
 
   return CAR (list);
+}
+
+
+struct object *
+evaluate_defun (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  return NULL;
 }
 
 
