@@ -40,6 +40,8 @@
 
 #define CDR(list) ((list)->value_ptr.cons_pair->cdr)
 
+#define SYMBOL(sym) ((sym)->type == TYPE_SYMBOL ? (sym) : (sym)->value_ptr.symbol_name->sym) 
+
 
 
 /* not a C string. not null-terminated and explicit size. null bytes are allowed inside */
@@ -60,7 +62,9 @@ symbol
   size_t name_len;
 
   int is_const;
+  int is_parameter;
   int is_special;
+
   struct object *value_cell;
   struct object *function_cell;
 
@@ -100,7 +104,6 @@ struct
 global_environment
 {
   struct binding *dyn_vars;
-  /*struct binding *const_vars;*/
   struct binding *funcs;
   struct binding *macros;
   struct binding *spec_ops;
@@ -132,7 +135,6 @@ lexical_environment
 struct
 environment
 {
-  struct binding *const_vars;
   struct binding *vars;
   struct binding *funcs;
   struct binding *macros;
@@ -514,10 +516,10 @@ struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env);
 struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
 
-struct binding *define_constant (struct object *sym, struct object *form, struct environment *env,
-				 enum eval_outcome *outcome, struct object **cursor);
-struct binding *define_constant_by_name (char *name, size_t size, struct object_list **symbol_list,struct object *form,
-					 struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *define_constant (struct object *sym, struct object *form, struct environment *env,
+				enum eval_outcome *outcome, struct object **cursor);
+struct object *define_constant_by_name (char *name, size_t size, struct object_list **symbol_list,struct object *form,
+					struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *define_parameter (struct object *sym, struct object *form, struct environment *env,
 				 enum eval_outcome *outcome, struct object **cursor);
 struct object *define_parameter_by_name (char *name, size_t size, struct object_list **symbol_list, struct object *form,
@@ -2020,44 +2022,34 @@ find_binding (struct symbol *sym, struct binding *env)
 struct binding *
 find_variable_binding (struct symbol *sym, struct environment *env)
 {
-  struct binding *b = find_binding (sym, env->const_vars);
-
-  if (b)
-    return b;
-  else
-    return find_binding (sym, env->vars);
+  return find_binding (sym, env->vars);
 }
 
 
-struct binding *
+struct object *
 define_constant (struct object *sym, struct object *form, struct environment *env,
 		 enum eval_outcome *outcome, struct object **cursor)
 {
-  struct binding *bind; 
   struct object *val = evaluate_object (form, env, outcome, cursor);
-  struct symbol *s;
   
   if (!val)
     return NULL;
 
-  if (sym->type == TYPE_SYMBOL_NAME)
-    s = sym->value_ptr.symbol_name->sym->value_ptr.symbol;
-  else
-    s = sym->value_ptr.symbol;
-  
-  bind = find_binding (s, env->const_vars);
-  
-  if (!bind)
-    return (env->const_vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING), env->const_vars));
-  else
+  if (SYMBOL (sym)->value_ptr.symbol->is_const)
     {
       *outcome = CANT_REDEFINE_CONSTANT;
       return NULL;
     }
+
+  SYMBOL (sym)->value_ptr.symbol->is_const = 1;
+  SYMBOL (sym)->value_ptr.symbol->value_cell = val;
+  SYMBOL (sym)->refcount++;
+
+  return sym;
 }
 
 
-struct binding *
+struct object *
 define_constant_by_name (char *name, size_t size, struct object_list **symbol_list, struct object *form,
 			 struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
@@ -2353,7 +2345,7 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
       if (obj->type == TYPE_SYMBOL_NAME)
 	sym = obj->value_ptr.symbol_name->sym;
 
-      if (sym->value_ptr.symbol->is_special)
+      if (sym->value_ptr.symbol->is_const)
 	return sym->value_ptr.symbol->value_cell;
       else
 	{
@@ -2626,12 +2618,7 @@ evaluate_progn (struct object *list, struct environment *env, enum eval_outcome 
 struct object *
 evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  struct binding *b = define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)), env, outcome, cursor);
-
-  if (b)
-    return CAR (list);
-  else
-    return NULL;
+  return define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)), env, outcome, cursor);
 }
 
 
