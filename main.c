@@ -39,7 +39,7 @@
 #define CAR(list) ((list) == &nil_object ? &nil_object : (list)->value_ptr.cons_pair->car)
 
 #define CDR(list) ((list) == &nil_object ? &nil_object :		\
-		   ((list)->value_ptr.cons_pair->cdr ? (list)->value_ptr.cons_pair->cdr : &nil_object))
+		   (list)->value_ptr.cons_pair->cdr ? (list)->value_ptr.cons_pair->cdr : &nil_object)
 
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) : (s)->value_ptr.symbol_name->sym) 
 
@@ -184,7 +184,7 @@ function
 {
   struct parameter *lambda_list;
   int allow_other_keys;
-  struct object_list *body;
+  struct object *body;
 };
 
 
@@ -204,7 +204,6 @@ cons_pair
 enum
 object_type
   {
-    TYPE_NIL = 0,
     TYPE_QUOTE = 1,
     TYPE_BACKQUOTE = 1 << 1,
     TYPE_COMMA = 1 << 2,
@@ -226,7 +225,8 @@ object_type
     TYPE_STRUCTURE = 1 << 18,
     TYPE_CONDITION = 1 << 19,
     TYPE_FUNCTION = 1 << 20,
-    TYPE_T = 1 << 21
+    TYPE_T = 1 << 21,
+    TYPE_NIL = 1 << 22
   };
 
 
@@ -544,7 +544,8 @@ struct parameter *parse_required_parameters (struct object *obj, struct paramete
 struct parameter *parse_optional_parameters (struct object *obj, struct parameter **last, struct object **next,
 					     enum parse_lambda_list_outcome *out);
 struct parameter *parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out);
-struct object *call_function (const struct function *func, const struct cons_pair *arglist);
+struct object *call_function (const struct function *func, const struct cons_pair *arglist, struct environment *env,
+			      enum eval_outcome *outcome, struct object **cursor);
 
 int check_type (struct object *obj, struct typespec *type);
 
@@ -1982,6 +1983,9 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type)
   bin->obj = obj;
   bin->next = NULL;
 
+  sym->refcount++;
+  obj->refcount++;
+
   return bin;
 }
 
@@ -2348,9 +2352,10 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 
 struct object *
-call_function (const struct function *func, const struct cons_pair *arglist)
+call_function (const struct function *func, const struct cons_pair *arglist, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
 {
-  return NULL;
+  return &nil_object;
 }
 
 
@@ -2425,6 +2430,7 @@ struct object *
 evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   struct symbol_name *symname;
+  struct binding *bind;
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME)
     {
@@ -2485,9 +2491,13 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
       return evaluate_defun (CDR (list), env, outcome, cursor);
     }
 
+  bind = find_binding (symname->sym->value_ptr.symbol, env->funcs);
+
+  if (bind)
+    return call_function (bind->obj->value_ptr.function, CAR (CDR (list))->value_ptr.cons_pair, env, outcome, cursor);
+
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
-
   return NULL;
 }
 
@@ -2708,14 +2718,23 @@ struct object *
 evaluate_defun (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *fun;
+  enum parse_lambda_list_outcome out;
 
-  if (!(CAR (list)->type & TYPE_LIST))
+  if (CAR (list)->type != TYPE_SYMBOL_NAME || !(CAR (CDR (list))->type & TYPE_LIST))
     {
       *outcome = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
     }
 
-  return NULL;
+  fun = alloc_function ();
+
+  fun->value_ptr.function->lambda_list = parse_lambda_list (CAR (CDR (list)), &out);
+
+  fun->value_ptr.function->body = CDR (CDR (list));
+
+  env->funcs = add_binding (create_binding (SYMBOL (CAR (list)), fun, DYNAMIC_BINDING), env->funcs);
+
+  return CAR (list);
 }
 
 
@@ -2962,6 +2981,10 @@ print_eval_error (enum eval_outcome err, struct object *arg)
   else if (err == INCORRECT_SYNTAX_IN_PROGN)
     {
       printf ("eval error: incorrect syntax in progn\n");
+    }
+  else if (err == INCORRECT_SYNTAX_IN_DEFUN)
+    {
+      printf ("eval error: incorrect syntax in defun\n");
     }
   else if (err == CANT_REDEFINE_CONSTANT)
     {
