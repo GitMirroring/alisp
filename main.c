@@ -422,6 +422,7 @@ eval_outcome
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
     INCORRECT_SYNTAX_IN_PROGN,
+    INCORRECT_SYNTAX_IN_DEFUN,
     CANT_REDEFINE_CONSTANT
   };
 
@@ -495,6 +496,7 @@ void *realloc_and_check (void *ptr, size_t size);
 struct object *alloc_object (void);
 struct object *alloc_prefix (enum element type);
 struct object *alloc_empty_cons_pair (void);
+struct object *alloc_function (void);
 
 const char *find_end_of_string (const char *input, size_t size, size_t *new_size, size_t *string_length);
 void normalize_string (char *output, const char *input, size_t size);
@@ -1681,6 +1683,24 @@ alloc_empty_cons_pair (void)
 }
 
 
+struct object *
+alloc_function (void)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct function *fun = malloc_and_check (sizeof (*fun));
+
+  fun->lambda_list = NULL;
+  fun->allow_other_keys = 0;
+  fun->body = NULL;
+
+  obj->type = TYPE_FUNCTION;
+  obj->refcount = 1;
+  obj->value_ptr.function = fun;
+
+  return obj;
+}
+
+
 const char *
 find_end_of_string (const char *input, size_t size, size_t *new_size, size_t *string_length)
 {
@@ -2687,6 +2707,14 @@ evaluate_defvar (struct object *list, struct environment *env, enum eval_outcome
 struct object *
 evaluate_defun (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
+  struct object *fun;
+
+  if (!(CAR (list)->type & TYPE_LIST))
+    {
+      *outcome = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
   return NULL;
 }
 
