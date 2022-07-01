@@ -2249,7 +2249,7 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 
 
 struct parameter *
-parse_required_parameters (struct object *obj, struct parameter **last, struct object **next, enum parse_lambda_list_outcome *out)
+parse_required_parameters (struct object *obj, struct parameter **last, struct object **rest, enum parse_lambda_list_outcome *out)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -2269,7 +2269,7 @@ parse_required_parameters (struct object *obj, struct parameter **last, struct o
       obj = obj->value_ptr.cons_pair->cdr;
     }
 
-  *next = obj;
+  *rest = obj;
   
   return first;
 }
@@ -2331,6 +2331,7 @@ struct parameter *
 parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 {
   struct parameter *first = NULL, *last = NULL, *newlast = NULL;
+  struct object *car;
   
   if (obj->type == TYPE_NIL)
     return NULL;
@@ -2340,13 +2341,13 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
   first = parse_required_parameters (obj, &last, &obj, out);
 
-  if (obj && obj->type == TYPE_SYMBOL_NAME
-      && symname_equals (obj->value_ptr.symbol_name, "&OPTIONAL"))
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = obj->value_ptr.cons_pair->car)
+      && symname_equals (car->value_ptr.symbol_name, "&OPTIONAL"))
     {
-      if (last)
-	last->next = parse_optional_parameters (obj, &newlast, &obj, out);
+      if (first)
+	last->next = parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &newlast, &obj, out);
       else
-	first = parse_optional_parameters (obj, &last, &obj, out);
+	first = parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &last, &obj, out);
     }
   
   return first;
@@ -2362,20 +2363,24 @@ call_function (struct object *func, struct object *arglist, struct environment *
   struct object *val, *res;
   int args = 0;
 
-  while (arglist != &nil_object)
+  while (arglist != &nil_object && par
+	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
-      if (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM)
+      val = evaluate_object (CAR (arglist), env, outcome, cursor);
+
+      if (!val)
+	return NULL;
+
+      bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
+      args++;
+
+      if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
-	  val = evaluate_object (CAR (arglist), env, outcome, cursor);
-
-	  if (!val)
-	    return NULL;
-
-	  bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
+	  bins = add_binding (create_binding (par->supplied_p_param, &t_object, LEXICAL_BINDING), bins);
 	  args++;
-
-	  par = par->next;
 	}
+
+      par = par->next;
 
       arglist = CDR (arglist);
     }
@@ -2384,6 +2389,39 @@ call_function (struct object *func, struct object *arglist, struct environment *
     {
       *outcome = TOO_FEW_ARGUMENTS;
       return NULL;
+    }
+
+  if (arglist != &nil_object)
+    {
+      *outcome = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  while (par && par->type == OPTIONAL_PARAM)
+    {
+      if (par->init_form)
+	{
+	  val = evaluate_object (par->init_form, env, outcome, cursor);
+
+	  if (!val)
+	    return NULL;
+
+	  bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
+	  args++;
+	}
+      else
+	{
+	  bins = add_binding (create_binding (par->name, &nil_object, LEXICAL_BINDING), bins);
+	  args++;
+	}
+
+      if (par->supplied_p_param)
+	{
+	  bins = add_binding (create_binding (par->supplied_p_param, &nil_object, LEXICAL_BINDING), bins);
+	  args++;
+	}
+
+      par = par->next;
     }
 
   env->vars = chain_bindings (bins, env->vars);
