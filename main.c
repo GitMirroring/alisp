@@ -170,10 +170,10 @@ struct
 parameter
 {
   enum parameter_type type;
-  struct symbol_name *name;
+  struct object *name;
 
   struct object *init_form;
-  struct symbol_name *supplied_p_param;
+  struct object *supplied_p_param;
   
   struct parameter *next;
 };
@@ -423,7 +423,9 @@ eval_outcome
     INCORRECT_SYNTAX_IN_LET,
     INCORRECT_SYNTAX_IN_PROGN,
     INCORRECT_SYNTAX_IN_DEFUN,
-    CANT_REDEFINE_CONSTANT
+    CANT_REDEFINE_CONSTANT,
+    TOO_FEW_ARGUMENTS,
+    TOO_MANY_ARGUMENTS
   };
 
 
@@ -538,16 +540,16 @@ struct object *nthcdr (unsigned int ind, struct object *list);
 unsigned int list_length (const struct object *list);
 
 void copy_symbol_name (char *out, const struct symbol_name *name);
-struct parameter *alloc_parameter (enum parameter_type type, struct symbol_name *sym);
+struct parameter *alloc_parameter (enum parameter_type type, struct object *sym);
 struct parameter *parse_required_parameters (struct object *obj, struct parameter **last, struct object **next,
 					     enum parse_lambda_list_outcome *out);
 struct parameter *parse_optional_parameters (struct object *obj, struct parameter **last, struct object **next,
 					     enum parse_lambda_list_outcome *out);
 struct parameter *parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out);
-struct object *call_function (const struct function *func, const struct cons_pair *arglist, struct environment *env,
+struct object *call_function (struct object *func, struct object *arglist, struct environment *env,
 			      enum eval_outcome *outcome, struct object **cursor);
 
-int check_type (struct object *obj, struct typespec *type);
+int check_type (const struct object *obj, const struct typespec *type);
 
 struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
@@ -2235,7 +2237,7 @@ copy_symbol_name (char *out, const struct symbol_name *name)
 
 
 struct parameter *
-alloc_parameter (enum parameter_type type, struct symbol_name *sym)
+alloc_parameter (enum parameter_type type, struct object *sym)
 {
   struct parameter *par = malloc_and_check (sizeof (*par));
   par->type = type;
@@ -2260,9 +2262,9 @@ parse_required_parameters (struct object *obj, struct parameter **last, struct o
 			       "&ALLOW_OTHER_KEYS", NULL))
     {
       if (!first)
-	*last = first = alloc_parameter (REQUIRED_PARAM, car->value_ptr.symbol_name);
+	*last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
       else
-	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, car->value_ptr.symbol_name);
+	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
       
       obj = obj->value_ptr.cons_pair->cdr;
     }
@@ -2292,9 +2294,9 @@ parse_optional_parameters (struct object *obj, struct parameter **last, struct o
       else if (car->type == TYPE_SYMBOL_NAME)
 	{
 	  if (!first)
-	    *last = first = alloc_parameter (OPTIONAL_PARAM, car->value_ptr.symbol_name);
+	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
 	  else
-	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, car->value_ptr.symbol_name);
+	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
 
 	  (*last)->init_form = NULL;
 	  (*last)->supplied_p_param = NULL;
@@ -2302,9 +2304,9 @@ parse_optional_parameters (struct object *obj, struct parameter **last, struct o
       else if (car->type == TYPE_CONS_PAIR)
 	{
 	  if (!first)
-	    *last = first = alloc_parameter (OPTIONAL_PARAM, CAR (car)->value_ptr.symbol_name);
+	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 	  else
-	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, CAR (car)->value_ptr.symbol_name);
+	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 
 	  (*last)->init_form = NULL;
 	  (*last)->supplied_p_param = NULL;
@@ -2313,7 +2315,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last, struct o
 	    (*last)->init_form = nth (1, car);
 	  
 	  if (list_length (car) == 3)
-	    (*last)->supplied_p_param = nth (2, car)->value_ptr.symbol_name;
+	    (*last)->supplied_p_param = SYMBOL (nth (2, car));
 	}
       
       obj = obj->value_ptr.cons_pair->cdr;
@@ -2352,15 +2354,50 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 
 struct object *
-call_function (const struct function *func, const struct cons_pair *arglist, struct environment *env,
+call_function (struct object *func, struct object *arglist, struct environment *env,
 	       enum eval_outcome *outcome, struct object **cursor)
 {
-  return &nil_object;
+  struct parameter *par = func->value_ptr.function->lambda_list;
+  struct binding *bins = NULL;
+  struct object *val, *res;
+  int args = 0;
+
+  while (arglist != &nil_object)
+    {
+      if (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM)
+	{
+	  val = evaluate_object (CAR (arglist), env, outcome, cursor);
+
+	  if (!val)
+	    return NULL;
+
+	  bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
+	  args++;
+
+	  par = par->next;
+	}
+
+      arglist = CDR (arglist);
+    }
+
+  if (par && par->type == REQUIRED_PARAM)
+    {
+      *outcome = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  env->vars = chain_bindings (bins, env->vars);
+
+  res = evaluate_progn (func->value_ptr.function->body, env, outcome, cursor);
+
+  env->vars = remove_bindings (env->vars, args);
+
+  return res;
 }
 
 
 int
-check_type (struct object *obj, struct typespec *type)
+check_type (const struct object *obj, const struct typespec *type)
 {
   if (type->type == TYPESPEC_INTERNAL_OR)
     return obj->type & type->int_value;
@@ -2494,7 +2531,7 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   bind = find_binding (symname->sym->value_ptr.symbol, env->funcs);
 
   if (bind)
-    return call_function (bind->obj->value_ptr.function, CAR (CDR (list))->value_ptr.cons_pair, env, outcome, cursor);
+    return call_function (bind->obj, CDR (list), env, outcome, cursor);
 
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
@@ -2993,6 +3030,14 @@ print_eval_error (enum eval_outcome err, struct object *arg)
   else if (err == EVAL_NOT_IMPLEMENTED)
     {
       printf ("eval error: not implemente\n");
+    }
+  else if (err == TOO_FEW_ARGUMENTS)
+    {
+      printf ("eval error: too few arguments to function call\n");
+    }
+  else if (err == TOO_MANY_ARGUMENTS)
+    {
+      printf ("eval error: too many arguments to function call\n");
     }
 }
 
