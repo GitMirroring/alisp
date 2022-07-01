@@ -2349,7 +2349,16 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
       else
 	first = parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &last, &obj, out);
     }
-  
+
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = obj->value_ptr.cons_pair->car)
+      && symname_equals (car->value_ptr.symbol_name, "&REST"))
+    {
+      if (first)
+	last->next = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+      else
+	first = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+    }
+
   return first;
 }
 
@@ -2391,7 +2400,7 @@ call_function (struct object *func, struct object *arglist, struct environment *
       return NULL;
     }
 
-  if (arglist != &nil_object)
+  if (arglist != &nil_object && (!par || (par && par->type != REST_PARAM)))
     {
       *outcome = TOO_MANY_ARGUMENTS;
       return NULL;
@@ -2423,6 +2432,9 @@ call_function (struct object *func, struct object *arglist, struct environment *
 
       par = par->next;
     }
+
+  if (par && par->type == REST_PARAM)
+    bins = add_binding (create_binding (par->name, arglist, LEXICAL_BINDING), bins);
 
   env->vars = chain_bindings (bins, env->vars);
 
