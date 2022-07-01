@@ -196,8 +196,8 @@ symbol_name
 enum
 binding_type
   {
-    LEXICAL_BINDING,
-    DYNAMIC_BINDING
+    LEXICAL_BINDING = 1,
+    DYNAMIC_BINDING = 2
   };
 
 
@@ -526,8 +526,7 @@ struct binding *create_binding (struct object *sym, struct object *obj, enum bin
 struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *chain_bindings (struct binding *bin, struct binding *env);
 struct binding *remove_bindings (struct binding *env, int num);
-struct binding *find_binding (struct symbol *sym, struct binding *env);
-struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
+struct binding *find_binding (struct symbol *sym, struct binding *env, enum binding_type type);
 
 void add_builtin_form (char *name, struct object_list **symbol_list,
 		       struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
@@ -2067,24 +2066,17 @@ remove_bindings (struct binding *env, int num)
 
 
 struct binding *
-find_binding (struct symbol *sym, struct binding *env)
+find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 {
   while (env)
     {
-      if (env->sym->value_ptr.symbol == sym)
+      if (env->sym->value_ptr.symbol == sym && env->type & type)
 	return env;
 
       env = env->next;
     }
 
   return NULL;
-}
-
-
-struct binding *
-find_variable_binding (struct symbol *sym, struct environment *env)
-{
-  return find_binding (sym, env->vars);
 }
 
 
@@ -2526,11 +2518,23 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
 	sym = obj->value_ptr.symbol_name->sym;
 
       if (sym->value_ptr.symbol->is_const)
-	return sym->value_ptr.symbol->value_cell;
+	{
+	  sym->refcount++;
+	  return sym->value_ptr.symbol->value_cell;
+	}
+      else if (sym->value_ptr.symbol->is_parameter || sym->value_ptr.symbol->is_special)
+	{
+	  bind = find_binding (sym->value_ptr.symbol, env->vars, DYNAMIC_BINDING);
+
+	  if (bind)
+	    return bind->obj;
+
+	  return sym->value_ptr.symbol->value_cell;
+	}
       else
 	{
-	  bind = find_variable_binding (sym->value_ptr.symbol, env);
-	  
+	  bind = find_binding (sym->value_ptr.symbol, env->vars, LEXICAL_BINDING);
+
 	  if (bind)
 	    return bind->obj;
 	  else
@@ -2595,7 +2599,7 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
       return CAR (CDR (list));
     }
 
-  bind = find_binding (symname->sym->value_ptr.symbol, env->funcs);
+  bind = find_binding (symname->sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
 
   if (bind)
     return call_function (bind->obj, CDR (list), env, outcome, cursor);
