@@ -57,51 +57,6 @@ string
 
 
 struct
-symbol
-{
-  char *name;
-  size_t name_len;
-
-  int is_const;
-  int is_parameter;
-  int is_special;
-
-  struct object *value_cell;
-  struct object *function_cell;
-
-  struct package *package;  
-};
-
-
-struct
-symbol_name
-{
-  char *value;
-  size_t alloc_size;
-  size_t used_size;
-  struct object *sym;
-};
-
-
-enum
-binding_type
-  {
-    LEXICAL_BINDING,
-    DYNAMIC_BINDING
-  };
-
-
-struct
-binding
-{
-  enum binding_type type;
-  struct object *sym;
-  struct object *obj;
-  struct binding *next;
-};
-
-
-struct
 global_environment
 {
   struct binding *dyn_vars;
@@ -148,6 +103,115 @@ environment
 
 
 enum
+read_outcome
+  {
+    NO_OBJECT = 0,
+
+    COMPLETE_OBJECT = 1,
+
+    OPENING_PARENTHESIS = 1 << 2,
+    CLOSING_PARENTHESIS = 1 << 3,
+    CLOSING_PARENTHESIS_AFTER_PREFIX = 1 << 4,
+
+    JUST_PREFIX = 1 << 5,
+    INCOMPLETE_LIST = 1 << 6,
+    INCOMPLETE_STRING = 1 << 7,
+    INCOMPLETE_SYMBOL_NAME = 1 << 8,
+    INCOMPLETE_SHARP_MACRO_CALL = 1 << 9,
+
+    INVALID_SHARP_DISPATCH = 1 << 10,
+    UNKNOWN_SHARP_DISPATCH = 1 << 11,
+
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 12,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 13,
+
+    COMMA_WITHOUT_BACKQUOTE = 1 << 14,
+
+    SINGLE_DOT = 1 << 15,
+
+    MULTIPLE_DOTS = 1 << 16,
+
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 17,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 18,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 19
+  };
+
+
+#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME |\
+			   INCOMPLETE_SHARP_MACRO_CALL)
+
+
+enum
+eval_outcome
+  {
+    EVAL_OK,
+    UNBOUND_SYMBOL,
+    ILLEGAL_FUNCTION_CALL,
+    WRONG_NUMBER_OF_ARGUMENTS,
+    CANT_EVALUATE_LISTS_YET,
+    UNKNOWN_FUNCTION,
+    EVAL_NOT_IMPLEMENTED,
+    MALFORMED_IF,
+    INCORRECT_SYNTAX_IN_LET,
+    INCORRECT_SYNTAX_IN_PROGN,
+    INCORRECT_SYNTAX_IN_DEFUN,
+    CANT_REDEFINE_CONSTANT,
+    TOO_FEW_ARGUMENTS,
+    TOO_MANY_ARGUMENTS
+  };
+
+
+struct
+symbol
+{
+  char *name;
+  size_t name_len;
+
+  int is_builtin_form;
+  struct parameter *lambda_list;
+  struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
+				  struct object **cursor);
+
+  int is_const;
+  int is_parameter;
+  int is_special;
+
+  struct object *value_cell;
+  struct object *function_cell;
+
+  struct package *package;
+};
+
+
+struct
+symbol_name
+{
+  char *value;
+  size_t alloc_size;
+  size_t used_size;
+  struct object *sym;
+};
+
+
+enum
+binding_type
+  {
+    LEXICAL_BINDING,
+    DYNAMIC_BINDING
+  };
+
+
+struct
+binding
+{
+  enum binding_type type;
+  struct object *sym;
+  struct object *obj;
+  struct binding *next;
+};
+
+
+enum
 parse_lambda_list_outcome
   {
     EMPTY_LAMBDA_LIST,
@@ -184,6 +248,7 @@ function
 {
   struct parameter *lambda_list;
   int allow_other_keys;
+
   struct object *body;
 };
 
@@ -370,65 +435,6 @@ element
   };
 
 
-enum
-read_outcome
-  {
-    NO_OBJECT = 0,
-    
-    COMPLETE_OBJECT = 1,
-
-    OPENING_PARENTHESIS = 1 << 2,
-    CLOSING_PARENTHESIS = 1 << 3,
-    CLOSING_PARENTHESIS_AFTER_PREFIX = 1 << 4,
-
-    JUST_PREFIX = 1 << 5,
-    INCOMPLETE_LIST = 1 << 6,
-    INCOMPLETE_STRING = 1 << 7,
-    INCOMPLETE_SYMBOL_NAME = 1 << 8,
-    INCOMPLETE_SHARP_MACRO_CALL = 1 << 9,
-
-    INVALID_SHARP_DISPATCH = 1 << 10,
-    UNKNOWN_SHARP_DISPATCH = 1 << 11,
-    
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 12,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 13,
-
-    COMMA_WITHOUT_BACKQUOTE = 1 << 14,
-
-    SINGLE_DOT = 1 << 15,
-
-    MULTIPLE_DOTS = 1 << 16,
-
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 17,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 18,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 19
-  };
-
-
-#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME |\
-			   INCOMPLETE_SHARP_MACRO_CALL)
-
-
-enum
-eval_outcome
-  {
-    EVAL_OK,
-    UNBOUND_SYMBOL,
-    ILLEGAL_FUNCTION_CALL,
-    WRONG_NUMBER_OF_ARGUMENTS,
-    CANT_EVALUATE_LISTS_YET,
-    UNKNOWN_FUNCTION,
-    EVAL_NOT_IMPLEMENTED,
-    MALFORMED_IF,
-    INCORRECT_SYNTAX_IN_LET,
-    INCORRECT_SYNTAX_IN_PROGN,
-    INCORRECT_SYNTAX_IN_DEFUN,
-    CANT_REDEFINE_CONSTANT,
-    TOO_FEW_ARGUMENTS,
-    TOO_MANY_ARGUMENTS
-  };
-
-
 struct
 line_list
 {
@@ -523,6 +529,10 @@ struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env);
 struct binding *find_variable_binding (struct symbol *sym, struct environment *env);
 
+void add_builtin_form (char *name, struct object_list **symbol_list,
+		       struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
+						       struct object **cursor));
+
 struct object *define_constant (struct object *sym, struct object *form, struct environment *env,
 				enum eval_outcome *outcome, struct object **cursor);
 struct object *define_constant_by_name (char *name, size_t size, struct object_list **symbol_list,struct object *form,
@@ -553,6 +563,8 @@ int check_type (const struct object *obj, const struct typespec *type);
 
 struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+
+struct object *builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct binding *create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome,
 					   struct object **cursor);
@@ -646,6 +658,15 @@ main (int argc, char *argv [])
 
   define_constant_by_name ("NIL", strlen ("NIL"), &sym_list, &nil_object, &env, &eval_out, &cursor);
   define_constant_by_name ("T", strlen ("T"), &sym_list, &t_object, &env, &eval_out, &cursor);
+
+  add_builtin_form ("CAR", &sym_list, builtin_car);
+  add_builtin_form ("IF", &sym_list, evaluate_if);
+  add_builtin_form ("PROGN", &sym_list, evaluate_progn);
+  add_builtin_form ("DEFCONSTANT", &sym_list, evaluate_defconstant);
+  add_builtin_form ("DEFPARAMETER", &sym_list, evaluate_defparameter);
+  add_builtin_form ("DEFVAR", &sym_list, evaluate_defvar);
+  add_builtin_form ("DEFUN", &sym_list, evaluate_defun);
+
 
   print_welcome_message ();
 
@@ -1928,6 +1949,7 @@ create_symbol (char *name, size_t size)
   sym = malloc_and_check (sizeof (*sym));
   sym->name = name;
   sym->name_len = size;
+  sym->is_builtin_form = 0;
   sym->is_special = 0;
   sym->value_cell = NULL;
   sym->function_cell = NULL;
@@ -1949,7 +1971,10 @@ intern_symbol (char *name, size_t len, struct object_list **symbol_list)
   while (cur)
     {
       if (eqmem (cur->obj->value_ptr.symbol->name, cur->obj->value_ptr.symbol->name_len, name, len))
-	return cur->obj;
+	{
+	  cur->obj->refcount++;
+	  return cur->obj;
+	}
       
       cur = cur->next;
     }
@@ -2060,6 +2085,19 @@ struct binding *
 find_variable_binding (struct symbol *sym, struct environment *env)
 {
   return find_binding (sym, env->vars);
+}
+
+
+void
+add_builtin_form (char *name, struct object_list **symbol_list,
+		  struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
+						  struct object **cursor))
+{
+  struct object *sym = intern_symbol (name, strlen (name), symbol_list);
+
+  sym->value_ptr.symbol->is_builtin_form = 1;
+  sym->value_ptr.symbol->builtin_form = builtin_form;
+  sym->refcount++;
 }
 
 
@@ -2528,6 +2566,9 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 
   symname = CAR (list)->value_ptr.symbol_name;
 
+  if (symname->sym->value_ptr.symbol->is_builtin_form)
+    return symname->sym->value_ptr.symbol->builtin_form (CDR (list), env, outcome, cursor);
+
   if (symname_equals (symname, "LET"))
     {
       if (!(CDR (list)->type & TYPE_LIST))
@@ -2553,30 +2594,6 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
       CAR (CDR (list))->refcount++;
       return CAR (CDR (list));
     }
-  else if (symname_equals (symname, "IF"))
-    {
-      return evaluate_if (CDR (list), env, outcome, cursor);
-    }
-  else if (symname_equals (symname, "PROGN"))
-    {
-      return evaluate_progn (CDR (list), env, outcome, cursor);
-    }
-  else if (symname_equals (symname, "DEFCONSTANT"))
-    {
-      return evaluate_defconstant (CDR (list), env, outcome, cursor);
-    }
-  else if (symname_equals (symname, "DEFPARAMETER"))
-    {
-      return evaluate_defparameter (CDR (list), env, outcome, cursor);
-    }
-  else if (symname_equals (symname, "DEFVAR"))
-    {
-      return evaluate_defvar (CDR (list), env, outcome, cursor);
-    }
-  else if (symname_equals (symname, "DEFUN"))
-    {
-      return evaluate_defun (CDR (list), env, outcome, cursor);
-    }
 
   bind = find_binding (symname->sym->value_ptr.symbol, env->funcs);
 
@@ -2586,6 +2603,13 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
   return NULL;
+}
+
+
+struct object *
+builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  return CAR (CAR (list));
 }
 
 
