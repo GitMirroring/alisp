@@ -96,6 +96,8 @@ environment
   struct binding *macros;
   struct binding *spec_ops;
 
+  struct package_name *packages;
+
   struct global_environment *glob_env;
   struct dynamic_environment *dyn_env;
   struct lexical_environment *lex_env;
@@ -339,21 +341,33 @@ package_record_visibility
 struct
 package_record
 {
-  struct string symbol_name;
-  struct symbol *symbol;
   enum package_record_visibility visibility;
+
+  char *symname;
+  size_t symname_len;
+
+  struct symbol *symbol;
+
+  struct package_record *next;
 };
 
 
 struct
 package
 {
-  struct string name;
-  struct string *nicks;
-  size_t nicks_size;
-  struct package_record *records;
-  size_t recs_alloc_size;
-  size_t recs_used_size;
+  struct symbol *name;
+
+  struct package_record *recs;
+};
+
+
+struct
+package_name
+{
+  struct symbol *name;
+  struct package *package;
+
+  struct package_name *next;
 };
 
 
