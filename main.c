@@ -3045,8 +3045,10 @@ print_object (const struct object *obj)
     print_symbol (obj->value_ptr.symbol);
   else if (obj->type == TYPE_CONS_PAIR)
     print_list (obj->value_ptr.cons_pair);
+  else if (obj->type == TYPE_FUNCTION)
+    printf ("#<FUNCTION %p>", obj);
   else
-    printf ("<print not implemented>");
+    printf ("#<print not implemented>");
 }
 
 
