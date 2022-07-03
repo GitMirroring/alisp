@@ -96,7 +96,7 @@ environment
   struct binding *macros;
   struct binding *spec_ops;
 
-  struct package_name *packages;
+  struct binding *packages;
 
   struct global_environment *glob_env;
   struct dynamic_environment *dyn_env;
@@ -116,31 +116,35 @@ read_outcome
     CLOSING_PARENTHESIS_AFTER_PREFIX = 1 << 4,
 
     JUST_PREFIX = 1 << 5,
-    INCOMPLETE_LIST = 1 << 6,
-    INCOMPLETE_STRING = 1 << 7,
-    INCOMPLETE_SYMBOL_NAME = 1 << 8,
-    INCOMPLETE_SHARP_MACRO_CALL = 1 << 9,
+    EMPTY_LIST = 1 << 6,
+    INCOMPLETE_LIST = 1 << 7,
+    INCOMPLETE_STRING = 1 << 8,
+    INCOMPLETE_SYMBOL_NAME = 1 << 9,
+    INCOMPLETE_SHARP_MACRO_CALL = 1 << 10,
 
-    INVALID_SHARP_DISPATCH = 1 << 10,
-    UNKNOWN_SHARP_DISPATCH = 1 << 11,
+    INVALID_SHARP_DISPATCH = 1 << 11,
+    UNKNOWN_SHARP_DISPATCH = 1 << 12,
 
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 12,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 13,
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 13,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 14,
 
-    COMMA_WITHOUT_BACKQUOTE = 1 << 14,
+    COMMA_WITHOUT_BACKQUOTE = 1 << 15,
 
-    SINGLE_DOT = 1 << 15,
+    SINGLE_DOT = 1 << 16,
 
-    MULTIPLE_DOTS = 1 << 16,
+    MULTIPLE_DOTS = 1 << 17,
 
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 17,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 18,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 19
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 18,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 19,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 20
   };
 
 
-#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME |\
-			   INCOMPLETE_SHARP_MACRO_CALL)
+#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME |	INCOMPLETE_SHARP_MACRO_CALL)
+
+#define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH |\
+		    COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS | NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST |\
+		    MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
 
 
 enum
@@ -171,6 +175,7 @@ symbol
 
   int is_builtin_form;
   struct parameter *lambda_list;
+  int evaluate_args;
   struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
 				  struct object **cursor);
 
@@ -258,7 +263,8 @@ function
 struct
 cons_pair
 {
-  int filling_car;  /* this is used when car is a list and we are still reading it */
+  int filling_car;  /* when car is incomplete but already partly allocated */
+  int empty_list_in_car;  /* when car is a still empty list so nothing allocated yet */
   struct object *car;
   struct object *cdr;
 };
@@ -358,16 +364,6 @@ package
   struct symbol *name;
 
   struct package_record *recs;
-};
-
-
-struct
-package_name
-{
-  struct symbol *name;
-  struct package *package;
-
-  struct package_name *next;
 };
 
 
@@ -472,10 +468,10 @@ int input_needs_continuation (const char *input, size_t size);
 
 char *read_line_interactively (const char prompt []);
 
-enum read_outcome read_object_continued (struct object **obj, const char *input, size_t size, const char **obj_begin,
+enum read_outcome read_object_continued (struct object **obj, int is_empty_list, const char *input, size_t size, const char **obj_begin,
 					 const char **obj_end, struct object_list **symbol_list, size_t *out_arg);
-struct object *complete_object_interactively (struct object *obj, struct object_list **symbol_list, size_t multiline_comm_depth,
-					      const char **input_left, size_t *input_left_size);
+struct object *complete_object_interactively (struct object *obj, int is_empty_list, struct object_list **symbol_list,
+					      size_t multiline_comm_depth, const char **input_left, size_t *input_left_size);
 struct object *read_object_interactively_continued (const char *input, size_t input_size, struct object_list **symbol_list,
 						    const char **input_left, size_t *input_left_size);
 struct object *read_object_interactively (struct object_list **symbol_list, const char **input_left, size_t *input_left_size);
@@ -748,11 +744,12 @@ read_line_interactively (const char prompt [])
 
 
 enum read_outcome
-read_object_continued (struct object **obj, const char *input, size_t size, const char **obj_begin,
+read_object_continued (struct object **obj, int is_empty_list, const char *input, size_t size, const char **obj_begin,
 		       const char **obj_end, struct object_list **symbol_list, size_t *out_arg)
 {
   enum read_outcome out;
   struct object *last_pref, *ob = skip_prefix (*obj, &last_pref);
+  struct object *l;
 
   if (*out_arg)
     {
@@ -765,9 +762,24 @@ read_object_continued (struct object **obj, const char *input, size_t size, cons
       size = --(*out_arg);
     }
 
-  if (!ob)
+  if (is_empty_list)
+    {
+      l = NULL;
+
+      out = read_list (&l, input, size, obj_end, symbol_list, out_arg);
+
+      ob = l;
+    }
+  else if (!ob)
     {
       out = read_object (&ob, input, size, obj_begin, obj_end, symbol_list, out_arg);
+
+      if (out == NO_OBJECT && last_pref)
+	out = JUST_PREFIX;
+    }
+  else if (ob->type == TYPE_CONS_PAIR)
+    {
+      out = read_list (&ob, input, size, obj_end, symbol_list, out_arg);
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -780,23 +792,19 @@ read_object_continued (struct object **obj, const char *input, size_t size, cons
       if (out == COMPLETE_OBJECT)
 	intern_symbol_name (ob, symbol_list);
     }
-  else if (ob->type == TYPE_CONS_PAIR)
-    {
-      out = read_list (&ob, input, size, obj_end, symbol_list, out_arg);
-    }
 
   if (last_pref)
     last_pref->value_ptr.next = ob;
   else
     *obj = ob;
-  
+
   return out;
 }
 
 
 struct object *
-complete_object_interactively (struct object *obj, struct object_list **symbol_list, size_t multiline_comm_depth,
-			       const char **input_left, size_t *input_left_size)  
+complete_object_interactively (struct object *obj, int is_empty_list, struct object_list **symbol_list,
+			       size_t multiline_comm_depth, const char **input_left, size_t *input_left_size)  
 {
   char *line;
   enum read_outcome read_out;
@@ -807,15 +815,18 @@ complete_object_interactively (struct object *obj, struct object_list **symbol_l
   line = read_line_interactively ("> ");
   len = strlen (line);
   
-  read_out = read_object_continued (&obj, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
+  read_out = read_object_continued (&obj, is_empty_list, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
 
   while (read_out & (INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
-		     | INCOMPLETE_SHARP_MACRO_CALL | UNFINISHED_MULTILINE_COMMENT))
+		     | INCOMPLETE_SHARP_MACRO_CALL | UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST))
     {
       line = read_line_interactively ("> ");
       len = strlen (line);
-      
-      read_out = read_object_continued (&obj, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
+
+      if (read_out & EMPTY_LIST)
+	read_out = read_object_continued (&obj, 1, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
+      else
+	read_out = read_object_continued (&obj, 0, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
     }
 
   *input_left = end + 1;
@@ -851,27 +862,18 @@ read_object_interactively_continued (const char *input, size_t input_size, struc
       
       return NULL;
     }
-  else if (read_out == SINGLE_DOT)
+  else if (read_out & READ_ERROR)
     {
-      printf ("read error: single dot is only allowed inside a list and must be followed by exactly one object\n");
+      print_read_error (read_out, input, input_size, begin, end);
 
       return NULL;
     }
-  else if (read_out ==  MULTIPLE_DOTS)
-    return NULL;
-  else if (read_out == CLOSING_PARENTHESIS)
+  else if (read_out == EMPTY_LIST)
     {
-      print_read_error (read_out, input, input_size, begin, end);
-      
-      return NULL;
-    }
-  else if (read_out ==  NO_OBJ_BEFORE_DOT_IN_LIST || read_out == NO_OBJ_AFTER_DOT_IN_LIST
-	   || read_out == MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
-    {
-      return NULL;
+      return complete_object_interactively (obj, 1, symbol_list, mult_comm_depth, input_left, input_left_size);
     }
   else
-    return complete_object_interactively (obj, symbol_list, mult_comm_depth, input_left, input_left_size);
+    return complete_object_interactively (obj, 0, symbol_list, mult_comm_depth, input_left, input_left_size);
 }
 
 
@@ -1151,28 +1153,53 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
   const char *obj_beg, *obj_end = NULL;
   enum read_outcome out;
   int found_dot = 0, dotted_list_full = 0;
-  
+
 
   if (!size)
-    return INCOMPLETE_LIST;
+    return EMPTY_LIST;
 
   ob = skip_prefix (*obj, &last_pref);
-  
+
   while (ob)
     {
       if (ob->value_ptr.cons_pair->filling_car)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 0, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+
+	  if (out == COMPLETE_OBJECT)
+	      ob->value_ptr.cons_pair->filling_car = 0;
+	  else if (out & READ_ERROR)
+	    return out;
+	}
+      else if (ob->value_ptr.cons_pair->empty_list_in_car)
+	{
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 1, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+
+	  if (out != EMPTY_LIST)
+	    ob->value_ptr.cons_pair->empty_list_in_car = 0;
+
+	  if (out & INCOMPLETE_OBJECT)
+	    ob->value_ptr.cons_pair->filling_car = 1;
+
+	  if (out & READ_ERROR)
+	    return out;
 	}
 
       last_cons = ob;
       ob = ob->value_ptr.cons_pair->cdr;      
     }
-  
+
   if (obj_end)
-    out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), &obj_beg, &obj_end, symbol_list, out_arg);
+    {
+      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), &obj_beg, &obj_end, symbol_list, out_arg);
+    }
   else
-    out = read_object (&car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+    {
+      out = read_object (&car, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
+    }
+
+  if (out == NO_OBJECT && !last_cons)
+    return EMPTY_LIST;
 
   if (out == CLOSING_PARENTHESIS && !last_cons)
     {
@@ -1181,16 +1208,13 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
       return COMPLETE_OBJECT;
     }
 
-  while (out != NO_OBJECT)
+  while (out != NO_OBJECT && out != EMPTY_LIST)
     {
       if (out == CLOSING_PARENTHESIS)
 	{
 	  if (found_dot && !dotted_list_full)
-	    {
-	      print_read_error (NO_OBJ_AFTER_DOT_IN_LIST, input, size, obj_beg, obj_end);
-	      return NO_OBJ_AFTER_DOT_IN_LIST;
-	    }
-	  
+	    return NO_OBJ_AFTER_DOT_IN_LIST;
+
 	  *list_end = obj_end;
 	  return COMPLETE_OBJECT;
 	}
@@ -1201,10 +1225,7 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
       else if (out == COMPLETE_OBJECT || out & INCOMPLETE_OBJECT)
 	{
 	  if (dotted_list_full)
-	    {
-	      print_read_error (MULTIPLE_OBJS_AFTER_DOT_IN_LIST, input, size, obj_beg, obj_end);
-	      return MULTIPLE_OBJS_AFTER_DOT_IN_LIST;
-	    }
+	    return MULTIPLE_OBJS_AFTER_DOT_IN_LIST;
 	  else if (found_dot)
 	    {
 	      if (last_cons)
@@ -1213,10 +1234,7 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 		  dotted_list_full = 1;
 		}
 	      else
-		{
-		  print_read_error (NO_OBJ_BEFORE_DOT_IN_LIST, input, size, obj_beg, obj_end);
-		  return NO_OBJ_BEFORE_DOT_IN_LIST;
-		}
+		return NO_OBJ_BEFORE_DOT_IN_LIST;
 	    }
 	  else
 	    {
@@ -1230,18 +1248,29 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 
 	      if (out & INCOMPLETE_OBJECT)
 		{
-		  last_cons->value_ptr.cons_pair->filling_car = 1;
+		  cons->value_ptr.cons_pair->filling_car = 1;
 
 		  return INCOMPLETE_LIST;
 		}
 	    }
 	}
-      
+
       if (obj_end == input + size)
 	break;
-      
+
       car = NULL;
       out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), &obj_beg, &obj_end, symbol_list, out_arg);
+    }
+
+  if (out == EMPTY_LIST)
+    {
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->empty_list_in_car = 1;
+
+      if (last_cons)
+	last_cons->value_ptr.cons_pair->cdr = cons;
+      else
+	*obj = cons;
     }
 
   return INCOMPLETE_LIST;
@@ -1299,14 +1328,8 @@ read_symbol_name (struct object **obj, const char *input, size_t size, const cha
   
   *symbol_end = find_end_of_symbol_name (input, size, &new_size, &length, &out);
 
-  if (out == SINGLE_DOT)
+  if (out == SINGLE_DOT || out == MULTIPLE_DOTS)
     return out;
-  else if (out == MULTIPLE_DOTS)
-    {
-      print_read_error (out, input, size, input, *symbol_end);
-      return out;
-    }
-  
   
   ob = skip_prefix (*obj, &last_pref);
 
@@ -1705,16 +1728,18 @@ alloc_empty_cons_pair (void)
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct cons_pair *cons = malloc_and_check (sizeof (*cons));
   struct object *car = malloc_and_check (sizeof (*car));
-  
+
+  car->type = TYPE_NIL;
+  car->refcount = 1;
+
+  cons->filling_car = 0;
+  cons->empty_list_in_car = 0;
+  cons->car = car;
+  cons->cdr = NULL;
+
   obj->type = TYPE_CONS_PAIR;
   obj->refcount = 1;
   obj->value_ptr.cons_pair = cons;
-  
-  car->type = TYPE_NIL;
-  car->refcount = 1;
-  
-  obj->value_ptr.cons_pair->car = car;
-  obj->value_ptr.cons_pair->cdr = NULL;
 
   return obj;
 }
@@ -1963,6 +1988,8 @@ create_symbol (char *name, size_t size)
   sym->name = name;
   sym->name_len = size;
   sym->is_builtin_form = 0;
+  sym->is_const = 0;
+  sym->is_parameter = 0;
   sym->is_special = 0;
   sym->value_cell = NULL;
   sym->function_cell = NULL;
@@ -3058,6 +3085,14 @@ print_read_error (enum read_outcome err, const char *input, size_t size, const c
   if (err == CLOSING_PARENTHESIS)
     {
       printf ("read error: mismatched closing parenthesis\n");
+    }
+  else if (err == CLOSING_PARENTHESIS_AFTER_PREFIX)
+    {
+      printf ("read error: closing parenthesis can't follows commas, ticks, backticks\n");
+    }
+  else if (err == SINGLE_DOT)
+    {
+      printf ("read error: single dot is only allowed inside a list and must be followed by exactly one object\n");
     }
   else if (err == MULTIPLE_DOTS)
     {
