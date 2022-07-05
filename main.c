@@ -469,7 +469,7 @@ int input_needs_continuation (const char *input, size_t size);
 char *read_line_interactively (const char prompt []);
 
 enum read_outcome read_object_continued (struct object **obj, int is_empty_list, const char *input, size_t size, const char **obj_begin,
-					 const char **obj_end, struct object_list **symbol_list, size_t *out_arg);
+					 const char **obj_end, struct object_list **symbol_list, size_t *mult_comm_depth);
 struct object *complete_object_interactively (struct object *obj, int is_empty_list, struct object_list **symbol_list,
 					      size_t multiline_comm_depth, const char **input_left, size_t *input_left_size);
 struct object *read_object_interactively_continued (const char *input, size_t input_size, struct object_list **symbol_list,
@@ -745,41 +745,42 @@ read_line_interactively (const char prompt [])
 
 enum read_outcome
 read_object_continued (struct object **obj, int is_empty_list, const char *input, size_t size, const char **obj_begin,
-		       const char **obj_end, struct object_list **symbol_list, size_t *out_arg)
+		       const char **obj_end, struct object_list **symbol_list, size_t *mult_comm_depth)
 {
   enum read_outcome out;
   struct object *last_pref, *ob = skip_prefix (*obj, &last_pref);
   struct object *l;
 
-  if (*out_arg)
+  if (*mult_comm_depth)
     {
-      input = jump_to_end_of_multiline_comment (input, size, *out_arg, out_arg);
+      input = jump_to_end_of_multiline_comment (input, size, *mult_comm_depth, mult_comm_depth);
 
       if (!input)
-	return UNFINISHED_MULTILINE_COMMENT;
+	return NO_OBJECT;
 
       input++;
-      size = --(*out_arg);
+      size = --(*mult_comm_depth);
+      *mult_comm_depth = 0;
     }
 
   if (is_empty_list)
     {
       l = NULL;
 
-      out = read_list (&l, input, size, obj_end, symbol_list, out_arg);
+      out = read_list (&l, input, size, obj_end, symbol_list, mult_comm_depth);
 
       ob = l;
     }
   else if (!ob)
     {
-      out = read_object (&ob, input, size, obj_begin, obj_end, symbol_list, out_arg);
+      out = read_object (&ob, input, size, obj_begin, obj_end, symbol_list, mult_comm_depth);
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
     }
   else if (ob->type == TYPE_CONS_PAIR)
     {
-      out = read_list (&ob, input, size, obj_end, symbol_list, out_arg);
+      out = read_list (&ob, input, size, obj_end, symbol_list, mult_comm_depth);
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -849,14 +850,14 @@ read_object_interactively_continued (const char *input, size_t input_size, struc
   
   read_out = read_object (&obj, input, input_size, &begin, &end, symbol_list, &mult_comm_depth);
   
-  if (read_out == COMPLETE_OBJECT)
+  if (read_out == COMPLETE_OBJECT  && !mult_comm_depth)
     {
       *input_left = end + 1;
       *input_left_size = (input + input_size) - end - 1;
       
       return obj;
     }
-  else if (read_out == NO_OBJECT)
+  else if (read_out == NO_OBJECT && !mult_comm_depth)
     {
       *input_left = NULL;
       *input_left_size = 0;
@@ -1073,9 +1074,12 @@ read_object (struct object **obj, const char *input, size_t size, const char **o
       else if (*input == '#' && size > 1 && *(input+1) == '|')
 	{
 	  if (!(input = jump_to_end_of_multiline_comment (input+2, size-2, 1, out_arg)))
-	    return UNFINISHED_MULTILINE_COMMENT;
+	    return NO_OBJECT;
 	  else
-	    size = *out_arg;
+	    {
+	      size = *out_arg;
+	      *out_arg = 0;
+	    }
 	}
       else if (*input == '\'' || *input == '`' || *input == ',' || *input == '@')
  	{
