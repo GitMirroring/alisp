@@ -26,6 +26,17 @@ and then run the usual
 
   $ make
 
+plus optionally
+
+  # make install
+
+
+There's a small test script.  Run it with
+
+  $ ./test.pl
+
+if you have perl on your machine.
+
 
 
 You can reach me at andrea.monaco@autistici.org.
