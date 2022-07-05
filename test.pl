@@ -1,4 +1,5 @@
 #!/usr/bin/perl -w
+use strict;
 
 # Copyright (C) 2022 Andrea G. Monaco
 # 
@@ -40,10 +41,21 @@ for ((1..5))
 }
 
 
+
+# reader tests
+
+make_test ("`'`\"\"", "'`\"\"");
+make_test ("'(((\n" .
+	   ")))", "((()))");
+make_test ("\"\"", "\"\"");
+
+
+
+# eval tests
+
 make_test ("nil", "()");
 make_test ("NIL", "()");
 make_test ("t", "T");
-make_test ("\"\"", "\"\"");
 
 
 
@@ -58,14 +70,28 @@ waitpid ($pid, 0);
 
 
 
+
 sub make_test
 {
     print $_[0] . " -> ";
-    print $al_in $_[0] . "\n";
 
-    <$al_out>;
+    my @lines = split("\n", $_[0]);
 
-    $out = <$al_out>;
+    foreach my $l (@lines)
+    {
+	if ($l =~ /\n$/)
+	{
+	    print $al_in $l;
+	}
+	else
+	{
+	    print $al_in $l . "\n";
+	}
+
+	<$al_out>;
+    }
+
+    my $out = <$al_out>;
 
     chomp ($out);
 
