@@ -48,6 +48,15 @@ make_test ("`'`\"\"", "'`\"\"");
 make_test ("'(((\n" .
 	   ")))", "((()))");
 make_test ("\"\"", "\"\"");
+make_test ("` ( ;\n" .
+           " \"\")", "(\"\")");
+make_test ("#|\n" .
+	   "|# \"\"", "\"\"");
+make_test (" #| #|\n" .
+	   "|##|\n" .
+	   "|#\n" .
+	   "  |# \"\"", "\"\"");
+make_test ("'( \"\" #||# )", "(\"\")");
 
 
 
@@ -79,14 +88,7 @@ sub make_test
 
     foreach my $l (@lines)
     {
-	if ($l =~ /\n$/)
-	{
-	    print $al_in $l;
-	}
-	else
-	{
-	    print $al_in $l . "\n";
-	}
+	print $al_in $l . "\n";
 
 	<$al_out>;
     }
