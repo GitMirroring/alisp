@@ -576,6 +576,9 @@ struct object *evaluate_list (struct object *list, struct environment *env, enum
 struct object *evaluate_through_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct object *builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_cdr (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_cons (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct binding *create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome,
 					   struct object **cursor);
@@ -671,6 +674,9 @@ main (int argc, char *argv [])
   define_constant_by_name ("T", strlen ("T"), &sym_list, &t_object, &env, &eval_out, &cursor);
 
   add_builtin_form ("CAR", &sym_list, builtin_car, 1);
+  add_builtin_form ("CDR", &sym_list, builtin_cdr, 1);
+  add_builtin_form ("CONS", &sym_list, builtin_cons, 1);
+  add_builtin_form ("LIST", &sym_list, builtin_list, 1);
   add_builtin_form ("IF", &sym_list, evaluate_if, 0);
   add_builtin_form ("PROGN", &sym_list, evaluate_progn, 0);
   add_builtin_form ("DEFCONSTANT", &sym_list, evaluate_defconstant, 0);
@@ -2631,7 +2637,12 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   if (symname->sym->value_ptr.symbol->is_builtin_form)
     {
       if (symname->sym->value_ptr.symbol->evaluate_args)
-	args = evaluate_through_list (CDR (list), env, outcome, cursor);
+	{
+	  args = evaluate_through_list (CDR (list), env, outcome, cursor);
+
+	  if (!args)
+	    return NULL;
+	}
       else
 	args = CDR (list);
 
@@ -2705,7 +2716,94 @@ evaluate_through_list (struct object *list, struct environment *env, enum eval_o
 struct object *
 builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
+  if (!list_length (list))
+    {
+      *outcome = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+  if (list_length (list) > 1)
+    {
+      *outcome = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!(list->value_ptr.cons_pair->car->type & TYPE_LIST))
+    {
+      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
   return CAR (CAR (list));
+}
+
+
+struct object *
+builtin_cdr (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  if (!list_length (list))
+    {
+      *outcome = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+  if (list_length (list) > 1)
+    {
+      *outcome = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!(list->value_ptr.cons_pair->car->type & TYPE_LIST))
+    {
+      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return CDR (CAR (list));
+}
+
+
+struct object *
+builtin_cons (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *cons;
+
+  if (list_length (list) < 2)
+    {
+      *outcome = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+  if (list_length (list) > 2)
+    {
+      *outcome = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  cons = alloc_empty_cons_pair ();
+  cons->value_ptr.cons_pair->car = CAR (list);
+  cons->value_ptr.cons_pair->cdr = CAR (CDR (list));
+
+  return cons;
+}
+
+
+struct object *
+builtin_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *l = NULL, *cons, *last_cons;
+
+  while (list != &nil_object)
+    {
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+
+      if (!l)
+	l = last_cons = cons;
+      else
+	last_cons = last_cons->value_ptr.cons_pair->cdr = cons;
+
+      list = CDR (list);
+    }
+
+  return l;
 }
 
 
