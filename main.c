@@ -163,7 +163,8 @@ eval_outcome
     INCORRECT_SYNTAX_IN_DEFUN,
     CANT_REDEFINE_CONSTANT,
     TOO_FEW_ARGUMENTS,
-    TOO_MANY_ARGUMENTS
+    TOO_MANY_ARGUMENTS,
+    WRONG_TYPE_OF_ARGUMENT,
   };
 
 
@@ -540,7 +541,7 @@ struct binding *find_binding (struct symbol *sym, struct binding *env, enum bind
 
 void add_builtin_form (char *name, struct object_list **symbol_list,
 		       struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
-						       struct object **cursor));
+						       struct object **cursor), int eval_args);
 
 struct object *define_constant (struct object *sym, struct object *form, struct environment *env,
 				enum eval_outcome *outcome, struct object **cursor);
@@ -572,6 +573,7 @@ int check_type (const struct object *obj, const struct typespec *type);
 
 struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_through_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct object *builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
@@ -668,13 +670,13 @@ main (int argc, char *argv [])
   define_constant_by_name ("NIL", strlen ("NIL"), &sym_list, &nil_object, &env, &eval_out, &cursor);
   define_constant_by_name ("T", strlen ("T"), &sym_list, &t_object, &env, &eval_out, &cursor);
 
-  add_builtin_form ("CAR", &sym_list, builtin_car);
-  add_builtin_form ("IF", &sym_list, evaluate_if);
-  add_builtin_form ("PROGN", &sym_list, evaluate_progn);
-  add_builtin_form ("DEFCONSTANT", &sym_list, evaluate_defconstant);
-  add_builtin_form ("DEFPARAMETER", &sym_list, evaluate_defparameter);
-  add_builtin_form ("DEFVAR", &sym_list, evaluate_defvar);
-  add_builtin_form ("DEFUN", &sym_list, evaluate_defun);
+  add_builtin_form ("CAR", &sym_list, builtin_car, 1);
+  add_builtin_form ("IF", &sym_list, evaluate_if, 0);
+  add_builtin_form ("PROGN", &sym_list, evaluate_progn, 0);
+  add_builtin_form ("DEFCONSTANT", &sym_list, evaluate_defconstant, 0);
+  add_builtin_form ("DEFPARAMETER", &sym_list, evaluate_defparameter, 0);
+  add_builtin_form ("DEFVAR", &sym_list, evaluate_defvar, 0);
+  add_builtin_form ("DEFUN", &sym_list, evaluate_defun, 0);
 
 
   print_welcome_message ();
@@ -2137,12 +2139,13 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 void
 add_builtin_form (char *name, struct object_list **symbol_list,
 		  struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
-						  struct object **cursor))
+						  struct object **cursor), int eval_args)
 {
   struct object *sym = intern_symbol (name, strlen (name), symbol_list);
 
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
+  sym->value_ptr.symbol->evaluate_args = eval_args;
   sym->refcount++;
 }
 
@@ -2614,6 +2617,7 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 {
   struct symbol_name *symname;
   struct binding *bind;
+  struct object *args;
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME)
     {
@@ -2625,7 +2629,14 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   symname = CAR (list)->value_ptr.symbol_name;
 
   if (symname->sym->value_ptr.symbol->is_builtin_form)
-    return symname->sym->value_ptr.symbol->builtin_form (CDR (list), env, outcome, cursor);
+    {
+      if (symname->sym->value_ptr.symbol->evaluate_args)
+	args = evaluate_through_list (CDR (list), env, outcome, cursor);
+      else
+	args = CDR (list);
+
+      return symname->sym->value_ptr.symbol->builtin_form (args, env, outcome, cursor);
+    }
 
   if (symname_equals (symname, "LET"))
     {
@@ -2661,6 +2672,33 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
   return NULL;
+}
+
+
+struct object *
+evaluate_through_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *args = NULL, *cons, *last_cons, *obj;
+
+  while (list != &nil_object)
+    {
+      obj = evaluate_object (CAR (list), env, outcome, cursor);
+
+      if (!obj)
+	return NULL;
+
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = obj;
+
+      if (!args)
+	args = last_cons = cons;
+      else
+	last_cons = last_cons->value_ptr.cons_pair->cdr = cons;
+
+      list = CDR (list);
+    }
+
+  return args;
 }
 
 
@@ -3180,6 +3218,10 @@ print_eval_error (enum eval_outcome err, struct object *arg)
   else if (err == TOO_MANY_ARGUMENTS)
     {
       printf ("eval error: too many arguments to function call\n");
+    }
+  else if (err == WRONG_TYPE_OF_ARGUMENT)
+    {
+      printf ("type error: wrong type of argument\n");
     }
 }
 
