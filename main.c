@@ -818,7 +818,8 @@ complete_object_interactively (struct object *obj, int is_empty_list, struct obj
   read_out = read_object_continued (&obj, is_empty_list, line, len, &begin, &end, symbol_list, &multiline_comm_depth);
 
   while (read_out & (INCOMPLETE_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
-		     | INCOMPLETE_SHARP_MACRO_CALL | UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST))
+		     | INCOMPLETE_SHARP_MACRO_CALL | UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST)
+	 || multiline_comm_depth)
     {
       line = read_line_interactively ("> ");
       len = strlen (line);
@@ -1160,15 +1161,16 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 
   ob = skip_prefix (*obj, &last_pref);
 
-  while (ob)
+  while (ob && ob != &nil_object)
     {
       if (ob->value_ptr.cons_pair->filling_car)
 	{
 	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 0, input, size, &obj_beg, &obj_end, symbol_list, out_arg);
 
-	  if (out == COMPLETE_OBJECT)
+	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
 	      ob->value_ptr.cons_pair->filling_car = 0;
-	  else if (out & READ_ERROR)
+	  else if (out == NO_OBJECT || out == EMPTY_LIST || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR
+		   || out & INCOMPLETE_OBJECT)
 	    return out;
 	}
       else if (ob->value_ptr.cons_pair->empty_list_in_car)
@@ -1179,9 +1181,12 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 	    ob->value_ptr.cons_pair->empty_list_in_car = 0;
 
 	  if (out & INCOMPLETE_OBJECT)
-	    ob->value_ptr.cons_pair->filling_car = 1;
+	    {
+	      ob->value_ptr.cons_pair->filling_car = 1;
+	      return out;
+	    }
 
-	  if (out & READ_ERROR)
+	  if (out == NO_OBJECT || out == EMPTY_LIST || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
 	    return out;
 	}
 
@@ -1217,6 +1222,10 @@ read_list (struct object **obj, const char *input, size_t size, const char **lis
 
 	  *list_end = obj_end;
 	  return COMPLETE_OBJECT;
+	}
+      else if (out == UNFINISHED_MULTILINE_COMMENT)
+	{
+	  return out;
 	}
       else if (out == SINGLE_DOT)
 	{
