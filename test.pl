@@ -68,6 +68,16 @@ make_test ("t", "T");
 
 
 
+# arithmetic tests
+
+make_test ("(+)", "0");
+make_test ("(+ 1 2 3)", "6");
+make_test ("(+ 1/2 2 3 1000)", "2011/2");
+make_test ("(+ .1 .1 .1)", "0.3e0");
+
+
+
+
 print "\n\ntotal tests: " . $total_tests . "\n";
 print "passed " . $passed_tests . " (" . $passed_tests / $total_tests * 100 . "%), failed " . $failed_tests . "\n";
 
