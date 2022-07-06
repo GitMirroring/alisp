@@ -579,6 +579,11 @@ struct object *builtin_car (struct object *list, struct environment *env, enum e
 struct object *builtin_cdr (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *builtin_cons (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *builtin_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_load (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+enum object_type highest_num_type (enum object_type t1, enum object_type t2);
+struct object *promote_number (struct object *num, enum object_type type);
+struct object *builtin_plus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_minus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct binding *create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome,
 					   struct object **cursor);
@@ -677,6 +682,9 @@ main (int argc, char *argv [])
   add_builtin_form ("CDR", &sym_list, builtin_cdr, 1);
   add_builtin_form ("CONS", &sym_list, builtin_cons, 1);
   add_builtin_form ("LIST", &sym_list, builtin_list, 1);
+  add_builtin_form ("LOAD", &sym_list, builtin_load, 1);
+  add_builtin_form ("+", &sym_list, builtin_plus, 1);
+  add_builtin_form ("-", &sym_list, builtin_minus, 1);
   add_builtin_form ("IF", &sym_list, evaluate_if, 0);
   add_builtin_form ("PROGN", &sym_list, evaluate_progn, 0);
   add_builtin_form ("DEFCONSTANT", &sym_list, evaluate_defconstant, 0);
@@ -1517,7 +1525,7 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 {
   int i = 0;
   
-  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0,
+  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0, found_initial_sign = 0,
     found_digit = 0, found_digit_after_slash = 0, found_digit_after_exp_marker = 0, need_decimal_digit = 0;
   
   char decimal_digits [] = "0123456789";
@@ -1557,6 +1565,9 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 	{
 	  if (i > 0 && found_exp_marker && i - exp_marker_pos > 1)
 	    return 0;
+
+	  if (!i)
+	    found_initial_sign = 1;
 	}
       else if (token [i] == '/')
 	{
@@ -1593,6 +1604,8 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
       i++;
     }
 
+  if (found_initial_sign && !found_digit)
+    return 0;
   if (found_slash && !found_digit_after_slash)
     return 0;
   if (found_exp_marker && !found_digit_after_exp_marker)
@@ -2709,6 +2722,9 @@ evaluate_through_list (struct object *list, struct environment *env, enum eval_o
       list = CDR (list);
     }
 
+  if (!args)
+    return &nil_object;
+
   return args;
 }
 
@@ -2804,6 +2820,111 @@ builtin_list (struct object *list, struct environment *env, enum eval_outcome *o
     }
 
   return l;
+}
+
+
+struct object *
+builtin_load (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  return NULL;
+}
+
+
+enum object_type
+highest_num_type (enum object_type t1, enum object_type t2)
+{
+  if (t1 == TYPE_FLOAT || t2 == TYPE_FLOAT)
+    return TYPE_FLOAT;
+
+  if (t1 == TYPE_RATIO || t2 == TYPE_RATIO)
+    return TYPE_RATIO;
+
+  return TYPE_INTEGER;
+}
+
+
+struct object *
+promote_number (struct object *num, enum object_type type)
+{
+  struct object *ret;
+
+  if (num->type == type)
+    return num;
+
+  ret = malloc_and_check (sizeof (*ret));
+  ret->type = type;
+
+  if (type == TYPE_RATIO)
+    {
+      mpq_init (ret->value_ptr.ratio);
+      mpq_set_z (ret->value_ptr.ratio, num->value_ptr.integer);
+    }
+  else if (type == TYPE_FLOAT)
+    {
+      mpf_init (ret->value_ptr.floating);
+
+      if (num->type == TYPE_INTEGER)
+	mpf_set_z (ret->value_ptr.floating, num->value_ptr.integer);
+      else if (num->type == TYPE_RATIO)
+	mpf_set_q (ret->value_ptr.floating, num->value_ptr.ratio);
+    }
+
+  return ret;
+}
+
+
+struct object *
+builtin_plus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *ret = malloc_and_check (sizeof (*ret));
+  struct object *op;
+
+  ret->type = TYPE_INTEGER;
+  ret->refcount = 1;
+
+  mpz_init (ret->value_ptr.integer);
+  mpz_set_si (ret->value_ptr.integer, 0);
+
+  if (!list_length (list))
+    return ret;
+
+  while (list != &nil_object)
+    {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  *outcome = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      op = CAR (list);
+
+      ret = promote_number (ret, highest_num_type (ret->type, op->type));
+      op = promote_number (op, highest_num_type (ret->type, op->type));
+
+      if (ret->type == TYPE_INTEGER)
+	{
+	  mpz_add (ret->value_ptr.integer, ret->value_ptr.integer, op->value_ptr.integer);
+	}
+      else if (ret->type == TYPE_RATIO)
+	{
+	  mpq_add (ret->value_ptr.ratio, ret->value_ptr.ratio, op->value_ptr.ratio);
+	}
+      else if (ret->type == TYPE_FLOAT)
+	{
+	  mpf_add (ret->value_ptr.floating, ret->value_ptr.floating, op->value_ptr.floating);
+	}
+
+      list = CDR (list);
+    }
+
+  return ret;
+}
+
+
+struct object *
+builtin_minus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  return NULL;
 }
 
 
