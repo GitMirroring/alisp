@@ -2948,10 +2948,6 @@ builtin_load (struct object *list, struct environment *env, struct object_list *
 
 	  if (res)
 	    {
-	      print_object (res);
-
-	      printf ("\n");
-
 	      out = read_object (&obj, in, sz, &obj_b, &obj_e, symlist, &mult_comm_depth);
 	      sz = sz - (obj_e + 1 - in);
 	      in = obj_e + 1;
