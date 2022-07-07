@@ -44,6 +44,9 @@
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) : (s)->value_ptr.symbol_name->sym) 
 
 
+#define TERMINATING_MACRO_CHARS "()';\"`,"
+
+
 
 /* not a C string. not null-terminated and explicit size. null bytes are allowed inside */
 
@@ -1594,7 +1597,7 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 	}      
       else if (token [i] == '+' || token [i] == '-')
 	{
-	  if (i > 0 && found_exp_marker && i - exp_marker_pos > 1)
+	  if (i > 0 && (!found_exp_marker || (i - exp_marker_pos > 1)))
 	    return 0;
 	}
       else if (token [i] == '/')
@@ -1624,14 +1627,16 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 		}
 	    }
 	}
-      else if (i == 0)
-	return 0;
-      else
+      else if (isspace (token [i]) || strchr (TERMINATING_MACRO_CHARS, token [i]))
 	break;
+      else
+	return 0;
       
       i++;
     }
 
+  if (!i)
+    return 0;
   if (!found_digit)
     return 0;
   if (found_slash && !found_digit_after_slash)
@@ -1946,7 +1951,6 @@ const char *
 find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, size_t *name_length, enum read_outcome *outcome)
 {
   int i = 0, single_escape = 0, multiple_escape = 0, just_dots = 1;
-  const char term_macro_chars [] = "()';\"`,";
   
   *name_length = 0;
   
@@ -1974,7 +1978,7 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, size_
 	}
       else
 	{
-	  if ((isspace (input [i]) || strchr (term_macro_chars, input [i]))
+	  if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
 	      && !single_escape && !multiple_escape)
 	    {
 	      if (just_dots && *name_length == 1)
@@ -2003,7 +2007,6 @@ void
 normalize_symbol_name (char *output, const char *input, size_t size)
 {
   int i, j, single_escape = 0, multiple_escape = 0;
-  const char term_macro_chars [] = "()';\"`,";
   
   for (i = 0, j = 0; i < size; i++)
     {
@@ -2023,7 +2026,7 @@ normalize_symbol_name (char *output, const char *input, size_t size)
 	{
 	  multiple_escape = (multiple_escape ? 0 : 1);
 	}
-      else if ((isspace (input [i]) || strchr (term_macro_chars, input [i]))
+      else if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
 	       && !single_escape && !multiple_escape)
 	{
 	  break;
