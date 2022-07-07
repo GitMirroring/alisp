@@ -1533,9 +1533,8 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 {
   int i = 0;
   
-  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0, found_initial_sign = 0,
-    found_digit = 0, found_digit_after_slash = 0, found_digit_after_exp_marker = 0, found_digit_after_dec_point = 0,
-    need_decimal_digit = 0;
+  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0, found_digit = 0,
+    found_digit_after_slash = 0, found_digit_after_exp_marker = 0, found_digit_after_dec_point = 0, need_decimal_digit = 0;
   
   char decimal_digits [] = "0123456789";
   char digits [] = "00112233445566778899aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ";
@@ -1575,9 +1574,6 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 	{
 	  if (i > 0 && found_exp_marker && i - exp_marker_pos > 1)
 	    return 0;
-
-	  if (!i)
-	    found_initial_sign = 1;
 	}
       else if (token [i] == '/')
 	{
@@ -1614,7 +1610,7 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
       i++;
     }
 
-  if (found_initial_sign && !found_digit)
+  if (!found_digit)
     return 0;
   if (found_slash && !found_digit_after_slash)
     return 0;
