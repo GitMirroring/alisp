@@ -581,9 +581,15 @@ struct object *builtin_cons (struct object *list, struct environment *env, enum 
 struct object *builtin_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *builtin_load (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
+struct object *copy_number (const struct object *num);
 struct object *promote_number (struct object *num, enum object_type type);
+struct object *apply_arithmetic_operation (struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
+					   void (*opq) (mpq_t, const mpq_t, const mpq_t), void (*opf) (mpf_t, const mpf_t, const mpf_t),
+					   struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *builtin_plus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 struct object *builtin_minus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_multiply (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_divide (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 struct binding *create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome,
 					   struct object **cursor);
@@ -685,6 +691,8 @@ main (int argc, char *argv [])
   add_builtin_form ("LOAD", &sym_list, builtin_load, 1);
   add_builtin_form ("+", &sym_list, builtin_plus, 1);
   add_builtin_form ("-", &sym_list, builtin_minus, 1);
+  add_builtin_form ("*", &sym_list, builtin_multiply, 1);
+  add_builtin_form ("/", &sym_list, builtin_divide, 1);
   add_builtin_form ("IF", &sym_list, evaluate_if, 0);
   add_builtin_form ("PROGN", &sym_list, evaluate_progn, 0);
   add_builtin_form ("DEFCONSTANT", &sym_list, evaluate_defconstant, 0);
@@ -2328,7 +2336,7 @@ list_length (const struct object *list)
       list = list->value_ptr.cons_pair->cdr;
     }
 
-  if (list)
+  if (list && list->type != TYPE_NIL)
     l++;
 
   return l;
@@ -2844,6 +2852,34 @@ highest_num_type (enum object_type t1, enum object_type t2)
 
 
 struct object *
+copy_number (const struct object *num)
+{
+  struct object *ret = malloc_and_check (sizeof (*ret));
+
+  ret->refcount = 1;
+  ret->type = num->type;
+
+  if (num->type == TYPE_INTEGER)
+    {
+      mpz_init (ret->value_ptr.integer);
+      mpz_set (ret->value_ptr.integer, num->value_ptr.integer);
+    }
+  else if (num->type == TYPE_RATIO)
+    {
+      mpq_init (ret->value_ptr.ratio);
+      mpq_set (ret->value_ptr.ratio, num->value_ptr.ratio);
+    }
+  else
+    {
+      mpf_init (ret->value_ptr.floating);
+      mpf_set (ret->value_ptr.floating, num->value_ptr.floating);
+    }
+
+  return ret;
+}
+
+
+struct object *
 promote_number (struct object *num, enum object_type type)
 {
   struct object *ret;
@@ -2874,21 +2910,68 @@ promote_number (struct object *num, enum object_type type)
 
 
 struct object *
+apply_arithmetic_operation (struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
+			    void (*opq) (mpq_t, const mpq_t, const mpq_t), void (*opf) (mpf_t, const mpf_t, const mpf_t),
+			    struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *ret, *op;
+
+  if (!(CAR (list)->type & TYPE_NUMBER) || !(CAR (CDR (list))->type & TYPE_NUMBER))
+    {
+      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (highest_num_type (CAR (list)->type, CAR (CDR (list))->type) == CAR (list)->type)
+    ret = copy_number (CAR (list));
+  else
+    ret = promote_number (CAR (list), highest_num_type (CAR (list)->type, CAR (CDR (list))->type));
+
+  list = CDR (list);
+
+  do
+    {
+      op = promote_number (CAR (list), highest_num_type (ret->type, CAR (list)->type));
+
+      if (ret->type == TYPE_INTEGER)
+	{
+	  opz (ret->value_ptr.integer, ret->value_ptr.integer, op->value_ptr.integer);
+	}
+      else if (ret->type == TYPE_RATIO)
+	{
+	  opq (ret->value_ptr.ratio, ret->value_ptr.ratio, op->value_ptr.ratio);
+	}
+      else if (ret->type == TYPE_FLOAT)
+	{
+	  opf (ret->value_ptr.floating, ret->value_ptr.floating, op->value_ptr.floating);
+	}
+
+      list = CDR (list);
+
+    } while (list != &nil_object);
+
+  return ret;
+}
+
+
+struct object *
 builtin_plus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
-  struct object *ret = malloc_and_check (sizeof (*ret));
-  struct object *op;
-
-  ret->type = TYPE_INTEGER;
-  ret->refcount = 1;
-
-  mpz_init (ret->value_ptr.integer);
-  mpz_set_si (ret->value_ptr.integer, 0);
+  struct object *ret;
 
   if (!list_length (list))
-    return ret;
+    {
+      ret = malloc_and_check (sizeof (*ret));
 
-  while (list != &nil_object)
+      ret->type = TYPE_INTEGER;
+      ret->refcount = 1;
+
+      mpz_init (ret->value_ptr.integer);
+      mpz_set_si (ret->value_ptr.integer, 0);
+
+      return ret;
+    }
+  else if (list_length (list) == 1)
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
@@ -2896,33 +2979,88 @@ builtin_plus (struct object *list, struct environment *env, enum eval_outcome *o
 	  return NULL;
 	}
 
-      op = CAR (list);
-
-      ret = promote_number (ret, highest_num_type (ret->type, op->type));
-      op = promote_number (op, highest_num_type (ret->type, op->type));
-
-      if (ret->type == TYPE_INTEGER)
-	{
-	  mpz_add (ret->value_ptr.integer, ret->value_ptr.integer, op->value_ptr.integer);
-	}
-      else if (ret->type == TYPE_RATIO)
-	{
-	  mpq_add (ret->value_ptr.ratio, ret->value_ptr.ratio, op->value_ptr.ratio);
-	}
-      else if (ret->type == TYPE_FLOAT)
-	{
-	  mpf_add (ret->value_ptr.floating, ret->value_ptr.floating, op->value_ptr.floating);
-	}
-
-      list = CDR (list);
+      return CAR (list);
     }
 
-  return ret;
+  return apply_arithmetic_operation (list, mpz_add, mpq_add, mpf_add, env, outcome, cursor);
 }
 
 
 struct object *
 builtin_minus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *ret;
+
+  if (!list_length (list))
+    {
+      *outcome = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (list_length (list) == 1)
+    {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  *outcome = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret = copy_number (CAR (list));
+
+      if (ret->type == TYPE_INTEGER)
+	{
+	  mpz_neg (ret->value_ptr.integer, ret->value_ptr.integer);
+	}
+      else if (ret->type == TYPE_RATIO)
+	{
+	  mpq_neg (ret->value_ptr.ratio, ret->value_ptr.ratio);
+	}
+      else if (ret->type == TYPE_FLOAT)
+	{
+	  mpf_neg (ret->value_ptr.floating, ret->value_ptr.floating);
+	}
+
+      return ret;
+    }
+
+  return apply_arithmetic_operation (list, mpz_sub, mpq_sub, mpf_sub, env, outcome, cursor);
+}
+
+
+struct object *
+builtin_multiply (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *ret;
+
+  if (!list_length (list))
+    {
+      ret = malloc_and_check (sizeof (*ret));
+
+      ret->type = TYPE_INTEGER;
+      ret->refcount = 1;
+
+      mpz_init (ret->value_ptr.integer);
+      mpz_set_si (ret->value_ptr.integer, 1);
+
+      return ret;
+    }
+  else if (list_length (list) == 1)
+    {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  *outcome = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      return CAR (list);
+    }
+
+  return apply_arithmetic_operation (list, mpz_mul, mpq_mul, mpf_mul, env, outcome, cursor);
+}
+
+
+struct object *
+builtin_divide (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
 {
   return NULL;
 }
