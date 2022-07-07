@@ -1534,7 +1534,8 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
   int i = 0;
   
   int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0, found_initial_sign = 0,
-    found_digit = 0, found_digit_after_slash = 0, found_digit_after_exp_marker = 0, need_decimal_digit = 0;
+    found_digit = 0, found_digit_after_slash = 0, found_digit_after_exp_marker = 0, found_digit_after_dec_point = 0,
+    need_decimal_digit = 0;
   
   char decimal_digits [] = "0123456789";
   char digits [] = "00112233445566778899aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ";
@@ -1557,6 +1558,7 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 
 	  found_exp_marker && (found_digit_after_exp_marker = 1);
 	  found_slash && (found_digit_after_slash = 1);
+	  found_dec_point && (found_digit_after_dec_point = 1);
 	}
       else if (strchr (exponent_markers, token [i]))
 	{
@@ -1620,6 +1622,9 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
     return 0;
   if (need_decimal_digit)
     return 0;
+
+  if (found_digit_after_dec_point)
+    *numtype = TYPE_FLOAT;
 
   if (token [i-1] == '.')
     {
