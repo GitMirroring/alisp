@@ -165,6 +165,7 @@ eval_outcome
     INCORRECT_SYNTAX_IN_PROGN,
     INCORRECT_SYNTAX_IN_DEFUN,
     CANT_REDEFINE_CONSTANT,
+    CANT_REBIND_CONSTANT,
     TOO_FEW_ARGUMENTS,
     TOO_MANY_ARGUMENTS,
     WRONG_TYPE_OF_ARGUMENT,
@@ -3229,7 +3230,16 @@ create_binding_from_let_form (struct object *form, struct environment *env, stru
     {
       sym = SYMBOL (form);
 
-      return create_binding (sym, &nil_object, LEXICAL_BINDING);
+      if (sym->value_ptr.symbol->is_const)
+	{
+	  *outcome = CANT_REBIND_CONSTANT;
+	  return NULL;
+	}
+
+      if (sym->value_ptr.symbol->is_parameter)
+	return create_binding (sym, &nil_object, DYNAMIC_BINDING);
+      else
+	return create_binding (sym, &nil_object, LEXICAL_BINDING);
     }
   else if (form->type == TYPE_CONS_PAIR)
     {
@@ -3242,12 +3252,21 @@ create_binding_from_let_form (struct object *form, struct environment *env, stru
 
       sym = SYMBOL (CAR (form));
 
+      if (sym->value_ptr.symbol->is_const)
+	{
+	  *outcome = CANT_REBIND_CONSTANT;
+	  return NULL;
+	}
+
       val = evaluate_object (CAR (CDR (form)), env, symlist, outcome, cursor);
 
       if (!val)
 	return NULL;
 
-      return create_binding (sym, val, LEXICAL_BINDING);
+      if (sym->value_ptr.symbol->is_parameter)
+	return create_binding (sym, val, DYNAMIC_BINDING);
+      else
+	return create_binding (sym, val, LEXICAL_BINDING);
     }
   else
     {
@@ -3696,6 +3715,10 @@ print_eval_error (enum eval_outcome err, struct object *arg)
       print_symbol (arg->value_ptr.symbol);
       printf (" not bound to any function\n");
     }
+  else if (err == EVAL_NOT_IMPLEMENTED)
+    {
+      printf ("eval error: not implemente\n");
+    }
   else if (err == ILLEGAL_FUNCTION_CALL)
     {
       printf ("eval error: illegal function call\n");
@@ -3724,9 +3747,9 @@ print_eval_error (enum eval_outcome err, struct object *arg)
     {
       printf ("eval error: redefining constants is not allowed\n");
     }
-  else if (err == EVAL_NOT_IMPLEMENTED)
+  else if (err == CANT_REBIND_CONSTANT)
     {
-      printf ("eval error: not implemente\n");
+      printf ("eval error: rebinding constants is not allowed\n");
     }
   else if (err == TOO_FEW_ARGUMENTS)
     {
