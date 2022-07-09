@@ -36,19 +36,23 @@
 #include <readline/history.h>
 
 
-#define CAR(list) ((list) == &nil_object ? &nil_object : (list)->value_ptr.cons_pair->car)
+#define CAR(list) ((list) == &nil_object ? &nil_object :\
+		   (list)->value_ptr.cons_pair->car)
 
 #define CDR(list) ((list) == &nil_object ? &nil_object :		\
-		   (list)->value_ptr.cons_pair->cdr ? (list)->value_ptr.cons_pair->cdr : &nil_object)
+		   (list)->value_ptr.cons_pair->cdr ?			\
+		   (list)->value_ptr.cons_pair->cdr : &nil_object)
 
-#define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) : (s)->value_ptr.symbol_name->sym) 
+#define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :	\
+		   (s)->value_ptr.symbol_name->sym) 
 
 
 #define TERMINATING_MACRO_CHARS "()';\"`,"
 
 
 
-/* not a C string. not null-terminated and explicit size. null bytes are allowed inside */
+/* not a C string. not null-terminated and explicit size. null bytes are
+   allowed inside */
 
 struct
 string
@@ -149,11 +153,16 @@ read_outcome
   };
 
 
-#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | INCOMPLETE_SHARP_MACRO_CALL)
+#define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_NONEMPTY_LIST |	\
+			   INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | \
+			   INCOMPLETE_SHARP_MACRO_CALL)
 
-#define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH |\
-		    COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS | NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST |\
-		    MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS | CANT_BEGIN_WITH_TWO_COLONS_OR_MORE |\
+#define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS | \
+		    INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH |	\
+		    COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS |\
+		    NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST | \
+		    MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS | \
+		    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE | \
 		    MORE_THAN_A_PACKAGE_SEPARATOR)
 
 
@@ -234,7 +243,9 @@ symbol
   int is_builtin_form;
   struct parameter *lambda_list;
   int evaluate_args;
-  struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+  struct object *(*builtin_form)
+    (struct object *list, struct environment *env, enum eval_outcome *outcome,
+     struct object **cursor);
 
   int is_const;
   int is_parameter;
@@ -330,7 +341,8 @@ struct
 cons_pair
 {
   int filling_car;  /* when car is incomplete but already partly allocated */
-  int empty_list_in_car;  /* when car is a still empty list so nothing allocated yet */
+  int empty_list_in_car;  /* when car is a still empty list so nothing
+			     allocated yet */
   struct object *car;
   struct object *cdr;
 };
@@ -398,7 +410,8 @@ object
   const char *begin;
   const char *end;
   enum object_type type;
-  union object_ptr_union value_ptr;  /* only when type is TYPE_NIL, this is allowed to be NULL */
+  union object_ptr_union value_ptr;  /* only when type is TYPE_NIL, this is
+					allowed to be NULL */
 };  
 
 
@@ -495,47 +508,74 @@ int input_needs_continuation (const char *input, size_t size);
 
 char *read_line_interactively (const char prompt []);
 
-enum read_outcome read_object_continued (struct object **obj, int is_empty_list, const char *input, size_t size, struct environment *env,
-					 enum eval_outcome *outcome, struct object **cursor, const char **obj_begin,
-					 const char **obj_end, size_t *mult_comm_depth);
-struct object *complete_object_interactively (struct object *obj, int is_empty_list, struct environment *env,
-					      enum eval_outcome *outcome, struct object **cursor, 
-					      size_t multiline_comm_depth, const char **input_left, size_t *input_left_size);
-struct object *read_object_interactively_continued (const char *input, size_t input_size, struct environment *env,
-						    enum eval_outcome *outcome, struct object **cursor,
-						    const char **input_left, size_t *input_left_size);
-struct object *read_object_interactively (struct environment *env, enum eval_outcome *outcome, struct object **cursor,
-					  const char **input_left, size_t *input_left_size);
+enum read_outcome read_object_continued
+(struct object **obj, int is_empty_list, const char *input, size_t size,
+ struct environment *env, enum eval_outcome *outcome, struct object **cursor,
+ const char **obj_begin, const char **obj_end, size_t *mult_comm_depth);
+struct object *complete_object_interactively
+(struct object *obj, int is_empty_list, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor,
+ size_t multiline_comm_depth, const char **input_left,
+ size_t *input_left_size);
+struct object *read_object_interactively_continued
+(const char *input, size_t input_size, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor, const char **input_left,
+ size_t *input_left_size);
+struct object *read_object_interactively
+(struct environment *env, enum eval_outcome *outcome, struct object **cursor,
+ const char **input_left, size_t *input_left_size);
 
-const char *skip_space_block (const char *input, size_t size, size_t *new_size);
-const char *jump_to_end_of_line (const char *input, size_t size, size_t *new_size);
-const char *find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_size);
-const char *jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth, size_t *depth_or_new_size);
+const char *skip_space_block
+(const char *input, size_t size, size_t *new_size);
+const char *jump_to_end_of_line
+(const char *input, size_t size, size_t *new_size);
+const char *find_multiline_comment_delimiter
+(const char *input, size_t size, size_t *new_size);
+const char *jump_to_end_of_multiline_comment
+(const char *input, size_t size, size_t depth, size_t *depth_or_new_size);
 
-struct line_list *append_line_to_list (char *line, size_t size, struct line_list *list, int do_copy);
-struct object_list *append_object_to_list (struct object *obj, struct object_list *list);
+struct line_list *append_line_to_list
+(char *line, size_t size, struct line_list *list, int do_copy);
+struct object_list *append_object_to_list
+(struct object *obj, struct object_list *list);
 
-enum read_outcome read_object (struct object **obj, const char *input, size_t size, struct environment *env, enum eval_outcome *outcome,
-			       struct object **cursor, const char **obj_begin, const char **obj_end, size_t *out_arg);
+enum read_outcome read_object
+(struct object **obj, const char *input, size_t size, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor, const char **obj_begin,
+ const char **obj_end, size_t *out_arg);
 
-enum read_outcome read_list (struct object **obj, const char *input, size_t size, struct environment *env, enum eval_outcome *outcome,
-			     struct object **cursor, const char **list_end, size_t *out_arg);
+enum read_outcome read_list
+(struct object **obj, const char *input, size_t size, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor, const char **list_end,
+ size_t *out_arg);
 
-enum read_outcome read_string (struct object **obj, const char *input, size_t size, const char **string_end);
+enum read_outcome read_string
+(struct object **obj, const char *input, size_t size,
+ const char **string_end);
 
-enum read_outcome read_symbol_name (struct object **obj, const char *input, size_t size, const char **symname_end);
+enum read_outcome read_symbol_name
+(struct object **obj, const char *input, size_t size,
+ const char **symname_end);
 
-enum read_outcome read_prefix (struct object **obj, const char *input, size_t size, struct object **last, const char **prefix_end);
+enum read_outcome read_prefix
+(struct object **obj, const char *input, size_t size, struct object **last,
+ const char **prefix_end);
 
-struct sharp_macro_call *read_sharp_macro_call (const char *input, size_t size, struct environment *env, enum eval_outcome *e_outcome,
-						struct object **cursor, const char **macro_end, size_t *out_arg,
-						enum read_outcome *outcome);
-struct object *call_sharp_macro (struct sharp_macro_call *macro_call, enum read_outcome *outcome);
+struct sharp_macro_call *read_sharp_macro_call
+(const char *input, size_t size, struct environment *env,
+ enum eval_outcome *e_outcome, struct object **cursor, const char **macro_end,
+ size_t *out_arg, enum read_outcome *outcome);
+struct object *call_sharp_macro
+(struct sharp_macro_call *macro_call, enum read_outcome *outcome);
 
-enum element find_next_element (const char *input, size_t size, const char **elem_begin);
+enum element find_next_element
+(const char *input, size_t size, const char **elem_begin);
 
-int is_number (const char *token, size_t size, int radix, enum object_type *numtype, const char **number_end, const char **token_end);
-struct object *alloc_number (const char *token, size_t size, int radix, enum object_type numtype);
+int is_number
+(const char *token, size_t size, int radix, enum object_type *numtype,
+ const char **number_end, const char **token_end);
+struct object *alloc_number
+(const char *token, size_t size, int radix, enum object_type numtype);
 
 void print_range (const char *begin, const char *end);
 char *append_newline (char *string);
@@ -549,7 +589,8 @@ struct object *alloc_empty_cons_pair (void);
 struct object *alloc_function (void);
 struct object *create_package (char *name, size_t name_len);
 
-const char *find_end_of_string (const char *input, size_t size, size_t *new_size, size_t *string_length);
+const char *find_end_of_string
+(const char *input, size_t size, size_t *new_size, size_t *string_length);
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (size_t size);
@@ -558,34 +599,46 @@ void resize_string (struct object *string, size_t size);
 struct object *alloc_symbol_name (size_t packname_s, size_t symname_s);
 void resize_symbol_name (struct object *symname, size_t size);
 
-const char *find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, const char **start_of_package_separator,
-				     int *sym_visibility, size_t *packname_length, size_t *name_length, enum read_outcome *outcome);
+const char *find_end_of_symbol_name
+(const char *input, size_t size, size_t *new_size,
+ const char **start_of_package_separator, int *sym_visibility,
+ size_t *packname_length, size_t *name_length, enum read_outcome *outcome);
 void normalize_symbol_name (char *output, const char *input, size_t size);
 
 struct object *create_symbol (char *name, size_t size);
-struct object *intern_symbol (char *name, size_t len, struct object_list **symbol_list);
-struct object *intern_symbol_name (struct object *symname, struct object_list **symbol_list);
+struct object *intern_symbol (char *name, size_t len,
+			      struct object_list **symbol_list);
+struct object *intern_symbol_name (struct object *symname,
+				   struct object_list **symbol_list);
 
-struct binding *create_binding (struct object *sym, struct object *obj, enum binding_type type);
+struct binding *create_binding (struct object *sym, struct object *obj,
+				enum binding_type type);
 struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *chain_bindings (struct binding *bin, struct binding *env);
 struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env, enum binding_type type);
 
 void add_builtin_form (char *name, struct environment *env,
-		       struct object *(*builtin_form) (struct object *list, struct environment *env, enum eval_outcome *outcome,
-						       struct object **cursor), int eval_args);
+		       struct object *(*builtin_form)
+		       (struct object *list, struct environment *env,
+			enum eval_outcome *outcome, struct object **cursor),
+		       int eval_args);
 
-struct object *define_constant (struct object *sym, struct object *form, struct environment *env, enum eval_outcome *outcome,
-				struct object **cursor);
-struct object *define_constant_by_name (char *name, size_t size, struct object *form, struct environment *env,
-					enum eval_outcome *outcome, struct object **cursor);
-struct object *define_parameter (struct object *sym, struct object *form, struct environment *env, enum eval_outcome *outcome,
-				 struct object **cursor);
-struct object *define_parameter_by_name (char *name, size_t size, struct object *form, struct environment *env,
-					 enum eval_outcome *outcome, struct object **cursor);
+struct object *define_constant
+(struct object *sym, struct object *form, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
+struct object *define_constant_by_name
+(char *name, size_t size, struct object *form, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
+struct object *define_parameter
+(struct object *sym, struct object *form, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
+struct object *define_parameter_by_name
+(char *name, size_t size, struct object *form, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
 
-struct object *skip_prefix (struct object *prefix, struct object **last_prefix);
+struct object *skip_prefix (struct object *prefix,
+			    struct object **last_prefix);
 struct object *append_prefix (struct object *obj, enum element type);
 
 struct object *nth (unsigned int ind, struct object *list);
@@ -593,51 +646,100 @@ struct object *nthcdr (unsigned int ind, struct object *list);
 unsigned int list_length (const struct object *list);
 
 void copy_symbol_name (char *out, const struct symbol_name *name);
-struct parameter *alloc_parameter (enum parameter_type type, struct object *sym);
-struct parameter *parse_required_parameters (struct object *obj, struct parameter **last, struct object **next,
-					     enum parse_lambda_list_outcome *out);
-struct parameter *parse_optional_parameters (struct object *obj, struct parameter **last, struct object **next,
-					     enum parse_lambda_list_outcome *out);
-struct parameter *parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out);
-struct object *call_function (struct object *func, struct object *arglist, struct environment *env, enum eval_outcome *outcome,
-			      struct object **cursor);
+struct parameter *alloc_parameter (enum parameter_type type,
+				   struct object *sym);
+struct parameter *parse_required_parameters
+(struct object *obj, struct parameter **last, struct object **next,
+ enum parse_lambda_list_outcome *out);
+struct parameter *parse_optional_parameters
+(struct object *obj, struct parameter **last, struct object **next,
+ enum parse_lambda_list_outcome *out);
+struct parameter *parse_lambda_list (struct object *obj,
+				     enum parse_lambda_list_outcome *out);
+struct object *call_function
+(struct object *func, struct object *arglist, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
 
 int check_type (const struct object *obj, const struct typespec *type);
 
-struct object *evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_through_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_object
+(struct object *obj, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_list
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_through_list
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
-struct object *builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_cdr (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_cons (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_load (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_car
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_cdr
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_cons
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_list
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_load
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
 struct object *promote_number (struct object *num, enum object_type type);
-struct object *apply_arithmetic_operation (struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
-					   void (*opq) (mpq_t, const mpq_t, const mpq_t), void (*opf) (mpf_t, const mpf_t, const mpf_t),
-					   struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_plus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_minus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_multiply (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *builtin_divide (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *apply_arithmetic_operation
+(struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
+ void (*opq) (mpq_t, const mpq_t, const mpq_t),
+ void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
+struct object *builtin_plus
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_minus
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_multiply
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *builtin_divide
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
-struct binding *create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_let (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
-			     struct object **cursor);
-struct object *evaluate_let_star (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
-				  struct object **cursor);
+struct binding *create_binding_from_let_form
+(struct object *form, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_let
+(struct object *bind_forms, struct object *body, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_let_star
+(struct object *bind_forms, struct object *body, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
 
-struct object *evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_defparameter (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_defvar (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_defun (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
-struct object *evaluate_defmacro (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+struct object *evaluate_if
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_progn
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_defconstant
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_defparameter
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_defvar
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_defun
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
+struct object *evaluate_defmacro
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -649,7 +751,8 @@ void print_string (const struct string *str);
 void print_list (const struct cons_pair *list);
 void print_object (const struct object *obj);
 
-void print_read_error (enum read_outcome err, const char *input, size_t size, const char *begin, const char *end);
+void print_read_error (enum read_outcome err, const char *input, size_t size,
+		       const char *begin, const char *end);
 void print_eval_error (enum eval_outcome err, struct object *arg);
 
 int decrement_refcount (struct object *obj);
@@ -677,7 +780,8 @@ struct object nil_object = {1, NULL, NULL, TYPE_NIL};
 
 struct symbol _nil_symbol = {"NIL", 3};
 
-struct object nil_symbol = {1, NULL, NULL, TYPE_SYMBOL, .value_ptr.symbol = &_nil_symbol};
+struct object nil_symbol = {1, NULL, NULL, TYPE_SYMBOL,
+  .value_ptr.symbol = &_nil_symbol};
 
 
 struct object t_object = {1, NULL, NULL, TYPE_T};
@@ -714,12 +818,16 @@ main (int argc, char *argv [])
 	}
     }
 
-  env.current_package = create_package ("COMMON-LISP", strlen ("COMMON-LISP"));
-  env.packages = create_binding (env.current_package->value_ptr.package->name, env.current_package, DYNAMIC_BINDING);
+  env.current_package = create_package ("COMMON-LISP",
+					strlen ("COMMON-LISP"));
+  env.packages = create_binding (env.current_package->value_ptr.package->name,
+				 env.current_package, DYNAMIC_BINDING);
 
 
-  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, &env, &eval_out, &cursor);
-  define_constant_by_name ("T", strlen ("T"), &t_object, &env, &eval_out, &cursor);
+  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, &env,
+			   &eval_out, &cursor);
+  define_constant_by_name ("T", strlen ("T"), &t_object, &env, &eval_out,
+			   &cursor);
 
   add_builtin_form ("CAR", &env, builtin_car, 1);
   add_builtin_form ("CDR", &env, builtin_cdr, 1);
@@ -743,7 +851,8 @@ main (int argc, char *argv [])
 
   while (!end_repl)
     {
-      obj = read_object_interactively (&env, &eval_out, &cursor, &input_left, &input_left_s);
+      obj = read_object_interactively (&env, &eval_out, &cursor, &input_left,
+				       &input_left_s);
       
       while (obj && input_left && input_left_s > 0)
 	{
@@ -760,8 +869,10 @@ main (int argc, char *argv [])
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
 
-	  obj = read_object_interactively_continued (input_left, input_left_s, &env, &eval_out, &cursor,
-						     &input_left, &input_left_s);
+	  obj = read_object_interactively_continued (input_left, input_left_s,
+						     &env, &eval_out, &cursor,
+						     &input_left,
+						     &input_left_s);
 	}
 
       if (obj)
@@ -807,8 +918,10 @@ read_line_interactively (const char prompt [])
 
 
 enum read_outcome
-read_object_continued (struct object **obj, int is_empty_list, const char *input, size_t size, struct environment *env,
-		       enum eval_outcome *outcome, struct object **cursor, const char **obj_begin,
+read_object_continued (struct object **obj, int is_empty_list,
+		       const char *input, size_t size,
+		       struct environment *env, enum eval_outcome *outcome,
+		       struct object **cursor, const char **obj_begin,
 		       const char **obj_end, size_t *mult_comm_depth)
 {
   enum read_outcome out;
@@ -817,7 +930,8 @@ read_object_continued (struct object **obj, int is_empty_list, const char *input
 
   if (*mult_comm_depth)
     {
-      input = jump_to_end_of_multiline_comment (input, size, *mult_comm_depth, mult_comm_depth);
+      input = jump_to_end_of_multiline_comment (input, size, *mult_comm_depth,
+						mult_comm_depth);
 
       if (!input)
 	return NO_OBJECT;
@@ -831,20 +945,23 @@ read_object_continued (struct object **obj, int is_empty_list, const char *input
     {
       l = NULL;
 
-      out = read_list (&l, input, size, env, outcome, cursor, obj_end, mult_comm_depth);
+      out = read_list (&l, input, size, env, outcome, cursor, obj_end,
+		       mult_comm_depth);
 
       ob = l;
     }
   else if (!ob)
     {
-      out = read_object (&ob, input, size, env, outcome, cursor, obj_begin, obj_end, mult_comm_depth);
+      out = read_object (&ob, input, size, env, outcome, cursor, obj_begin,
+			 obj_end, mult_comm_depth);
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
     }
   else if (ob->type == TYPE_CONS_PAIR)
     {
-      out = read_list (&ob, input, size, env, outcome, cursor, obj_end, mult_comm_depth);
+      out = read_list (&ob, input, size, env, outcome, cursor, obj_end,
+		       mult_comm_depth);
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -855,7 +972,8 @@ read_object_continued (struct object **obj, int is_empty_list, const char *input
       out = read_symbol_name (&ob, input, size, obj_end);
 
       if (out == COMPLETE_OBJECT)
-	intern_symbol_name (ob, &env->current_package->value_ptr.package->symlist);
+	intern_symbol_name (ob,
+			    &env->current_package->value_ptr.package->symlist);
     }
 
   if (last_pref)
@@ -868,9 +986,13 @@ read_object_continued (struct object **obj, int is_empty_list, const char *input
 
 
 struct object *
-complete_object_interactively (struct object *obj, int is_empty_list, struct environment *env,
-			       enum eval_outcome *outcome, struct object **cursor, 
-			       size_t multiline_comm_depth, const char **input_left, size_t *input_left_size)
+complete_object_interactively (struct object *obj, int is_empty_list,
+			       struct environment *env,
+			       enum eval_outcome *outcome,
+			       struct object **cursor,
+			       size_t multiline_comm_depth,
+			       const char **input_left,
+			       size_t *input_left_size)
 {
   char *line;
   enum read_outcome read_out;
@@ -881,19 +1003,27 @@ complete_object_interactively (struct object *obj, int is_empty_list, struct env
   line = read_line_interactively ("> ");
   len = strlen (line);
   
-  read_out = read_object_continued (&obj, is_empty_list, line, len, env, outcome, cursor, &begin, &end, &multiline_comm_depth);
+  read_out = read_object_continued (&obj, is_empty_list, line, len, env,
+				    outcome, cursor, &begin, &end,
+				    &multiline_comm_depth);
 
-  while (read_out & (INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
-		     | INCOMPLETE_SHARP_MACRO_CALL | UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST)
+  while (read_out & (INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING |
+		     INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
+		     | INCOMPLETE_SHARP_MACRO_CALL |
+		     UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST)
 	 || multiline_comm_depth)
     {
       line = read_line_interactively ("> ");
       len = strlen (line);
 
       if (read_out & EMPTY_LIST)
-	read_out = read_object_continued (&obj, 1, line, len, env, outcome, cursor, &begin, &end, &multiline_comm_depth);
+	read_out = read_object_continued (&obj, 1, line, len, env, outcome,
+					  cursor, &begin, &end,
+					  &multiline_comm_depth);
       else
-	read_out = read_object_continued (&obj, 0, line, len, env, outcome, cursor, &begin, &end, &multiline_comm_depth);
+	read_out = read_object_continued (&obj, 0, line, len, env, outcome,
+					  cursor, &begin, &end,
+					  &multiline_comm_depth);
     }
 
   *input_left = end + 1;
@@ -904,9 +1034,12 @@ complete_object_interactively (struct object *obj, int is_empty_list, struct env
 
 
 struct object *
-read_object_interactively_continued (const char *input, size_t input_size, struct environment *env,
-				     enum eval_outcome *outcome, struct object **cursor,
-				     const char **input_left, size_t *input_left_size)
+read_object_interactively_continued (const char *input, size_t input_size,
+				     struct environment *env,
+				     enum eval_outcome *outcome,
+				     struct object **cursor,
+				     const char **input_left,
+				     size_t *input_left_size)
 {
   enum read_outcome read_out;
   struct object *obj = NULL;
@@ -914,7 +1047,8 @@ read_object_interactively_continued (const char *input, size_t input_size, struc
   size_t mult_comm_depth = 0;
 
   
-  read_out = read_object (&obj, input, input_size, env, outcome, cursor, &begin, &end, &mult_comm_depth);
+  read_out = read_object (&obj, input, input_size, env, outcome, cursor,
+			  &begin, &end, &mult_comm_depth);
   
   if (read_out == COMPLETE_OBJECT  && !mult_comm_depth)
     {
@@ -938,20 +1072,27 @@ read_object_interactively_continued (const char *input, size_t input_size, struc
     }
   else if (read_out == EMPTY_LIST)
     {
-      return complete_object_interactively (obj, 1, env, outcome, cursor, mult_comm_depth, input_left, input_left_size);
+      return complete_object_interactively (obj, 1, env, outcome, cursor,
+					    mult_comm_depth, input_left,
+					    input_left_size);
     }
   else
-    return complete_object_interactively (obj, 0, env, outcome, cursor, mult_comm_depth, input_left, input_left_size);
+    return complete_object_interactively (obj, 0, env, outcome, cursor,
+					  mult_comm_depth, input_left,
+					  input_left_size);
 }
 
 
 struct object *
-read_object_interactively (struct environment *env, enum eval_outcome *outcome, struct object **cursor,
-			   const char **input_left, size_t *input_left_size)
+read_object_interactively (struct environment *env, enum eval_outcome *outcome,
+			   struct object **cursor, const char **input_left,
+			   size_t *input_left_size)
 {
   char *line = read_line_interactively ("al> ");
 
-  return read_object_interactively_continued (line, strlen (line), env, outcome, cursor, input_left, input_left_size);
+  return read_object_interactively_continued (line, strlen (line), env,
+					      outcome, cursor, input_left,
+					      input_left_size);
 }
 
 
@@ -993,7 +1134,8 @@ jump_to_end_of_line (const char *input, size_t size, size_t *new_size)
 
 
 const char *
-find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_size)
+find_multiline_comment_delimiter (const char *input, size_t size,
+				  size_t *new_size)
 {
   const char *comm_begin, *comm_end, *delim;
 
@@ -1024,7 +1166,8 @@ find_multiline_comment_delimiter (const char *input, size_t size, size_t *new_si
 
 
 const char *
-jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth, size_t *depth_or_new_size)
+jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth,
+				  size_t *depth_or_new_size)
 {
   const char *delim, *ret;
 
@@ -1058,7 +1201,8 @@ jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth, 
 
 
 struct line_list *
-append_line_to_list (char *line, size_t size, struct line_list *list, int do_copy)
+append_line_to_list (char *line, size_t size, struct line_list *list,
+		     int do_copy)
 {
   struct line_list *l, *prev, *beg = list;
 
@@ -1116,8 +1260,10 @@ append_object_to_list (struct object *obj, struct object_list *list)
 
 
 enum read_outcome
-read_object (struct object **obj, const char *input, size_t size, struct environment *env, enum eval_outcome *outcome,
-	     struct object **cursor, const char **obj_begin, const char **obj_end, size_t *out_arg)
+read_object (struct object **obj, const char *input, size_t size,
+	     struct environment *env, enum eval_outcome *outcome,
+	     struct object **cursor, const char **obj_begin,
+	     const char **obj_end, size_t *out_arg)
 {
   int found_prefix = 0;
   struct object *last_pref, *ob = NULL;
@@ -1140,7 +1286,8 @@ read_object (struct object **obj, const char *input, size_t size, struct environ
 	}
       else if (*input == '#' && size > 1 && *(input+1) == '|')
 	{
-	  if (!(input = jump_to_end_of_multiline_comment (input+2, size-2, 1, out_arg)))
+	  if (!(input = jump_to_end_of_multiline_comment (input+2, size-2, 1,
+							  out_arg)))
 	    return NO_OBJECT;
 	  else
 	    {
@@ -1148,7 +1295,8 @@ read_object (struct object **obj, const char *input, size_t size, struct environ
 	      *out_arg = 0;
 	    }
 	}
-      else if (*input == '\'' || *input == '`' || *input == ',' || *input == '@')
+      else if (*input == '\'' || *input == '`' || *input == ','
+	       || *input == '@')
  	{
 	  read_prefix (obj, input, size, &last_pref, obj_end);
 	  size = size - (*obj_end - input);
@@ -1158,12 +1306,14 @@ read_object (struct object **obj, const char *input, size_t size, struct environ
       else if (*input == ')')
 	{
 	  *obj_end = input;
-	  return found_prefix ? CLOSING_PARENTHESIS_AFTER_PREFIX : CLOSING_PARENTHESIS;
+	  return found_prefix ? CLOSING_PARENTHESIS_AFTER_PREFIX :
+	    CLOSING_PARENTHESIS;
 	}
       else if (*input == '(')
 	{
 	  *obj_begin = input;
-	  out = read_list (&ob, input+1, size-1, env, outcome, cursor, obj_end, out_arg);
+	  out = read_list (&ob, input+1, size-1, env, outcome, cursor,
+			   obj_end, out_arg);
 	  break;
 	}
       else if (*input == '"')
@@ -1175,7 +1325,8 @@ read_object (struct object **obj, const char *input, size_t size, struct environ
       else if (*input == '#')
 	{
 	  *obj_begin = input;
-	  sharp_m = read_sharp_macro_call (input+1, size-1, env, outcome, cursor, obj_end, out_arg, &out);
+	  sharp_m = read_sharp_macro_call (input+1, size-1, env, outcome,
+					   cursor, obj_end, out_arg, &out);
 
 	  if (out == COMPLETE_OBJECT)
 	    ob = call_sharp_macro (sharp_m, &out);
@@ -1196,7 +1347,8 @@ read_object (struct object **obj, const char *input, size_t size, struct environ
 	      out = read_symbol_name (&ob, input, size, obj_end);
 
 	      if (out == COMPLETE_OBJECT)
-		intern_symbol_name (ob, &env->current_package->value_ptr.package->symlist);
+		intern_symbol_name (ob,
+				    &env->current_package->value_ptr.package->symlist);
 	    }
 
 	  break;
@@ -1218,7 +1370,8 @@ read_object (struct object **obj, const char *input, size_t size, struct environ
 
 
 enum read_outcome
-read_list (struct object **obj, const char *input, size_t size, struct environment *env, enum eval_outcome *outcome,
+read_list (struct object **obj, const char *input, size_t size,
+	   struct environment *env, enum eval_outcome *outcome,
 	   struct object **cursor, const char **list_end, size_t *out_arg)
 {
   struct object *last_cons = NULL, *car = NULL, *ob, *last_pref, *cons;
@@ -1236,17 +1389,22 @@ read_list (struct object **obj, const char *input, size_t size, struct environme
     {
       if (ob->value_ptr.cons_pair->filling_car)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 0, input, size, env, outcome, cursor, &obj_beg, &obj_end, out_arg);
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 0, input,
+				       size, env, outcome, cursor, &obj_beg,
+				       &obj_end, out_arg);
 
 	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
 	      ob->value_ptr.cons_pair->filling_car = 0;
-	  else if (out == NO_OBJECT || out == EMPTY_LIST || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR
+	  else if (out == NO_OBJECT || out == EMPTY_LIST
+		   || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR
 		   || out & INCOMPLETE_OBJECT)
 	    return out;
 	}
       else if (ob->value_ptr.cons_pair->empty_list_in_car)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 1, input, size, env, outcome, cursor, &obj_beg, &obj_end, out_arg);
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 1, input,
+				       size, env, outcome, cursor, &obj_beg,
+				       &obj_end, out_arg);
 
 	  if (out != EMPTY_LIST)
 	    ob->value_ptr.cons_pair->empty_list_in_car = 0;
@@ -1257,7 +1415,8 @@ read_list (struct object **obj, const char *input, size_t size, struct environme
 	      return out;
 	    }
 
-	  if (out == NO_OBJECT || out == EMPTY_LIST || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
+	  if (out == NO_OBJECT || out == EMPTY_LIST
+	      || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
 	    return out;
 	}
 
@@ -1267,11 +1426,13 @@ read_list (struct object **obj, const char *input, size_t size, struct environme
 
   if (obj_end)
     {
-      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), env, outcome, cursor, &obj_beg, &obj_end, out_arg);
+      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), env,
+			 outcome, cursor, &obj_beg, &obj_end, out_arg);
     }
   else
     {
-      out = read_object (&car, input, size, env, outcome, cursor, &obj_beg, &obj_end, out_arg);
+      out = read_object (&car, input, size, env, outcome, cursor, &obj_beg,
+			 &obj_end, out_arg);
     }
 
   if (out == NO_OBJECT && !last_cons)
@@ -1339,7 +1500,8 @@ read_list (struct object **obj, const char *input, size_t size, struct environme
 	break;
 
       car = NULL;
-      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), env, outcome, cursor, &obj_beg, &obj_end, out_arg);
+      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), env,
+			 outcome, cursor, &obj_beg, &obj_end, out_arg);
     }
 
   if (out == EMPTY_LIST)
@@ -1358,7 +1520,8 @@ read_list (struct object **obj, const char *input, size_t size, struct environme
 
 
 enum read_outcome 
-read_string (struct object **obj, const char *input, size_t size, const char **string_end)
+read_string (struct object **obj, const char *input, size_t size,
+	     const char **string_end)
 {
   size_t length, new_size;
   struct string *str;
@@ -1398,7 +1561,8 @@ read_string (struct object **obj, const char *input, size_t size, const char **s
 
 
 enum read_outcome 
-read_symbol_name (struct object **obj, const char *input, size_t size, const char **symname_end)
+read_symbol_name (struct object **obj, const char *input, size_t size,
+		  const char **symname_end)
 {
   struct symbol_name *sym;
   size_t packname_l, name_l, new_size;
@@ -1408,7 +1572,9 @@ read_symbol_name (struct object **obj, const char *input, size_t size, const cha
   int visib;
 
 
-  *symname_end = find_end_of_symbol_name (input, size, &new_size, &start_of_pack_s, &visib, &packname_l, &name_l, &out);
+  *symname_end = find_end_of_symbol_name (input, size, &new_size,
+					  &start_of_pack_s, &visib,
+					  &packname_l, &name_l, &out);
 
   if (out & READ_ERROR)
     return out;
@@ -1443,7 +1609,8 @@ read_symbol_name (struct object **obj, const char *input, size_t size, const cha
 
 
 enum read_outcome
-read_prefix (struct object **obj, const char *input, size_t size, struct object **last, const char **prefix_end)
+read_prefix (struct object **obj, const char *input, size_t size,
+	     struct object **last, const char **prefix_end)
 {
   const char *n = input;
   enum element el;
@@ -1472,8 +1639,10 @@ read_prefix (struct object **obj, const char *input, size_t size, struct object 
 
 
 struct sharp_macro_call *
-read_sharp_macro_call (const char *input, size_t size, struct environment *env, enum eval_outcome *e_outcome, struct object **cursor,
-		       const char **macro_end, size_t *out_arg, enum read_outcome *outcome)
+read_sharp_macro_call (const char *input, size_t size, struct environment *env,
+		       enum eval_outcome *e_outcome, struct object **cursor,
+		       const char **macro_end, size_t *out_arg,
+		       enum read_outcome *outcome)
 {
   int arg, i = 0;
   const char *obj_b, *obj_e;
@@ -1515,14 +1684,16 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env, 
     }
 
   call->obj = NULL;
-  *outcome = read_object (&call->obj, input+i+1, size-i-1, env, e_outcome, cursor, &obj_b, &obj_e, out_arg);
+  *outcome = read_object (&call->obj, input+i+1, size-i-1, env, e_outcome,
+			  cursor, &obj_b, &obj_e, out_arg);
   
   return call;
 }
 
 
 struct object *
-call_sharp_macro (struct sharp_macro_call *macro_call, enum read_outcome *outcome)
+call_sharp_macro (struct sharp_macro_call *macro_call,
+		  enum read_outcome *outcome)
 {
   return NULL;
 }
@@ -1574,15 +1745,19 @@ find_next_element (const char *input, size_t size, const char **elem_begin)
 
 
 int
-is_number (const char *token, size_t size, int radix, enum object_type *numtype, const char **number_end, const char **token_end)
+is_number (const char *token, size_t size, int radix, enum object_type *numtype,
+	   const char **number_end, const char **token_end)
 {
   int i = 0;
   
-  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0, found_dec_digit = 0, found_digit = 0,
-    found_digit_after_slash = 0, found_digit_after_exp_marker = 0, found_digit_after_dec_point = 0, need_decimal_digit = 0;
+  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0,
+    found_dec_digit = 0, found_digit = 0, found_digit_after_slash = 0,
+    found_digit_after_exp_marker = 0, found_digit_after_dec_point = 0,
+    need_decimal_digit = 0;
   
   char decimal_digits [] = "0123456789";
-  char digits [] = "00112233445566778899aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ";
+  char digits [] = "00112233445566778899aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRs"
+    "StTuUvVwWxXyYzZ";
   char exponent_markers [] = "dDeEfFlLsS";
 
   int digits_len = radix * 2;
@@ -1872,7 +2047,8 @@ create_package (char *name, size_t name_len)
 
 
 const char *
-find_end_of_string (const char *input, size_t size, size_t *new_size, size_t *string_length)
+find_end_of_string (const char *input, size_t size, size_t *new_size,
+		    size_t *string_length)
 {
   int i = 0, escape = 0;
 
@@ -1943,7 +2119,8 @@ alloc_string (size_t size)
 void
 resize_string (struct object *string, size_t size)
 {
-  string->value_ptr.string->value = realloc_and_check (string->value_ptr.string->value, size);
+  string->value_ptr.string->value =
+    realloc_and_check (string->value_ptr.string->value, size);
 
   if (size < string->value_ptr.string->used_size)
     string->value_ptr.string->used_size = size;
@@ -1961,7 +2138,8 @@ alloc_symbol_name (size_t packname_s, size_t symname_s)
   obj->type = TYPE_SYMBOL_NAME;
   obj->refcount = 1;
 
-  obj->value_ptr.symbol_name = malloc_and_check (sizeof (*obj->value_ptr.symbol_name));
+  obj->value_ptr.symbol_name =
+    malloc_and_check (sizeof (*obj->value_ptr.symbol_name));
   s = obj->value_ptr.symbol_name;
 
   s->packname = malloc_and_check (packname_s);
@@ -1979,8 +2157,9 @@ alloc_symbol_name (size_t packname_s, size_t symname_s)
 void
 resize_symbol_name (struct object *symname, size_t size)
 {
-  symname->value_ptr.symbol_name->value = realloc_and_check (symname->value_ptr.symbol_name->value,
-							     sizeof (char) * size);
+  symname->value_ptr.symbol_name->value =
+    realloc_and_check (symname->value_ptr.symbol_name->value,
+		       sizeof (char) * size);
   
   if (size < symname->value_ptr.symbol_name->used_size)
     symname->value_ptr.symbol_name->used_size = size;
@@ -1990,8 +2169,10 @@ resize_symbol_name (struct object *symname, size_t size)
 
 
 const char *
-find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, const char **start_of_package_separator, int *sym_visibility,
-			 size_t *packname_length, size_t *name_length, enum read_outcome *outcome)
+find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
+			 const char **start_of_package_separator,
+			 int *sym_visibility, size_t *packname_length,
+			 size_t *name_length, enum read_outcome *outcome)
 {
   int i = 0, single_escape = 0, multiple_escape = 0, just_dots = 1, colons = 0;
 
@@ -2028,7 +2209,8 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, const
 	  if (!colons && i > 0)
 	    *start_of_package_separator = input + i - 1;
 
-	  if (*start_of_package_separator && (*start_of_package_separator - input - i > colons))
+	  if (*start_of_package_separator
+	      && (*start_of_package_separator - input - i > colons))
 	    {
 	      *outcome = MORE_THAN_A_PACKAGE_SEPARATOR;
 
@@ -2157,7 +2339,8 @@ intern_symbol (char *name, size_t len, struct object_list **symbol_list)
 
   while (cur)
     {
-      if (eqmem (cur->obj->value_ptr.symbol->name, cur->obj->value_ptr.symbol->name_len, name, len))
+      if (eqmem (cur->obj->value_ptr.symbol->name,
+		 cur->obj->value_ptr.symbol->name_len, name, len))
 	{
 	  cur->obj->refcount++;
 	  return cur->obj;
@@ -2181,9 +2364,10 @@ intern_symbol (char *name, size_t len, struct object_list **symbol_list)
 struct object *
 intern_symbol_name (struct object *symname, struct object_list **symbol_list)
 {
-  return (symname->value_ptr.symbol_name->sym = intern_symbol (symname->value_ptr.symbol_name->value,
-							       symname->value_ptr.symbol_name->used_size,
-							       symbol_list));
+  return (symname->value_ptr.symbol_name->sym =
+	  intern_symbol (symname->value_ptr.symbol_name->value,
+			 symname->value_ptr.symbol_name->used_size,
+			 symbol_list));
 }
 
 
@@ -2270,10 +2454,15 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 
 void
 add_builtin_form (char *name, struct environment *env,
-		  struct object *(*builtin_form) (struct object *list, struct environment *env, 
-						  enum eval_outcome *outcome, struct object **cursor), int eval_args)
+		  struct object *(*builtin_form) (struct object *list,
+						  struct environment *env,
+						  enum eval_outcome *outcome,
+						  struct object **cursor),
+		  int eval_args)
 {
-  struct object *sym = intern_symbol (name, strlen (name), &env->current_package->value_ptr.package->symlist);
+  struct object *sym =
+    intern_symbol (name, strlen (name),
+		   &env->current_package->value_ptr.package->symlist);
 
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
@@ -2283,7 +2472,9 @@ add_builtin_form (char *name, struct environment *env,
 
 
 struct object *
-define_constant (struct object *sym, struct object *form, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+define_constant (struct object *sym, struct object *form,
+		 struct environment *env, enum eval_outcome *outcome,
+		 struct object **cursor)
 {
   struct object *val = evaluate_object (form, env, outcome, cursor);
   
@@ -2306,16 +2497,20 @@ define_constant (struct object *sym, struct object *form, struct environment *en
 
 struct object *
 define_constant_by_name (char *name, size_t size, struct object *form,
-			 struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+			 struct environment *env, enum eval_outcome *outcome,
+			 struct object **cursor)
 {
-  struct object *sym = intern_symbol (name, size, &env->current_package->value_ptr.package->symlist);
+  struct object *sym =
+    intern_symbol (name, size, &env->current_package->value_ptr.package->symlist);
 
   return define_constant (sym, form, env, outcome, cursor);
 }
 
 
 struct object *
-define_parameter (struct object *sym, struct object *form, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+define_parameter (struct object *sym, struct object *form,
+		  struct environment *env, enum eval_outcome *outcome,
+		  struct object **cursor)
 {
   struct object *s;
   struct object *val = evaluate_object (form, env, outcome, cursor);
@@ -2336,10 +2531,12 @@ define_parameter (struct object *sym, struct object *form, struct environment *e
 
 
 struct object *
-define_parameter_by_name (char *name, size_t size, struct object *form, struct environment *env,
-			  enum eval_outcome *outcome, struct object **cursor)
+define_parameter_by_name (char *name, size_t size, struct object *form,
+			  struct environment *env, enum eval_outcome *outcome,
+			  struct object **cursor)
 {
-  struct object *sym = intern_symbol (name, size, &env->current_package->value_ptr.package->symlist);
+  struct object *sym =
+    intern_symbol (name, size, &env->current_package->value_ptr.package->symlist);
 
   return define_parameter (sym, form, env, outcome, cursor);
 }
@@ -2466,7 +2663,8 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 
 
 struct parameter *
-parse_required_parameters (struct object *obj, struct parameter **last, struct object **rest, enum parse_lambda_list_outcome *out)
+parse_required_parameters (struct object *obj, struct parameter **last,
+			   struct object **rest, enum parse_lambda_list_outcome *out)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -2475,8 +2673,8 @@ parse_required_parameters (struct object *obj, struct parameter **last, struct o
   
   while (obj && (car = obj->value_ptr.cons_pair->car)
 	 && car->type == TYPE_SYMBOL_NAME 
-	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST", "&KEYWORD", "&AUX",
-			       "&ALLOW_OTHER_KEYS", NULL))
+	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
+			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
     {
       if (!first)
 	*last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
@@ -2493,7 +2691,8 @@ parse_required_parameters (struct object *obj, struct parameter **last, struct o
 
 
 struct parameter *
-parse_optional_parameters (struct object *obj, struct parameter **last, struct object **next, enum parse_lambda_list_outcome *out)
+parse_optional_parameters (struct object *obj, struct parameter **last,
+			   struct object **next, enum parse_lambda_list_outcome *out)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -2503,8 +2702,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last, struct o
   while (obj && (car = obj->value_ptr.cons_pair->car))
     {
       if (car->type == TYPE_SYMBOL_NAME 
-	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST", "&KEYWORD", "&AUX",
-			       "&ALLOW_OTHER_KEYS", NULL))
+	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
+			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
 	{
 	  break;
 	}
@@ -2562,9 +2761,12 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
       && symname_equals (car->value_ptr.symbol_name, "&OPTIONAL"))
     {
       if (first)
-	last->next = parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &newlast, &obj, out);
+	last->next =
+	  parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &newlast,
+				     &obj, out);
       else
-	first = parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &last, &obj, out);
+	first = parse_optional_parameters (obj->value_ptr.cons_pair->cdr,
+					   &last, &obj, out);
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = obj->value_ptr.cons_pair->car)
@@ -2581,7 +2783,8 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 
 struct object *
-call_function (struct object *func, struct object *arglist, struct environment *env, enum eval_outcome *outcome,
+call_function (struct object *func, struct object *arglist,
+	       struct environment *env, enum eval_outcome *outcome,
 	       struct object **cursor)
 {
   struct parameter *par = func->value_ptr.function->lambda_list;
@@ -2602,7 +2805,8 @@ call_function (struct object *func, struct object *arglist, struct environment *
 
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
-	  bins = add_binding (create_binding (par->supplied_p_param, &t_object, LEXICAL_BINDING), bins);
+	  bins = add_binding (create_binding (par->supplied_p_param, &t_object,
+					      LEXICAL_BINDING), bins);
 	  args++;
 	}
 
@@ -2637,13 +2841,16 @@ call_function (struct object *func, struct object *arglist, struct environment *
 	}
       else
 	{
-	  bins = add_binding (create_binding (par->name, &nil_object, LEXICAL_BINDING), bins);
+	  bins = add_binding (create_binding
+			      (par->name, &nil_object, LEXICAL_BINDING), bins);
 	  args++;
 	}
 
       if (par->supplied_p_param)
 	{
-	  bins = add_binding (create_binding (par->supplied_p_param, &nil_object, LEXICAL_BINDING), bins);
+	  bins = add_binding (create_binding
+			      (par->supplied_p_param, &nil_object, LEXICAL_BINDING),
+			      bins);
 	  args++;
 	}
 
@@ -2682,7 +2889,8 @@ check_type (const struct object *obj, const struct typespec *type)
 
 
 struct object *
-evaluate_object (struct object *obj, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_object (struct object *obj, struct environment *env,
+		 enum eval_outcome *outcome, struct object **cursor)
 {
   struct binding *bind;
   struct object *sym = obj;
@@ -2743,7 +2951,8 @@ evaluate_object (struct object *obj, struct environment *env, enum eval_outcome 
 
 
 struct object *
-evaluate_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_list (struct object *list, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
 {
   struct symbol_name *symname;
   struct binding *bind;
@@ -2811,7 +3020,8 @@ evaluate_list (struct object *list, struct environment *env, enum eval_outcome *
 
 
 struct object *
-evaluate_through_list (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_through_list (struct object *list, struct environment *env,
+		       enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *args = NULL, *cons, *last_cons, *obj;
 
@@ -2841,7 +3051,8 @@ evaluate_through_list (struct object *list, struct environment *env, enum eval_o
 
 
 struct object *
-builtin_car (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_car (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
 {
   if (!list_length (list))
     {
@@ -2865,7 +3076,8 @@ builtin_car (struct object *list, struct environment *env, enum eval_outcome *ou
 
 
 struct object *
-builtin_cdr (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_cdr (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
 {
   if (!list_length (list))
     {
@@ -2889,7 +3101,8 @@ builtin_cdr (struct object *list, struct environment *env, enum eval_outcome *ou
 
 
 struct object *
-builtin_cons (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_cons (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *cons;
 
@@ -2913,8 +3126,8 @@ builtin_cons (struct object *list, struct environment *env, enum eval_outcome *o
 
 
 struct object *
-builtin_list (struct object *list, struct environment *env, enum eval_outcome *outcome,
-	      struct object **cursor)
+builtin_list (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *l = NULL, *cons, *last_cons;
 
@@ -2936,7 +3149,8 @@ builtin_list (struct object *list, struct environment *env, enum eval_outcome *o
 
 
 struct object *
-builtin_load (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_load (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   FILE *f;
   long l;
@@ -2999,7 +3213,8 @@ builtin_load (struct object *list, struct environment *env, enum eval_outcome *o
       return NULL;
     }
 
-  out = read_object (&obj, buf, l, env, outcome, cursor, &obj_b, &obj_e, &mult_comm_depth);
+  out = read_object (&obj, buf, l, env, outcome, cursor, &obj_b, &obj_e,
+		     &mult_comm_depth);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
 
@@ -3018,7 +3233,8 @@ builtin_load (struct object *list, struct environment *env, enum eval_outcome *o
 
 	  if (res)
 	    {
-	      out = read_object (&obj, in, sz, env, outcome, cursor, &obj_b, &obj_e, &mult_comm_depth);
+	      out = read_object (&obj, in, sz, env, outcome, cursor, &obj_b,
+				 &obj_e, &mult_comm_depth);
 	      sz = sz - (obj_e + 1 - in);
 	      in = obj_e + 1;
 	    }
@@ -3129,9 +3345,12 @@ promote_number (struct object *num, enum object_type type)
 
 
 struct object *
-apply_arithmetic_operation (struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
-			    void (*opq) (mpq_t, const mpq_t, const mpq_t), void (*opf) (mpf_t, const mpf_t, const mpf_t),
-			    struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+apply_arithmetic_operation (struct object *list,
+			    void (*opz) (mpz_t, const mpz_t, const mpz_t),
+			    void (*opq) (mpq_t, const mpq_t, const mpq_t),
+			    void (*opf) (mpf_t, const mpf_t, const mpf_t),
+			    struct environment *env, enum eval_outcome *outcome,
+			    struct object **cursor)
 {
   struct object *ret, *op;
 
@@ -3174,7 +3393,8 @@ apply_arithmetic_operation (struct object *list, void (*opz) (mpz_t, const mpz_t
 
 
 struct object *
-builtin_plus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_plus (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *ret;
 
@@ -3206,7 +3426,8 @@ builtin_plus (struct object *list, struct environment *env, enum eval_outcome *o
 
 
 struct object *
-builtin_minus (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_minus (struct object *list, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *ret;
 
@@ -3247,7 +3468,8 @@ builtin_minus (struct object *list, struct environment *env, enum eval_outcome *
 
 
 struct object *
-builtin_multiply (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_multiply (struct object *list, struct environment *env,
+		  enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *ret;
 
@@ -3279,15 +3501,16 @@ builtin_multiply (struct object *list, struct environment *env, enum eval_outcom
 
 
 struct object *
-builtin_divide (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+builtin_divide (struct object *list, struct environment *env,
+		enum eval_outcome *outcome, struct object **cursor)
 {
   return NULL;
 }
 
 
 struct binding *
-create_binding_from_let_form (struct object *form, struct environment *env, enum eval_outcome *outcome,
-			      struct object **cursor)
+create_binding_from_let_form (struct object *form, struct environment *env,
+			      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *sym, *val;
 
@@ -3342,7 +3565,8 @@ create_binding_from_let_form (struct object *form, struct environment *env, enum
 
 
 struct object *
-evaluate_let (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
+evaluate_let (struct object *bind_forms, struct object *body,
+	      struct environment *env, enum eval_outcome *outcome,
 	      struct object **cursor)
 {
   struct object *res;
@@ -3373,7 +3597,8 @@ evaluate_let (struct object *bind_forms, struct object *body, struct environment
 
 
 struct object *
-evaluate_let_star (struct object *bind_forms, struct object *body, struct environment *env, enum eval_outcome *outcome,
+evaluate_let_star (struct object *bind_forms, struct object *body,
+		   struct environment *env, enum eval_outcome *outcome,
 		   struct object **cursor)
 {
   struct object *res;
@@ -3402,7 +3627,8 @@ evaluate_let_star (struct object *bind_forms, struct object *body, struct enviro
 
 
 struct object *
-evaluate_if (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_if (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *if_clause;
 
@@ -3440,7 +3666,8 @@ evaluate_if (struct object *list, struct environment *env, enum eval_outcome *ou
 
 
 struct object *
-evaluate_progn (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_progn (struct object *list, struct environment *env,
+		enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *res;
 
@@ -3469,14 +3696,16 @@ evaluate_progn (struct object *list, struct environment *env, enum eval_outcome 
 
 
 struct object *
-evaluate_defconstant (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_defconstant (struct object *list, struct environment *env,
+		      enum eval_outcome *outcome, struct object **cursor)
 {
   return define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)), env, outcome, cursor);
 }
 
 
 struct object *
-evaluate_defparameter (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_defparameter (struct object *list, struct environment *env,
+		       enum eval_outcome *outcome, struct object **cursor)
 {
   if (list_length (list) != 2)
     {
@@ -3489,7 +3718,8 @@ evaluate_defparameter (struct object *list, struct environment *env, enum eval_o
 
 
 struct object *
-evaluate_defvar (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_defvar (struct object *list, struct environment *env,
+		 enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *s = CAR (list);
   
@@ -3518,7 +3748,8 @@ evaluate_defvar (struct object *list, struct environment *env, enum eval_outcome
 
 
 struct object *
-evaluate_defun (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_defun (struct object *list, struct environment *env,
+		enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *fun;
   enum parse_lambda_list_outcome out;
@@ -3542,7 +3773,8 @@ evaluate_defun (struct object *list, struct environment *env, enum eval_outcome 
 
 
 struct object *
-evaluate_defmacro (struct object *list, struct environment *env, enum eval_outcome *outcome, struct object **cursor)
+evaluate_defmacro (struct object *list, struct environment *env,
+		   enum eval_outcome *outcome, struct object **cursor)
 {
   return NULL;
 }
@@ -3734,7 +3966,8 @@ print_object (const struct object *obj)
 
 
 void
-print_read_error (enum read_outcome err, const char *input, size_t size, const char *begin, const char *end)
+print_read_error (enum read_outcome err, const char *input, size_t size,
+		  const char *begin, const char *end)
 {
   if (err == CLOSING_PARENTHESIS)
     {
@@ -3742,15 +3975,18 @@ print_read_error (enum read_outcome err, const char *input, size_t size, const c
     }
   else if (err == CLOSING_PARENTHESIS_AFTER_PREFIX)
     {
-      printf ("read error: closing parenthesis can't follows commas, ticks, backticks\n");
+      printf ("read error: closing parenthesis can't follows commas, ticks, "
+	      "backticks\n");
     }
   else if (err == SINGLE_DOT)
     {
-      printf ("read error: single dot is only allowed inside a list and must be followed by exactly one object\n");
+      printf ("read error: single dot is only allowed inside a list and must "
+	      "be followed by exactly one object\n");
     }
   else if (err == MULTIPLE_DOTS)
     {
-      printf ("read error: symbol names made of non-escaped dots only are not allowed\n");
+      printf ("read error: symbol names made of non-escaped dots only are "
+	      "not allowed\n");
     }
   else if (err == NO_OBJ_BEFORE_DOT_IN_LIST)
     {
