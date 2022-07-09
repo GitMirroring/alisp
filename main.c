@@ -1403,7 +1403,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size, const cha
   struct symbol_name *sym;
   size_t packname_l, name_l, new_size;
   struct object *last_pref, *ob;
-  enum read_outcome out;
+  enum read_outcome out = NO_OBJECT;
   const char *start_of_pack_s;
   int visib;
 
@@ -2059,7 +2059,7 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size, const
 	    {
 	      if (just_dots && *name_length == 1)
 		*outcome = SINGLE_DOT;
-	      else if (just_dots)
+	      else if (just_dots && *name_length)
 		*outcome = MULTIPLE_DOTS;
 
 	      *new_size = size-i+1;
@@ -2110,7 +2110,10 @@ normalize_symbol_name (char *output, const char *input, size_t size)
       else
 	{
 	  if (single_escape || multiple_escape)
-	    output [j++] = input [i];
+	    {
+	      output [j++] = input [i];
+	      single_escape = 0;
+	    }
 	  else
 	    output [j++] = toupper (input [i]);
 	}
