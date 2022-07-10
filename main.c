@@ -150,7 +150,8 @@ read_outcome
 
     TOO_MANY_COLONS = 1 << 21,
     CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 22,
-    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 23
+    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 23,
+    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 24
   };
 
 
@@ -160,10 +161,11 @@ read_outcome
 
 #define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS | \
 		    INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH |	\
-		    COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS |\
+		    COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS | \
 		    NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST | \
 		    MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS | \
-		    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE | \
+		    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE |		\
+		    CANT_END_WITH_PACKAGE_SEPARATOR |			\
 		    MORE_THAN_A_PACKAGE_SEPARATOR)
 
 
@@ -205,7 +207,7 @@ object_list
 enum
 package_record_visibility
   {
-    INTERNAL_VISIBLITY,
+    INTERNAL_VISIBILITY,
     EXTERNAL_VISIBILITY
   };
 
@@ -602,8 +604,9 @@ void resize_symbol_name (struct object *symname, size_t size);
 
 const char *find_end_of_symbol_name
 (const char *input, size_t size, size_t *new_size,
- const char **start_of_package_separator, int *sym_visibility,
- size_t *packname_length, size_t *name_length, enum read_outcome *outcome);
+ const char **start_of_package_separator,
+ enum package_record_visibility *sym_visibility, size_t *packname_length,
+ size_t *name_length, enum read_outcome *outcome);
 void normalize_symbol_name (char *output, const char *input, size_t size);
 
 struct object *create_symbol (char *name, size_t size);
@@ -1583,7 +1586,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   struct object *last_pref, *ob;
   enum read_outcome out = NO_OBJECT;
   const char *start_of_pack_s;
-  int visib;
+  enum package_record_visibility visib;
 
 
   *symname_end = find_end_of_symbol_name (input, size, &new_size,
@@ -2185,8 +2188,9 @@ resize_symbol_name (struct object *symname, size_t size)
 const char *
 find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 			 const char **start_of_package_separator,
-			 int *sym_visibility, size_t *packname_length,
-			 size_t *name_length, enum read_outcome *outcome)
+			 enum package_record_visibility *sym_visibility,
+			 size_t *packname_length, size_t *name_length,
+			 enum read_outcome *outcome)
 {
   int i = 0, single_escape = 0, multiple_escape = 0, just_dots = 1, colons = 0;
 
@@ -2220,11 +2224,14 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 	}
       else if (input [i] == ':' && !single_escape && !multiple_escape)
 	{
-	  if (!colons && i > 0)
-	    *start_of_package_separator = input + i - 1;
+	  if (!colons)
+	    {
+	      *start_of_package_separator = input + i;
+	      *sym_visibility = EXTERNAL_VISIBILITY;
+	    }
 
 	  if (*start_of_package_separator
-	      && (*start_of_package_separator - input - i > colons))
+	      && (input + i > *start_of_package_separator + colons))
 	    {
 	      *outcome = MORE_THAN_A_PACKAGE_SEPARATOR;
 
@@ -2247,6 +2254,10 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 
 	      return NULL;
 	    }
+	  else if (colons == 2)
+	    {
+	      *sym_visibility = INTERNAL_VISIBILITY;
+	    }
 	}
       else
 	{
@@ -2257,6 +2268,9 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 		*outcome = SINGLE_DOT;
 	      else if (just_dots && *name_length)
 		*outcome = MULTIPLE_DOTS;
+	      else if (*start_of_package_separator
+		       && (input + i == *start_of_package_separator + colons))
+		*outcome = CANT_END_WITH_PACKAGE_SEPARATOR;
 
 	      *new_size = size-i+1;
 	      return input+i-1;
@@ -4027,6 +4041,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
   else if (err == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE)
     {
       printf ("read error: a token can't begin with two colons or more\n");
+    }
+  else if (err == CANT_END_WITH_PACKAGE_SEPARATOR)
+    {
+      printf ("read error: a token can't end with a package separator\n");
     }
   else if (err == MORE_THAN_A_PACKAGE_SEPARATOR)
     {
