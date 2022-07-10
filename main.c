@@ -822,11 +822,14 @@ main (int argc, char *argv [])
 
   env.keyword_package = create_package ("KEYWORD",
 					strlen ("KEYWORD"));
+  env.packages = create_binding (env.keyword_package->value_ptr.package->name,
+				 env.keyword_package, DYNAMIC_BINDING);
 
   env.current_package = create_package ("COMMON-LISP",
 					strlen ("COMMON-LISP"));
-  env.packages = create_binding (env.current_package->value_ptr.package->name,
-				 env.current_package, DYNAMIC_BINDING);
+  env.packages = add_binding (create_binding
+			      (env.current_package->value_ptr.package->name,
+			       env.current_package, DYNAMIC_BINDING), env.packages);
 
   cluser_package = create_package ("COMMON-LISP-USER",
 				   strlen ("COMMON-LISP-USER"));
