@@ -3971,6 +3971,12 @@ print_object (const struct object *obj)
     print_list (obj->value_ptr.cons_pair);
   else if (obj->type == TYPE_FUNCTION)
     printf ("#<FUNCTION %p>", obj);
+  else if (obj->type == TYPE_PACKAGE)
+    {
+      printf ("#<PACKAGE \"");
+      print_symbol (obj->value_ptr.package->name->value_ptr.symbol);
+      printf ("\">");
+    }
   else
     printf ("#<print not implemented>");
 }
