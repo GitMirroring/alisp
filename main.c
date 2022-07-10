@@ -105,6 +105,7 @@ environment
 
   struct binding *packages;
 
+  struct object *keyword_package;
   struct object *current_package;
 
   /*struct global_environment *glob_env;
@@ -795,6 +796,7 @@ main (int argc, char *argv [])
 
   struct object *result, *cursor, *obj;
   struct environment env = {NULL};
+  struct object *cluser_package;
   
   enum eval_outcome eval_out;
 
@@ -818,10 +820,19 @@ main (int argc, char *argv [])
 	}
     }
 
+  env.keyword_package = create_package ("KEYWORD",
+					strlen ("KEYWORD"));
+
   env.current_package = create_package ("COMMON-LISP",
 					strlen ("COMMON-LISP"));
   env.packages = create_binding (env.current_package->value_ptr.package->name,
 				 env.current_package, DYNAMIC_BINDING);
+
+  cluser_package = create_package ("COMMON-LISP-USER",
+				   strlen ("COMMON-LISP-USER"));
+  env.packages = add_binding (create_binding
+			      (cluser_package->value_ptr.package->name,
+			       cluser_package, DYNAMIC_BINDING), env.packages);
 
 
   define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, &env,
