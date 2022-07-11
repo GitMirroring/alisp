@@ -151,7 +151,8 @@ read_outcome
     TOO_MANY_COLONS = 1 << 21,
     CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 22,
     CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 23,
-    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 24
+    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 24,
+    PACKAGE_NOT_FOUND = 1 << 25
   };
 
 
@@ -166,7 +167,7 @@ read_outcome
 		    MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS | \
 		    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE |		\
 		    CANT_END_WITH_PACKAGE_SEPARATOR |			\
-		    MORE_THAN_A_PACKAGE_SEPARATOR)
+		    MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND)
 
 
 
@@ -175,7 +176,7 @@ eval_outcome
   {
     EVAL_OK,
     UNBOUND_SYMBOL,
-    ILLEGAL_FUNCTION_CALL,
+    INVALID_FUNCTION_CALL,
     WRONG_NUMBER_OF_ARGUMENTS,
     CANT_EVALUATE_LISTS_YET,
     UNKNOWN_FUNCTION,
@@ -231,6 +232,8 @@ package
 {
   struct object *name;
 
+  struct object_list *nicks;
+
   struct object_list *symlist;
 
   struct object_list *uses;
@@ -265,14 +268,14 @@ symbol
 struct
 symbol_name
 {
-  char *packname;
-  size_t packname_alloc_s;
-  size_t packname_used_s;
-  int packname_complete;
-
   char *value;
   size_t alloc_size;
   size_t used_size;
+
+  int packname_present;
+  char *actual_symname;
+  size_t actual_symname_alloc_s;
+  size_t actual_symname_used_s;
 
   struct object *sym;
 };
@@ -599,21 +602,23 @@ void normalize_string (char *output, const char *input, size_t size);
 struct object *alloc_string (size_t size);
 void resize_string (struct object *string, size_t size);
 
-struct object *alloc_symbol_name (size_t packname_s, size_t symname_s);
-void resize_symbol_name (struct object *symname, size_t size);
+struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
+void resize_symbol_name (struct object *symname, size_t value_s,
+			 size_t actual_symname_s);
 
 const char *find_end_of_symbol_name
-(const char *input, size_t size, size_t *new_size,
+(const char *input, size_t size, int found_package_sep, size_t *new_size,
  const char **start_of_package_separator,
- enum package_record_visibility *sym_visibility, size_t *packname_length,
- size_t *name_length, enum read_outcome *outcome);
+ enum package_record_visibility *sym_visibility, size_t *name_length,
+ size_t *act_name_length, enum read_outcome *outcome);
 void normalize_symbol_name (char *output, const char *input, size_t size);
 
 struct object *create_symbol (char *name, size_t size);
-struct object *intern_symbol (char *name, size_t len,
-			      struct object_list **symbol_list);
+struct object *find_package (const char *name, size_t len,
+			     struct environment *env);
+struct object *intern_symbol (char *name, size_t len, struct object *package);
 struct object *intern_symbol_name (struct object *symname,
-				   struct object_list **symbol_list);
+				   struct environment *env);
 
 struct binding *create_binding (struct object *sym, struct object *obj,
 				enum binding_type type);
@@ -988,9 +993,8 @@ read_object_continued (struct object **obj, int is_empty_list,
     {
       out = read_symbol_name (&ob, input, size, obj_end);
 
-      if (out == COMPLETE_OBJECT)
-	intern_symbol_name (ob,
-			    &env->current_package->value_ptr.package->symlist);
+      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
+	return PACKAGE_NOT_FOUND;
     }
 
   if (last_pref)
@@ -1028,8 +1032,15 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 		     INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
 		     | INCOMPLETE_SHARP_MACRO_CALL |
 		     UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST)
+	 || read_out & READ_ERROR
 	 || multiline_comm_depth)
     {
+      if (read_out & READ_ERROR)
+	{
+	  print_read_error (read_out, line, len, begin, end);
+	  return NULL;
+	}
+
       line = read_line_interactively ("> ");
       len = strlen (line);
 
@@ -1363,9 +1374,8 @@ read_object (struct object **obj, const char *input, size_t size,
 	    {
 	      out = read_symbol_name (&ob, input, size, obj_end);
 
-	      if (out == COMPLETE_OBJECT)
-		intern_symbol_name (ob,
-				    &env->current_package->value_ptr.package->symlist);
+	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
+		return PACKAGE_NOT_FOUND;
 	    }
 
 	  break;
@@ -1582,41 +1592,54 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 		  const char **symname_end)
 {
   struct symbol_name *sym;
-  size_t packname_l, name_l, new_size;
+  size_t name_l, act_name_l, new_size;
   struct object *last_pref, *ob;
   enum read_outcome out = NO_OBJECT;
   const char *start_of_pack_s;
   enum package_record_visibility visib;
 
 
-  *symname_end = find_end_of_symbol_name (input, size, &new_size,
-					  &start_of_pack_s, &visib,
-					  &packname_l, &name_l, &out);
+  ob = skip_prefix (*obj, &last_pref);
+
+  *symname_end = find_end_of_symbol_name
+    (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
+     &new_size, &start_of_pack_s, &visib, &name_l, &act_name_l, &out);
 
   if (out & READ_ERROR)
     return out;
-  
-  ob = skip_prefix (*obj, &last_pref);
+
+  if (!name_l && !act_name_l)
+    return COMPLETE_OBJECT;
 
   if (!ob)
     {
-      ob = alloc_symbol_name (packname_l, name_l);
+      ob = alloc_symbol_name (name_l, act_name_l);
       if (last_pref)
 	last_pref->value_ptr.next = ob;
       else
 	*obj = ob;
     }
   else
-    resize_symbol_name (ob, ob->value_ptr.symbol_name->used_size + name_l);
+    resize_symbol_name (ob, ob->value_ptr.symbol_name->used_size + name_l,
+			ob->value_ptr.symbol_name->actual_symname_used_s + act_name_l);
 
-  if (!name_l)
-    return COMPLETE_OBJECT;
-    
   sym = ob->value_ptr.symbol_name;
 
-  normalize_symbol_name (sym->value + sym->used_size, input, size);
+  if (sym->packname_present)
+    normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s, input, size);
+  else if (start_of_pack_s)
+    {
+      normalize_symbol_name (sym->value + sym->used_size, input, start_of_pack_s - input);
+      sym->packname_present = 1;
+      normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s,
+			     visib == EXTERNAL_VISIBILITY ?
+			     start_of_pack_s + 1 : start_of_pack_s + 2, size);
+    }
+  else
+    normalize_symbol_name (sym->value + sym->used_size, input, size);
 
   sym->used_size += name_l;
+  sym->actual_symname_used_s += act_name_l;
 
   if (!*symname_end)
     return INCOMPLETE_SYMBOL_NAME;
@@ -1937,7 +1960,7 @@ malloc_and_check (size_t size)
 {
   void *mem = malloc (size);
 
-  if (!mem)
+  if (size && !mem)
     {
       fprintf (stderr, "could not allocate %lu bytes. Aborting...\n", size);
       exit (1);
@@ -1952,7 +1975,7 @@ realloc_and_check (void *ptr, size_t size)
 {
   void *mem = realloc (ptr, size);
 
-  if (!mem)
+  if (size && !mem)
     {
       fprintf (stderr, "could not allocate %lu bytes. Aborting...\n", size);
       exit (1);
@@ -2147,7 +2170,7 @@ resize_string (struct object *string, size_t size)
 
 
 struct object *
-alloc_symbol_name (size_t packname_s, size_t symname_s)
+alloc_symbol_name (size_t value_s, size_t actual_symname_s)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct symbol_name *s;
@@ -2159,12 +2182,15 @@ alloc_symbol_name (size_t packname_s, size_t symname_s)
     malloc_and_check (sizeof (*obj->value_ptr.symbol_name));
   s = obj->value_ptr.symbol_name;
 
-  s->packname = malloc_and_check (packname_s);
-  s->packname_alloc_s = packname_s;
-  s->packname_used_s = 0;
-  s->value = malloc_and_check (symname_s);
-  s->alloc_size = symname_s;
+  s->value = malloc_and_check (value_s);
+  s->alloc_size = value_s;
   s->used_size = 0;
+
+  s->packname_present = 0;
+
+  s->actual_symname = malloc_and_check (actual_symname_s);
+  s->actual_symname_alloc_s = actual_symname_s;
+  s->actual_symname_used_s = 0;
   s->sym = NULL;
 
   return obj;
@@ -2172,33 +2198,43 @@ alloc_symbol_name (size_t packname_s, size_t symname_s)
 
 
 void
-resize_symbol_name (struct object *symname, size_t size)
+resize_symbol_name (struct object *symname, size_t value_s,
+		    size_t actual_symname_s)
 {
-  symname->value_ptr.symbol_name->value =
-    realloc_and_check (symname->value_ptr.symbol_name->value,
-		       sizeof (char) * size);
-  
-  if (size < symname->value_ptr.symbol_name->used_size)
-    symname->value_ptr.symbol_name->used_size = size;
+  struct symbol_name *s = symname->value_ptr.symbol_name;
 
-  symname->value_ptr.symbol_name->alloc_size = sizeof (char) * size;
+  s->value = realloc_and_check (s->value, value_s);
+
+  if (value_s < s->used_size)
+    s->used_size = value_s;
+
+  s->alloc_size = value_s;
+
+  s->actual_symname = realloc_and_check (s->actual_symname, actual_symname_s);
+
+  if (actual_symname_s < s->actual_symname_used_s)
+    s->actual_symname_used_s = actual_symname_s;
+
+  s->actual_symname_alloc_s = actual_symname_s;
 }
 
 
 const char *
-find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
+find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
+			 size_t *new_size,
 			 const char **start_of_package_separator,
 			 enum package_record_visibility *sym_visibility,
-			 size_t *packname_length, size_t *name_length,
+			 size_t *name_length, size_t *act_name_length,
 			 enum read_outcome *outcome)
 {
   int i = 0, single_escape = 0, multiple_escape = 0, just_dots = 1, colons = 0;
+  size_t **length;
 
   *start_of_package_separator = NULL;
 
-  *name_length = 0;
+  *name_length = 0, *act_name_length = 0, *outcome = NO_OBJECT;
 
-  *outcome = NO_OBJECT;
+  length = found_package_sep ? &act_name_length : &name_length;
 
   while (i < size)
     {
@@ -2213,7 +2249,7 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 	  else
 	    {
 	      single_escape = 0;
-	      (*name_length)++;
+	      (**length)++;
 	    }
 	}
       else if (input [i] == '|' && !single_escape)
@@ -2224,29 +2260,31 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 	}
       else if (input [i] == ':' && !single_escape && !multiple_escape)
 	{
-	  if (!colons)
-	    {
-	      *start_of_package_separator = input + i;
-	      *sym_visibility = EXTERNAL_VISIBILITY;
-	    }
-
-	  if (*start_of_package_separator
-	      && (input + i > *start_of_package_separator + colons))
+	  if (found_package_sep
+	      || (*start_of_package_separator
+		  && (input + i > *start_of_package_separator + colons)))
 	    {
 	      *outcome = MORE_THAN_A_PACKAGE_SEPARATOR;
 
 	      return NULL;
 	    }
 
-	  if (colons == 1 && (colons == i))
+	  if (colons == 1 && (i == 1))
 	    {
 	      *outcome = CANT_BEGIN_WITH_TWO_COLONS_OR_MORE;
 
 	      return NULL;
 	    }
 
+	  if (!colons)
+	    {
+	      *start_of_package_separator = input + i;
+	      *sym_visibility = EXTERNAL_VISIBILITY;
+	      length = &act_name_length;
+	    }
+
 	  colons++;
-	  (*name_length)++;
+	  //(**length)++;
 
 	  if (colons > 2)
 	    {
@@ -2264,9 +2302,9 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 	  if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
 	      && !single_escape && !multiple_escape)
 	    {
-	      if (just_dots && *name_length == 1)
+	      if (just_dots && **length == 1)
 		*outcome = SINGLE_DOT;
-	      else if (just_dots && *name_length)
+	      else if (just_dots && **length)
 		*outcome = MULTIPLE_DOTS;
 	      else if (*start_of_package_separator
 		       && (input + i == *start_of_package_separator + colons))
@@ -2279,7 +2317,7 @@ find_end_of_symbol_name (const char *input, size_t size, size_t *new_size,
 	  if (input [i] != '.')
 	    just_dots = 0;
 
-	  (*name_length)++;
+	  (**length)++;
 	  single_escape = 0;
 	}
       i++;
@@ -2358,12 +2396,30 @@ create_symbol (char *name, size_t size)
 
 
 struct object *
-intern_symbol (char *name, size_t len, struct object_list **symbol_list)
+find_package (const char *name, size_t len, struct environment *env)
+{
+  struct binding *bind = env->packages;
+
+  while (bind)
+    {
+      if (eqmem (bind->sym->value_ptr.symbol->name,
+		 bind->sym->value_ptr.symbol->name_len, name, len))
+	return bind->obj;
+
+      bind = bind->next;
+    }
+
+  return NULL;
+}
+
+
+struct object *
+intern_symbol (char *name, size_t len, struct object *package)
 {
   struct object *sym;
   struct object_list *cur, *new_sym;
-  
-  cur = *symbol_list;
+
+  cur = package->value_ptr.package->symlist;
 
   while (cur)
     {
@@ -2373,29 +2429,41 @@ intern_symbol (char *name, size_t len, struct object_list **symbol_list)
 	  cur->obj->refcount++;
 	  return cur->obj;
 	}
-      
+
       cur = cur->next;
     }
-  
+
   sym = create_symbol (name, len);
 
   new_sym = malloc_and_check (sizeof (*new_sym));
   new_sym->obj = sym;
-  new_sym->next = *symbol_list;
+  new_sym->next = package->value_ptr.package->symlist;
 
-  *symbol_list = new_sym;
-  
+  package->value_ptr.package->symlist = new_sym;
+
   return sym;  
 }
 
 
 struct object *
-intern_symbol_name (struct object *symname, struct object_list **symbol_list)
+intern_symbol_name (struct object *symname, struct environment *env)
 {
-  return (symname->value_ptr.symbol_name->sym =
-	  intern_symbol (symname->value_ptr.symbol_name->value,
-			 symname->value_ptr.symbol_name->used_size,
-			 symbol_list));
+  struct symbol_name *s = symname->value_ptr.symbol_name;
+  struct object *pack;
+
+  if (s->packname_present)
+    {
+      pack = find_package (s->value, s->used_size, env);
+
+      if (!pack)
+	return NULL;
+      else
+	return (s->sym = intern_symbol (s->actual_symname,
+					s->actual_symname_used_s, pack));
+    }
+
+  pack = env->current_package;
+  return (s->sym = intern_symbol (s->value, s->used_size, pack));
 }
 
 
@@ -2488,9 +2556,7 @@ add_builtin_form (char *name, struct environment *env,
 						  struct object **cursor),
 		  int eval_args)
 {
-  struct object *sym =
-    intern_symbol (name, strlen (name),
-		   &env->current_package->value_ptr.package->symlist);
+  struct object *sym = intern_symbol (name, strlen (name), env->current_package);
 
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
@@ -2528,8 +2594,7 @@ define_constant_by_name (char *name, size_t size, struct object *form,
 			 struct environment *env, enum eval_outcome *outcome,
 			 struct object **cursor)
 {
-  struct object *sym =
-    intern_symbol (name, size, &env->current_package->value_ptr.package->symlist);
+  struct object *sym = intern_symbol (name, size, env->current_package);
 
   return define_constant (sym, form, env, outcome, cursor);
 }
@@ -2563,8 +2628,7 @@ define_parameter_by_name (char *name, size_t size, struct object *form,
 			  struct environment *env, enum eval_outcome *outcome,
 			  struct object **cursor)
 {
-  struct object *sym =
-    intern_symbol (name, size, &env->current_package->value_ptr.package->symlist);
+  struct object *sym = intern_symbol (name, size, env->current_package);
 
   return define_parameter (sym, form, env, outcome, cursor);
 }
@@ -2988,7 +3052,7 @@ evaluate_list (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME)
     {
-      *outcome = ILLEGAL_FUNCTION_CALL;
+      *outcome = INVALID_FUNCTION_CALL;
       *cursor = CAR (list);
       return NULL;
     }
@@ -4036,7 +4100,7 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     }
   else if (err == TOO_MANY_COLONS)
     {
-      printf ("read error: more than two colons cannot appear in a token\n");
+      printf ("read error: more than two consecutive colons cannot appear in a token\n");
     }
   else if (err == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE)
     {
@@ -4049,6 +4113,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
   else if (err == MORE_THAN_A_PACKAGE_SEPARATOR)
     {
       printf ("read error: more than a package separator not allowed in token\n");
+    }
+  else if (err == PACKAGE_NOT_FOUND)
+    {
+      printf ("read error: package not found\n");
     }
 }
 
@@ -4072,9 +4140,9 @@ print_eval_error (enum eval_outcome err, struct object *arg)
     {
       printf ("eval error: not implemente\n");
     }
-  else if (err == ILLEGAL_FUNCTION_CALL)
+  else if (err == INVALID_FUNCTION_CALL)
     {
-      printf ("eval error: illegal function call\n");
+      printf ("eval error: invalid function call\n");
     }
   else if (err == WRONG_NUMBER_OF_ARGUMENTS)
     {
