@@ -755,14 +755,15 @@ int symname_equals (const struct symbol_name *sym, const char *s);
 int symname_is_among (const struct symbol_name *sym, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
 
-void print_symbol (const struct symbol *sym);
+void print_symbol (const struct symbol *sym, struct environment *env);
 void print_string (const struct string *str);
-void print_list (const struct cons_pair *list);
-void print_object (const struct object *obj);
+void print_list (const struct cons_pair *list, struct environment *env);
+void print_object (const struct object *obj, struct environment *env);
 
 void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const char *begin, const char *end);
-void print_eval_error (enum eval_outcome err, struct object *arg);
+void print_eval_error (enum eval_outcome err, struct object *arg,
+		       struct environment *env);
 
 int decrement_refcount (struct object *obj);
 
@@ -882,11 +883,11 @@ main (int argc, char *argv [])
 
 	  if (result)
 	    {
-	      print_object (result);
+	      print_object (result, &env);
 	      printf ("\n");
 	    }
 	  else
-	    print_eval_error (eval_out, cursor);
+	    print_eval_error (eval_out, cursor, &env);
 
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
@@ -903,11 +904,11 @@ main (int argc, char *argv [])
 
 	  if (result)
 	    {
-	      print_object (result);
+	      print_object (result, &env);
 	      printf ("\n");
 	    }
 	  else
-	    print_eval_error (eval_out, cursor);
+	    print_eval_error (eval_out, cursor, &env);
 
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
@@ -2453,13 +2454,26 @@ intern_symbol_name (struct object *symname, struct environment *env)
 
   if (s->packname_present)
     {
+      if (!s->used_size)
+	{
+	  s->sym = intern_symbol (s->actual_symname, s->actual_symname_used_s,
+				  env->keyword_package);
+	  s->sym->value_ptr.symbol->home_package = env->keyword_package;
+
+	  return s->sym;
+	}
+
       pack = find_package (s->value, s->used_size, env);
 
       if (!pack)
 	return NULL;
       else
-	return (s->sym = intern_symbol (s->actual_symname,
-					s->actual_symname_used_s, pack));
+	{
+	  s->sym = intern_symbol (s->actual_symname, s->actual_symname_used_s,
+				  pack);
+	  s->sym->value_ptr.symbol->home_package = pack;
+	  return s->sym;
+	}
     }
 
   pack = env->current_package;
@@ -2986,7 +3000,7 @@ evaluate_object (struct object *obj, struct environment *env,
 {
   struct binding *bind;
   struct object *sym = obj;
-  
+
   if (obj->type == TYPE_T || obj->type == TYPE_NIL || obj->type == TYPE_INTEGER
       || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT || obj->type == TYPE_CHARACTER
       || obj->type == TYPE_STRING)
@@ -3003,6 +3017,12 @@ evaluate_object (struct object *obj, struct environment *env,
     {
       if (obj->type == TYPE_SYMBOL_NAME)
 	sym = obj->value_ptr.symbol_name->sym;
+
+      if (sym->value_ptr.symbol->home_package == env->keyword_package)
+	{
+	  sym->refcount++;
+	  return sym;
+	}
 
       if (sym->value_ptr.symbol->is_const)
 	{
@@ -3332,7 +3352,7 @@ builtin_load (struct object *list, struct environment *env,
 	    }
 	  else
 	    {
-	      print_eval_error (*outcome, *cursor);
+	      print_eval_error (*outcome, *cursor, env);
 
 	      free (buf);
 	      fclose (f);
@@ -3934,12 +3954,15 @@ equal_strings (const struct string *s1, const struct string *s2)
 
 
 void
-print_symbol (const struct symbol *sym)
+print_symbol (const struct symbol *sym, struct environment *env)
 {  
   int i;
   char *nm = sym->name;
   char need_escape [] = "().,;'#\"\n\\";
   int do_need_escape = 0;
+
+  if (sym->home_package == env->keyword_package)
+    printf (":");
 
   /* first we make a pass to understand if we need vertical escape */
   for (i = 0; i < sym->name_len && !do_need_escape; i++)
@@ -3984,13 +4007,13 @@ print_string (const struct string *str)
 
 
 void
-print_list (const struct cons_pair *list)
+print_list (const struct cons_pair *list, struct environment *env)
 {
   struct object *cdr;
   
   printf ("(");
 
-  print_object (list->car);
+  print_object (list->car, env);
 
   cdr = list->cdr;
   
@@ -3999,13 +4022,13 @@ print_list (const struct cons_pair *list)
       if (cdr->type == TYPE_CONS_PAIR)
 	{
 	  printf (" ");
-	  print_object (cdr->value_ptr.cons_pair->car);
+	  print_object (cdr->value_ptr.cons_pair->car, env);
 	  cdr = cdr->value_ptr.cons_pair->cdr;
 	}
       else
 	{
 	  printf (" . ");
-	  print_object (cdr);
+	  print_object (cdr, env);
 	  break;
 	}
     }
@@ -4015,7 +4038,7 @@ print_list (const struct cons_pair *list)
 
 
 void
-print_object (const struct object *obj)
+print_object (const struct object *obj, struct environment *env)
 {
   if (obj->type == TYPE_NIL)
     printf ("()");
@@ -4024,17 +4047,17 @@ print_object (const struct object *obj)
   else if (obj->type == TYPE_QUOTE)
     {
       printf ("'");
-      print_object (obj->value_ptr.next);
+      print_object (obj->value_ptr.next, env);
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
       printf ("`");
-      print_object (obj->value_ptr.next);
+      print_object (obj->value_ptr.next, env);
     }
   else if (obj->type == TYPE_COMMA)
     {
       printf (",");
-      print_object (obj->value_ptr.next);
+      print_object (obj->value_ptr.next, env);
     }
   else if (obj->type == TYPE_INTEGER)
     mpz_out_str (NULL, 10, obj->value_ptr.integer);
@@ -4045,17 +4068,17 @@ print_object (const struct object *obj)
   else if (obj->type == TYPE_STRING)
     print_string (obj->value_ptr.string);
   else if (obj->type == TYPE_SYMBOL_NAME)
-    print_symbol (obj->value_ptr.symbol_name->sym->value_ptr.symbol);
+    print_symbol (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
   else if (obj->type == TYPE_SYMBOL)
-    print_symbol (obj->value_ptr.symbol);
+    print_symbol (obj->value_ptr.symbol, env);
   else if (obj->type == TYPE_CONS_PAIR)
-    print_list (obj->value_ptr.cons_pair);
+    print_list (obj->value_ptr.cons_pair, env);
   else if (obj->type == TYPE_FUNCTION)
     printf ("#<FUNCTION %p>", obj);
   else if (obj->type == TYPE_PACKAGE)
     {
       printf ("#<PACKAGE \"");
-      print_symbol (obj->value_ptr.package->name->value_ptr.symbol);
+      print_symbol (obj->value_ptr.package->name->value_ptr.symbol, env);
       printf ("\">");
     }
   else
@@ -4122,18 +4145,19 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
 
 
 void
-print_eval_error (enum eval_outcome err, struct object *arg)
+print_eval_error (enum eval_outcome err, struct object *arg,
+		  struct environment *env)
 {
   if (err == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
-      print_symbol (arg->value_ptr.symbol);
+      print_symbol (arg->value_ptr.symbol, env);
       printf (" not bound to any object\n");
     }
   else if (err == UNKNOWN_FUNCTION)
     {
       printf ("eval error: symbol ");
-      print_symbol (arg->value_ptr.symbol);
+      print_symbol (arg->value_ptr.symbol, env);
       printf (" not bound to any function\n");
     }
   else if (err == EVAL_NOT_IMPLEMENTED)
