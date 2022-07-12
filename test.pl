@@ -57,7 +57,9 @@ make_test (" #| #|\n" .
 	   "|#\n" .
 	   "  |# \"\"", "\"\"");
 make_test ("'( \"\" #||# )", "(\"\")");
-
+make_test ("'asd\\f|gh|j", "|ASDfghJ|");
+make_test ("'\\\n ", "|\n|");
+make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 
 
 # eval tests
@@ -65,7 +67,8 @@ make_test ("'( \"\" #||# )", "(\"\")");
 make_test ("nil", "()");
 make_test ("NIL", "()");
 make_test ("t", "T");
-
+make_test ("(if nil 1)", "()");
+make_test ("(common-lisp:if '(1) 2)", "2");
 
 
 # arithmetic tests
@@ -81,7 +84,7 @@ make_test ("(* 3 5)", "15");
 
 
 
-print "\n\ntotal tests: " . $total_tests . "\n";
+print "\ntotal tests: " . $total_tests . "\n";
 print "passed " . $passed_tests . " (" . $passed_tests / $total_tests * 100 . "%), failed " . $failed_tests . "\n";
 
 
@@ -97,31 +100,48 @@ sub make_test
 {
     print $_[0] . " -> ";
 
-    my @lines = split("\n", $_[0]);
+    my $in = $_[0] . "\n";
 
-    foreach my $l (@lines)
+    my @inlines = split("\n", $in);
+
+    foreach my $l (@inlines)
     {
 	print $al_in $l . "\n";
 
 	<$al_out>;
     }
 
-    my $out = <$al_out>;
+    my @expected_outlines = split("\n", $_[1]);
 
-    chomp ($out);
+    my $result = 1;
 
-    print $out;
-    
-    if ($out eq $_[1])
+    for (my $i = 0; $i < scalar (@expected_outlines); $i++)
     {
-	print "; OK\n";
+	my $out = <$al_out>;
+
+	print $out;
+
+	chomp ($out);
+
+	if ($out ne $expected_outlines [$i])
+	{
+	    $result = 0;
+	}
+    }
+
+
+    if ($result == 1)
+    {
+	print "OK!\n";
 	$passed_tests++;
     }
     else
     {
-	print "; FAIL, expected " . $_[1] . " instead\n";
+	print "FAIL, expected " . $_[1] . " instead\n";
 	$failed_tests++;
     }
+
+    print "\n";
 
     $total_tests++;
 }
