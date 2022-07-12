@@ -69,6 +69,7 @@ make_test ("NIL", "()");
 make_test ("t", "T");
 make_test ("(if nil 1)", "()");
 make_test ("(common-lisp:if '(1) 2)", "2");
+make_test ("(load \"cl.lisp\")", "T");
 
 
 # arithmetic tests
