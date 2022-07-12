@@ -134,25 +134,27 @@ read_outcome
 
     INVALID_SHARP_DISPATCH = 1 << 11,
     UNKNOWN_SHARP_DISPATCH = 1 << 12,
+    WRONG_OBJECT_TYPE_TO_SHARP_MACRO = 1 << 13,
+    FUNCTION_NOT_FOUND = 1 << 14,
 
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 13,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 14,
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 15,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 16,
 
-    COMMA_WITHOUT_BACKQUOTE = 1 << 15,
+    COMMA_WITHOUT_BACKQUOTE = 1 << 17,
 
-    SINGLE_DOT = 1 << 16,
+    SINGLE_DOT = 1 << 18,
 
-    MULTIPLE_DOTS = 1 << 17,
+    MULTIPLE_DOTS = 1 << 19,
 
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 18,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 19,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 20,
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 20,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 21,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 22,
 
-    TOO_MANY_COLONS = 1 << 21,
-    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 22,
-    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 23,
-    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 24,
-    PACKAGE_NOT_FOUND = 1 << 25
+    TOO_MANY_COLONS = 1 << 23,
+    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 24,
+    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 25,
+    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 26,
+    PACKAGE_NOT_FOUND = 1 << 27
   };
 
 
@@ -160,15 +162,15 @@ read_outcome
 			   INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | \
 			   INCOMPLETE_SHARP_MACRO_CALL)
 
-#define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS | \
-		    INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH |	\
-		    COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS | \
-		    NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST | \
-		    MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS | \
-		    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE |		\
-		    CANT_END_WITH_PACKAGE_SEPARATOR |			\
-		    MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND)
-
+#define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS \
+		    | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH	\
+		    | WRONG_OBJECT_TYPE_TO_SHARP_MACRO | FUNCTION_NOT_FOUND \
+		    | COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS \
+		    | NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST \
+		    | MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS \
+		    | CANT_BEGIN_WITH_TWO_COLONS_OR_MORE		\
+		    | CANT_END_WITH_PACKAGE_SEPARATOR			\
+		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND)
 
 
 enum
@@ -572,7 +574,9 @@ struct sharp_macro_call *read_sharp_macro_call
  enum eval_outcome *e_outcome, struct object **cursor, const char **macro_end,
  size_t *out_arg, enum read_outcome *outcome);
 struct object *call_sharp_macro
-(struct sharp_macro_call *macro_call, enum read_outcome *outcome);
+(struct sharp_macro_call *macro_call, struct environment *env,
+ enum eval_outcome *e_outcome, struct object **cursor,
+ enum read_outcome *r_outcome);
 
 enum element find_next_element
 (const char *input, size_t size, const char **elem_begin);
@@ -1358,7 +1362,7 @@ read_object (struct object **obj, const char *input, size_t size,
 					   cursor, obj_end, out_arg, &out);
 
 	  if (out == COMPLETE_OBJECT)
-	    ob = call_sharp_macro (sharp_m, &out);
+	    ob = call_sharp_macro (sharp_m, env, outcome, cursor, &out);
 
 	  break;
 	}
@@ -1686,7 +1690,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
 		       enum read_outcome *outcome)
 {
   int arg, i = 0;
-  const char *obj_b, *obj_e;
+  const char *obj_b;
   struct sharp_macro_call *call;
 
   if (!size)
@@ -1726,16 +1730,41 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
 
   call->obj = NULL;
   *outcome = read_object (&call->obj, input+i+1, size-i-1, env, e_outcome,
-			  cursor, &obj_b, &obj_e, out_arg);
+			  cursor, &obj_b, macro_end, out_arg);
   
   return call;
 }
 
 
 struct object *
-call_sharp_macro (struct sharp_macro_call *macro_call,
-		  enum read_outcome *outcome)
+call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
+		  enum eval_outcome *e_outcome, struct object **cursor,
+		  enum read_outcome *r_outcome)
 {
+  struct binding *bind;
+
+  if (macro_call->dispatch_ch == '\'')
+    {
+      if (macro_call->obj->type != TYPE_SYMBOL &&
+	  macro_call->obj->type != TYPE_SYMBOL_NAME)
+	{
+	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+
+	  return NULL;
+	}
+
+      bind = find_binding (SYMBOL (macro_call->obj)->value_ptr.symbol,
+			   env->funcs, DYNAMIC_BINDING);
+
+      if (!bind)
+	{
+	  *r_outcome = FUNCTION_NOT_FOUND;
+	  return NULL;
+	}
+
+      return bind->obj;
+    }
+
   return NULL;
 }
 
@@ -3002,8 +3031,9 @@ evaluate_object (struct object *obj, struct environment *env,
   struct object *sym = obj;
 
   if (obj->type == TYPE_T || obj->type == TYPE_NIL || obj->type == TYPE_INTEGER
-      || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT || obj->type == TYPE_CHARACTER
-      || obj->type == TYPE_STRING)
+      || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT
+      || obj->type == TYPE_CHARACTER || obj->type == TYPE_STRING
+      || obj->type == TYPE_FUNCTION || obj->type == TYPE_PACKAGE)
     {
       obj->refcount++;
       return obj;
@@ -4099,6 +4129,26 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
       printf ("read error: closing parenthesis can't follows commas, ticks, "
 	      "backticks\n");
     }
+  else if (err == INVALID_SHARP_DISPATCH)
+    {
+      printf ("read error: invalid character used as a sharp dispatch\n");
+    }
+  else if (err == UNKNOWN_SHARP_DISPATCH)
+    {
+      printf ("read error: character not known as a sharp dispatch\n");
+    }
+  else if (err == WRONG_OBJECT_TYPE_TO_SHARP_MACRO)
+    {
+      printf ("read error: wrong type of object as content of a sharp macro\n");
+    }
+  else if (err == FUNCTION_NOT_FOUND)
+    {
+      printf ("read error: function not found\n");
+    }
+  else if (err == COMMA_WITHOUT_BACKQUOTE)
+    {
+      printf ("read error: comma can appear only inside a backquoted form\n");
+    }
   else if (err == SINGLE_DOT)
     {
       printf ("read error: single dot is only allowed inside a list and must "
@@ -4162,7 +4212,7 @@ print_eval_error (enum eval_outcome err, struct object *arg,
     }
   else if (err == EVAL_NOT_IMPLEMENTED)
     {
-      printf ("eval error: not implemente\n");
+      printf ("eval error: not implemented\n");
     }
   else if (err == INVALID_FUNCTION_CALL)
     {
