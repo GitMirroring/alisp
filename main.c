@@ -1409,7 +1409,7 @@ read_list (struct object **obj, const char *input, size_t size,
 	   struct environment *env, enum eval_outcome *outcome,
 	   struct object **cursor, const char **list_end, size_t *out_arg)
 {
-  struct object *last_cons = NULL, *car = NULL, *ob, *last_pref, *cons;
+  struct object *last_cons = NULL, *car = NULL, *ob = *obj, *cons;
   const char *obj_beg, *obj_end = NULL;
   enum read_outcome out;
   int found_dot = 0, dotted_list_full = 0;
@@ -1417,8 +1417,6 @@ read_list (struct object **obj, const char *input, size_t size,
 
   if (!size)
     return EMPTY_LIST;
-
-  ob = skip_prefix (*obj, NULL, NULL, &last_pref, NULL, NULL);
 
   while (ob && ob != &nil_object)
     {
@@ -1429,7 +1427,7 @@ read_list (struct object **obj, const char *input, size_t size,
 				       &obj_end, out_arg);
 
 	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
-	      ob->value_ptr.cons_pair->filling_car = 0;
+	    ob->value_ptr.cons_pair->filling_car = 0;
 	  else if (out == NO_OBJECT || out == EMPTY_LIST
 		   || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR
 		   || out & INCOMPLETE_OBJECT)
@@ -1561,7 +1559,7 @@ read_string (struct object **obj, const char *input, size_t size,
   size_t length, new_size;
   struct string *str;
   enum read_outcome out = COMPLETE_OBJECT;
-  struct object *last_pref, *ob;
+  struct object *ob = *obj;
 
 
   *string_end = find_end_of_string (input, size, &new_size, &length);
@@ -1569,15 +1567,10 @@ read_string (struct object **obj, const char *input, size_t size,
   if (!*string_end)
     out = INCOMPLETE_STRING;
     
-  ob = skip_prefix (*obj, NULL, NULL, &last_pref, NULL, NULL);
-  
   if (!ob)
     {
       ob = alloc_string (length);
-      if (last_pref)
-	last_pref->value_ptr.next = ob;
-      else
-	*obj = ob;
+      *obj = ob;
     }
   else
     resize_string (ob, ob->value_ptr.string->used_size + length);  
@@ -1601,13 +1594,11 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 {
   struct symbol_name *sym;
   size_t name_l, act_name_l, new_size;
-  struct object *last_pref, *ob;
+  struct object *ob = *obj;
   enum read_outcome out = NO_OBJECT;
   const char *start_of_pack_s;
   enum package_record_visibility visib;
 
-
-  ob = skip_prefix (*obj, NULL, NULL, &last_pref, NULL, NULL);
 
   *symname_end = find_end_of_symbol_name
     (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
@@ -1622,10 +1613,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   if (!ob)
     {
       ob = alloc_symbol_name (name_l, act_name_l);
-      if (last_pref)
-	last_pref->value_ptr.next = ob;
-      else
-	*obj = ob;
+      *obj = ob;
     }
   else
     resize_symbol_name (ob, ob->value_ptr.symbol_name->used_size + name_l,
