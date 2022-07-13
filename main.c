@@ -650,8 +650,10 @@ struct object *define_parameter_by_name
 (char *name, size_t size, struct object *form, struct environment *env,
  enum eval_outcome *outcome, struct object **cursor);
 
-struct object *skip_prefix (struct object *prefix,
-			    struct object **last_prefix);
+struct object *skip_prefix (struct object *prefix, int *num_backticks,
+			    int *num_commas, struct object **last_prefix,
+			    struct object **last_comma,
+			    struct object **before_last_comma);
 struct object *append_prefix (struct object *obj, enum element type);
 
 struct object *nth (unsigned int ind, struct object *list);
@@ -952,7 +954,8 @@ read_object_continued (struct object **obj, int is_empty_list,
 		       const char **obj_end, size_t *mult_comm_depth)
 {
   enum read_outcome out;
-  struct object *last_pref, *ob = skip_prefix (*obj, &last_pref);
+  struct object *last_pref, *ob = skip_prefix (*obj, NULL, NULL, &last_pref,
+					       NULL, NULL);
   struct object *l;
 
   if (*mult_comm_depth)
@@ -1415,7 +1418,7 @@ read_list (struct object **obj, const char *input, size_t size,
   if (!size)
     return EMPTY_LIST;
 
-  ob = skip_prefix (*obj, &last_pref);
+  ob = skip_prefix (*obj, NULL, NULL, &last_pref, NULL, NULL);
 
   while (ob && ob != &nil_object)
     {
@@ -1566,7 +1569,7 @@ read_string (struct object **obj, const char *input, size_t size,
   if (!*string_end)
     out = INCOMPLETE_STRING;
     
-  ob = skip_prefix (*obj, &last_pref);
+  ob = skip_prefix (*obj, NULL, NULL, &last_pref, NULL, NULL);
   
   if (!ob)
     {
@@ -1604,7 +1607,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   enum package_record_visibility visib;
 
 
-  ob = skip_prefix (*obj, &last_pref);
+  ob = skip_prefix (*obj, NULL, NULL, &last_pref, NULL, NULL);
 
   *symname_end = find_end_of_symbol_name
     (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
@@ -1663,7 +1666,7 @@ read_prefix (struct object **obj, const char *input, size_t size,
   if (!size)
     return NO_OBJECT;
 
-  skip_prefix (*obj, last);
+  skip_prefix (*obj, NULL, NULL, last, NULL, NULL);
   
   el = find_next_element (input, size, &n);
   
@@ -2678,11 +2681,21 @@ define_parameter_by_name (char *name, size_t size, struct object *form,
 
 
 struct object *
-skip_prefix (struct object *prefix, struct object **last_prefix)
+skip_prefix (struct object *prefix, int *num_backticks, int *num_commas,
+	     struct object **last_prefix, struct object **last_comma,
+	     struct object **before_last_comma)
 {
   if (last_prefix)
     *last_prefix = NULL;
-  
+  if (num_backticks)
+    *num_backticks = 0;
+  if (num_commas)
+    *num_commas = 0;
+  if (last_comma)
+    *last_comma = NULL;
+  if (before_last_comma)
+    *before_last_comma = NULL;
+
   while (prefix &&
 	 (prefix->type == TYPE_QUOTE
 	  || prefix->type == TYPE_BACKQUOTE
@@ -2690,6 +2703,20 @@ skip_prefix (struct object *prefix, struct object **last_prefix)
     {
       if (last_prefix)
 	*last_prefix = prefix;
+
+      if (num_backticks && prefix->type == TYPE_BACKQUOTE)
+	(*num_backticks)++;
+
+      if (num_commas && prefix->type == TYPE_COMMA)
+	(*num_commas)++;
+
+      if (last_comma && prefix->type == TYPE_COMMA)
+	*last_comma = prefix;
+
+      if (before_last_comma && prefix->value_ptr.next
+	  && prefix->value_ptr.next->type == TYPE_COMMA)
+	*before_last_comma = prefix;
+
       prefix = prefix->value_ptr.next;
     }
 
