@@ -519,9 +519,11 @@ int input_needs_continuation (const char *input, size_t size);
 char *read_line_interactively (const char prompt []);
 
 enum read_outcome read_object_continued
-(struct object **obj, int is_empty_list, const char *input, size_t size,
- struct environment *env, enum eval_outcome *outcome, struct object **cursor,
- const char **obj_begin, const char **obj_end, size_t *mult_comm_depth);
+(struct object **obj, int backts_commas_balance,
+ int is_empty_list, const char *input, size_t size,
+ struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor, const char **obj_begin,
+ const char **obj_end, size_t *mult_comm_depth);
 struct object *complete_object_interactively
 (struct object *obj, int is_empty_list, struct environment *env,
  enum eval_outcome *outcome, struct object **cursor,
@@ -550,14 +552,15 @@ struct object_list *append_object_to_list
 (struct object *obj, struct object_list *list);
 
 enum read_outcome read_object
-(struct object **obj, const char *input, size_t size, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor, const char **obj_begin,
+(struct object **obj, int backt_commas_balance, const char *input,
+ size_t size, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor, const char **obj_begin,
  const char **obj_end, size_t *out_arg);
 
 enum read_outcome read_list
-(struct object **obj, const char *input, size_t size, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor, const char **list_end,
- size_t *out_arg);
+(struct object **obj, int backts_commas_balance, const char *input,
+ size_t size, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor, const char **list_end, size_t *out_arg);
 
 enum read_outcome read_string
 (struct object **obj, const char *input, size_t size,
@@ -568,7 +571,8 @@ enum read_outcome read_symbol_name
  const char **symname_end);
 
 enum read_outcome read_prefix
-(struct object **obj, const char *input, size_t size, struct object **last,
+(struct object **obj, const char *input, size_t size,
+ int *backt_commas_balance, struct object **last,
  const char **prefix_end);
 
 struct sharp_macro_call *read_sharp_macro_call
@@ -949,16 +953,19 @@ read_line_interactively (const char prompt [])
 
 
 enum read_outcome
-read_object_continued (struct object **obj, int is_empty_list,
-		       const char *input, size_t size,
+read_object_continued (struct object **obj, int backts_commas_balance,
+		       int is_empty_list, const char *input, size_t size,
 		       struct environment *env, enum eval_outcome *outcome,
 		       struct object **cursor, const char **obj_begin,
 		       const char **obj_end, size_t *mult_comm_depth)
 {
   enum read_outcome out;
-  struct object *last_pref, *ob = skip_prefix (*obj, NULL, NULL, &last_pref,
+  int bts, cs;
+  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref,
 					       NULL, NULL);
   struct object *l;
+
+  backts_commas_balance += (bts - cs);
 
   if (*mult_comm_depth)
     {
@@ -977,23 +984,23 @@ read_object_continued (struct object **obj, int is_empty_list,
     {
       l = NULL;
 
-      out = read_list (&l, input, size, env, outcome, cursor, obj_end,
-		       mult_comm_depth);
+      out = read_list (&l, backts_commas_balance, input, size, env, outcome,
+		       cursor, obj_end, mult_comm_depth);
 
       ob = l;
     }
   else if (!ob)
     {
-      out = read_object (&ob, input, size, env, outcome, cursor, obj_begin,
-			 obj_end, mult_comm_depth);
+      out = read_object (&ob, backts_commas_balance, input, size, env,
+			 outcome, cursor, obj_begin, obj_end, mult_comm_depth);
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
     }
   else if (ob->type == TYPE_CONS_PAIR)
     {
-      out = read_list (&ob, input, size, env, outcome, cursor, obj_end,
-		       mult_comm_depth);
+      out = read_list (&ob, backts_commas_balance, input, size, env, outcome,
+		       cursor, obj_end, mult_comm_depth);
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -1034,7 +1041,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   line = read_line_interactively ("> ");
   len = strlen (line);
   
-  read_out = read_object_continued (&obj, is_empty_list, line, len, env,
+  read_out = read_object_continued (&obj, 0, is_empty_list, line, len, env,
 				    outcome, cursor, &begin, &end,
 				    &multiline_comm_depth);
 
@@ -1055,11 +1062,11 @@ complete_object_interactively (struct object *obj, int is_empty_list,
       len = strlen (line);
 
       if (read_out & EMPTY_LIST)
-	read_out = read_object_continued (&obj, 1, line, len, env, outcome,
+	read_out = read_object_continued (&obj, 0, 1, line, len, env, outcome,
 					  cursor, &begin, &end,
 					  &multiline_comm_depth);
       else
-	read_out = read_object_continued (&obj, 0, line, len, env, outcome,
+	read_out = read_object_continued (&obj, 0, 0, line, len, env, outcome,
 					  cursor, &begin, &end,
 					  &multiline_comm_depth);
     }
@@ -1085,7 +1092,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
   size_t mult_comm_depth = 0;
 
   
-  read_out = read_object (&obj, input, input_size, env, outcome, cursor,
+  read_out = read_object (&obj, 0, input, input_size, env, outcome, cursor,
 			  &begin, &end, &mult_comm_depth);
   
   if (read_out == COMPLETE_OBJECT  && !mult_comm_depth)
@@ -1298,8 +1305,8 @@ append_object_to_list (struct object *obj, struct object_list *list)
 
 
 enum read_outcome
-read_object (struct object **obj, const char *input, size_t size,
-	     struct environment *env, enum eval_outcome *outcome,
+read_object (struct object **obj, int backts_commas_balance, const char *input,
+	     size_t size, struct environment *env, enum eval_outcome *outcome,
 	     struct object **cursor, const char **obj_begin,
 	     const char **obj_end, size_t *out_arg)
 {
@@ -1336,7 +1343,8 @@ read_object (struct object **obj, const char *input, size_t size,
       else if (*input == '\'' || *input == '`' || *input == ','
 	       || *input == '@')
  	{
-	  out = read_prefix (obj, input, size, &last_pref, obj_end);
+	  out = read_prefix (obj, input, size, &backts_commas_balance,
+			     &last_pref, obj_end);
 
 	  if (out == TOO_MANY_COMMAS)
 	    return out;
@@ -1354,8 +1362,8 @@ read_object (struct object **obj, const char *input, size_t size,
       else if (*input == '(')
 	{
 	  *obj_begin = input;
-	  out = read_list (&ob, input+1, size-1, env, outcome, cursor,
-			   obj_end, out_arg);
+	  out = read_list (&ob, backts_commas_balance, input+1, size-1, env,
+			   outcome, cursor, obj_end, out_arg);
 	  break;
 	}
       else if (*input == '"')
@@ -1411,8 +1419,8 @@ read_object (struct object **obj, const char *input, size_t size,
 
 
 enum read_outcome
-read_list (struct object **obj, const char *input, size_t size,
-	   struct environment *env, enum eval_outcome *outcome,
+read_list (struct object **obj, int backts_commas_balance, const char *input,
+	   size_t size, struct environment *env, enum eval_outcome *outcome,
 	   struct object **cursor, const char **list_end, size_t *out_arg)
 {
   struct object *last_cons = NULL, *car = NULL, *ob = *obj, *cons;
@@ -1428,7 +1436,8 @@ read_list (struct object **obj, const char *input, size_t size,
     {
       if (ob->value_ptr.cons_pair->filling_car)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 0, input,
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car,
+				       backts_commas_balance, 0, input,
 				       size, env, outcome, cursor, &obj_beg,
 				       &obj_end, out_arg);
 
@@ -1441,7 +1450,8 @@ read_list (struct object **obj, const char *input, size_t size,
 	}
       else if (ob->value_ptr.cons_pair->empty_list_in_car)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car, 1, input,
+	  out = read_object_continued (&ob->value_ptr.cons_pair->car,
+				       backts_commas_balance, 1, input,
 				       size, env, outcome, cursor, &obj_beg,
 				       &obj_end, out_arg);
 
@@ -1465,13 +1475,14 @@ read_list (struct object **obj, const char *input, size_t size,
 
   if (obj_end)
     {
-      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), env,
-			 outcome, cursor, &obj_beg, &obj_end, out_arg);
+      out = read_object (&car, backts_commas_balance, obj_end + 1,
+			 size - (obj_end + 1 - input), env, outcome, cursor,
+			 &obj_beg, &obj_end, out_arg);
     }
   else
     {
-      out = read_object (&car, input, size, env, outcome, cursor, &obj_beg,
-			 &obj_end, out_arg);
+      out = read_object (&car, backts_commas_balance, input, size, env,
+			 outcome, cursor, &obj_beg, &obj_end, out_arg);
     }
 
   if (out == NO_OBJECT && !last_cons)
@@ -1494,13 +1505,13 @@ read_list (struct object **obj, const char *input, size_t size,
 	  *list_end = obj_end;
 	  return COMPLETE_OBJECT;
 	}
-      else if (out == UNFINISHED_MULTILINE_COMMENT)
-	{
-	  return out;
-	}
       else if (out == SINGLE_DOT)
 	{
 	  found_dot = 1;
+	}
+      else if (out & READ_ERROR)
+	{
+	  return out;
 	}
       else if (out == COMPLETE_OBJECT || out & INCOMPLETE_OBJECT)
 	{
@@ -1539,8 +1550,9 @@ read_list (struct object **obj, const char *input, size_t size,
 	break;
 
       car = NULL;
-      out = read_object (&car, obj_end + 1, size - (obj_end + 1 - input), env,
-			 outcome, cursor, &obj_beg, &obj_end, out_arg);
+      out = read_object (&car, backts_commas_balance, obj_end + 1,
+			 size - (obj_end + 1 - input), env, outcome, cursor,
+			 &obj_beg, &obj_end, out_arg);
     }
 
   if (out == EMPTY_LIST)
@@ -1652,20 +1664,21 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 
 enum read_outcome
 read_prefix (struct object **obj, const char *input, size_t size,
-	     struct object **last, const char **prefix_end)
+	     int *backts_commas_balance, struct object **last,
+	     const char **prefix_end)
 {
   const char *n = input;
   enum element el;
-  int num_backts, num_commas, backt_commas_balance;
+  int num_backts, num_commas;
   
   if (!size)
     return NO_OBJECT;
 
   skip_prefix (*obj, &num_backts, &num_commas, last, NULL, NULL);
 
-  backt_commas_balance = num_backts - num_commas;
+  *backts_commas_balance += (num_backts - num_commas);
 
-  if (backt_commas_balance < 0)
+  if (*backts_commas_balance < 0)
     return TOO_MANY_COMMAS;
   
   el = find_next_element (input, size, &n);
@@ -1680,11 +1693,11 @@ read_prefix (struct object **obj, const char *input, size_t size,
 	*last = (*last)->value_ptr.next = alloc_prefix (el);
 
       if (el == BACKQUOTE)
-	backt_commas_balance++;
+	(*backts_commas_balance)++;
       else if (el == COMMA)
-	backt_commas_balance--;
+	(*backts_commas_balance)--;
 
-      if (backt_commas_balance < 0)
+      if (*backts_commas_balance < 0)
 	return TOO_MANY_COMMAS;
 
       el = find_next_element (n+1, size - (n + 1 - input), &n);
@@ -1740,7 +1753,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
     }
 
   call->obj = NULL;
-  *outcome = read_object (&call->obj, input+i+1, size-i-1, env, e_outcome,
+  *outcome = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
 			  cursor, &obj_b, macro_end, out_arg);
   
   return call;
@@ -3390,7 +3403,7 @@ builtin_load (struct object *list, struct environment *env,
       return NULL;
     }
 
-  out = read_object (&obj, buf, l, env, outcome, cursor, &obj_b, &obj_e,
+  out = read_object (&obj, 0, buf, l, env, outcome, cursor, &obj_b, &obj_e,
 		     &mult_comm_depth);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
@@ -3410,7 +3423,7 @@ builtin_load (struct object *list, struct environment *env,
 
 	  if (res)
 	    {
-	      out = read_object (&obj, in, sz, env, outcome, cursor, &obj_b,
+	      out = read_object (&obj, 0, in, sz, env, outcome, cursor, &obj_b,
 				 &obj_e, &mult_comm_depth);
 	      sz = sz - (obj_e + 1 - in);
 	      in = obj_e + 1;
