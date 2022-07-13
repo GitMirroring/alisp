@@ -141,20 +141,21 @@ read_outcome
     UNFINISHED_MULTILINE_COMMENT = 1 << 16,
 
     COMMA_WITHOUT_BACKQUOTE = 1 << 17,
+    TOO_MANY_COMMAS = 1 << 18,
 
-    SINGLE_DOT = 1 << 18,
+    SINGLE_DOT = 1 << 19,
 
-    MULTIPLE_DOTS = 1 << 19,
+    MULTIPLE_DOTS = 1 << 20,
 
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 20,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 21,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 22,
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 21,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 22,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 23,
 
-    TOO_MANY_COLONS = 1 << 23,
-    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 24,
-    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 25,
-    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 26,
-    PACKAGE_NOT_FOUND = 1 << 27
+    TOO_MANY_COLONS = 1 << 24,
+    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 25,
+    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 26,
+    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 27,
+    PACKAGE_NOT_FOUND = 1 << 28
   };
 
 
@@ -165,8 +166,9 @@ read_outcome
 #define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS \
 		    | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH	\
 		    | WRONG_OBJECT_TYPE_TO_SHARP_MACRO | FUNCTION_NOT_FOUND \
-		    | COMMA_WITHOUT_BACKQUOTE | SINGLE_DOT | MULTIPLE_DOTS \
-		    | NO_OBJ_BEFORE_DOT_IN_LIST | NO_OBJ_AFTER_DOT_IN_LIST \
+		    | COMMA_WITHOUT_BACKQUOTE | TOO_MANY_COMMAS | SINGLE_DOT \
+		    | MULTIPLE_DOTS | NO_OBJ_BEFORE_DOT_IN_LIST		\
+		    | NO_OBJ_AFTER_DOT_IN_LIST				\
 		    | MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS \
 		    | CANT_BEGIN_WITH_TWO_COLONS_OR_MORE		\
 		    | CANT_END_WITH_PACKAGE_SEPARATOR			\
@@ -1334,7 +1336,11 @@ read_object (struct object **obj, const char *input, size_t size,
       else if (*input == '\'' || *input == '`' || *input == ','
 	       || *input == '@')
  	{
-	  read_prefix (obj, input, size, &last_pref, obj_end);
+	  out = read_prefix (obj, input, size, &last_pref, obj_end);
+
+	  if (out == TOO_MANY_COMMAS)
+	    return out;
+
 	  size = size - (*obj_end - input);
 	  input = *obj_end;
 	  found_prefix = 1;
@@ -1650,11 +1656,17 @@ read_prefix (struct object **obj, const char *input, size_t size,
 {
   const char *n = input;
   enum element el;
+  int num_backts, num_commas, backt_commas_balance;
   
   if (!size)
     return NO_OBJECT;
 
-  skip_prefix (*obj, NULL, NULL, last, NULL, NULL);
+  skip_prefix (*obj, &num_backts, &num_commas, last, NULL, NULL);
+
+  backt_commas_balance = num_backts - num_commas;
+
+  if (backt_commas_balance < 0)
+    return TOO_MANY_COMMAS;
   
   el = find_next_element (input, size, &n);
   
@@ -1666,7 +1678,15 @@ read_prefix (struct object **obj, const char *input, size_t size,
 	*obj = *last = alloc_prefix (el);
       else
 	*last = (*last)->value_ptr.next = alloc_prefix (el);
-      
+
+      if (el == BACKQUOTE)
+	backt_commas_balance++;
+      else if (el == COMMA)
+	backt_commas_balance--;
+
+      if (backt_commas_balance < 0)
+	return TOO_MANY_COMMAS;
+
       el = find_next_element (n+1, size - (n + 1 - input), &n);
     }
 
@@ -4163,6 +4183,11 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
   else if (err == COMMA_WITHOUT_BACKQUOTE)
     {
       printf ("read error: comma can appear only inside a backquoted form\n");
+    }
+  else if (err == TOO_MANY_COMMAS)
+    {
+      printf ("read error: number of commas can't exceed number of backquotes"
+	      " of enclosing form\n");
     }
   else if (err == SINGLE_DOT)
     {
