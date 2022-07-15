@@ -181,6 +181,7 @@ eval_outcome
     EVAL_OK,
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
+    DOTTED_LIST_NOT_ALLOWED_HERE,
     WRONG_NUMBER_OF_ARGUMENTS,
     UNKNOWN_FUNCTION,
     MALFORMED_IF,
@@ -663,7 +664,9 @@ struct object *append_prefix (struct object *obj, enum element type);
 
 struct object *nth (unsigned int ind, struct object *list);
 struct object *nthcdr (unsigned int ind, struct object *list);
+
 unsigned int list_length (const struct object *list);
+int is_dotted_list (const struct object *list);
 
 void copy_symbol_name (char *out, const struct symbol_name *name);
 struct parameter *alloc_parameter (enum parameter_type type,
@@ -2828,6 +2831,21 @@ list_length (const struct object *list)
 }
 
 
+int
+is_dotted_list (const struct object *list)
+{
+  while (list && list->type == TYPE_CONS_PAIR)
+    {
+      list = list->value_ptr.cons_pair->cdr;
+    }
+
+  if (list && list != &nil_object)
+    return 1;
+
+  return 0;
+}
+
+
 void
 copy_symbol_name (char *out, const struct symbol_name *name)
 {
@@ -3238,6 +3256,13 @@ evaluate_list (struct object *list, int backts_commas_balance,
   struct symbol_name *symname;
   struct binding *bind;
   struct object *args;
+
+  if (is_dotted_list (list))
+    {
+      *outcome = DOTTED_LIST_NOT_ALLOWED_HERE;
+
+      return NULL;
+    }
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME)
     {
@@ -4381,6 +4406,10 @@ print_eval_error (enum eval_outcome err, struct object *arg,
   else if (err == INVALID_FUNCTION_CALL)
     {
       printf ("eval error: invalid function call\n");
+    }
+  else if (err == DOTTED_LIST_NOT_ALLOWED_HERE)
+    {
+      printf ("eval error: dotted list not allowed here\n");
     }
   else if (err == WRONG_NUMBER_OF_ARGUMENTS)
     {
