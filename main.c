@@ -513,8 +513,6 @@ line_list
 
 
 
-int input_needs_continuation (const char *input, size_t size);
-
 char *read_line_interactively (const char prompt []);
 
 enum read_outcome read_object_continued
@@ -932,13 +930,6 @@ main (int argc, char *argv [])
 	}
     }
   
-  return 0;
-}
-
-
-int
-input_needs_continuation (const char *input, size_t size)
-{
   return 0;
 }
 
