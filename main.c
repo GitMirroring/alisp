@@ -182,9 +182,7 @@ eval_outcome
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
     WRONG_NUMBER_OF_ARGUMENTS,
-    CANT_EVALUATE_LISTS_YET,
     UNKNOWN_FUNCTION,
-    EVAL_NOT_IMPLEMENTED,
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
     INCORRECT_SYNTAX_IN_PROGN,
@@ -4380,10 +4378,6 @@ print_eval_error (enum eval_outcome err, struct object *arg,
       print_symbol (arg->value_ptr.symbol, env);
       printf (" not bound to any function\n");
     }
-  else if (err == EVAL_NOT_IMPLEMENTED)
-    {
-      printf ("eval error: not implemented\n");
-    }
   else if (err == INVALID_FUNCTION_CALL)
     {
       printf ("eval error: invalid function call\n");
@@ -4391,10 +4385,6 @@ print_eval_error (enum eval_outcome err, struct object *arg,
   else if (err == WRONG_NUMBER_OF_ARGUMENTS)
     {
       printf ("eval error: wrong number of arguments\n");
-    }
-  else if (err == CANT_EVALUATE_LISTS_YET)
-    {
-      printf ("eval error: can't evaluate lists yet!\n");
     }
   else if (err == INCORRECT_SYNTAX_IN_LET)
     {
