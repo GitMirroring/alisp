@@ -48,7 +48,7 @@ make_test ("`'`\"\"", "'`\"\"");
 make_test ("'(((\n" .
 	   ")))", "((()))");
 make_test ("\"\"", "\"\"");
-make_test ("` ( ;\n" .
+make_test ("` ( ; asd\n" .
            " \"\")", "(\"\")");
 make_test ("#|\n" .
 	   "|# \"\"", "\"\"");
@@ -56,10 +56,16 @@ make_test (" #| #|\n" .
 	   "|##|\n" .
 	   "|#\n" .
 	   "  |# \"\"", "\"\"");
+make_test ("'(1 . 2)", "(1 . 2)");
 make_test ("'( \"\" #||# )", "(\"\")");
 make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'\\\n ", "|\n|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
+make_test ("`,'a", "A");
+make_test ("``,a", "`,A");
+make_test ("``(a ,,(+ 1 2))", "`(A ,3)");
+make_test ("``(a ,,(+ 1 2) ,(+ 3 4))", "`(A ,3 ,(+ 3 4))");
+make_test ("``(a ,(+ ,1 2))", "`(A ,(+ 1 2))");
 
 
 # eval tests
@@ -69,6 +75,10 @@ make_test ("NIL", "()");
 make_test ("t", "T");
 make_test ("(if nil 1)", "()");
 make_test ("(common-lisp:if '(1) 2)", "2");
+make_test ("(defconstant a 8)", "A");
+make_test ("a", "8");
+make_test ("(defparameter b 9)", "B");
+make_test ("b", "9");
 make_test ("(load \"cl.lisp\")", "T");
 
 
@@ -77,6 +87,7 @@ make_test ("(load \"cl.lisp\")", "T");
 make_test ("(+)", "0");
 make_test ("(+ 1 2 3)", "6");
 make_test ("(+ 1/2 2 3 1000)", "2011/2");
+make_test ("(+ a b)", "17");
 make_test ("(+ .1 .1 .1)", "0.3e0");
 make_test ("(- 3.5)", "-0.35e1");
 make_test ("(- 3 4.5)", "-0.15e1");
