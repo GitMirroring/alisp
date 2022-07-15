@@ -666,7 +666,6 @@ struct object *nthcdr (unsigned int ind, struct object *list);
 unsigned int list_length (const struct object *list);
 int is_dotted_list (const struct object *list);
 
-void copy_symbol_name (char *out, const struct symbol_name *name);
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
 struct parameter *parse_required_parameters
@@ -1140,7 +1139,7 @@ read_object_interactively (struct environment *env, enum eval_outcome *outcome,
 const char *
 skip_space_block (const char *input, size_t size, size_t *new_size)
 {
-  int i;
+  size_t i;
 
   for (i = 0; i < size; i++)
     {
@@ -1709,7 +1708,8 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
 		       const char **macro_end, size_t *out_arg,
 		       enum read_outcome *outcome)
 {
-  int arg, i = 0;
+  int arg;
+  size_t i = 0;
   const char *obj_b;
   struct sharp_macro_call *call;
 
@@ -1838,7 +1838,7 @@ int
 is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 	   const char **number_end, const char **token_end)
 {
-  int i = 0;
+  size_t i = 0;
   
   int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0,
     found_dec_digit = 0, found_digit = 0, found_digit_after_slash = 0,
@@ -2140,7 +2140,7 @@ const char *
 find_end_of_string (const char *input, size_t size, size_t *new_size,
 		    size_t *string_length)
 {
-  int i = 0, escape = 0;
+  size_t i = 0, escape = 0;
 
   *string_length = 0;
   
@@ -2169,7 +2169,8 @@ find_end_of_string (const char *input, size_t size, size_t *new_size,
 void
 normalize_string (char *output, const char *input, size_t size)
 {
-  int escape = 0, i = 0, j = 0;
+  int escape = 0, j = 0;
+  size_t i = 0;
 
   while (i < size)
     {
@@ -2277,7 +2278,8 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 			 size_t *name_length, size_t *act_name_length,
 			 enum read_outcome *outcome)
 {
-  int i = 0, single_escape = 0, multiple_escape = 0, just_dots = 1, colons = 0;
+  size_t i = 0;
+  int single_escape = 0, multiple_escape = 0, just_dots = 1, colons = 0;
   size_t **length;
 
   *start_of_package_separator = NULL;
@@ -2379,7 +2381,8 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 void
 normalize_symbol_name (char *output, const char *input, size_t size)
 {
-  int i, j, single_escape = 0, multiple_escape = 0;
+  size_t i;
+  int j, single_escape = 0, multiple_escape = 0;
   
   for (i = 0, j = 0; i < size; i++)
     {
@@ -2775,7 +2778,7 @@ append_prefix (struct object *obj, enum element type)
 struct object *
 nth (unsigned int ind, struct object *list)
 {
-  int i;
+  size_t i;
 
   for (i = 0; i < ind; i++)
     if (!list->value_ptr.cons_pair->cdr)
@@ -2790,7 +2793,7 @@ nth (unsigned int ind, struct object *list)
 struct object *
 nthcdr (unsigned int ind, struct object *list)
 {
-  int i;
+  size_t i;
 
   for (i = 0; i < ind; i++)
     {
@@ -2834,13 +2837,6 @@ is_dotted_list (const struct object *list)
     return 1;
 
   return 0;
-}
-
-
-void
-copy_symbol_name (char *out, const struct symbol_name *name)
-{
-  
 }
 
 
@@ -4104,7 +4100,7 @@ evaluate_defmacro (struct object *list, int backts_commas_balance,
 int
 eqmem (const char *s1, size_t n1, const char *s2, size_t n2)
 {
-  int i;
+  size_t i;
   
   if (n1 != n2)
     return 0;
@@ -4149,7 +4145,7 @@ symname_is_among (const struct symbol_name *sym, ...)
 int
 equal_strings (const struct string *s1, const struct string *s2)
 {
-  int i;
+  size_t i;
   
   if (s1->used_size != s2->used_size)
     return 0;
@@ -4165,7 +4161,7 @@ equal_strings (const struct string *s1, const struct string *s2)
 void
 print_symbol (const struct symbol *sym, struct environment *env)
 {  
-  int i;
+  size_t i;
   char *nm = sym->name;
   char need_escape [] = "().,;'#\"\n\\";
   int do_need_escape = 0;
@@ -4199,7 +4195,7 @@ print_symbol (const struct symbol *sym, struct environment *env)
 void
 print_string (const struct string *str)
 {
-  int i;
+  size_t i;
   
   putchar ('"');
 
