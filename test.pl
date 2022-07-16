@@ -57,12 +57,14 @@ make_test (" #| #|\n" .
 	   "|#\n" .
 	   "  |# \"\"", "\"\"");
 make_test ("'(1 . 2)", "(1 . 2)");
+make_test ("'(1 . (2 3))", "(1 2 3)");
 make_test ("'( \"\" #||# )", "(\"\")");
 make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'\\\n ", "|\n|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 make_test ("`,'a", "A");
 make_test ("``,a", "`,A");
+make_test ("`,`a", "A");
 make_test ("``(a ,,(+ 1 2))", "`(A ,3)");
 make_test ("``(a ,,(+ 1 2) ,(+ 3 4))", "`(A ,3 ,(+ 3 4))");
 make_test ("``(a ,(+ ,1 2))", "`(A ,(+ 1 2))");
