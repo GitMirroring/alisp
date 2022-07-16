@@ -3165,10 +3165,10 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		 struct environment *env, enum eval_outcome *outcome,
 		 struct object **cursor)
 {
-  struct object *last_prefix, *last_comma, *before_last_comma, *ret, *list;
-  int num_bt, num_c, bt_c_bal;
-  struct object *obj = skip_prefix (form, &num_bt, &num_c, &last_prefix,
-				    &last_comma, &before_last_comma);
+  struct object *last_comma, *before_last_comma, *ret, *list;
+  int num_bt, num_c;
+  struct object *obj = skip_prefix (form, &num_bt, &num_c, NULL, &last_comma,
+				    &before_last_comma);
   backts_commas_balance += (num_bt - num_c);
 
   if (!backts_commas_balance)
@@ -3198,34 +3198,12 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
   while (list != &nil_object)
     {
-      obj = skip_prefix (CAR (list), &num_bt, &num_c, &last_prefix, &last_comma,
-			 &before_last_comma);
-      bt_c_bal = backts_commas_balance + num_bt - num_c;
+      ret = apply_backquote (CAR (list), backts_commas_balance, env, outcome, cursor);
 
-      if (!bt_c_bal)
-	{
-	  ret = evaluate_object (last_comma->value_ptr.next, 0, env, outcome,
-				 cursor);
+      if (!ret)
+	return NULL;
 
-	  if (!ret)
-	    return NULL;
-
-	  last_comma->value_ptr.next = ret;
-
-	  if (before_last_comma)
-	    before_last_comma->value_ptr.next = last_comma->value_ptr.next;
-	  else
-	    list->value_ptr.cons_pair->car = last_comma->value_ptr.next;
-	}
-      else if (obj->type & TYPE_LIST)
-	{
-	  ret = apply_backquote (obj, bt_c_bal, env, outcome, cursor);
-
-	  if (!ret)
-	    return NULL;
-
-	  last_comma->value_ptr.next = ret;
-	}
+      list->value_ptr.cons_pair->car = ret;
 
       list = CDR (list);
     }
