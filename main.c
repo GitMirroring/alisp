@@ -513,6 +513,8 @@ line_list
 
 
 
+void add_standard_definitions (struct environment *env);
+
 char *read_line_interactively (const char prompt []);
 
 enum read_outcome read_object_continued
@@ -819,7 +821,6 @@ main (int argc, char *argv [])
 
   struct object *result, *cursor, *obj;
   struct environment env = {NULL};
-  struct object *cluser_package;
   
   enum eval_outcome eval_out;
 
@@ -843,46 +844,7 @@ main (int argc, char *argv [])
 	}
     }
 
-  env.keyword_package = create_package ("KEYWORD",
-					strlen ("KEYWORD"));
-  env.packages = create_binding (env.keyword_package->value_ptr.package->name,
-				 env.keyword_package, DYNAMIC_BINDING);
-
-  env.current_package = create_package ("COMMON-LISP",
-					strlen ("COMMON-LISP"));
-  env.packages = add_binding (create_binding
-			      (env.current_package->value_ptr.package->name,
-			       env.current_package, DYNAMIC_BINDING), env.packages);
-
-  cluser_package = create_package ("COMMON-LISP-USER",
-				   strlen ("COMMON-LISP-USER"));
-  env.packages = add_binding (create_binding
-			      (cluser_package->value_ptr.package->name,
-			       cluser_package, DYNAMIC_BINDING), env.packages);
-
-
-  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, &env,
-			   &eval_out, &cursor);
-  define_constant_by_name ("T", strlen ("T"), &t_object, &env, &eval_out,
-			   &cursor);
-
-  add_builtin_form ("CAR", &env, builtin_car, 1);
-  add_builtin_form ("CDR", &env, builtin_cdr, 1);
-  add_builtin_form ("CONS", &env, builtin_cons, 1);
-  add_builtin_form ("LIST", &env, builtin_list, 1);
-  add_builtin_form ("LOAD", &env, builtin_load, 1);
-  add_builtin_form ("+", &env, builtin_plus, 1);
-  add_builtin_form ("-", &env, builtin_minus, 1);
-  add_builtin_form ("*", &env, builtin_multiply, 1);
-  add_builtin_form ("/", &env, builtin_divide, 1);
-  add_builtin_form ("IF", &env, evaluate_if, 0);
-  add_builtin_form ("PROGN", &env, evaluate_progn, 0);
-  add_builtin_form ("DEFCONSTANT", &env, evaluate_defconstant, 0);
-  add_builtin_form ("DEFPARAMETER", &env, evaluate_defparameter, 0);
-  add_builtin_form ("DEFVAR", &env, evaluate_defvar, 0);
-  add_builtin_form ("DEFUN", &env, evaluate_defun, 0);
-  add_builtin_form ("DEFMACRO", &env, evaluate_defmacro, 0);
-
+  add_standard_definitions (&env);
 
   print_welcome_message ();
 
@@ -930,6 +892,55 @@ main (int argc, char *argv [])
     }
   
   return 0;
+}
+
+
+void
+add_standard_definitions (struct environment *env)
+{
+  struct object *cluser_package, *cursor;
+  enum eval_outcome eval_out;
+
+  env->keyword_package = create_package ("KEYWORD",
+					 strlen ("KEYWORD"));
+  env->packages = create_binding (env->keyword_package->value_ptr.package->name,
+				  env->keyword_package, DYNAMIC_BINDING);
+
+  env->current_package = create_package ("COMMON-LISP",
+					 strlen ("COMMON-LISP"));
+  env->packages = add_binding (create_binding
+			       (env->current_package->value_ptr.package->name,
+				env->current_package, DYNAMIC_BINDING),
+			       env->packages);
+
+  cluser_package = create_package ("COMMON-LISP-USER",
+				   strlen ("COMMON-LISP-USER"));
+  env->packages = add_binding (create_binding
+			       (cluser_package->value_ptr.package->name,
+				cluser_package, DYNAMIC_BINDING),
+			       env->packages);
+
+  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, env,
+			   &eval_out, &cursor);
+  define_constant_by_name ("T", strlen ("T"), &t_object, env, &eval_out,
+			   &cursor);
+
+  add_builtin_form ("CAR", env, builtin_car, 1);
+  add_builtin_form ("CDR", env, builtin_cdr, 1);
+  add_builtin_form ("CONS", env, builtin_cons, 1);
+  add_builtin_form ("LIST", env, builtin_list, 1);
+  add_builtin_form ("LOAD", env, builtin_load, 1);
+  add_builtin_form ("+", env, builtin_plus, 1);
+  add_builtin_form ("-", env, builtin_minus, 1);
+  add_builtin_form ("*", env, builtin_multiply, 1);
+  add_builtin_form ("/", env, builtin_divide, 1);
+  add_builtin_form ("IF", env, evaluate_if, 0);
+  add_builtin_form ("PROGN", env, evaluate_progn, 0);
+  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 0);
+  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, 0);
+  add_builtin_form ("DEFVAR", env, evaluate_defvar, 0);
+  add_builtin_form ("DEFUN", env, evaluate_defun, 0);
+  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0);
 }
 
 
