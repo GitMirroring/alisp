@@ -3109,17 +3109,6 @@ evaluate_object (struct object *obj, int backts_commas_balance,
       return apply_backquote (obj->value_ptr.next, backts_commas_balance + 1,
 				 env, outcome, cursor);
     }
-  else if (obj->type == TYPE_COMMA)
-    {
-      if (backts_commas_balance == 1)
-	return evaluate_object (obj->value_ptr.next, backts_commas_balance - 1,
-				env, outcome, cursor);
-      else
-	{
-	  obj->refcount++;
-	  return obj;
-	}
-    }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
       sym = SYMBOL (obj);
