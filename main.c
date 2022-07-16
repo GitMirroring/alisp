@@ -253,8 +253,8 @@ symbol
   struct parameter *lambda_list;
   int evaluate_args;
   struct object *(*builtin_form)
-    (struct object *list, int backts_commas_balance, struct environment *env,
-     enum eval_outcome *outcome, struct object **cursor);
+    (struct object *list, struct environment *env, enum eval_outcome *outcome,
+     struct object **cursor);
 
   int is_const;
   int is_parameter;
@@ -637,9 +637,9 @@ struct binding *find_binding (struct symbol *sym, struct binding *env,
 
 void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
-		       (struct object *list, int backts_commas_balance,
-			struct environment *env, enum eval_outcome *outcome,
-			struct object **cursor), int eval_args);
+		       (struct object *list, struct environment *env,
+			enum eval_outcome *outcome, struct object **cursor),
+		       int eval_args);
 
 struct object *define_constant
 (struct object *sym, struct object *form, struct environment *env,
@@ -677,39 +677,39 @@ struct parameter *parse_optional_parameters
 struct parameter *parse_lambda_list (struct object *obj,
 				     enum parse_lambda_list_outcome *out);
 struct object *call_function
-(struct object *func, struct object *arglist, int backts_commas_balance,
- struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+(struct object *func, struct object *arglist, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
 
 int check_type (const struct object *obj, const struct typespec *type);
 
 struct object *evaluate_object
-(struct object *obj, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *obj, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *apply_backquote
 (struct object *form, int backts_commas_balance, struct environment *env,
  enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_through_list
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 struct object *builtin_car
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_cdr
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_cons
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_list
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_load
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
@@ -720,49 +720,49 @@ struct object *apply_arithmetic_operation
  void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
  enum eval_outcome *outcome, struct object **cursor);
 struct object *builtin_plus
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_minus
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_multiply
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_divide
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, enum eval_outcome *outcome,
  struct object **cursor);
 struct object *evaluate_let
-(struct object *bind_forms, struct object *body, int backts_commas_balance,
- struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+(struct object *bind_forms, struct object *body, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_let_star
-(struct object *bind_forms, struct object *body, int backts_commas_balance,
- struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+(struct object *bind_forms, struct object *body, struct environment *env,
+ enum eval_outcome *outcome, struct object **cursor);
 
 struct object *evaluate_if
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_progn
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_defconstant
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_defparameter
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_defvar
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_defun
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *evaluate_defmacro
-(struct object *list, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -893,7 +893,7 @@ main (int argc, char *argv [])
       
       while (obj && input_left && input_left_s > 0)
 	{
-	  result = evaluate_object (obj, 0, &env, &eval_out, &cursor);
+	  result = evaluate_object (obj, &env, &eval_out, &cursor);
 
 	  if (result)
 	    {
@@ -914,7 +914,7 @@ main (int argc, char *argv [])
 
       if (obj)
 	{
-	  result = evaluate_object (obj, 0, &env, &eval_out, &cursor);
+	  result = evaluate_object (obj, &env, &eval_out, &cursor);
 
 	  if (result)
 	    {
@@ -2616,7 +2616,6 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 void
 add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form) (struct object *list,
-						  int backts_commas_balance,
 						  struct environment *env,
 						  enum eval_outcome *outcome,
 						  struct object **cursor),
@@ -2636,7 +2635,7 @@ define_constant (struct object *sym, struct object *form,
 		 struct environment *env, enum eval_outcome *outcome,
 		 struct object **cursor)
 {
-  struct object *val = evaluate_object (form, 0, env, outcome, cursor);
+  struct object *val = evaluate_object (form, env, outcome, cursor);
   
   if (!val)
     return NULL;
@@ -2672,7 +2671,7 @@ define_parameter (struct object *sym, struct object *form,
 		  struct object **cursor)
 {
   struct object *s;
-  struct object *val = evaluate_object (form, 0, env, outcome, cursor);
+  struct object *val = evaluate_object (form, env, outcome, cursor);
 
   if (!val)
     return NULL;
@@ -2984,8 +2983,8 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 struct object *
 call_function (struct object *func, struct object *arglist,
-	       int backts_commas_balance, struct environment *env,
-	       enum eval_outcome *outcome, struct object **cursor)
+	       struct environment *env, enum eval_outcome *outcome,
+	       struct object **cursor)
 {
   struct parameter *par = func->value_ptr.function->lambda_list;
   struct binding *bins = NULL;
@@ -2995,8 +2994,7 @@ call_function (struct object *func, struct object *arglist,
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
-      val = evaluate_object (CAR (arglist), backts_commas_balance, env,
-			     outcome, cursor);
+      val = evaluate_object (CAR (arglist), env, outcome, cursor);
 
       if (!val)
 	return NULL;
@@ -3032,8 +3030,7 @@ call_function (struct object *func, struct object *arglist,
     {
       if (par->init_form)
 	{
-	  val = evaluate_object (par->init_form, backts_commas_balance, env,
-				 outcome, cursor);
+	  val = evaluate_object (par->init_form, env, outcome, cursor);
 
 	  if (!val)
 	    return NULL;
@@ -3064,8 +3061,7 @@ call_function (struct object *func, struct object *arglist,
 
   env->vars = chain_bindings (bins, env->vars);
 
-  res = evaluate_progn (func->value_ptr.function->body, backts_commas_balance,
-			env, outcome, cursor);
+  res = evaluate_progn (func->value_ptr.function->body, env, outcome, cursor);
 
   env->vars = remove_bindings (env->vars, args);
 
@@ -3092,9 +3088,8 @@ check_type (const struct object *obj, const struct typespec *type)
 
 
 struct object *
-evaluate_object (struct object *obj, int backts_commas_balance,
-		 struct environment *env, enum eval_outcome *outcome,
-		 struct object **cursor)
+evaluate_object (struct object *obj, struct environment *env,
+		 enum eval_outcome *outcome, struct object **cursor)
 {
   struct binding *bind;
   struct object *sym;
@@ -3150,7 +3145,7 @@ evaluate_object (struct object *obj, int backts_commas_balance,
     }
   else if (obj->type == TYPE_CONS_PAIR)
     {
-      return evaluate_list (obj, 0, env, outcome, cursor);
+      return evaluate_list (obj, env, outcome, cursor);
     }
   else
     {
@@ -3173,7 +3168,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
   if (!backts_commas_balance)
     {
-      ret = evaluate_object (last_comma->value_ptr.next, 0, env, outcome, cursor);
+      ret = evaluate_object (last_comma->value_ptr.next, env, outcome, cursor);
 
       if (!ret)
 	return NULL;
@@ -3225,9 +3220,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 
 struct object *
-evaluate_list (struct object *list, int backts_commas_balance,
-	       struct environment *env, enum eval_outcome *outcome,
-	       struct object **cursor)
+evaluate_list (struct object *list, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
 {
   struct symbol_name *symname;
   struct binding *bind;
@@ -3253,8 +3247,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
     {
       if (symname->sym->value_ptr.symbol->evaluate_args)
 	{
-	  args = evaluate_through_list (CDR (list), 0,
-					env, outcome, cursor);
+	  args = evaluate_through_list (CDR (list), env, outcome, cursor);
 
 	  if (!args)
 	    return NULL;
@@ -3262,9 +3255,8 @@ evaluate_list (struct object *list, int backts_commas_balance,
       else
 	args = CDR (list);
 
-      return symname->sym->value_ptr.symbol->builtin_form (args,
-							   0,
-							   env, outcome, cursor);
+      return symname->sym->value_ptr.symbol->builtin_form (args, env, outcome,
+							   cursor);
     }
 
   if (symname_equals (symname, "LET"))
@@ -3275,8 +3267,8 @@ evaluate_list (struct object *list, int backts_commas_balance,
 	  return NULL;
 	}
 
-      return evaluate_let (CAR (CDR (list)), CDR (CDR (list)),
-			   0, env, outcome, cursor);
+      return evaluate_let (CAR (CDR (list)), CDR (CDR (list)), env, outcome,
+			   cursor);
     }
   else if (symname_equals (symname, "LET*"))
     {
@@ -3286,8 +3278,8 @@ evaluate_list (struct object *list, int backts_commas_balance,
 	  return NULL;
 	}
 
-      return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)),
-				0, env, outcome, cursor);
+      return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)), env,
+				outcome, cursor);
     }
   else if (symname_equals (symname, "QUOTE"))
     {
@@ -3298,8 +3290,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
   bind = find_binding (symname->sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
 
   if (bind)
-    return call_function (bind->obj, CDR (list), 0, env,
-			  outcome, cursor);
+    return call_function (bind->obj, CDR (list), env, outcome, cursor);
 
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
@@ -3308,16 +3299,14 @@ evaluate_list (struct object *list, int backts_commas_balance,
 
 
 struct object *
-evaluate_through_list (struct object *list, int backts_commas_balance,
-		       struct environment *env, enum eval_outcome *outcome,
-		       struct object **cursor)
+evaluate_through_list (struct object *list, struct environment *env,
+		       enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *args = NULL, *cons, *last_cons, *obj;
 
   while (list != &nil_object)
     {
-      obj = evaluate_object (CAR (list), backts_commas_balance, env,
-			     outcome, cursor);
+      obj = evaluate_object (CAR (list), env, outcome, cursor);
 
       if (!obj)
 	return NULL;
@@ -3341,9 +3330,8 @@ evaluate_through_list (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_car (struct object *list, int backts_commas_balance,
-	     struct environment *env, enum eval_outcome *outcome,
-	     struct object **cursor)
+builtin_car (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
 {
   if (!list_length (list))
     {
@@ -3367,9 +3355,8 @@ builtin_car (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_cdr (struct object *list, int backts_commas_balance,
-	     struct environment *env, enum eval_outcome *outcome,
-	     struct object **cursor)
+builtin_cdr (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
 {
   if (!list_length (list))
     {
@@ -3393,9 +3380,8 @@ builtin_cdr (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_cons (struct object *list, int backts_commas_balance,
-	      struct environment *env, enum eval_outcome *outcome,
-	      struct object **cursor)
+builtin_cons (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *cons;
 
@@ -3419,9 +3405,8 @@ builtin_cons (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_list (struct object *list, int backts_commas_balance,
-	      struct environment *env, enum eval_outcome *outcome,
-	      struct object **cursor)
+builtin_list (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *l = NULL, *cons, *last_cons;
 
@@ -3443,9 +3428,8 @@ builtin_list (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_load (struct object *list, int backts_commas_balance,
-	      struct environment *env, enum eval_outcome *outcome,
-	      struct object **cursor)
+builtin_load (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   FILE *f;
   long l;
@@ -3524,7 +3508,7 @@ builtin_load (struct object *list, int backts_commas_balance,
 	}
       else if (out == COMPLETE_OBJECT)
 	{
-	  res = evaluate_object (obj, 0, env, outcome, cursor);
+	  res = evaluate_object (obj, env, outcome, cursor);
 
 	  if (res)
 	    {
@@ -3688,9 +3672,8 @@ apply_arithmetic_operation (struct object *list,
 
 
 struct object *
-builtin_plus (struct object *list, int backts_commas_balance,
-	      struct environment *env, enum eval_outcome *outcome,
-	      struct object **cursor)
+builtin_plus (struct object *list, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *ret;
 
@@ -3722,9 +3705,8 @@ builtin_plus (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_minus (struct object *list, int backts_commas_balance,
-	       struct environment *env, enum eval_outcome *outcome,
-	       struct object **cursor)
+builtin_minus (struct object *list, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *ret;
 
@@ -3765,9 +3747,8 @@ builtin_minus (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_multiply (struct object *list, int backts_commas_balance,
-		  struct environment *env, enum eval_outcome *outcome,
-		  struct object **cursor)
+builtin_multiply (struct object *list, struct environment *env,
+		  enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *ret;
 
@@ -3799,9 +3780,8 @@ builtin_multiply (struct object *list, int backts_commas_balance,
 
 
 struct object *
-builtin_divide (struct object *list, int backts_commas_balance,
-		struct environment *env, enum eval_outcome *outcome,
-		struct object **cursor)
+builtin_divide (struct object *list, struct environment *env,
+		enum eval_outcome *outcome, struct object **cursor)
 {
   return NULL;
 }
@@ -3845,7 +3825,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 	  return NULL;
 	}
 
-      val = evaluate_object (CAR (CDR (form)), 0, env, outcome, cursor);
+      val = evaluate_object (CAR (CDR (form)), env, outcome, cursor);
 
       if (!val)
 	return NULL;
@@ -3865,8 +3845,8 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
 struct object *
 evaluate_let (struct object *bind_forms, struct object *body,
-	      int backts_commas_balance, struct environment *env,
-	      enum eval_outcome *outcome, struct object **cursor)
+	      struct environment *env, enum eval_outcome *outcome,
+	      struct object **cursor)
 {
   struct object *res;
   int binding_num = 0;
@@ -3887,7 +3867,7 @@ evaluate_let (struct object *bind_forms, struct object *body,
 
   env->vars = chain_bindings (bins, env->vars);
 
-  res = evaluate_progn (body, backts_commas_balance, env, outcome, cursor);
+  res = evaluate_progn (body, env, outcome, cursor);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
@@ -3897,8 +3877,8 @@ evaluate_let (struct object *bind_forms, struct object *body,
 
 struct object *
 evaluate_let_star (struct object *bind_forms, struct object *body,
-		   int backts_commas_balance, struct environment *env,
-		   enum eval_outcome *outcome, struct object **cursor)
+		   struct environment *env, enum eval_outcome *outcome,
+		   struct object **cursor)
 {
   struct object *res;
   int binding_num = 0;
@@ -3917,7 +3897,7 @@ evaluate_let_star (struct object *bind_forms, struct object *body,
       bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_progn (body, backts_commas_balance, env, outcome, cursor);
+  res = evaluate_progn (body, env, outcome, cursor);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
@@ -3926,9 +3906,8 @@ evaluate_let_star (struct object *bind_forms, struct object *body,
 
 
 struct object *
-evaluate_if (struct object *list, int backts_commas_balance,
-	     struct environment *env, enum eval_outcome *outcome,
-	     struct object **cursor)
+evaluate_if (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *if_clause;
 
@@ -3938,7 +3917,7 @@ evaluate_if (struct object *list, int backts_commas_balance,
       return NULL;
     }
 
-  if_clause = evaluate_object (CAR (list), 0, env, outcome, cursor);
+  if_clause = evaluate_object (CAR (list), env, outcome, cursor);
 
   if (!if_clause)
     return NULL;
@@ -3951,7 +3930,7 @@ evaluate_if (struct object *list, int backts_commas_balance,
 	  return NULL;
 	}
 
-      return evaluate_object (CAR (CDR (list)), 0, env, outcome, cursor);
+      return evaluate_object (CAR (CDR (list)), env, outcome, cursor);
     }
   else
     {
@@ -3960,15 +3939,14 @@ evaluate_if (struct object *list, int backts_commas_balance,
 	  return &nil_object;
 	}
       else
-	return evaluate_object (nth (2, list), 0, env, outcome, cursor);
+	return evaluate_object (nth (2, list), env, outcome, cursor);
     }
 }
 
 
 struct object *
-evaluate_progn (struct object *list, int backts_commas_balance,
-		struct environment *env, enum eval_outcome *outcome,
-		struct object **cursor)
+evaluate_progn (struct object *list, struct environment *env,
+		enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *res;
 
@@ -3982,14 +3960,14 @@ evaluate_progn (struct object *list, int backts_commas_balance,
       return NULL;
     }
 
-  res = evaluate_object (list->value_ptr.cons_pair->car, 0, env, outcome, cursor);
+  res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
 
   while (res && (list = list->value_ptr.cons_pair->cdr))
     {
       if (list->type != TYPE_CONS_PAIR)
-	return evaluate_object (list, 0, env, outcome, cursor);
+	return evaluate_object (list, env, outcome, cursor);
       else
-	res = evaluate_object (list->value_ptr.cons_pair->car, 0, env, outcome, cursor);
+	res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
     }
 
   return res;
@@ -3997,18 +3975,16 @@ evaluate_progn (struct object *list, int backts_commas_balance,
 
 
 struct object *
-evaluate_defconstant (struct object *list, int backts_commas_balance,
-		      struct environment *env, enum eval_outcome *outcome,
-		      struct object **cursor)
+evaluate_defconstant (struct object *list, struct environment *env,
+		      enum eval_outcome *outcome, struct object **cursor)
 {
   return define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)), env, outcome, cursor);
 }
 
 
 struct object *
-evaluate_defparameter (struct object *list, int backts_commas_balance,
-		       struct environment *env, enum eval_outcome *outcome,
-		       struct object **cursor)
+evaluate_defparameter (struct object *list, struct environment *env,
+		       enum eval_outcome *outcome, struct object **cursor)
 {
   if (list_length (list) != 2)
     {
@@ -4021,9 +3997,8 @@ evaluate_defparameter (struct object *list, int backts_commas_balance,
 
 
 struct object *
-evaluate_defvar (struct object *list, int backts_commas_balance,
-		 struct environment *env, enum eval_outcome *outcome,
-		 struct object **cursor)
+evaluate_defvar (struct object *list, struct environment *env,
+		 enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *s = CAR (list);
   
@@ -4052,9 +4027,8 @@ evaluate_defvar (struct object *list, int backts_commas_balance,
 
 
 struct object *
-evaluate_defun (struct object *list, int backts_commas_balance,
-		struct environment *env, enum eval_outcome *outcome,
-		struct object **cursor)
+evaluate_defun (struct object *list, struct environment *env,
+		enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *fun;
   enum parse_lambda_list_outcome out;
@@ -4078,9 +4052,8 @@ evaluate_defun (struct object *list, int backts_commas_balance,
 
 
 struct object *
-evaluate_defmacro (struct object *list, int backts_commas_balance,
-		   struct environment *env, enum eval_outcome *outcome,
-		   struct object **cursor)
+evaluate_defmacro (struct object *list, struct environment *env,
+		   enum eval_outcome *outcome, struct object **cursor)
 {
   return NULL;
 }
