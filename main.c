@@ -654,10 +654,10 @@ struct object *define_parameter_by_name
 (char *name, size_t size, struct object *form, struct environment *env,
  enum eval_outcome *outcome, struct object **cursor);
 
-struct object *skip_prefix (struct object *prefix, int *num_backticks,
-			    int *num_commas, struct object **last_prefix,
-			    struct object **last_comma,
-			    struct object **before_last_comma);
+struct object *skip_prefix
+(struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
+ struct object **last_prefix, struct object **last_comma,
+ struct object **before_last_comma);
 struct object *append_prefix (struct object *obj, enum element type);
 
 struct object *nth (unsigned int ind, struct object *list);
@@ -2701,14 +2701,16 @@ define_parameter_by_name (char *name, size_t size, struct object *form,
 
 
 struct object *
-skip_prefix (struct object *prefix, int *num_backticks, int *num_commas,
-	     struct object **last_prefix, struct object **last_comma,
-	     struct object **before_last_comma)
+skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
+	     int *num_commas, struct object **last_prefix,
+	     struct object **last_comma, struct object **before_last_comma)
 {
+  int num_backticks = 0;
+
   if (last_prefix)
     *last_prefix = NULL;
-  if (num_backticks)
-    *num_backticks = 0;
+  if (num_backticks_before_last_comma)
+    *num_backticks_before_last_comma = 0;
   if (num_commas)
     *num_commas = 0;
   if (last_comma)
@@ -2724,11 +2726,16 @@ skip_prefix (struct object *prefix, int *num_backticks, int *num_commas,
       if (last_prefix)
 	*last_prefix = prefix;
 
-      if (num_backticks && prefix->type == TYPE_BACKQUOTE)
-	(*num_backticks)++;
+      if (prefix->type == TYPE_BACKQUOTE)
+	num_backticks++;
 
       if (num_commas && prefix->type == TYPE_COMMA)
-	(*num_commas)++;
+	{
+	  (*num_commas)++;
+
+	  if (num_backticks_before_last_comma)
+	    *num_backticks_before_last_comma = num_backticks;
+	}
 
       if (last_comma && prefix->type == TYPE_COMMA)
 	*last_comma = prefix;
@@ -2739,6 +2746,9 @@ skip_prefix (struct object *prefix, int *num_backticks, int *num_commas,
 
       prefix = prefix->value_ptr.next;
     }
+
+  if (num_backticks_before_last_comma && (!num_commas || !*num_commas))
+    *num_backticks_before_last_comma = num_backticks;
 
   return prefix;
 }
