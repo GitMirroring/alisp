@@ -3106,7 +3106,7 @@ evaluate_object (struct object *obj, int backts_commas_balance,
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      return apply_backquote (obj->value_ptr.next, backts_commas_balance + 1,
+      return apply_backquote (obj->value_ptr.next, 1,
 				 env, outcome, cursor);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
@@ -3150,7 +3150,7 @@ evaluate_object (struct object *obj, int backts_commas_balance,
     }
   else if (obj->type == TYPE_CONS_PAIR)
     {
-      return evaluate_list (obj, backts_commas_balance, env, outcome, cursor);
+      return evaluate_list (obj, 0, env, outcome, cursor);
     }
   else
     {
@@ -3263,7 +3263,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
     {
       if (symname->sym->value_ptr.symbol->evaluate_args)
 	{
-	  args = evaluate_through_list (CDR (list), backts_commas_balance,
+	  args = evaluate_through_list (CDR (list), 0,
 					env, outcome, cursor);
 
 	  if (!args)
@@ -3273,7 +3273,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
 	args = CDR (list);
 
       return symname->sym->value_ptr.symbol->builtin_form (args,
-							   backts_commas_balance,
+							   0,
 							   env, outcome, cursor);
     }
 
@@ -3286,7 +3286,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
 	}
 
       return evaluate_let (CAR (CDR (list)), CDR (CDR (list)),
-			   backts_commas_balance, env, outcome, cursor);
+			   0, env, outcome, cursor);
     }
   else if (symname_equals (symname, "LET*"))
     {
@@ -3297,7 +3297,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
 	}
 
       return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)),
-				backts_commas_balance, env, outcome, cursor);
+				0, env, outcome, cursor);
     }
   else if (symname_equals (symname, "QUOTE"))
     {
@@ -3308,7 +3308,7 @@ evaluate_list (struct object *list, int backts_commas_balance,
   bind = find_binding (symname->sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
 
   if (bind)
-    return call_function (bind->obj, CDR (list), backts_commas_balance, env,
+    return call_function (bind->obj, CDR (list), 0, env,
 			  outcome, cursor);
 
   *outcome = UNKNOWN_FUNCTION;
