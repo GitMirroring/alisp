@@ -3165,7 +3165,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		 struct environment *env, enum eval_outcome *outcome,
 		 struct object **cursor)
 {
-  struct object *last_comma, *before_last_comma, *ret, *list;
+  struct object *last_comma, *before_last_comma, *ret, *prev_list, *list;
   int num_bt, num_c;
   struct object *obj = skip_prefix (form, &num_bt, &num_c, NULL, &last_comma,
 				    &before_last_comma);
@@ -3196,16 +3196,28 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
   list = obj;
 
-  while (list != &nil_object)
+  while (list->type == TYPE_CONS_PAIR)
     {
-      ret = apply_backquote (CAR (list), backts_commas_balance, env, outcome, cursor);
+      ret = apply_backquote (CAR (list), backts_commas_balance, env, outcome,
+			     cursor);
 
       if (!ret)
 	return NULL;
 
       list->value_ptr.cons_pair->car = ret;
 
+      prev_list = list;
       list = CDR (list);
+    }
+
+  if (list != &nil_object)
+    {
+      ret = apply_backquote (list, backts_commas_balance, env, outcome, cursor);
+
+      if (!ret)
+	return NULL;
+
+      prev_list->value_ptr.cons_pair->cdr = ret;
     }
 
   return form;
