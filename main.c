@@ -2007,12 +2007,12 @@ char *
 append_newline (char *string)
 {
   size_t len = strlen (string);
-  char *newstring = realloc (string, len + 2);
+  string = realloc_and_check (string, len + 2);
   
-  newstring [len] = '\n';
-  newstring [len+1] = 0;
+  string [len] = '\n';
+  string [len+1] = 0;
 
-  return newstring;
+  return string;
 }
 
 
