@@ -182,6 +182,7 @@ eval_outcome
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
     DOTTED_LIST_NOT_ALLOWED_HERE,
+    COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
     WRONG_NUMBER_OF_ARGUMENTS,
     UNKNOWN_FUNCTION,
     MALFORMED_IF,
@@ -357,7 +358,7 @@ cons_pair
 };
 
 
-/* a slight abuse of terminology: commas, quotes, backquotes and ats
+/* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
 
@@ -368,28 +369,30 @@ object_type
     TYPE_BACKQUOTE = 1 << 1,
     TYPE_COMMA = 1 << 2,
     TYPE_AT = 1 << 3,
-    TYPE_SYMBOL_NAME = 1 << 4,
-    TYPE_SYMBOL = 1 << 5,
-    TYPE_INTEGER = 1 << 6,
-    TYPE_RATIO = 1 << 7,
-    TYPE_FLOAT = 1 << 8,
-    TYPE_CONS_PAIR = 1 << 9,
-    TYPE_CHARACTER = 1 << 10,
-    TYPE_STRING = 1 << 11,
-    TYPE_ARRAY = 1 << 12,
-    TYPE_HASHTABLE = 1 << 13,
-    TYPE_ENVIRONMENT = 1 << 14,
-    TYPE_PACKAGE = 1 << 15,
-    TYPE_PATHNAME = 1 << 16,
-    TYPE_STREAM = 1 << 17,
-    TYPE_STRUCTURE = 1 << 18,
-    TYPE_CONDITION = 1 << 19,
-    TYPE_FUNCTION = 1 << 20,
-    TYPE_T = 1 << 21,
-    TYPE_NIL = 1 << 22
+    TYPE_DOT = 1 << 4,
+    TYPE_SYMBOL_NAME = 1 << 5,
+    TYPE_SYMBOL = 1 << 6,
+    TYPE_INTEGER = 1 << 7,
+    TYPE_RATIO = 1 << 8,
+    TYPE_FLOAT = 1 << 9,
+    TYPE_CONS_PAIR = 1 << 10,
+    TYPE_CHARACTER = 1 << 11,
+    TYPE_STRING = 1 << 12,
+    TYPE_ARRAY = 1 << 13,
+    TYPE_HASHTABLE = 1 << 14,
+    TYPE_ENVIRONMENT = 1 << 15,
+    TYPE_PACKAGE = 1 << 16,
+    TYPE_PATHNAME = 1 << 17,
+    TYPE_STREAM = 1 << 18,
+    TYPE_STRUCTURE = 1 << 19,
+    TYPE_CONDITION = 1 << 20,
+    TYPE_FUNCTION = 1 << 21,
+    TYPE_T = 1 << 22,
+    TYPE_NIL = 1 << 23
   };
 
 
+#define TYPE_PREFIX (TYPE_QUOTE | TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT | TYPE_DOT)
 #define TYPE_LIST (TYPE_NIL | TYPE_CONS_PAIR)
 #define TYPE_REAL (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT)
 #define TYPE_NUMBER (TYPE_REAL)
@@ -666,7 +669,12 @@ struct object *nth (unsigned int ind, struct object *list);
 struct object *nthcdr (unsigned int ind, struct object *list);
 
 unsigned int list_length (const struct object *list);
+struct object *last_cons_pair (struct object *list);
 int is_dotted_list (const struct object *list);
+struct object *copy_prefix (const struct object *begin, const struct object *end,
+			    struct object **last_prefix);
+struct object *copy_list_structure (const struct object *list,
+				    const struct object *prefix);
 
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
@@ -1346,8 +1354,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	      *out_arg = 0;
 	    }
 	}
-      else if (*input == '\'' || *input == '`' || *input == ','
-	       || *input == '@')
+      else if (*input == '\'' || *input == '`' || *input == ',')
  	{
 	  out = read_prefix (obj, input, size, &backts_commas_balance,
 			     &last_pref, obj_end);
@@ -1676,6 +1683,7 @@ read_prefix (struct object **obj, const char *input, size_t size,
   const char *n = input;
   enum element el;
   int num_backts, num_commas;
+  int found_comma = 0;
   
   if (!size)
     return NO_OBJECT;
@@ -1689,10 +1697,13 @@ read_prefix (struct object **obj, const char *input, size_t size,
   
   el = find_next_element (input, size, &n);
   
-  while (el == QUOTE || el == BACKQUOTE || el == COMMA || el == AT)
+  while (el == QUOTE || el == BACKQUOTE || el == COMMA || el == AT || el == DOT)
     {
-      *prefix_end = n;
+      if ((el == AT || el == DOT) && !found_comma)
+	return JUST_PREFIX;
       
+      *prefix_end = n;
+
       if (!*last)
 	*obj = *last = alloc_prefix (el);
       else
@@ -1705,6 +1716,11 @@ read_prefix (struct object **obj, const char *input, size_t size,
 
       if (*backts_commas_balance < 0)
 	return TOO_MANY_COMMAS;
+
+      if (el == COMMA)
+	found_comma = 1;
+      else
+	found_comma = 0;
 
       el = find_next_element (n+1, size - (n + 1 - input), &n);
     }
@@ -2075,6 +2091,9 @@ alloc_prefix (enum element type)
       break;
     case AT:
       obj->type = TYPE_AT;
+      break;
+    case DOT:
+      obj->type = TYPE_DOT;
       break;
     default:
       break;
@@ -2845,6 +2864,21 @@ list_length (const struct object *list)
 }
 
 
+struct object *
+last_cons_pair (struct object *list)
+{
+  struct object *prev;
+
+  while (list && list->type != TYPE_NIL)
+    {
+      prev = list;
+      list = list->value_ptr.cons_pair->cdr;
+    }
+
+  return prev;
+}
+
+
 int
 is_dotted_list (const struct object *list)
 {
@@ -2857,6 +2891,84 @@ is_dotted_list (const struct object *list)
     return 1;
 
   return 0;
+}
+
+
+struct object *
+copy_prefix (const struct object *begin, const struct object *end,
+	     struct object **last_prefix)
+{
+  struct object *out = NULL, *pr = NULL, *tmp;
+
+  while (begin && begin != end)
+    {
+      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? QUOTE :
+			  begin->type == TYPE_BACKQUOTE ? BACKQUOTE :
+			  begin->type == TYPE_COMMA ? COMMA :
+			  begin->type == TYPE_AT ? AT :
+			  begin->type == TYPE_DOT ? DOT
+			  : NONE);
+
+      if (pr)
+	pr->value_ptr.next = tmp;
+      else
+	out = pr = tmp;
+
+      begin = begin->value_ptr.next;
+    }
+
+  if (begin)
+    tmp = alloc_prefix (begin->type == TYPE_QUOTE ? QUOTE :
+			begin->type == TYPE_BACKQUOTE ? BACKQUOTE :
+			begin->type == TYPE_COMMA ? COMMA :
+			begin->type == TYPE_AT ? AT :
+			begin->type == TYPE_DOT ? DOT : NONE);
+
+  if (pr)
+    pr->value_ptr.next = tmp;
+  else
+    out = tmp;
+
+  if (last_prefix)
+    *last_prefix = pr->value_ptr.next;
+
+  return out;
+}
+
+
+struct object *
+copy_list_structure (const struct object *list, const struct object *prefix)
+{
+  struct object *cons, *out, *lastpref;
+
+  out = cons = alloc_empty_cons_pair ();
+
+  if (prefix)
+    {
+      cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref);
+      lastpref->value_ptr.next = list->value_ptr.cons_pair->car;
+    }
+  else
+    cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+
+  list = list->value_ptr.cons_pair->cdr;
+
+  while (list)
+    {
+      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      if (prefix)
+	{
+	  cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref);
+	  lastpref->value_ptr.next = list->value_ptr.cons_pair->car;
+	}
+      else
+	cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+
+      list = list->value_ptr.cons_pair->cdr;
+    }
+
+  return out;
 }
 
 
@@ -3112,8 +3224,7 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      return apply_backquote (obj->value_ptr.next, 1,
-				 env, outcome, cursor);
+      return apply_backquote (obj->value_ptr.next, 1, env, outcome, cursor);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
@@ -3171,25 +3282,32 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		 struct environment *env, enum eval_outcome *outcome,
 		 struct object **cursor)
 {
-  struct object *last_comma, *before_last_comma, *ret, *prev_list, *list;
-  int num_bt, num_c;
-  struct object *obj = skip_prefix (form, &num_bt, &num_c, NULL, &last_comma,
-				    &before_last_comma);
+  struct object *lastpref, *last_comma, *before_last_comma, *ret,
+    *prev_list = NULL, *list, *car, **out, *tmp, *prefcopy;
+  int num_bt, num_c, bt_c_bal;
+  enum object_type tp = NO_OBJECT;
+  struct object *obj = skip_prefix (form, &num_bt, &num_c, &lastpref,
+				    &last_comma, &before_last_comma);
   backts_commas_balance += (num_bt - num_c);
 
   if (!backts_commas_balance)
     {
+      out = before_last_comma ? &before_last_comma->value_ptr.next : &form;
+      tp = last_comma->value_ptr.next->type;
+
+      if (tp == TYPE_AT || tp == TYPE_DOT)
+	{
+	  *outcome = COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL;
+
+	  return NULL;
+	}
+
       ret = evaluate_object (last_comma->value_ptr.next, env, outcome, cursor);
 
       if (!ret)
 	return NULL;
 
-      last_comma->value_ptr.next = ret;
-
-      if (before_last_comma)
-	before_last_comma->value_ptr.next = last_comma->value_ptr.next;
-      else
-	form = last_comma->value_ptr.next;
+      *out = ret;
 
       return form;
     }
@@ -3202,28 +3320,70 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
   list = obj;
 
-  while (list->type == TYPE_CONS_PAIR)
+  while (list->type != TYPE_NIL)
     {
-      ret = apply_backquote (CAR (list), backts_commas_balance, env, outcome,
-			     cursor);
+      tp = NO_OBJECT;
+
+      car = (list->type == TYPE_CONS_PAIR) ? CAR (list) : list;
+
+      skip_prefix (car, &num_bt, &num_c, NULL, &last_comma, &before_last_comma);
+      bt_c_bal = backts_commas_balance + num_bt - num_c;
+
+      out = before_last_comma ? &before_last_comma->value_ptr.next :
+	(list->type != TYPE_CONS_PAIR ? &prev_list->value_ptr.cons_pair->cdr :
+	 &list->value_ptr.cons_pair->car);
+
+      if (!bt_c_bal)
+	{
+	  tp = last_comma->value_ptr.next->type;
+
+	  if (tp == TYPE_AT || tp == TYPE_DOT)
+	    ret = evaluate_object (last_comma->value_ptr.next->value_ptr.next,
+				   env, outcome, cursor);
+	  else
+	    ret = evaluate_object (last_comma->value_ptr.next, env, outcome,
+				   cursor);
+	}
+      else
+	ret = apply_backquote (car, backts_commas_balance, env, outcome, cursor);
 
       if (!ret)
 	return NULL;
 
-      list->value_ptr.cons_pair->car = ret;
+      if (tp & (TYPE_AT | TYPE_DOT))
+	{
+	  if (before_last_comma)
+	    {
+	      prefcopy = copy_prefix (car, before_last_comma, NULL);
+	      ret = copy_list_structure (ret, prefcopy);
+	    }
+	  else if (tp == TYPE_AT && list_length (list) > 1)
+	    {
+	      ret = copy_list_structure (ret, NULL);
+	    }
+
+	  if (prev_list)
+	    prev_list->value_ptr.cons_pair->cdr = ret;
+	  else if (lastpref)
+	    lastpref->value_ptr.next = ret;
+	  else
+	    form = ret;
+
+	  if (list_length (list) > 1)
+	    {
+	      tmp = last_cons_pair (ret);
+
+	      last_cons_pair (ret)->value_ptr.cons_pair->cdr =
+		list->value_ptr.cons_pair->cdr;
+
+	      list = tmp;
+	    }
+	}
+      else
+	*out = ret;
 
       prev_list = list;
       list = CDR (list);
-    }
-
-  if (list != &nil_object)
-    {
-      ret = apply_backquote (list, backts_commas_balance, env, outcome, cursor);
-
-      if (!ret)
-	return NULL;
-
-      prev_list->value_ptr.cons_pair->cdr = ret;
     }
 
   return form;
@@ -4370,6 +4530,11 @@ print_eval_error (enum eval_outcome err, struct object *arg,
   else if (err == DOTTED_LIST_NOT_ALLOWED_HERE)
     {
       printf ("eval error: dotted list not allowed here\n");
+    }
+  else if (err == COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL)
+    {
+      printf ("eval error: comma-at and comma-dot syntax are not allowed on "
+	      "top-level forms\n");
     }
   else if (err == WRONG_NUMBER_OF_ARGUMENTS)
     {
