@@ -21,13 +21,18 @@
 #include "config.h"
 
 
+
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
+
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <ctype.h>
 #include <string.h>
+#include <locale.h>
 
 #include <getopt.h>
 
@@ -135,27 +140,28 @@ read_outcome
     INVALID_SHARP_DISPATCH = 1 << 11,
     UNKNOWN_SHARP_DISPATCH = 1 << 12,
     WRONG_OBJECT_TYPE_TO_SHARP_MACRO = 1 << 13,
-    FUNCTION_NOT_FOUND = 1 << 14,
+    UNKNOWN_CHARACTER_NAME = 1 << 14,
+    FUNCTION_NOT_FOUND = 1 << 15,
 
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 15,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 16,
+    UNFINISHED_SINGLELINE_COMMENT = 1 << 16,
+    UNFINISHED_MULTILINE_COMMENT = 1 << 17,
 
-    COMMA_WITHOUT_BACKQUOTE = 1 << 17,
-    TOO_MANY_COMMAS = 1 << 18,
+    COMMA_WITHOUT_BACKQUOTE = 1 << 18,
+    TOO_MANY_COMMAS = 1 << 19,
 
-    SINGLE_DOT = 1 << 19,
+    SINGLE_DOT = 1 << 20,
 
-    MULTIPLE_DOTS = 1 << 20,
+    MULTIPLE_DOTS = 1 << 21,
 
-    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 21,
-    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 22,
-    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 23,
+    NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 22,
+    NO_OBJ_AFTER_DOT_IN_LIST = 1 << 23,
+    MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 24,
 
-    TOO_MANY_COLONS = 1 << 24,
-    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 25,
-    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 26,
-    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 27,
-    PACKAGE_NOT_FOUND = 1 << 28
+    TOO_MANY_COLONS = 1 << 25,
+    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 26,
+    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 27,
+    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 28,
+    PACKAGE_NOT_FOUND = 1 << 29
   };
 
 
@@ -165,7 +171,8 @@ read_outcome
 
 #define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS \
 		    | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH	\
-		    | WRONG_OBJECT_TYPE_TO_SHARP_MACRO | FUNCTION_NOT_FOUND \
+		    | WRONG_OBJECT_TYPE_TO_SHARP_MACRO | UNKNOWN_CHARACTER_NAME	\
+		    | FUNCTION_NOT_FOUND				\
 		    | COMMA_WITHOUT_BACKQUOTE | TOO_MANY_COMMAS | SINGLE_DOT \
 		    | MULTIPLE_DOTS | NO_OBJ_BEFORE_DOT_IN_LIST		\
 		    | NO_OBJ_AFTER_DOT_IN_LIST				\
@@ -376,8 +383,8 @@ object_type
     TYPE_RATIO = 1 << 8,
     TYPE_FLOAT = 1 << 9,
     TYPE_CONS_PAIR = 1 << 10,
-    TYPE_CHARACTER = 1 << 11,
-    TYPE_STRING = 1 << 12,
+    TYPE_STRING = 1 << 11,
+    TYPE_CHARACTER = 1 << 12,
     TYPE_ARRAY = 1 << 13,
     TYPE_HASHTABLE = 1 << 14,
     TYPE_ENVIRONMENT = 1 << 15,
@@ -409,6 +416,7 @@ object_ptr_union
   mpf_t floating;
   struct cons_pair *cons_pair;
   struct string *string;
+  char *character;
   struct environment *environment;
   struct package *package;
   struct function *function;
@@ -505,6 +513,16 @@ element
   };
 
 
+enum
+readtable_case
+  {
+    CASE_UPCASE,
+    CASE_DOWNCASE,
+    CASE_PRESERVE,
+    CASE_INVERT
+  };
+
+
 struct
 line_list
 {
@@ -570,7 +588,7 @@ enum read_outcome read_string
 
 enum read_outcome read_symbol_name
 (struct object **obj, const char *input, size_t size,
- const char **symname_end);
+ const char **symname_end, enum readtable_case read_case);
 
 enum read_outcome read_prefix
 (struct object **obj, const char *input, size_t size,
@@ -596,7 +614,10 @@ struct object *alloc_number
 (const char *token, size_t size, int radix, enum object_type numtype);
 
 void print_range (const char *begin, const char *end);
+
 char *append_newline (char *string);
+char *append_zero_byte (char *string, size_t size);
+char *copy_token_to_buffer (const char *input, size_t size);
 
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
@@ -623,9 +644,12 @@ const char *find_end_of_symbol_name
  const char **start_of_package_separator,
  enum package_record_visibility *sym_visibility, size_t *name_length,
  size_t *act_name_length, enum read_outcome *outcome);
-void normalize_symbol_name (char *output, const char *input, size_t size);
+void normalize_symbol_name (char *output, const char *input, size_t size,
+			    enum readtable_case read_case);
 
 struct object *create_symbol (char *name, size_t size);
+struct object *create_character (char *character);
+
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
 struct object *intern_symbol (char *name, size_t len, struct object *package);
@@ -781,6 +805,7 @@ int equal_strings (const struct string *s1, const struct string *s2);
 
 void print_symbol (const struct symbol *sym, struct environment *env);
 void print_string (const struct string *str);
+void print_character (const char *character);
 void print_list (const struct cons_pair *list, struct environment *env);
 void print_object (const struct object *obj, struct environment *env);
 
@@ -851,6 +876,8 @@ main (int argc, char *argv [])
 	  exit (0);
 	}
     }
+
+  setlocale (LC_CTYPE, "");
 
   add_standard_definitions (&env);
 
@@ -1022,7 +1049,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_SYMBOL_NAME)
     {
-      out = read_symbol_name (&ob, input, size, obj_end);
+      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE);
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 	return PACKAGE_NOT_FOUND;
@@ -1407,7 +1434,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    }
 	  else
 	    {
-	      out = read_symbol_name (&ob, input, size, obj_end);
+	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 		return PACKAGE_NOT_FOUND;
@@ -1619,9 +1646,9 @@ read_string (struct object **obj, const char *input, size_t size,
 }
 
 
-enum read_outcome 
+enum read_outcome
 read_symbol_name (struct object **obj, const char *input, size_t size,
-		  const char **symname_end)
+		  const char **symname_end, enum readtable_case read_case)
 {
   struct symbol_name *sym;
   size_t name_l, act_name_l, new_size;
@@ -1648,22 +1675,26 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
     }
   else
     resize_symbol_name (ob, ob->value_ptr.symbol_name->used_size + name_l,
-			ob->value_ptr.symbol_name->actual_symname_used_s + act_name_l);
+			ob->value_ptr.symbol_name->actual_symname_used_s +
+			act_name_l);
 
   sym = ob->value_ptr.symbol_name;
 
   if (sym->packname_present)
-    normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s, input, size);
+    normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s,
+			   input, size, read_case);
   else if (start_of_pack_s)
     {
-      normalize_symbol_name (sym->value + sym->used_size, input, start_of_pack_s - input);
+      normalize_symbol_name (sym->value + sym->used_size, input,
+			     start_of_pack_s - input, read_case);
       sym->packname_present = 1;
       normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s,
 			     visib == EXTERNAL_VISIBILITY ?
-			     start_of_pack_s + 1 : start_of_pack_s + 2, size);
+			     start_of_pack_s + 1 : start_of_pack_s + 2, size,
+			     read_case);
     }
   else
-    normalize_symbol_name (sym->value + sym->used_size, input, size);
+    normalize_symbol_name (sym->value + sym->used_size, input, size, read_case);
 
   sym->used_size += name_l;
   sym->actual_symname_used_s += act_name_l;
@@ -1739,6 +1770,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
   size_t i = 0;
   const char *obj_b;
   struct sharp_macro_call *call;
+  char *buf;
 
   if (!size)
     return NULL;
@@ -1775,10 +1807,26 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
       return NULL;
     }
 
+  if (call->dispatch_ch == '\\')
+    {
+      buf = copy_token_to_buffer (input+i+1, size-i-1);
+
+      if (mbslen (buf) == 1)
+	{
+	  call->obj = create_character (buf);
+
+	  *outcome = COMPLETE_OBJECT;
+
+	  *macro_end = input+i + strlen (buf);
+
+	  return call;
+	}
+    }
+
   call->obj = NULL;
   *outcome = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
 			  cursor, &obj_b, macro_end, out_arg);
-  
+
   return call;
 }
 
@@ -1789,19 +1837,20 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 		  enum read_outcome *r_outcome)
 {
   struct binding *bind;
+  struct object *obj = macro_call->obj;
+  struct symbol_name *s;
 
   if (macro_call->dispatch_ch == '\'')
     {
-      if (macro_call->obj->type != TYPE_SYMBOL &&
-	  macro_call->obj->type != TYPE_SYMBOL_NAME)
+      if (obj->type != TYPE_SYMBOL && obj->type != TYPE_SYMBOL_NAME)
 	{
 	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 
 	  return NULL;
 	}
 
-      bind = find_binding (SYMBOL (macro_call->obj)->value_ptr.symbol,
-			   env->funcs, DYNAMIC_BINDING);
+      bind = find_binding (SYMBOL (obj)->value_ptr.symbol, env->funcs,
+			   DYNAMIC_BINDING);
 
       if (!bind)
 	{
@@ -1810,6 +1859,46 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	}
 
       return bind->obj;
+    }
+  else if (macro_call->dispatch_ch == '\\')
+    {
+      if (obj->type == TYPE_CHARACTER)
+	return obj;
+
+      if (obj->type != TYPE_SYMBOL_NAME)
+	{
+	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+
+	  return NULL;
+	}
+
+      s = obj->value_ptr.symbol_name;
+
+      if (s->packname_present)
+	{
+	  *r_outcome = UNKNOWN_CHARACTER_NAME;
+
+	  return NULL;
+	}
+
+      if (eqmem (s->value, s->used_size, "NEWLINE", strlen ("NEWLINE")))
+	return create_character ("\n");
+      else if (eqmem (s->value, s->used_size, "SPACE", strlen ("SPACE")))
+	return create_character (" ");
+      else if (eqmem (s->value, s->used_size, "TAB", strlen ("TAB")))
+	return create_character ("\t");
+      else if (eqmem (s->value, s->used_size, "BACKSPACE", strlen ("BACKSPACE")))
+	return create_character ("\b");
+      else if (eqmem (s->value, s->used_size, "PAGE", strlen ("PAGE")))
+	return create_character ("\f");
+      else if (eqmem (s->value, s->used_size, "RETURN", strlen ("RETURN")))
+	return create_character ("\r");
+      else
+	{
+	  *r_outcome = UNKNOWN_CHARACTER_NAME;
+
+	  return NULL;
+	}
     }
 
   return NULL;
@@ -1834,7 +1923,6 @@ find_next_element (const char *input, size_t size, const char **elem_begin)
       return END_LIST;
     case '"':
       return STRING_DELIMITER;
-      break;
     case '\'':
       return QUOTE;
     case '`':
@@ -2029,6 +2117,46 @@ append_newline (char *string)
   string [len+1] = 0;
 
   return string;
+}
+
+
+char *
+append_zero_byte (char *string, size_t size)
+{
+  string = realloc_and_check (string, size + 1);
+
+  string [size] = 0;
+
+  return string;
+}
+
+
+char *
+copy_token_to_buffer (const char *input, size_t size)
+{
+  size_t i;
+  int single_esc = 0, multiple_esc = 0;
+  char *buf;
+
+  for (i = 0; i < size; i++)
+    {
+      if (input [i] == '\\')
+	single_esc = single_esc ? 0 : 1;
+      else if (input [i] == '|')
+	multiple_esc = multiple_esc ? 0 : 1;
+      else if (!single_esc && !multiple_esc
+	       && (isspace (input [i])
+		   || strchr (TERMINATING_MACRO_CHARS, input [i])))
+	break;
+    }
+
+  buf = malloc_and_check (i + 1);
+
+  strncpy (buf, input, i);
+
+  buf [i] = '\0';
+
+  return buf;
 }
 
 
@@ -2409,7 +2537,8 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 
 
 void
-normalize_symbol_name (char *output, const char *input, size_t size)
+normalize_symbol_name (char *output, const char *input, size_t size,
+		       enum readtable_case read_case)
 {
   size_t i;
   int j, single_escape = 0, multiple_escape = 0;
@@ -2445,7 +2574,22 @@ normalize_symbol_name (char *output, const char *input, size_t size)
 	      single_escape = 0;
 	    }
 	  else
-	    output [j++] = toupper (input [i]);
+	    switch (read_case)
+	      {
+	      case CASE_UPCASE:
+		output [j++] = toupper (input [i]);
+		break;
+	      case CASE_DOWNCASE:
+		output [j++] = tolower (input [i]);
+		break;
+	      case CASE_PRESERVE:
+		output [j++] = input [i];
+		break;
+	      case CASE_INVERT:
+		output [j++] = isupper (input [i]) ? tolower (input [i])
+		  : toupper (input [i]);
+		break;
+	      }
 	}
     }
 }
@@ -2472,6 +2616,21 @@ create_symbol (char *name, size_t size)
   sym->function_cell = NULL;
 
   obj->value_ptr.symbol = sym;
+
+  return obj;
+}
+
+
+struct object *
+create_character (char *character)
+{
+  struct object *obj;
+
+  obj = malloc_and_check (sizeof (*obj));
+  obj->type = TYPE_CHARACTER;
+  obj->refcount = 1;
+
+  obj->value_ptr.character = character;
 
   return obj;
 }
@@ -4345,6 +4504,43 @@ print_string (const struct string *str)
 
 
 void
+print_character (const char *character)
+{
+  printf ("#\\");
+
+  if (strlen (character) == 1)
+    {
+      switch (character [0])
+	{
+	case '\n':
+	  printf ("Newline");
+	  break;
+	case ' ':
+	  printf ("Space");
+	  break;
+	case '\t':
+	  printf ("Tab");
+	  break;
+	case '\b':
+	  printf ("Backspace");
+	  break;
+	case '\f':
+	  printf ("Page");
+	  break;
+	case '\r':
+	  printf ("Return");
+	  break;
+	default:
+	  printf ("%s", character);
+	  break;
+	}
+    }
+  else
+    printf ("%s", character);
+}
+
+
+void
 print_list (const struct cons_pair *list, struct environment *env)
 {
   struct object *cdr;
@@ -4405,6 +4601,8 @@ print_object (const struct object *obj, struct environment *env)
     mpf_out_str (NULL, 10, 0, obj->value_ptr.floating);
   else if (obj->type == TYPE_STRING)
     print_string (obj->value_ptr.string);
+  else if (obj->type == TYPE_CHARACTER)
+    print_character (obj->value_ptr.character);
   else if (obj->type == TYPE_SYMBOL_NAME)
     print_symbol (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
   else if (obj->type == TYPE_SYMBOL)
@@ -4448,6 +4646,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
   else if (err == WRONG_OBJECT_TYPE_TO_SHARP_MACRO)
     {
       printf ("read error: wrong type of object as content of a sharp macro\n");
+    }
+  else if (err == UNKNOWN_CHARACTER_NAME)
+    {
+      printf ("read error: unknwon character name\n");
     }
   else if (err == FUNCTION_NOT_FOUND)
     {
