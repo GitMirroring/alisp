@@ -619,6 +619,8 @@ char *append_newline (char *string);
 char *append_zero_byte (char *string, size_t size);
 char *copy_token_to_buffer (const char *input, size_t size);
 
+size_t mbslen (const char *string);
+
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
 
@@ -2157,6 +2159,21 @@ copy_token_to_buffer (const char *input, size_t size)
   buf [i] = '\0';
 
   return buf;
+}
+
+
+size_t
+mbslen (const char *string)
+{
+  size_t s = 0;
+
+  for (; *string != '\0'; string++)
+    {
+      if ((*string & 0xc0) >> 6 != 2)
+	s++;
+    }
+
+  return s;
 }
 
 
@@ -4649,7 +4666,7 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     }
   else if (err == UNKNOWN_CHARACTER_NAME)
     {
-      printf ("read error: unknwon character name\n");
+      printf ("read error: unknown character name\n");
     }
   else if (err == FUNCTION_NOT_FOUND)
     {
