@@ -17,16 +17,5 @@
 #
 
 
-ACLOCAL_AMFLAGS = -I m4
-
-SUBDIRS = lib
-
-EXTRA_DIST = m4/gnulib-cache.m4
-
-AM_CPPFLAGS = -I$(top_builddir)/lib -I$(top_srcdir)/lib
-
-LDADD = lib/libgnu.a
-
-
 bin_PROGRAMS = al
 al_SOURCES = main.c
