@@ -35,7 +35,9 @@ There's a small test script.  Run it with
 
   $ ./test.pl
 
-if you have perl on your machine.
+if you have perl on your machine.  You should expect a 100% success
+rate, or maybe some failures if floating-point operations give
+slightly different results.
 
 
 
