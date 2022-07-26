@@ -1796,7 +1796,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
   else
     return NULL;
 
-  if (strchr ("\b\t\n\r\f ", call->dispatch_ch))
+  if (strchr ("\b\t\n\r\f <)", call->dispatch_ch))
     {
       *outcome = INVALID_SHARP_DISPATCH;
       return NULL;
