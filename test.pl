@@ -79,6 +79,7 @@ make_test ("``(,,.(cdr '(0 1 2 3)) ,4)", "`(,1 ,2 ,3 ,4)");
 make_test ("#\\a", "#\\a");
 make_test ("#\\κ", "#\\κ");
 make_test ("#\\newLINE", "#\\Newline");
+make_test ("#.\"\"", "\"\"");
 
 # eval tests
 
