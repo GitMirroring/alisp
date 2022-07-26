@@ -1802,7 +1802,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
       return NULL;
     }
 
-  if (!strchr ("'\\", call->dispatch_ch))
+  if (!strchr ("'\\.", call->dispatch_ch))
     {
       *outcome = UNKNOWN_SHARP_DISPATCH;
       return NULL;
@@ -1900,6 +1900,10 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 
 	  return NULL;
 	}
+    }
+  else if (macro_call->dispatch_ch == '.')
+    {
+      return evaluate_object (obj, env, e_outcome, cursor);
     }
 
   return NULL;
