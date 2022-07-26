@@ -745,6 +745,9 @@ struct object *builtin_list
 struct object *builtin_load
 (struct object *list, struct environment *env, enum eval_outcome *outcome,
  struct object **cursor);
+struct object *builtin_eq
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
@@ -966,6 +969,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CONS", env, builtin_cons, 1);
   add_builtin_form ("LIST", env, builtin_list, 1);
   add_builtin_form ("LOAD", env, builtin_load, 1);
+  add_builtin_form ("EQ", env, builtin_eq, 1);
   add_builtin_form ("+", env, builtin_plus, 1);
   add_builtin_form ("-", env, builtin_minus, 1);
   add_builtin_form ("*", env, builtin_multiply, 1);
@@ -3899,6 +3903,35 @@ builtin_load (struct object *list, struct environment *env,
   fclose (f);
 
   return NULL;
+}
+
+
+struct object *
+builtin_eq (struct object *list, struct environment *env,
+	    enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *arg1, *arg2;
+
+  if (list_length (list) != 2)
+    {
+      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (nth (0, list)->type == TYPE_SYMBOL_NAME)
+    arg1 = SYMBOL (nth (0, list));
+  else
+    arg1 = nth (0, list);
+
+  if (nth (1, list)->type == TYPE_SYMBOL_NAME)
+    arg2 = SYMBOL (nth (1, list));
+  else
+    arg2 = nth (1, list);
+
+  if (arg1 == arg2)
+    return &t_object;
+
+  return &nil_object;
 }
 
 
