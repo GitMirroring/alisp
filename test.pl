@@ -88,6 +88,8 @@ make_test ("NIL", "()");
 make_test ("t", "T");
 make_test ("(if nil 1)", "()");
 make_test ("(common-lisp:if '(1) 2)", "2");
+make_test ("(eq 1 1)", "()");
+make_test ("(eq 'a 'a)", "T");
 make_test ("(defconstant a 8)", "A");
 make_test ("a", "8");
 make_test ("(defparameter b 9)", "B");
