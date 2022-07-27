@@ -387,7 +387,7 @@ array
 struct
 filename
 {
-
+  struct string *value;
 };
 
 
@@ -709,6 +709,7 @@ void normalize_symbol_name (char *output, const char *input, size_t size,
 
 struct object *create_symbol (char *name, size_t size);
 struct object *create_character (char *character);
+struct object *create_filename (struct object *string);
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
@@ -871,6 +872,7 @@ int equal_strings (const struct string *s1, const struct string *s2);
 void print_symbol (const struct symbol *sym, struct environment *env);
 void print_string (const struct string *str);
 void print_character (const char *character);
+void print_filename (const struct filename *fn);
 void print_list (const struct cons_pair *list, struct environment *env);
 void print_array (const struct array *array, struct environment *env);
 void print_object (const struct object *obj, struct environment *env);
@@ -1868,7 +1870,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
       return NULL;
     }
 
-  if (!strchr ("'\\.", call->dispatch_ch))
+  if (!strchr ("'\\.pP", call->dispatch_ch))
     {
       *outcome = UNKNOWN_SHARP_DISPATCH;
       return NULL;
@@ -1970,6 +1972,17 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
   else if (macro_call->dispatch_ch == '.')
     {
       return evaluate_object (obj, env, e_outcome, cursor);
+    }
+  else if (macro_call->dispatch_ch == 'p' || macro_call->dispatch_ch == 'P')
+    {
+      if (obj->type != TYPE_STRING)
+	{
+	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+
+	  return NULL;
+	}
+
+      return create_filename (obj);
     }
 
   return NULL;
@@ -2710,13 +2723,29 @@ create_symbol (char *name, size_t size)
 struct object *
 create_character (char *character)
 {
-  struct object *obj;
+  struct object *obj = malloc_and_check (sizeof (*obj));
 
-  obj = malloc_and_check (sizeof (*obj));
   obj->type = TYPE_CHARACTER;
   obj->refcount = 1;
 
   obj->value_ptr.character = character;
+
+  return obj;
+}
+
+
+struct object *
+create_filename (struct object *string)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct filename *fn = malloc_and_check (sizeof (*fn));
+
+  obj->type = TYPE_FILENAME;
+  obj->refcount = 1;
+
+  fn->value = string->value_ptr.string;
+
+  obj->value_ptr.filename = fn;
 
   return obj;
 }
@@ -4673,6 +4702,14 @@ print_character (const char *character)
 
 
 void
+print_filename (const struct filename *fn)
+{
+  printf ("#P");
+  print_string (fn->value);
+}
+
+
+void
 print_list (const struct cons_pair *list, struct environment *env)
 {
   struct object *cdr;
@@ -4756,6 +4793,8 @@ print_object (const struct object *obj, struct environment *env)
     print_string (obj->value_ptr.string);
   else if (obj->type == TYPE_CHARACTER)
     print_character (obj->value_ptr.character);
+  else if (obj->type == TYPE_FILENAME)
+    print_filename (obj->value_ptr.filename);
   else if (obj->type == TYPE_SYMBOL_NAME)
     print_symbol (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
   else if (obj->type == TYPE_SYMBOL)
