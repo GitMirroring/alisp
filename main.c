@@ -384,6 +384,42 @@ array
 };
 
 
+struct
+filename
+{
+
+};
+
+
+enum
+stream_type
+  {
+    CHARACTER_STREAM,
+    BINARY_STREAM
+  };
+
+
+enum
+stream_direction
+  {
+    NO_DIRECTION,
+    INPUT_STREAM,
+    OUTPUT_STREAM,
+    BIDIRECTIONAL_STREAM
+  };
+
+
+struct
+stream
+{
+  enum stream_type type;
+
+  enum stream_direction direction;
+
+  int is_open;
+};
+
+
 /* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
@@ -408,7 +444,7 @@ object_type
     TYPE_HASHTABLE = 1 << 14,
     TYPE_ENVIRONMENT = 1 << 15,
     TYPE_PACKAGE = 1 << 16,
-    TYPE_PATHNAME = 1 << 17,
+    TYPE_FILENAME = 1 << 17,
     TYPE_STREAM = 1 << 18,
     TYPE_STRUCTURE = 1 << 19,
     TYPE_CONDITION = 1 << 20,
@@ -439,6 +475,8 @@ object_ptr_union
   struct array *array;
   struct environment *environment;
   struct package *package;
+  struct filename *filename;
+  struct stream *stream;
   struct function *function;
 };
 
