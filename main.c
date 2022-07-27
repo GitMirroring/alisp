@@ -376,11 +376,11 @@ array_size
 struct
 array
 {
-  struct array_size alloc_size;
+  struct array_size *alloc_size;
 
   size_t fill_pointer;
 
-  struct object *value;
+  struct object **value;
 };
 
 
@@ -722,6 +722,8 @@ struct object *copy_prefix (const struct object *begin, const struct object *end
 struct object *copy_list_structure (const struct object *list,
 				    const struct object *prefix);
 
+int array_rank (const struct array *array);
+
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
 struct parameter *parse_required_parameters
@@ -832,6 +834,7 @@ void print_symbol (const struct symbol *sym, struct environment *env);
 void print_string (const struct string *str);
 void print_character (const char *character);
 void print_list (const struct cons_pair *list, struct environment *env);
+void print_array (const struct array *array, struct environment *env);
 void print_object (const struct object *obj, struct environment *env);
 
 void print_read_error (enum read_outcome err, const char *input, size_t size,
@@ -3176,6 +3179,23 @@ copy_list_structure (const struct object *list, const struct object *prefix)
 }
 
 
+int
+array_rank (const struct array *array)
+{
+  struct array_size *as = array->alloc_size;
+  int rank = 0;
+
+  while (as)
+    {
+      rank++;
+
+      as = as->next;
+    }
+
+  return rank;
+}
+
+
 struct parameter *
 alloc_parameter (enum parameter_type type, struct object *sym)
 {
@@ -4646,6 +4666,27 @@ print_list (const struct cons_pair *list, struct environment *env)
 
 
 void
+print_array (const struct array *array, struct environment *env)
+{
+  int rk = array_rank (array);
+  size_t i;
+
+  if (rk == 1)
+    {
+      printf ("#(");
+
+      for (i = 0; i < (array->fill_pointer > 0 ? array->fill_pointer :
+		       array->alloc_size->size); i++)
+	{
+	  print_object (array->value [i], env);
+	}
+
+      printf (")");
+    }
+}
+
+
+void
 print_object (const struct object *obj, struct environment *env)
 {
   if (obj->type == TYPE_NIL)
@@ -4683,6 +4724,8 @@ print_object (const struct object *obj, struct environment *env)
     print_symbol (obj->value_ptr.symbol, env);
   else if (obj->type == TYPE_CONS_PAIR)
     print_list (obj->value_ptr.cons_pair, env);
+  else if (obj->type == TYPE_ARRAY)
+    print_array (obj->value_ptr.array, env);
   else if (obj->type == TYPE_FUNCTION)
     printf ("#<FUNCTION %p>", obj);
   else if (obj->type == TYPE_PACKAGE)
