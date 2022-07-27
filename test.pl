@@ -80,6 +80,8 @@ make_test ("#\\a", "#\\a");
 make_test ("#\\κ", "#\\κ");
 make_test ("#\\newLINE", "#\\Newline");
 make_test ("#.\"\"", "\"\"");
+make_test ("#p\".\"", "#P\".\"");
+
 
 # eval tests
 
