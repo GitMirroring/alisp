@@ -364,6 +364,26 @@ cons_pair
 };
 
 
+struct
+array_size
+{
+  size_t size;
+
+  struct array_size *next;
+};
+
+
+struct
+array
+{
+  struct array_size alloc_size;
+
+  size_t fill_pointer;
+
+  struct object *value;
+};
+
+
 /* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
@@ -416,6 +436,7 @@ object_ptr_union
   struct cons_pair *cons_pair;
   struct string *string;
   char *character;
+  struct array *array;
   struct environment *environment;
   struct package *package;
   struct function *function;
