@@ -32,6 +32,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <locale.h>
+#include <errno.h>
 
 #include <getopt.h>
 
@@ -929,7 +930,7 @@ main (int argc, char *argv [])
   const char *input_left = NULL;
   size_t input_left_s = 0;
   
-  int c, option_index = 0;
+  int c, option_index = 0, err;
 
   
   while ((c = getopt_long (argc, argv, "vh",
@@ -951,6 +952,11 @@ main (int argc, char *argv [])
   add_standard_definitions (&env);
 
   print_welcome_message ();
+
+  err = read_history ("al_history");
+
+  if (err && err != ENOENT)
+    printf ("could not read line history from al_history: %s\n", strerror (err));
 
   while (!end_repl)
     {
@@ -1053,10 +1059,19 @@ char *
 read_line_interactively (const char prompt [])
 {
   char *line = readline (prompt);
-      
+  int err;
+
   if (line && *line)
     add_history (line);
-  
+
+  err = append_history (1, "al_history");
+
+  if (err == ENOENT)
+    err = write_history ("al_history");
+
+  if (err)
+    printf ("could not write line history to al_history: %s\n", strerror (err));
+
   line = append_newline (line);
 
   return line;
