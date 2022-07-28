@@ -710,6 +710,7 @@ void normalize_symbol_name (char *output, const char *input, size_t size,
 struct object *create_symbol (char *name, size_t size);
 struct object *create_character (char *character);
 struct object *create_filename (struct object *string);
+struct object *create_vector (struct object *list);
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
@@ -1870,7 +1871,7 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
       return NULL;
     }
 
-  if (!strchr ("'\\.pP", call->dispatch_ch))
+  if (!strchr ("'\\.pP(", call->dispatch_ch))
     {
       *outcome = UNKNOWN_SHARP_DISPATCH;
       return NULL;
@@ -1890,6 +1891,16 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
 
 	  return call;
 	}
+
+      free (buf);
+    }
+  else if (call->dispatch_ch == '(')
+    {
+      call->obj = NULL;
+      *outcome = read_list (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
+			    cursor, macro_end, out_arg);
+
+      return call;
     }
 
   call->obj = NULL;
@@ -1984,6 +1995,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 
       return create_filename (obj);
     }
+  else if (macro_call->dispatch_ch == '(')
+    return create_vector (obj);
 
   return NULL;
 }
@@ -2746,6 +2759,31 @@ create_filename (struct object *string)
   fn->value = string->value_ptr.string;
 
   obj->value_ptr.filename = fn;
+
+  return obj;
+}
+
+
+struct object *
+create_vector (struct object *list)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct array *vec = malloc_and_check (sizeof (*vec));
+  struct array_size *sz = malloc_and_check (sizeof (*sz));
+  int i;
+
+  sz->size = list_length (list);
+  sz->next = NULL;
+
+  vec->alloc_size = sz;
+  vec->value = malloc_and_check (sizeof (*vec->value) * sz->size);
+
+  for (i = 0; i < sz->size; i++)
+    vec->value [i] = nth (i, list);
+
+  obj->type = TYPE_ARRAY;
+  obj->refcount = 1;
+  obj->value_ptr.array = vec;
 
   return obj;
 }
@@ -4753,6 +4791,9 @@ print_array (const struct array *array, struct environment *env)
       for (i = 0; i < (array->fill_pointer > 0 ? array->fill_pointer :
 		       array->alloc_size->size); i++)
 	{
+	  if (i)
+	    printf (" ");
+
 	  print_object (array->value [i], env);
 	}
 
