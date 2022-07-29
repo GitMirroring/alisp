@@ -806,6 +806,9 @@ struct object *builtin_cons
 struct object *builtin_list
 (struct object *list, struct environment *env, enum eval_outcome *outcome,
  struct object **cursor);
+struct object *builtin_write
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 struct object *builtin_load
 (struct object *list, struct environment *env, enum eval_outcome *outcome,
  struct object **cursor);
@@ -1039,6 +1042,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CDR", env, builtin_cdr, 1);
   add_builtin_form ("CONS", env, builtin_cons, 1);
   add_builtin_form ("LIST", env, builtin_list, 1);
+  add_builtin_form ("WRITE", env, builtin_write, 1);
   add_builtin_form ("LOAD", env, builtin_load, 1);
   add_builtin_form ("EQ", env, builtin_eq, 1);
   add_builtin_form ("+", env, builtin_plus, 1);
@@ -3939,6 +3943,23 @@ builtin_list (struct object *list, struct environment *env,
     }
 
   return l;
+}
+
+
+struct object *
+builtin_write (struct object *list, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
+{
+  if (list_length (list) != 1)
+    {
+      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  print_object (CAR (list), env);
+  printf ("\n");
+
+  return CAR (list);
 }
 
 
