@@ -23,4 +23,5 @@
   (- num 1))
 
 
-     
+(defmacro when (clause &rest body)
+  `(if ,clause (progn ,@body)))
