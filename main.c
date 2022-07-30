@@ -3736,7 +3736,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
       skip_prefix (car, &num_bt, &num_c, NULL, &last_comma, &before_last_comma);
       bt_c_bal = backts_commas_balance + num_bt - num_c;
 
-      out = before_last_comma ? &before_last_comma->value_ptr.next :
+      out = bt_c_bal ? &car :
+	before_last_comma ? &before_last_comma->value_ptr.next :
 	(list->type != TYPE_CONS_PAIR ? &prev_list->value_ptr.cons_pair->cdr :
 	 &list->value_ptr.cons_pair->car);
 
