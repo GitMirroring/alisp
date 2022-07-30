@@ -815,6 +815,9 @@ struct object *builtin_load
 struct object *builtin_eq
 (struct object *list, struct environment *env, enum eval_outcome *outcome,
  struct object **cursor);
+struct object *builtin_not
+(struct object *list, struct environment *env, enum eval_outcome *outcome,
+ struct object **cursor);
 
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
@@ -1045,6 +1048,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("WRITE", env, builtin_write, 1);
   add_builtin_form ("LOAD", env, builtin_load, 1);
   add_builtin_form ("EQ", env, builtin_eq, 1);
+  add_builtin_form ("NOT", env, builtin_not, 1);
+  add_builtin_form ("NULL", env, builtin_not, 1);
   add_builtin_form ("+", env, builtin_plus, 1);
   add_builtin_form ("-", env, builtin_minus, 1);
   add_builtin_form ("*", env, builtin_multiply, 1);
@@ -4111,6 +4116,23 @@ builtin_eq (struct object *list, struct environment *env,
     arg2 = nth (1, list);
 
   if (arg1 == arg2)
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_not (struct object *list, struct environment *env,
+	     enum eval_outcome *outcome, struct object **cursor)
+{
+  if (list_length (list) != 1)
+    {
+      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_NIL)
     return &t_object;
 
   return &nil_object;
