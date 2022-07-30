@@ -378,7 +378,7 @@ array
 {
   struct array_size *alloc_size;
 
-  size_t fill_pointer;
+  int fill_pointer;
 
   struct object **value;
 };
@@ -2821,6 +2821,7 @@ create_vector (struct object *list)
   sz->next = NULL;
 
   vec->alloc_size = sz;
+  vec->fill_pointer = -1;
   vec->value = malloc_and_check (sizeof (*vec->value) * sz->size);
 
   for (i = 0; i < sz->size; i++)
