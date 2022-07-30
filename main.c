@@ -194,7 +194,6 @@ eval_outcome
     UNKNOWN_FUNCTION,
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
-    INCORRECT_SYNTAX_IN_PROGN,
     INCORRECT_SYNTAX_IN_DEFUN,
     CANT_REDEFINE_CONSTANT,
     CANT_REBIND_CONSTANT,
@@ -450,8 +449,9 @@ object_type
     TYPE_STRUCTURE = 1 << 19,
     TYPE_CONDITION = 1 << 20,
     TYPE_FUNCTION = 1 << 21,
-    TYPE_T = 1 << 22,
-    TYPE_NIL = 1 << 23
+    TYPE_MACRO = 1 << 22,
+    TYPE_T = 1 << 23,
+    TYPE_NIL = 1 << 24
   };
 
 
@@ -478,7 +478,9 @@ object_ptr_union
   struct package *package;
   struct filename *filename;
   struct stream *stream;
+  struct structure *structure;
   struct function *function;
+  struct function *macro;
 };
 
 
@@ -687,6 +689,7 @@ struct object *alloc_object (void);
 struct object *alloc_prefix (enum element type);
 struct object *alloc_empty_cons_pair (void);
 struct object *alloc_function (void);
+struct object *create_function (struct object *lambda_list, struct object *body);
 struct object *create_package (char *name, size_t name_len);
 
 const char *find_end_of_string
@@ -775,9 +778,13 @@ struct parameter *parse_optional_parameters
  enum parse_lambda_list_outcome *out);
 struct parameter *parse_lambda_list (struct object *obj,
 				     enum parse_lambda_list_outcome *out);
-struct object *call_function
-(struct object *func, struct object *arglist, struct environment *env,
+
+struct object *evaluate_body
+(struct object *body, int eval_twice, struct environment *env,
  enum eval_outcome *outcome, struct object **cursor);
+struct object *call_function
+(struct object *func, struct object *arglist, int eval_args, int eval_twice,
+ struct environment *env, enum eval_outcome *outcome, struct object **cursor);
 
 int check_type (const struct object *obj, const struct typespec *type);
 
@@ -2414,6 +2421,20 @@ alloc_function (void)
 
 
 struct object *
+create_function (struct object *lambda_list, struct object *body)
+{
+  enum parse_lambda_list_outcome out;
+  struct object *fun = alloc_function ();
+
+  fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, &out);
+
+  fun->value_ptr.function->body = body;
+
+  return fun;
+}
+
+
+struct object *
 create_package (char *name, size_t name_len)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
@@ -3458,9 +3479,35 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 
 struct object *
-call_function (struct object *func, struct object *arglist,
-	       struct environment *env, enum eval_outcome *outcome,
-	       struct object **cursor)
+evaluate_body (struct object *body, int eval_twice, struct environment *env,
+	      enum eval_outcome *outcome, struct object **cursor)
+{
+  struct object *res;
+
+  do
+    {
+      res = evaluate_object (CAR (body), env, outcome, cursor);
+
+      if (eval_twice)
+	{
+	  if (!res)
+	    return NULL;
+
+	  res = evaluate_object (res, env, outcome, cursor);
+	}
+
+      body = CDR (body);
+
+    } while (res && body->type != TYPE_NIL);
+
+  return res;
+}
+
+
+struct object *
+call_function (struct object *func, struct object *arglist, int eval_args,
+	       int eval_twice, struct environment *env,
+	       enum eval_outcome *outcome, struct object **cursor)
 {
   struct parameter *par = func->value_ptr.function->lambda_list;
   struct binding *bins = NULL;
@@ -3470,10 +3517,15 @@ call_function (struct object *func, struct object *arglist,
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
-      val = evaluate_object (CAR (arglist), env, outcome, cursor);
+      if (eval_args)
+	{
+	  val = evaluate_object (CAR (arglist), env, outcome, cursor);
 
-      if (!val)
-	return NULL;
+	  if (!val)
+	    return NULL;
+	}
+      else
+	val = CAR (arglist);
 
       bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
       args++;
@@ -3537,7 +3589,8 @@ call_function (struct object *func, struct object *arglist,
 
   env->vars = chain_bindings (bins, env->vars);
 
-  res = evaluate_progn (func->value_ptr.function->body, env, outcome, cursor);
+  res = evaluate_body (func->value_ptr.function->body, eval_twice, env, outcome,
+		       cursor);
 
   env->vars = remove_bindings (env->vars, args);
 
@@ -3814,7 +3867,12 @@ evaluate_list (struct object *list, struct environment *env,
   bind = find_binding (symname->sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
 
   if (bind)
-    return call_function (bind->obj, CDR (list), env, outcome, cursor);
+    {
+      if (bind->obj->type == TYPE_FUNCTION)
+	return call_function (bind->obj, CDR (list), 1, 0, env, outcome, cursor);
+      else
+	return call_function (bind->obj, CDR (list), 0, 1, env, outcome, cursor);
+    }
 
   *outcome = UNKNOWN_FUNCTION;
   *cursor = CAR (list);
@@ -4535,29 +4593,7 @@ struct object *
 evaluate_progn (struct object *list, struct environment *env,
 		enum eval_outcome *outcome, struct object **cursor)
 {
-  struct object *res;
-
-  if (!list || list == &nil_object)
-    return &nil_object;
-
-  if (list->type != TYPE_CONS_PAIR)
-    {
-      *outcome = INCORRECT_SYNTAX_IN_PROGN;
-
-      return NULL;
-    }
-
-  res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
-
-  while (res && (list = list->value_ptr.cons_pair->cdr))
-    {
-      if (list->type != TYPE_CONS_PAIR)
-	return evaluate_object (list, env, outcome, cursor);
-      else
-	res = evaluate_object (list->value_ptr.cons_pair->car, env, outcome, cursor);
-    }
-
-  return res;
+  return evaluate_body (list, 0, env, outcome, cursor);
 }
 
 
@@ -4618,21 +4654,18 @@ evaluate_defun (struct object *list, struct environment *env,
 		enum eval_outcome *outcome, struct object **cursor)
 {
   struct object *fun;
-  enum parse_lambda_list_outcome out;
 
-  if (CAR (list)->type != TYPE_SYMBOL_NAME || !(CAR (CDR (list))->type & TYPE_LIST))
+  if (CAR (list)->type != TYPE_SYMBOL_NAME
+      || !(CAR (CDR (list))->type & TYPE_LIST))
     {
       *outcome = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
     }
 
-  fun = alloc_function ();
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
-  fun->value_ptr.function->lambda_list = parse_lambda_list (CAR (CDR (list)), &out);
-
-  fun->value_ptr.function->body = CDR (CDR (list));
-
-  env->funcs = add_binding (create_binding (SYMBOL (CAR (list)), fun, DYNAMIC_BINDING), env->funcs);
+  env->funcs = add_binding (create_binding (SYMBOL (CAR (list)), fun,
+					    DYNAMIC_BINDING), env->funcs);
 
   return CAR (list);
 }
@@ -4642,7 +4675,23 @@ struct object *
 evaluate_defmacro (struct object *list, struct environment *env,
 		   enum eval_outcome *outcome, struct object **cursor)
 {
-  return NULL;
+  struct object *fun;
+
+  if (CAR (list)->type != TYPE_SYMBOL_NAME
+      || !(CAR (CDR (list))->type & TYPE_LIST))
+    {
+      *outcome = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
+
+  fun->type = TYPE_MACRO;
+
+  env->funcs = add_binding (create_binding (SYMBOL (CAR (list)), fun,
+					    DYNAMIC_BINDING), env->funcs);
+
+  return CAR (list);
 }
 
 
@@ -5038,10 +5087,6 @@ print_eval_error (enum eval_outcome err, struct object *arg,
   else if (err == INCORRECT_SYNTAX_IN_LET)
     {
       printf ("eval error: incorrect syntax in let\n");
-    }
-  else if (err == INCORRECT_SYNTAX_IN_PROGN)
-    {
-      printf ("eval error: incorrect syntax in progn\n");
     }
   else if (err == INCORRECT_SYNTAX_IN_DEFUN)
     {
