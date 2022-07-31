@@ -450,8 +450,9 @@ object_type
     TYPE_CONDITION = 1 << 20,
     TYPE_FUNCTION = 1 << 21,
     TYPE_MACRO = 1 << 22,
-    TYPE_T = 1 << 23,
-    TYPE_NIL = 1 << 24
+    TYPE_SHARP_MACRO_CALL = 1 << 23,
+    TYPE_T = 1 << 24,
+    TYPE_NIL = 1 << 25
   };
 
 
@@ -481,6 +482,7 @@ object_ptr_union
   struct structure *structure;
   struct function *function;
   struct function *macro;
+  struct sharp_macro_call *sharp_macro_call;
 };
 
 
@@ -652,14 +654,13 @@ enum read_outcome read_symbol_name
  const char **symname_end, enum readtable_case read_case);
 
 enum read_outcome read_prefix
-(struct object **obj, const char *input, size_t size,
- int *backt_commas_balance, struct object **last,
- const char **prefix_end);
+(struct object **obj, const char *input, size_t size, int *backt_commas_balance,
+ struct object **last, const char **prefix_end);
 
-struct sharp_macro_call *read_sharp_macro_call
-(const char *input, size_t size, struct environment *env,
+enum read_outcome read_sharp_macro_call
+(struct object **obj, const char *input, size_t size, struct environment *env,
  enum eval_outcome *e_outcome, struct object **cursor, const char **macro_end,
- size_t *out_arg, enum read_outcome *outcome);
+ size_t *out_arg);
 struct object *call_sharp_macro
 (struct sharp_macro_call *macro_call, struct environment *env,
  enum eval_outcome *e_outcome, struct object **cursor,
@@ -689,6 +690,8 @@ struct object *alloc_object (void);
 struct object *alloc_prefix (enum element type);
 struct object *alloc_empty_cons_pair (void);
 struct object *alloc_function (void);
+struct object *alloc_sharp_macro_call (void);
+
 struct object *create_function (struct object *lambda_list, struct object *body);
 struct object *create_package (char *name, size_t name_len);
 
@@ -1155,6 +1158,15 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 	return PACKAGE_NOT_FOUND;
     }
+  else if (ob->type == TYPE_SHARP_MACRO_CALL)
+    {
+      out = read_sharp_macro_call (&ob, input, size, env, outcome, cursor,
+				   obj_end, mult_comm_depth);
+
+      if (out == COMPLETE_OBJECT)
+	ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
+			       cursor, &out);
+    }
 
   if (last_pref)
     last_pref->value_ptr.next = ob;
@@ -1457,8 +1469,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
   enum object_type numtype;
   enum read_outcome out = NO_OBJECT;
   const char *num_end;
-  struct sharp_macro_call *sharp_m;
-  
+
   input = skip_space_block (input, size, &size);
 
   if (!input)
@@ -1516,11 +1527,12 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
       else if (*input == '#')
 	{
 	  *obj_begin = input;
-	  sharp_m = read_sharp_macro_call (input+1, size-1, env, outcome,
-					   cursor, obj_end, out_arg, &out);
+	  out = read_sharp_macro_call (&ob, input+1, size-1, env, outcome,
+				       cursor, obj_end, out_arg);
 
 	  if (out == COMPLETE_OBJECT)
-	    ob = call_sharp_macro (sharp_m, env, outcome, cursor, &out);
+	    ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
+				   cursor, &out);
 
 	  break;
 	}
@@ -1861,28 +1873,38 @@ read_prefix (struct object **obj, const char *input, size_t size,
 }
 
 
-struct sharp_macro_call *
-read_sharp_macro_call (const char *input, size_t size, struct environment *env,
-		       enum eval_outcome *e_outcome, struct object **cursor,
-		       const char **macro_end, size_t *out_arg,
-		       enum read_outcome *outcome)
+enum read_outcome
+read_sharp_macro_call (struct object **obj, const char *input, size_t size,
+		       struct environment *env, enum eval_outcome *e_outcome,
+		       struct object **cursor, const char **macro_end,
+		       size_t *out_arg)
 {
   int arg;
   size_t i = 0;
   const char *obj_b;
   struct sharp_macro_call *call;
   char *buf;
+  enum read_outcome out;
 
   if (!size)
-    return NULL;
+    return NO_OBJECT;
 
-  call = malloc_and_check (sizeof (*call));
-  
+  if (*obj)
+    {
+      return read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
+				    0, input, size, env, e_outcome, cursor,
+				    &obj_b, macro_end, out_arg);
+    }
+
+  *obj = alloc_sharp_macro_call ();
+
+  call = (*obj)->value_ptr.sharp_macro_call;
+
   if (isdigit (input [i]))
     arg = input [i++] - '0';
   else
     arg = -1;
-  
+
   while (i < size && isdigit (input [i]))
     {
       arg *= 10;
@@ -1890,22 +1912,20 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
     }
 
   call->arg = arg;
-  
+
   if (i < size)
     call->dispatch_ch = input [i];
   else
-    return NULL;
+    return NO_OBJECT;
 
   if (strchr ("\b\t\n\r\f <)", call->dispatch_ch))
     {
-      *outcome = INVALID_SHARP_DISPATCH;
-      return NULL;
+      return INVALID_SHARP_DISPATCH;
     }
 
   if (!strchr ("'\\.pP(", call->dispatch_ch))
     {
-      *outcome = UNKNOWN_SHARP_DISPATCH;
-      return NULL;
+      return UNKNOWN_SHARP_DISPATCH;
     }
 
   if (call->dispatch_ch == '\\')
@@ -1916,11 +1936,9 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
 	{
 	  call->obj = create_character (buf);
 
-	  *outcome = COMPLETE_OBJECT;
-
 	  *macro_end = input+i + strlen (buf);
 
-	  return call;
+	  return COMPLETE_OBJECT;
 	}
 
       free (buf);
@@ -1928,17 +1946,23 @@ read_sharp_macro_call (const char *input, size_t size, struct environment *env,
   else if (call->dispatch_ch == '(')
     {
       call->obj = NULL;
-      *outcome = read_list (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
+      out = read_list (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
 			    cursor, macro_end, out_arg);
 
-      return call;
+      if (out & INCOMPLETE_OBJECT)
+	return INCOMPLETE_SHARP_MACRO_CALL;
+
+      return COMPLETE_OBJECT;
     }
 
   call->obj = NULL;
-  *outcome = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
+  out = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
 			  cursor, &obj_b, macro_end, out_arg);
 
-  return call;
+  if (out & INCOMPLETE_OBJECT)
+    return INCOMPLETE_SHARP_MACRO_CALL;
+
+  return COMPLETE_OBJECT;
 }
 
 
@@ -2415,6 +2439,20 @@ alloc_function (void)
   obj->type = TYPE_FUNCTION;
   obj->refcount = 1;
   obj->value_ptr.function = fun;
+
+  return obj;
+}
+
+
+struct object *
+alloc_sharp_macro_call (void)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct sharp_macro_call *call = malloc_and_check (sizeof (*call));
+
+  obj->type = TYPE_SHARP_MACRO_CALL;
+  obj->refcount = 1;
+  obj->value_ptr.sharp_macro_call = call;
 
   return obj;
 }
