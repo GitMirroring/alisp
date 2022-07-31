@@ -131,7 +131,7 @@ read_outcome
     CLOSING_PARENTHESIS_AFTER_PREFIX = 1 << 4,
 
     JUST_PREFIX = 1 << 5,
-    EMPTY_LIST = 1 << 6,
+    INCOMPLETE_EMPTY_LIST = 1 << 6,
     INCOMPLETE_NONEMPTY_LIST = 1 << 7,
     INCOMPLETE_STRING = 1 << 8,
     INCOMPLETE_SYMBOL_NAME = 1 << 9,
@@ -1202,7 +1202,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   while (read_out & (INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING |
 		     INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
 		     | INCOMPLETE_SHARP_MACRO_CALL |
-		     UNFINISHED_MULTILINE_COMMENT | EMPTY_LIST)
+		     UNFINISHED_MULTILINE_COMMENT | INCOMPLETE_EMPTY_LIST)
 	 || read_out & READ_ERROR
 	 || multiline_comm_depth)
     {
@@ -1215,7 +1215,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
       line = read_line_interactively ("> ");
       len = strlen (line);
 
-      if (read_out & EMPTY_LIST)
+      if (read_out & INCOMPLETE_EMPTY_LIST)
 	read_out = read_object_continued (&obj, 0, 1, line, len, env, outcome,
 					  cursor, &begin, &end,
 					  &multiline_comm_depth);
@@ -1269,7 +1269,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
 
       return NULL;
     }
-  else if (read_out == EMPTY_LIST)
+  else if (read_out == INCOMPLETE_EMPTY_LIST)
     {
       return complete_object_interactively (obj, 1, env, outcome, cursor,
 					    mult_comm_depth, input_left,
@@ -1583,7 +1583,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 
   if (!size)
-    return EMPTY_LIST;
+    return INCOMPLETE_EMPTY_LIST;
 
   while (ob && ob != &nil_object)
     {
@@ -1596,7 +1596,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
 	    ob->value_ptr.cons_pair->filling_car = 0;
-	  else if (out == NO_OBJECT || out == EMPTY_LIST
+	  else if (out == NO_OBJECT || out == INCOMPLETE_EMPTY_LIST
 		   || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR
 		   || out & INCOMPLETE_OBJECT)
 	    return out;
@@ -1608,7 +1608,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       size, env, outcome, cursor, &obj_beg,
 				       &obj_end, out_arg);
 
-	  if (out != EMPTY_LIST)
+	  if (out != INCOMPLETE_EMPTY_LIST)
 	    ob->value_ptr.cons_pair->empty_list_in_car = 0;
 
 	  if (out & INCOMPLETE_OBJECT)
@@ -1617,7 +1617,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	      return out;
 	    }
 
-	  if (out == NO_OBJECT || out == EMPTY_LIST
+	  if (out == NO_OBJECT || out == INCOMPLETE_EMPTY_LIST
 	      || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
 	    return out;
 	}
@@ -1639,7 +1639,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
     }
 
   if (out == NO_OBJECT && !last_cons)
-    return EMPTY_LIST;
+    return INCOMPLETE_EMPTY_LIST;
 
   if (out == CLOSING_PARENTHESIS && !last_cons)
     {
@@ -1648,7 +1648,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
       return COMPLETE_OBJECT;
     }
 
-  while (out != NO_OBJECT && out != EMPTY_LIST)
+  while (out != NO_OBJECT && out != INCOMPLETE_EMPTY_LIST)
     {
       if (out == CLOSING_PARENTHESIS)
 	{
@@ -1708,7 +1708,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 			 &obj_beg, &obj_end, out_arg);
     }
 
-  if (out == EMPTY_LIST)
+  if (out == INCOMPLETE_EMPTY_LIST)
     {
       cons = alloc_empty_cons_pair ();
       cons->value_ptr.cons_pair->empty_list_in_car = 1;
