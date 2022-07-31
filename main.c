@@ -167,7 +167,7 @@ read_outcome
 
 #define INCOMPLETE_OBJECT (JUST_PREFIX | INCOMPLETE_NONEMPTY_LIST |	\
 			   INCOMPLETE_STRING | INCOMPLETE_SYMBOL_NAME | \
-			   INCOMPLETE_SHARP_MACRO_CALL)
+			   INCOMPLETE_SHARP_MACRO_CALL | INCOMPLETE_EMPTY_LIST)
 
 #define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS \
 		    | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH	\
@@ -526,6 +526,8 @@ sharp_macro_call
 {
   int arg;
   int dispatch_ch;
+
+  int is_empty_list;
   struct object *obj;
 };
 
@@ -1892,8 +1894,10 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   if (*obj)
     {
       return read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
-				    0, input, size, env, e_outcome, cursor,
-				    &obj_b, macro_end, out_arg);
+				    (*obj)->value_ptr.sharp_macro_call->
+				    is_empty_list, input, size, env,
+				    e_outcome, cursor, &obj_b, macro_end,
+				    out_arg);
     }
 
   *obj = alloc_sharp_macro_call ();
@@ -1949,6 +1953,9 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       out = read_list (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
 			    cursor, macro_end, out_arg);
 
+      if (out == INCOMPLETE_EMPTY_LIST)
+	call->is_empty_list = 1;
+
       if (out & INCOMPLETE_OBJECT)
 	return INCOMPLETE_SHARP_MACRO_CALL;
 
@@ -1958,6 +1965,9 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   call->obj = NULL;
   out = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
 			  cursor, &obj_b, macro_end, out_arg);
+
+  if (out == INCOMPLETE_EMPTY_LIST)
+    call->is_empty_list = 1;
 
   if (out & INCOMPLETE_OBJECT)
     return INCOMPLETE_SHARP_MACRO_CALL;
@@ -2453,6 +2463,8 @@ alloc_sharp_macro_call (void)
   obj->type = TYPE_SHARP_MACRO_CALL;
   obj->refcount = 1;
   obj->value_ptr.sharp_macro_call = call;
+
+  call->is_empty_list = 0;
 
   return obj;
 }
