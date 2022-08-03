@@ -797,7 +797,8 @@ struct object *evaluate_object
 (struct object *obj, struct environment *env, enum eval_outcome *outcome,
  struct object **cursor);
 struct object *apply_backquote
-(struct object *form, int backts_commas_balance, struct environment *env,
+(struct object *form, struct object *cons, int first_cons,
+ struct object *prev_prefix, int backts_commas_balance, struct environment *env,
  enum eval_outcome *outcome, struct object **cursor);
 struct object *evaluate_list
 (struct object *list, struct environment *env, enum eval_outcome *outcome,
@@ -3351,17 +3352,11 @@ copy_list_structure (const struct object *list, const struct object *prefix)
 
   out = cons = alloc_empty_cons_pair ();
 
-  if (prefix)
-    {
-      cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref);
-      lastpref->value_ptr.next = list->value_ptr.cons_pair->car;
-    }
-  else
-    cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+  cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
 
   list = list->value_ptr.cons_pair->cdr;
 
-  while (list)
+  while (list->type == TYPE_CONS_PAIR)
     {
       cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
@@ -3681,7 +3676,10 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      return apply_backquote (obj->value_ptr.next, 1, env, outcome, cursor);
+      increment_refcount (obj->value_ptr.next);
+
+      return apply_backquote (obj->value_ptr.next, NULL, 0, NULL, 1, env,
+			      outcome, cursor);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
@@ -3735,113 +3733,122 @@ evaluate_object (struct object *obj, struct environment *env,
 
 
 struct object *
-apply_backquote (struct object *form, int backts_commas_balance,
+apply_backquote (struct object *form, struct object *cons, int first_cons,
+		 struct object *prev_prefix, int backts_commas_balance,
 		 struct environment *env, enum eval_outcome *outcome,
 		 struct object **cursor)
 {
-  struct object *lastpref, *last_comma, *before_last_comma, *ret,
-    *prev_list = NULL, *list, *car, **out, *tmp, *prefcopy;
-  int num_bt, num_c, bt_c_bal;
-  enum object_type tp = NO_OBJECT;
-  struct object *obj = skip_prefix (form, &num_bt, &num_c, &lastpref,
-				    &last_comma, &before_last_comma);
-  backts_commas_balance += (num_bt - num_c);
+  struct object *prev_cons, *cur_cons, *next_cons, *ret, *pref_copy;
 
   if (!backts_commas_balance)
     {
-      out = before_last_comma ? &before_last_comma->value_ptr.next : &form;
-      tp = last_comma->value_ptr.next->type;
-
-      if (tp == TYPE_AT || tp == TYPE_DOT)
-	{
-	  *outcome = COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL;
-
-	  return NULL;
-	}
-
-      ret = evaluate_object (last_comma->value_ptr.next, env, outcome, cursor);
+      return evaluate_object (form, env, outcome, cursor);
+    }
+  else if (form->type == TYPE_BACKQUOTE)
+    {
+      ret = apply_backquote (form->value_ptr.next, cons, first_cons, form,
+			     backts_commas_balance + 1, env, outcome, cursor);
 
       if (!ret)
 	return NULL;
 
-      *out = ret;
+      form->value_ptr.next = ret;
 
       return form;
     }
-
-  if (!(obj->type & TYPE_LIST))
+  else if (form->type == TYPE_COMMA)
     {
-      form->refcount++;
-      return form;
+      if (backts_commas_balance == 1)
+	{
+	  if (form->value_ptr.next->type == TYPE_AT
+	      || form->value_ptr.next->type == TYPE_DOT)
+	    {
+	      if (!cons)
+		{
+		  *outcome = COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL;
+
+		  return NULL;
+		}
+
+	      ret = evaluate_object (form->value_ptr.next->value_ptr.next, env,
+				     outcome, cursor);
+
+	      if (!ret)
+		return NULL;
+
+	      pref_copy = prev_prefix
+		? (first_cons
+		   ? copy_prefix (CAR (cons), prev_prefix, NULL)
+		   : copy_prefix (CAR (CDR (cons)), prev_prefix, NULL))
+		: NULL;
+
+	      if (form->value_ptr.next->type == TYPE_AT || prev_prefix)
+		ret = copy_list_structure (ret, pref_copy);
+
+	      if (first_cons)
+		{
+		  cons->value_ptr.cons_pair->car = CAR (ret);
+		  last_cons_pair (ret)->value_ptr.cons_pair->cdr = CDR (cons);
+		  cons->value_ptr.cons_pair->cdr = CDR (ret);
+		}
+	      else
+		{
+		  last_cons_pair (ret)->value_ptr.cons_pair->cdr =
+		    CDR (CDR (cons));
+
+		  cons->value_ptr.cons_pair->cdr = ret;
+		}
+
+	      return CAR (ret);
+	    }
+
+	  return evaluate_object (form->value_ptr.next, env, outcome, cursor);
+	}
+      else
+	{
+	  ret = apply_backquote (form->value_ptr.next, cons, first_cons, form, 
+				 backts_commas_balance - 1, env, outcome, cursor);
+
+	  if (!ret)
+	    return NULL;
+
+	  form->value_ptr.next = ret;
+
+	  return form;
+	}
     }
-
-  list = obj;
-
-  while (list->type != TYPE_NIL)
+  else if (form->type == TYPE_CONS_PAIR)
     {
-      tp = NO_OBJECT;
+      prev_cons = cur_cons = form;
+      first_cons = 1;
 
-      car = (list->type == TYPE_CONS_PAIR) ? CAR (list) : list;
-
-      skip_prefix (car, &num_bt, &num_c, NULL, &last_comma, &before_last_comma);
-      bt_c_bal = backts_commas_balance + num_bt - num_c;
-
-      out = bt_c_bal ? &car :
-	before_last_comma ? &before_last_comma->value_ptr.next :
-	(list->type != TYPE_CONS_PAIR ? &prev_list->value_ptr.cons_pair->cdr :
-	 &list->value_ptr.cons_pair->car);
-
-      if (!bt_c_bal)
+      while (cur_cons->type == TYPE_CONS_PAIR)
 	{
-	  tp = last_comma->value_ptr.next->type;
+	  next_cons = CDR (cur_cons);
 
-	  if (tp == TYPE_AT || tp == TYPE_DOT)
-	    ret = evaluate_object (last_comma->value_ptr.next->value_ptr.next,
-				   env, outcome, cursor);
-	  else
-	    ret = evaluate_object (last_comma->value_ptr.next, env, outcome,
-				   cursor);
+	  ret = apply_backquote (CAR (cur_cons), prev_cons, first_cons, NULL,
+				 backts_commas_balance, env, outcome, cursor);
+
+	  if (!ret)
+	    return NULL;
+
+	  cur_cons->value_ptr.cons_pair->car = ret;
+
+	  prev_cons = cur_cons;
+	  cur_cons = next_cons;
+	  first_cons = 0;
 	}
-      else
-	ret = apply_backquote (car, backts_commas_balance, env, outcome, cursor);
 
-      if (!ret)
-	return NULL;
-
-      if (tp & (TYPE_AT | TYPE_DOT))
+      if (cur_cons->type != TYPE_NIL)
 	{
-	  if (before_last_comma)
-	    {
-	      prefcopy = copy_prefix (car, before_last_comma, NULL);
-	      ret = copy_list_structure (ret, prefcopy);
-	    }
-	  else if (tp == TYPE_AT && list_length (list) > 1)
-	    {
-	      ret = copy_list_structure (ret, NULL);
-	    }
+	  ret = apply_backquote (cur_cons, cons, 0, NULL, backts_commas_balance,
+				 env, outcome, cursor);
 
-	  if (prev_list)
-	    prev_list->value_ptr.cons_pair->cdr = ret;
-	  else if (lastpref)
-	    lastpref->value_ptr.next = ret;
-	  else
-	    form = ret;
+	  if (!ret)
+	    return NULL;
 
-	  if (list_length (list) > 1)
-	    {
-	      tmp = last_cons_pair (ret);
-
-	      last_cons_pair (ret)->value_ptr.cons_pair->cdr =
-		list->value_ptr.cons_pair->cdr;
-
-	      list = tmp;
-	    }
+	  prev_cons->value_ptr.cons_pair->cdr = ret;
 	}
-      else
-	*out = ret;
-
-      prev_list = list;
-      list = CDR (list);
     }
 
   return form;
