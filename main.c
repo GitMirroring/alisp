@@ -903,11 +903,13 @@ void print_read_error (enum read_outcome err, const char *input, size_t size,
 void print_eval_error (enum eval_outcome err, struct object *arg,
 		       struct environment *env);
 
+void increment_refcount (struct object *obj);
 int decrement_refcount (struct object *obj);
 
 void free_object (struct object *obj);
 void free_string (struct object *obj);
 void free_symbol (struct object *obj);
+void free_cons_pair (struct object *obj);
 void free_list_structure (struct object *obj);
 void free_list_recursively (struct object *obj);
 
@@ -2426,7 +2428,7 @@ alloc_empty_cons_pair (void)
   cons->filling_car = 0;
   cons->empty_list_in_car = 0;
   cons->car = car;
-  cons->cdr = NULL;
+  cons->cdr = &nil_object;
 
   obj->type = TYPE_CONS_PAIR;
   obj->refcount = 1;
@@ -2917,7 +2919,7 @@ intern_symbol (char *name, size_t len, struct object *package)
       if (eqmem (cur->obj->value_ptr.symbol->name,
 		 cur->obj->value_ptr.symbol->name_len, name, len))
 	{
-	  cur->obj->refcount++;
+	  increment_refcount (cur->obj);
 	  return cur->obj;
 	}
 
@@ -2981,8 +2983,8 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type)
   bin->obj = obj;
   bin->next = NULL;
 
-  sym->refcount++;
-  obj->refcount++;
+  increment_refcount (sym);
+  increment_refcount (obj);
 
   return bin;
 }
@@ -3065,7 +3067,7 @@ add_builtin_form (char *name, struct environment *env,
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
   sym->value_ptr.symbol->evaluate_args = eval_args;
-  sym->refcount++;
+  increment_refcount (sym);
 }
 
 
@@ -3087,7 +3089,7 @@ define_constant (struct object *sym, struct object *form,
 
   SYMBOL (sym)->value_ptr.symbol->is_const = 1;
   SYMBOL (sym)->value_ptr.symbol->value_cell = val;
-  SYMBOL (sym)->refcount++;
+  increment_refcount (SYMBOL (sym));
 
   return sym;
 }
@@ -3229,12 +3231,15 @@ nth (unsigned int ind, struct object *list)
   size_t i;
 
   for (i = 0; i < ind; i++)
-    if (!list->value_ptr.cons_pair->cdr)
+    if (list->type != TYPE_CONS_PAIR)
       return &nil_object;
     else
       list = list->value_ptr.cons_pair->cdr;
 
-  return list->value_ptr.cons_pair->car;
+  if (list->type == TYPE_CONS_PAIR)
+    return list->value_ptr.cons_pair->car;
+  else
+    return list;
 }
 
 
@@ -3413,7 +3418,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
   
-  while (obj && (car = obj->value_ptr.cons_pair->car)
+  while (obj && (car = CAR (obj))
 	 && car->type == TYPE_SYMBOL_NAME 
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
 			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
@@ -3423,7 +3428,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
       else
 	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
       
-      obj = obj->value_ptr.cons_pair->cdr;
+      obj = CDR (obj);
     }
 
   *rest = obj;
@@ -3671,7 +3676,7 @@ evaluate_object (struct object *obj, struct environment *env,
 
   if (obj->type == TYPE_QUOTE)
     {
-      obj->value_ptr.next->refcount++;
+      increment_refcount (obj->value_ptr.next);
       return obj->value_ptr.next;
     }
   else if (obj->type == TYPE_BACKQUOTE)
@@ -3687,13 +3692,13 @@ evaluate_object (struct object *obj, struct environment *env,
 
       if (sym->value_ptr.symbol->home_package == env->keyword_package)
 	{
-	  sym->refcount++;
+	  increment_refcount (sym);
 	  return sym;
 	}
 
       if (sym->value_ptr.symbol->is_const)
 	{
-	  sym->refcount++;
+	  increment_refcount (sym);
 	  return sym->value_ptr.symbol->value_cell;
 	}
       else if (sym->value_ptr.symbol->is_parameter
@@ -3726,7 +3731,7 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else
     {
-      obj->refcount++;
+      increment_refcount (obj);
       return obj;
     }
 }
@@ -3919,7 +3924,7 @@ evaluate_list (struct object *list, struct environment *env,
     }
   else if (symname_equals (symname, "QUOTE"))
     {
-      CAR (CDR (list))->refcount++;
+      increment_refcount (CAR (CDR (list)));
       return CAR (CDR (list));
     }
 
@@ -5190,19 +5195,48 @@ print_eval_error (enum eval_outcome err, struct object *arg,
 }
 
 
+void
+increment_refcount (struct object *obj)
+{
+  if (!obj || obj == &nil_object  || obj == &nil_symbol || obj == &t_object)
+    return;
+
+  obj->refcount++;
+
+  if (obj->type & TYPE_PREFIX)
+    increment_refcount (obj->value_ptr.next);
+  else if (obj->type == TYPE_CONS_PAIR)
+    {
+      increment_refcount (obj->value_ptr.cons_pair->car);
+      increment_refcount (obj->value_ptr.cons_pair->cdr);
+    }
+}
+
+
 int
 decrement_refcount (struct object *obj)
 {
   if (!obj)
     return 0;
 
-  if (obj == &nil_object
-      || obj == &nil_symbol)
+  if (obj == &nil_object || obj == &nil_symbol || obj == &t_object)
     return 0;
-  
+
   obj->refcount--;
 
-  if (obj->refcount <= 0)
+  if (obj->type & TYPE_PREFIX && decrement_refcount (obj->value_ptr.next))
+    obj->value_ptr.next = NULL;
+
+  if (obj->type == TYPE_CONS_PAIR)
+    {
+      if (decrement_refcount (obj->value_ptr.cons_pair->car))
+	obj->value_ptr.cons_pair->car = NULL;
+
+      if (decrement_refcount (obj->value_ptr.cons_pair->cdr))
+	obj->value_ptr.cons_pair->cdr = NULL;
+    }
+
+  if (!obj->refcount)
     {
       free_object (obj);
       return 1;
@@ -5215,13 +5249,22 @@ decrement_refcount (struct object *obj)
 void
 free_object (struct object *obj)
 {
-  if (!obj)
+  if (!obj || obj->refcount < 0)
     return;
-  
+
   if (obj->type == TYPE_STRING)
     free_string (obj);
   else if (obj->type == TYPE_SYMBOL && !obj->value_ptr.symbol->is_special)
     free_symbol (obj);
+  else if (obj->type & TYPE_PREFIX)
+    {
+      if (decrement_refcount (obj->value_ptr.next))
+	obj->value_ptr.next = NULL;
+
+      free (obj);
+    }
+  else if (obj->type == TYPE_CONS_PAIR)
+    free_cons_pair (obj);
 }
 
 
@@ -5238,6 +5281,17 @@ void
 free_symbol (struct object *obj)
 {
   free (obj->value_ptr.symbol->name);
+  free (obj);
+}
+
+
+void
+free_cons_pair (struct object *obj)
+{
+  decrement_refcount (obj->value_ptr.cons_pair->car);
+  decrement_refcount (obj->value_ptr.cons_pair->cdr);
+
+  free (obj->value_ptr.cons_pair);
   free (obj);
 }
 
