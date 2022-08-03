@@ -910,6 +910,8 @@ void free_object (struct object *obj);
 void free_string (struct object *obj);
 void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
+void free_array_size (struct array_size *size);
+void free_array (struct object *obj);
 void free_list_structure (struct object *obj);
 void free_list_recursively (struct object *obj);
 
@@ -5268,8 +5270,11 @@ free_object (struct object *obj)
   else if (obj->type == TYPE_FILENAME)
     {
       free_string (obj->value_ptr.filename->value);
+      free (obj->value_ptr.filename);
       free (obj);
     }
+  else if (obj->type == TYPE_ARRAY)
+    free_array (obj);
 }
 
 
@@ -5298,6 +5303,37 @@ free_cons_pair (struct object *obj)
 
   free (obj->value_ptr.cons_pair);
   free (obj);
+}
+
+
+void
+free_array_size (struct array_size *size)
+{
+  if (size->next)
+    free_array_size (size->next);
+
+  free (size);
+}
+
+
+void
+free_array (struct object *obj)
+{
+  int r = array_rank (obj->value_ptr.array);
+  size_t sz;
+
+  if (r == 1)
+    {
+      sz = obj->value_ptr.array->alloc_size->size;
+
+      free_array_size (obj->value_ptr.array->alloc_size);
+
+      for (; sz; sz--)
+	free_object (obj->value_ptr.array->value [sz - 1]);
+
+      free (obj->value_ptr.array);
+      free (obj);
+    }
 }
 
 
