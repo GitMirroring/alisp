@@ -387,7 +387,7 @@ array
 struct
 filename
 {
-  struct string *value;
+  struct object *value;
 };
 
 
@@ -2854,7 +2854,7 @@ create_filename (struct object *string)
   obj->type = TYPE_FILENAME;
   obj->refcount = 1;
 
-  fn->value = string->value_ptr.string;
+  fn->value = string;
 
   obj->value_ptr.filename = fn;
 
@@ -4914,7 +4914,7 @@ void
 print_filename (const struct filename *fn)
 {
   printf ("#P");
-  print_string (fn->value);
+  print_string (fn->value->value_ptr.string);
 }
 
 
@@ -5265,6 +5265,11 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_CONS_PAIR)
     free_cons_pair (obj);
+  else if (obj->type == TYPE_FILENAME)
+    {
+      free_string (obj->value_ptr.filename->value);
+      free (obj);
+    }
 }
 
 
