@@ -107,6 +107,7 @@ make_test ("a", "8");
 make_test ("(defparameter b 9)", "B");
 make_test ("b", "9");
 make_test ("(load \"cl.lisp\")", "T");
+make_test ("(1+ 5)", "6");
 
 
 # arithmetic tests
