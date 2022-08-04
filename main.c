@@ -5342,6 +5342,7 @@ free_array (struct object *obj)
       for (; sz; sz--)
 	free_object (obj->value_ptr.array->value [sz - 1]);
 
+      free (obj->value_ptr.array->value);
       free (obj->value_ptr.array);
       free (obj);
     }
