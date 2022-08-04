@@ -717,7 +717,7 @@ void normalize_symbol_name (char *output, const char *input, size_t size,
 			    enum readtable_case read_case);
 
 struct object *create_symbol (char *name, size_t size);
-struct object *create_character (char *character);
+struct object *create_character (char *character, int do_copy);
 struct object *create_filename (struct object *string);
 struct object *create_vector (struct object *list);
 
@@ -1943,7 +1943,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
       if (mbslen (buf) == 1)
 	{
-	  call->obj = create_character (buf);
+	  call->obj = create_character (buf, 0);
 
 	  *macro_end = input+i + strlen (buf);
 
@@ -2032,17 +2032,17 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	}
 
       if (eqmem (s->value, s->used_size, "NEWLINE", strlen ("NEWLINE")))
-	return create_character ("\n");
+	return create_character ("\n", 1);
       else if (eqmem (s->value, s->used_size, "SPACE", strlen ("SPACE")))
-	return create_character (" ");
+	return create_character (" ", 1);
       else if (eqmem (s->value, s->used_size, "TAB", strlen ("TAB")))
-	return create_character ("\t");
+	return create_character ("\t", 1);
       else if (eqmem (s->value, s->used_size, "BACKSPACE", strlen ("BACKSPACE")))
-	return create_character ("\b");
+	return create_character ("\b", 1);
       else if (eqmem (s->value, s->used_size, "PAGE", strlen ("PAGE")))
-	return create_character ("\f");
+	return create_character ("\f", 1);
       else if (eqmem (s->value, s->used_size, "RETURN", strlen ("RETURN")))
-	return create_character ("\r");
+	return create_character ("\r", 1);
       else
 	{
 	  *r_outcome = UNKNOWN_CHARACTER_NAME;
@@ -2834,14 +2834,20 @@ create_symbol (char *name, size_t size)
 
 
 struct object *
-create_character (char *character)
+create_character (char *character, int do_copy)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
 
   obj->type = TYPE_CHARACTER;
   obj->refcount = 1;
 
-  obj->value_ptr.character = character;
+  if (do_copy)
+    {
+      obj->value_ptr.character = malloc_and_check (strlen (character) + 1);
+      strcpy (obj->value_ptr.character, character);
+    }
+  else
+    obj->value_ptr.character = character;
 
   return obj;
 }
@@ -5275,6 +5281,11 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_ARRAY)
     free_array (obj);
+  else if (obj->type == TYPE_CHARACTER)
+    {
+      free (obj->value_ptr.character);
+      free (obj);
+    }
 }
 
 
