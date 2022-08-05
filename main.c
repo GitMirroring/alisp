@@ -183,7 +183,7 @@ read_outcome
 
 
 enum
-eval_outcome
+eval_outcome_type
   {
     EVAL_OK,
     UNBOUND_SYMBOL,
@@ -205,6 +205,15 @@ eval_outcome
     COULD_NOT_TELL_FILE,
     ERROR_READING_FILE
   };
+
+
+struct
+eval_outcome
+{
+  enum eval_outcome_type type;
+
+  struct object *obj;
+};
 
 
 struct
@@ -260,8 +269,7 @@ symbol
   struct parameter *lambda_list;
   int evaluate_args;
   struct object *(*builtin_form)
-    (struct object *list, struct environment *env, enum eval_outcome *outcome,
-     struct object **cursor);
+    (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
   int is_const;
   int is_parameter;
@@ -604,23 +612,20 @@ void add_standard_definitions (struct environment *env);
 char *read_line_interactively (const char prompt []);
 
 enum read_outcome read_object_continued
-(struct object **obj, int backts_commas_balance,
- int is_empty_list, const char *input, size_t size,
- struct environment *env, enum eval_outcome *outcome,
- struct object **cursor, const char **obj_begin,
- const char **obj_end, size_t *mult_comm_depth);
+(struct object **obj, int backts_commas_balance, int is_empty_list,
+ const char *input, size_t size, struct environment *env,
+ struct eval_outcome *outcome,  const char **obj_begin, const char **obj_end,
+ size_t *mult_comm_depth);
 struct object *complete_object_interactively
 (struct object *obj, int is_empty_list, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor,
- size_t multiline_comm_depth, const char **input_left,
- size_t *input_left_size);
+ struct eval_outcome *outcome, size_t multiline_comm_depth,
+ const char **input_left, size_t *input_left_size);
 struct object *read_object_interactively_continued
 (const char *input, size_t input_size, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor, const char **input_left,
- size_t *input_left_size);
+ struct eval_outcome *outcome, const char **input_left, size_t *input_left_size);
 struct object *read_object_interactively
-(struct environment *env, enum eval_outcome *outcome, struct object **cursor,
- const char **input_left, size_t *input_left_size);
+(struct environment *env, struct eval_outcome *outcome, const char **input_left,
+ size_t *input_left_size);
 
 const char *skip_space_block
 (const char *input, size_t size, size_t *new_size);
@@ -637,23 +642,21 @@ struct object_list *append_object_to_list
 (struct object *obj, struct object_list *list);
 
 enum read_outcome read_object
-(struct object **obj, int backt_commas_balance, const char *input,
- size_t size, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor, const char **obj_begin,
+(struct object **obj, int backt_commas_balance, const char *input, size_t size,
+ struct environment *env, struct eval_outcome *outcome, const char **obj_begin,
  const char **obj_end, size_t *out_arg);
 
 enum read_outcome read_list
-(struct object **obj, int backts_commas_balance, const char *input,
- size_t size, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor, const char **list_end, size_t *out_arg);
+(struct object **obj, int backts_commas_balance, const char *input, size_t size,
+ struct environment *env, struct eval_outcome *outcome, const char **list_end,
+ size_t *out_arg);
 
 enum read_outcome read_string
-(struct object **obj, const char *input, size_t size,
- const char **string_end);
+(struct object **obj, const char *input, size_t size, const char **string_end);
 
 enum read_outcome read_symbol_name
-(struct object **obj, const char *input, size_t size,
- const char **symname_end, enum readtable_case read_case);
+(struct object **obj, const char *input, size_t size, const char **symname_end,
+ enum readtable_case read_case);
 
 enum read_outcome read_prefix
 (struct object **obj, const char *input, size_t size, int *backt_commas_balance,
@@ -661,12 +664,10 @@ enum read_outcome read_prefix
 
 enum read_outcome read_sharp_macro_call
 (struct object **obj, const char *input, size_t size, struct environment *env,
- enum eval_outcome *e_outcome, struct object **cursor, const char **macro_end,
- size_t *out_arg);
+ struct eval_outcome *e_outcome, const char **macro_end, size_t *out_arg);
 struct object *call_sharp_macro
 (struct sharp_macro_call *macro_call, struct environment *env,
- enum eval_outcome *e_outcome, struct object **cursor,
- enum read_outcome *r_outcome);
+ struct eval_outcome *e_outcome, enum read_outcome *r_outcome);
 
 enum element find_next_element
 (const char *input, size_t size, const char **elem_begin);
@@ -738,21 +739,20 @@ struct binding *find_binding (struct symbol *sym, struct binding *env,
 void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
 		       (struct object *list, struct environment *env,
-			enum eval_outcome *outcome, struct object **cursor),
-		       int eval_args);
+			struct eval_outcome *outcome), int eval_args);
 
 struct object *define_constant
 (struct object *sym, struct object *form, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *define_constant_by_name
 (char *name, size_t size, struct object *form, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *define_parameter
 (struct object *sym, struct object *form, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *define_parameter_by_name
 (char *name, size_t size, struct object *form, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 
 struct object *skip_prefix
 (struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
@@ -786,51 +786,40 @@ struct parameter *parse_lambda_list (struct object *obj,
 
 struct object *evaluate_body
 (struct object *body, int eval_twice, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int eval_twice,
- struct environment *env, enum eval_outcome *outcome, struct object **cursor);
+ struct environment *env, struct eval_outcome *outcome);
 
 int check_type (const struct object *obj, const struct typespec *type);
 
 struct object *evaluate_object
-(struct object *obj, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *obj, struct environment *env, struct eval_outcome *outcome);
 struct object *apply_backquote
 (struct object *form, struct object *cons, int first_cons,
  struct object *prev_prefix, int backts_commas_balance, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *evaluate_list
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_through_list
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *builtin_car
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_cdr
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_cons
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_list
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_not
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
@@ -839,51 +828,39 @@ struct object *apply_arithmetic_operation
 (struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
  void (*opq) (mpq_t, const mpq_t, const mpq_t),
  void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *builtin_plus
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_minus
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_multiply
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_divide
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
-(struct object *form, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *form, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_let
 (struct object *bind_forms, struct object *body, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 struct object *evaluate_let_star
 (struct object *bind_forms, struct object *body, struct environment *env,
- enum eval_outcome *outcome, struct object **cursor);
+ struct eval_outcome *outcome);
 
 struct object *evaluate_if
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_progn
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defconstant
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defparameter
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defvar
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defun
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defmacro
-(struct object *list, struct environment *env, enum eval_outcome *outcome,
- struct object **cursor);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -900,8 +877,7 @@ void print_object (const struct object *obj, struct environment *env);
 
 void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const char *begin, const char *end);
-void print_eval_error (enum eval_outcome err, struct object *arg,
-		       struct environment *env);
+void print_eval_error (struct eval_outcome *err, struct environment *env);
 
 void increment_refcount (struct object *obj);
 int decrement_refcount (struct object *obj);
@@ -920,12 +896,14 @@ void print_version (void);
 void print_help (void);
 
 
+
 const struct option long_options[] =
   {
     {"version", no_argument, NULL, 'v'},
     {"help", no_argument, NULL, 'h'},
     {0, 0, 0, 0}
   };
+
 
 
 struct object nil_object = {1, NULL, NULL, TYPE_NIL};
@@ -945,10 +923,10 @@ main (int argc, char *argv [])
 {
   int end_repl = 0;
 
-  struct object *result, *cursor, *obj;
+  struct object *result, *obj;
   struct environment env = {NULL};
   
-  enum eval_outcome eval_out;
+  struct eval_outcome eval_out = {EVAL_OK};
 
   const char *input_left = NULL;
   size_t input_left_s = 0;
@@ -983,12 +961,12 @@ main (int argc, char *argv [])
 
   while (!end_repl)
     {
-      obj = read_object_interactively (&env, &eval_out, &cursor, &input_left,
+      obj = read_object_interactively (&env, &eval_out, &input_left,
 				       &input_left_s);
       
       while (obj && input_left && input_left_s > 0)
 	{
-	  result = evaluate_object (obj, &env, &eval_out, &cursor);
+	  result = evaluate_object (obj, &env, &eval_out);
 
 	  if (result)
 	    {
@@ -996,20 +974,20 @@ main (int argc, char *argv [])
 	      printf ("\n");
 	    }
 	  else
-	    print_eval_error (eval_out, cursor, &env);
+	    print_eval_error (&eval_out, &env);
 
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
 
 	  obj = read_object_interactively_continued (input_left, input_left_s,
-						     &env, &eval_out, &cursor,
+						     &env, &eval_out,
 						     &input_left,
 						     &input_left_s);
 	}
 
       if (obj)
 	{
-	  result = evaluate_object (obj, &env, &eval_out, &cursor);
+	  result = evaluate_object (obj, &env, &eval_out);
 
 	  if (result)
 	    {
@@ -1017,7 +995,7 @@ main (int argc, char *argv [])
 	      printf ("\n");
 	    }
 	  else
-	    print_eval_error (eval_out, cursor, &env);
+	    print_eval_error (&eval_out, &env);
 
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
@@ -1031,8 +1009,8 @@ main (int argc, char *argv [])
 void
 add_standard_definitions (struct environment *env)
 {
-  struct object *cluser_package, *cursor;
-  enum eval_outcome eval_out;
+  struct object *cluser_package;
+  struct eval_outcome eval_out;
 
   env->keyword_package = create_package ("KEYWORD",
 					 strlen ("KEYWORD"));
@@ -1053,10 +1031,8 @@ add_standard_definitions (struct environment *env)
 				cluser_package, DYNAMIC_BINDING),
 			       env->packages);
 
-  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, env,
-			   &eval_out, &cursor);
-  define_constant_by_name ("T", strlen ("T"), &t_object, env, &eval_out,
-			   &cursor);
+  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, env, &eval_out);
+  define_constant_by_name ("T", strlen ("T"), &t_object, env, &eval_out);
 
   add_builtin_form ("CAR", env, builtin_car, 1);
   add_builtin_form ("CDR", env, builtin_cdr, 1);
@@ -1107,9 +1083,9 @@ read_line_interactively (const char prompt [])
 enum read_outcome
 read_object_continued (struct object **obj, int backts_commas_balance,
 		       int is_empty_list, const char *input, size_t size,
-		       struct environment *env, enum eval_outcome *outcome,
-		       struct object **cursor, const char **obj_begin,
-		       const char **obj_end, size_t *mult_comm_depth)
+		       struct environment *env, struct eval_outcome *outcome,
+		       const char **obj_begin, const char **obj_end,
+		       size_t *mult_comm_depth)
 {
   enum read_outcome out;
   int bts, cs;
@@ -1137,14 +1113,14 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       l = NULL;
 
       out = read_list (&l, backts_commas_balance, input, size, env, outcome,
-		       cursor, obj_end, mult_comm_depth);
+		       obj_end, mult_comm_depth);
 
       ob = l;
     }
   else if (!ob)
     {
       out = read_object (&ob, backts_commas_balance, input, size, env,
-			 outcome, cursor, obj_begin, obj_end, mult_comm_depth);
+			 outcome, obj_begin, obj_end, mult_comm_depth);
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
@@ -1152,7 +1128,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
   else if (ob->type == TYPE_CONS_PAIR)
     {
       out = read_list (&ob, backts_commas_balance, input, size, env, outcome,
-		       cursor, obj_end, mult_comm_depth);
+		       obj_end, mult_comm_depth);
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -1167,12 +1143,12 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
     {
-      out = read_sharp_macro_call (&ob, input, size, env, outcome, cursor,
-				   obj_end, mult_comm_depth);
+      out = read_sharp_macro_call (&ob, input, size, env, outcome, obj_end,
+				   mult_comm_depth);
 
       if (out == COMPLETE_OBJECT)
 	ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
-			       cursor, &out);
+			       &out);
     }
 
   if (last_pref)
@@ -1187,11 +1163,9 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 struct object *
 complete_object_interactively (struct object *obj, int is_empty_list,
 			       struct environment *env,
-			       enum eval_outcome *outcome,
-			       struct object **cursor,
+			       struct eval_outcome *outcome,
 			       size_t multiline_comm_depth,
-			       const char **input_left,
-			       size_t *input_left_size)
+			       const char **input_left, size_t *input_left_size)
 {
   char *line;
   enum read_outcome read_out;
@@ -1203,8 +1177,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   len = strlen (line);
   
   read_out = read_object_continued (&obj, 0, is_empty_list, line, len, env,
-				    outcome, cursor, &begin, &end,
-				    &multiline_comm_depth);
+				    outcome, &begin, &end, &multiline_comm_depth);
 
   while (read_out & (INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING |
 		     INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
@@ -1224,11 +1197,11 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
       if (read_out & INCOMPLETE_EMPTY_LIST)
 	read_out = read_object_continued (&obj, 0, 1, line, len, env, outcome,
-					  cursor, &begin, &end,
+					  &begin, &end,
 					  &multiline_comm_depth);
       else
 	read_out = read_object_continued (&obj, 0, 0, line, len, env, outcome,
-					  cursor, &begin, &end,
+					  &begin, &end,
 					  &multiline_comm_depth);
     }
 
@@ -1242,8 +1215,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 struct object *
 read_object_interactively_continued (const char *input, size_t input_size,
 				     struct environment *env,
-				     enum eval_outcome *outcome,
-				     struct object **cursor,
+				     struct eval_outcome *outcome,
 				     const char **input_left,
 				     size_t *input_left_size)
 {
@@ -1253,8 +1225,8 @@ read_object_interactively_continued (const char *input, size_t input_size,
   size_t mult_comm_depth = 0;
 
   
-  read_out = read_object (&obj, 0, input, input_size, env, outcome, cursor,
-			  &begin, &end, &mult_comm_depth);
+  read_out = read_object (&obj, 0, input, input_size, env, outcome, &begin,
+			  &end, &mult_comm_depth);
   
   if (read_out == COMPLETE_OBJECT  && !mult_comm_depth)
     {
@@ -1278,26 +1250,24 @@ read_object_interactively_continued (const char *input, size_t input_size,
     }
   else if (read_out == INCOMPLETE_EMPTY_LIST)
     {
-      return complete_object_interactively (obj, 1, env, outcome, cursor,
+      return complete_object_interactively (obj, 1, env, outcome,
 					    mult_comm_depth, input_left,
 					    input_left_size);
     }
   else
-    return complete_object_interactively (obj, 0, env, outcome, cursor,
-					  mult_comm_depth, input_left,
-					  input_left_size);
+    return complete_object_interactively (obj, 0, env, outcome, mult_comm_depth,
+					  input_left, input_left_size);
 }
 
 
 struct object *
-read_object_interactively (struct environment *env, enum eval_outcome *outcome,
-			   struct object **cursor, const char **input_left,
-			   size_t *input_left_size)
+read_object_interactively (struct environment *env, struct eval_outcome *outcome,
+			   const char **input_left, size_t *input_left_size)
 {
   char *line = read_line_interactively ("al> ");
 
   return read_object_interactively_continued (line, strlen (line), env,
-					      outcome, cursor, input_left,
+					      outcome, input_left,
 					      input_left_size);
 }
 
@@ -1467,9 +1437,8 @@ append_object_to_list (struct object *obj, struct object_list *list)
 
 enum read_outcome
 read_object (struct object **obj, int backts_commas_balance, const char *input,
-	     size_t size, struct environment *env, enum eval_outcome *outcome,
-	     struct object **cursor, const char **obj_begin,
-	     const char **obj_end, size_t *out_arg)
+	     size_t size, struct environment *env, struct eval_outcome *outcome,
+	     const char **obj_begin, const char **obj_end, size_t *out_arg)
 {
   int found_prefix = 0;
   struct object *last_pref, *ob = NULL;
@@ -1522,7 +1491,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  *obj_begin = input;
 	  out = read_list (&ob, backts_commas_balance, input+1, size-1, env,
-			   outcome, cursor, obj_end, out_arg);
+			   outcome, obj_end, out_arg);
 	  break;
 	}
       else if (*input == '"')
@@ -1535,11 +1504,11 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  *obj_begin = input;
 	  out = read_sharp_macro_call (&ob, input+1, size-1, env, outcome,
-				       cursor, obj_end, out_arg);
+				       obj_end, out_arg);
 
 	  if (out == COMPLETE_OBJECT)
 	    ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
-				   cursor, &out);
+				   &out);
 
 	  break;
 	}
@@ -1580,8 +1549,8 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 enum read_outcome
 read_list (struct object **obj, int backts_commas_balance, const char *input,
-	   size_t size, struct environment *env, enum eval_outcome *outcome,
-	   struct object **cursor, const char **list_end, size_t *out_arg)
+	   size_t size, struct environment *env, struct eval_outcome *outcome,
+	   const char **list_end, size_t *out_arg)
 {
   struct object *last_cons = NULL, *car = NULL, *ob = *obj, *cons;
   const char *obj_beg, *obj_end = NULL;
@@ -1598,7 +1567,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  out = read_object_continued (&ob->value_ptr.cons_pair->car,
 				       backts_commas_balance, 0, input,
-				       size, env, outcome, cursor, &obj_beg,
+				       size, env, outcome, &obj_beg,
 				       &obj_end, out_arg);
 
 	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
@@ -1612,7 +1581,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  out = read_object_continued (&ob->value_ptr.cons_pair->car,
 				       backts_commas_balance, 1, input,
-				       size, env, outcome, cursor, &obj_beg,
+				       size, env, outcome, &obj_beg,
 				       &obj_end, out_arg);
 
 	  if (out != INCOMPLETE_EMPTY_LIST)
@@ -1636,13 +1605,13 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
   if (obj_end)
     {
       out = read_object (&car, backts_commas_balance, obj_end + 1,
-			 size - (obj_end + 1 - input), env, outcome, cursor,
-			 &obj_beg, &obj_end, out_arg);
+			 size - (obj_end + 1 - input), env, outcome, &obj_beg,
+			 &obj_end, out_arg);
     }
   else
     {
       out = read_object (&car, backts_commas_balance, input, size, env,
-			 outcome, cursor, &obj_beg, &obj_end, out_arg);
+			 outcome, &obj_beg, &obj_end, out_arg);
     }
 
   if (out == NO_OBJECT && !last_cons)
@@ -1711,8 +1680,8 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
       car = NULL;
       out = read_object (&car, backts_commas_balance, obj_end + 1,
-			 size - (obj_end + 1 - input), env, outcome, cursor,
-			 &obj_beg, &obj_end, out_arg);
+			 size - (obj_end + 1 - input), env, outcome, &obj_beg,
+			 &obj_end, out_arg);
     }
 
   if (out == INCOMPLETE_EMPTY_LIST)
@@ -1882,9 +1851,8 @@ read_prefix (struct object **obj, const char *input, size_t size,
 
 enum read_outcome
 read_sharp_macro_call (struct object **obj, const char *input, size_t size,
-		       struct environment *env, enum eval_outcome *e_outcome,
-		       struct object **cursor, const char **macro_end,
-		       size_t *out_arg)
+		       struct environment *env, struct eval_outcome *e_outcome,
+		       const char **macro_end, size_t *out_arg)
 {
   int arg;
   size_t i = 0;
@@ -1900,9 +1868,8 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     {
       return read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
 				    (*obj)->value_ptr.sharp_macro_call->
-				    is_empty_list, input, size, env,
-				    e_outcome, cursor, &obj_b, macro_end,
-				    out_arg);
+				    is_empty_list, input, size, env, e_outcome,
+				    &obj_b, macro_end, out_arg);
     }
 
   *obj = alloc_sharp_macro_call ();
@@ -1956,7 +1923,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     {
       call->obj = NULL;
       out = read_list (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
-			    cursor, macro_end, out_arg);
+		       macro_end, out_arg);
 
       if (out == INCOMPLETE_EMPTY_LIST)
 	call->is_empty_list = 1;
@@ -1968,8 +1935,8 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     }
 
   call->obj = NULL;
-  out = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
-			  cursor, &obj_b, macro_end, out_arg);
+  out = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome, &obj_b,
+		     macro_end, out_arg);
 
   if (out == INCOMPLETE_EMPTY_LIST)
     call->is_empty_list = 1;
@@ -1983,8 +1950,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
 struct object *
 call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
-		  enum eval_outcome *e_outcome, struct object **cursor,
-		  enum read_outcome *r_outcome)
+		  struct eval_outcome *e_outcome, enum read_outcome *r_outcome)
 {
   struct binding *bind;
   struct object *obj = macro_call->obj;
@@ -2052,7 +2018,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == '.')
     {
-      return evaluate_object (obj, env, e_outcome, cursor);
+      return evaluate_object (obj, env, e_outcome);
     }
   else if (macro_call->dispatch_ch == 'p' || macro_call->dispatch_ch == 'P')
     {
@@ -3066,8 +3032,7 @@ void
 add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form) (struct object *list,
 						  struct environment *env,
-						  enum eval_outcome *outcome,
-						  struct object **cursor),
+						  struct eval_outcome *outcome),
 		  int eval_args)
 {
   struct object *sym = intern_symbol (name, strlen (name), env->current_package);
@@ -3081,17 +3046,16 @@ add_builtin_form (char *name, struct environment *env,
 
 struct object *
 define_constant (struct object *sym, struct object *form,
-		 struct environment *env, enum eval_outcome *outcome,
-		 struct object **cursor)
+		 struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *val = evaluate_object (form, env, outcome, cursor);
+  struct object *val = evaluate_object (form, env, outcome);
   
   if (!val)
     return NULL;
 
   if (SYMBOL (sym)->value_ptr.symbol->is_const)
     {
-      *outcome = CANT_REDEFINE_CONSTANT;
+      outcome->type = CANT_REDEFINE_CONSTANT;
       return NULL;
     }
 
@@ -3105,22 +3069,20 @@ define_constant (struct object *sym, struct object *form,
 
 struct object *
 define_constant_by_name (char *name, size_t size, struct object *form,
-			 struct environment *env, enum eval_outcome *outcome,
-			 struct object **cursor)
+			 struct environment *env, struct eval_outcome *outcome)
 {
   struct object *sym = intern_symbol (name, size, env->current_package);
 
-  return define_constant (sym, form, env, outcome, cursor);
+  return define_constant (sym, form, env, outcome);
 }
 
 
 struct object *
 define_parameter (struct object *sym, struct object *form,
-		  struct environment *env, enum eval_outcome *outcome,
-		  struct object **cursor)
+		  struct environment *env, struct eval_outcome *outcome)
 {
   struct object *s;
-  struct object *val = evaluate_object (form, env, outcome, cursor);
+  struct object *val = evaluate_object (form, env, outcome);
 
   if (!val)
     return NULL;
@@ -3139,12 +3101,11 @@ define_parameter (struct object *sym, struct object *form,
 
 struct object *
 define_parameter_by_name (char *name, size_t size, struct object *form,
-			  struct environment *env, enum eval_outcome *outcome,
-			  struct object **cursor)
+			  struct environment *env, struct eval_outcome *outcome)
 {
   struct object *sym = intern_symbol (name, size, env->current_package);
 
-  return define_parameter (sym, form, env, outcome, cursor);
+  return define_parameter (sym, form, env, outcome);
 }
 
 
@@ -3539,20 +3500,20 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 struct object *
 evaluate_body (struct object *body, int eval_twice, struct environment *env,
-	      enum eval_outcome *outcome, struct object **cursor)
+	       struct eval_outcome *outcome)
 {
   struct object *res;
 
   do
     {
-      res = evaluate_object (CAR (body), env, outcome, cursor);
+      res = evaluate_object (CAR (body), env, outcome);
 
       if (eval_twice)
 	{
 	  if (!res)
 	    return NULL;
 
-	  res = evaluate_object (res, env, outcome, cursor);
+	  res = evaluate_object (res, env, outcome);
 	}
 
       body = CDR (body);
@@ -3566,7 +3527,7 @@ evaluate_body (struct object *body, int eval_twice, struct environment *env,
 struct object *
 call_function (struct object *func, struct object *arglist, int eval_args,
 	       int eval_twice, struct environment *env,
-	       enum eval_outcome *outcome, struct object **cursor)
+	       struct eval_outcome *outcome)
 {
   struct parameter *par = func->value_ptr.function->lambda_list;
   struct binding *bins = NULL;
@@ -3578,7 +3539,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       if (eval_args)
 	{
-	  val = evaluate_object (CAR (arglist), env, outcome, cursor);
+	  val = evaluate_object (CAR (arglist), env, outcome);
 
 	  if (!val)
 	    return NULL;
@@ -3603,13 +3564,13 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (par && par->type == REQUIRED_PARAM)
     {
-      *outcome = TOO_FEW_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
 
   if (arglist != &nil_object && (!par || (par && par->type != REST_PARAM)))
     {
-      *outcome = TOO_MANY_ARGUMENTS;
+      outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
@@ -3617,7 +3578,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       if (par->init_form)
 	{
-	  val = evaluate_object (par->init_form, env, outcome, cursor);
+	  val = evaluate_object (par->init_form, env, outcome);
 
 	  if (!val)
 	    return NULL;
@@ -3648,8 +3609,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   env->vars = chain_bindings (bins, env->vars);
 
-  res = evaluate_body (func->value_ptr.function->body, eval_twice, env, outcome,
-		       cursor);
+  res = evaluate_body (func->value_ptr.function->body, eval_twice, env, outcome);
 
   env->vars = remove_bindings (env->vars, args);
 
@@ -3677,7 +3637,7 @@ check_type (const struct object *obj, const struct typespec *type)
 
 struct object *
 evaluate_object (struct object *obj, struct environment *env,
-		 enum eval_outcome *outcome, struct object **cursor)
+		 struct eval_outcome *outcome)
 {
   struct binding *bind;
   struct object *sym;
@@ -3692,7 +3652,7 @@ evaluate_object (struct object *obj, struct environment *env,
       increment_refcount (obj->value_ptr.next);
 
       return apply_backquote (obj->value_ptr.next, NULL, 0, NULL, 1, env,
-			      outcome, cursor);
+			      outcome);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
@@ -3727,15 +3687,15 @@ evaluate_object (struct object *obj, struct environment *env,
 	    return bind->obj;
 	  else
 	    {
-	      *outcome = UNBOUND_SYMBOL;
-	      *cursor = sym;
+	      outcome->type = UNBOUND_SYMBOL;
+	      outcome->obj = sym;
 	      return NULL;
 	    }
 	}
     }
   else if (obj->type == TYPE_CONS_PAIR)
     {
-      return evaluate_list (obj, env, outcome, cursor);
+      return evaluate_list (obj, env, outcome);
     }
   else
     {
@@ -3748,19 +3708,18 @@ evaluate_object (struct object *obj, struct environment *env,
 struct object *
 apply_backquote (struct object *form, struct object *cons, int first_cons,
 		 struct object *prev_prefix, int backts_commas_balance,
-		 struct environment *env, enum eval_outcome *outcome,
-		 struct object **cursor)
+		 struct environment *env, struct eval_outcome *outcome)
 {
   struct object *prev_cons, *cur_cons, *next_cons, *ret, *pref_copy;
 
   if (!backts_commas_balance)
     {
-      return evaluate_object (form, env, outcome, cursor);
+      return evaluate_object (form, env, outcome);
     }
   else if (form->type == TYPE_BACKQUOTE)
     {
       ret = apply_backquote (form->value_ptr.next, cons, first_cons, form,
-			     backts_commas_balance + 1, env, outcome, cursor);
+			     backts_commas_balance + 1, env, outcome);
 
       if (!ret)
 	return NULL;
@@ -3778,13 +3737,13 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	    {
 	      if (!cons)
 		{
-		  *outcome = COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL;
+		  outcome->type = COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL;
 
 		  return NULL;
 		}
 
 	      ret = evaluate_object (form->value_ptr.next->value_ptr.next, env,
-				     outcome, cursor);
+				     outcome);
 
 	      if (!ret)
 		return NULL;
@@ -3815,12 +3774,12 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	      return CAR (ret);
 	    }
 
-	  return evaluate_object (form->value_ptr.next, env, outcome, cursor);
+	  return evaluate_object (form->value_ptr.next, env, outcome);
 	}
       else
 	{
 	  ret = apply_backquote (form->value_ptr.next, cons, first_cons, form, 
-				 backts_commas_balance - 1, env, outcome, cursor);
+				 backts_commas_balance - 1, env, outcome);
 
 	  if (!ret)
 	    return NULL;
@@ -3840,7 +3799,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	  next_cons = CDR (cur_cons);
 
 	  ret = apply_backquote (CAR (cur_cons), prev_cons, first_cons, NULL,
-				 backts_commas_balance, env, outcome, cursor);
+				 backts_commas_balance, env, outcome);
 
 	  if (!ret)
 	    return NULL;
@@ -3855,7 +3814,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
       if (cur_cons->type != TYPE_NIL)
 	{
 	  ret = apply_backquote (cur_cons, cons, 0, NULL, backts_commas_balance,
-				 env, outcome, cursor);
+				 env, outcome);
 
 	  if (!ret)
 	    return NULL;
@@ -3870,7 +3829,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 
 struct object *
 evaluate_list (struct object *list, struct environment *env,
-	       enum eval_outcome *outcome, struct object **cursor)
+	       struct eval_outcome *outcome)
 {
   struct symbol_name *symname;
   struct binding *bind;
@@ -3878,15 +3837,15 @@ evaluate_list (struct object *list, struct environment *env,
 
   if (is_dotted_list (list))
     {
-      *outcome = DOTTED_LIST_NOT_ALLOWED_HERE;
+      outcome->type = DOTTED_LIST_NOT_ALLOWED_HERE;
 
       return NULL;
     }
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME)
     {
-      *outcome = INVALID_FUNCTION_CALL;
-      *cursor = CAR (list);
+      outcome->type = INVALID_FUNCTION_CALL;
+      outcome->obj = CAR (list);
       return NULL;
     }
 
@@ -3896,7 +3855,7 @@ evaluate_list (struct object *list, struct environment *env,
     {
       if (symname->sym->value_ptr.symbol->evaluate_args)
 	{
-	  args = evaluate_through_list (CDR (list), env, outcome, cursor);
+	  args = evaluate_through_list (CDR (list), env, outcome);
 
 	  if (!args)
 	    return NULL;
@@ -3904,31 +3863,28 @@ evaluate_list (struct object *list, struct environment *env,
       else
 	args = CDR (list);
 
-      return symname->sym->value_ptr.symbol->builtin_form (args, env, outcome,
-							   cursor);
+      return symname->sym->value_ptr.symbol->builtin_form (args, env, outcome);
     }
 
   if (symname_equals (symname, "LET"))
     {
       if (!(CDR (list)->type & TYPE_LIST))
 	{
-	  *outcome = INCORRECT_SYNTAX_IN_LET;
+	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
 	}
 
-      return evaluate_let (CAR (CDR (list)), CDR (CDR (list)), env, outcome,
-			   cursor);
+      return evaluate_let (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
     }
   else if (symname_equals (symname, "LET*"))
     {
       if (!(CDR (list)->type & TYPE_LIST))
 	{
-	  *outcome = INCORRECT_SYNTAX_IN_LET;
+	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
 	}
 
-      return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)), env,
-				outcome, cursor);
+      return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
     }
   else if (symname_equals (symname, "QUOTE"))
     {
@@ -3941,26 +3897,26 @@ evaluate_list (struct object *list, struct environment *env,
   if (bind)
     {
       if (bind->obj->type == TYPE_FUNCTION)
-	return call_function (bind->obj, CDR (list), 1, 0, env, outcome, cursor);
+	return call_function (bind->obj, CDR (list), 1, 0, env, outcome);
       else
-	return call_function (bind->obj, CDR (list), 0, 1, env, outcome, cursor);
+	return call_function (bind->obj, CDR (list), 0, 1, env, outcome);
     }
 
-  *outcome = UNKNOWN_FUNCTION;
-  *cursor = CAR (list);
+  outcome->type = UNKNOWN_FUNCTION;
+  outcome->obj = CAR (list);
   return NULL;
 }
 
 
 struct object *
 evaluate_through_list (struct object *list, struct environment *env,
-		       enum eval_outcome *outcome, struct object **cursor)
+		       struct eval_outcome *outcome)
 {
   struct object *args = NULL, *cons, *last_cons, *obj;
 
   while (list != &nil_object)
     {
-      obj = evaluate_object (CAR (list), env, outcome, cursor);
+      obj = evaluate_object (CAR (list), env, outcome);
 
       if (!obj)
 	return NULL;
@@ -3985,22 +3941,22 @@ evaluate_through_list (struct object *list, struct environment *env,
 
 struct object *
 builtin_car (struct object *list, struct environment *env,
-	     enum eval_outcome *outcome, struct object **cursor)
+	     struct eval_outcome *outcome)
 {
   if (!list_length (list))
     {
-      *outcome = TOO_FEW_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
   if (list_length (list) > 1)
     {
-      *outcome = TOO_MANY_ARGUMENTS;
+      outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
   if (!(list->value_ptr.cons_pair->car->type & TYPE_LIST))
     {
-      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
@@ -4010,22 +3966,22 @@ builtin_car (struct object *list, struct environment *env,
 
 struct object *
 builtin_cdr (struct object *list, struct environment *env,
-	     enum eval_outcome *outcome, struct object **cursor)
+	     struct eval_outcome *outcome)
 {
   if (!list_length (list))
     {
-      *outcome = TOO_FEW_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
   if (list_length (list) > 1)
     {
-      *outcome = TOO_MANY_ARGUMENTS;
+      outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
   if (!(list->value_ptr.cons_pair->car->type & TYPE_LIST))
     {
-      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
@@ -4035,18 +3991,18 @@ builtin_cdr (struct object *list, struct environment *env,
 
 struct object *
 builtin_cons (struct object *list, struct environment *env,
-	      enum eval_outcome *outcome, struct object **cursor)
+	      struct eval_outcome *outcome)
 {
   struct object *cons;
 
   if (list_length (list) < 2)
     {
-      *outcome = TOO_FEW_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
   if (list_length (list) > 2)
     {
-      *outcome = TOO_MANY_ARGUMENTS;
+      outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
@@ -4060,7 +4016,7 @@ builtin_cons (struct object *list, struct environment *env,
 
 struct object *
 builtin_list (struct object *list, struct environment *env,
-	      enum eval_outcome *outcome, struct object **cursor)
+	      struct eval_outcome *outcome)
 {
   struct object *l = NULL, *cons, *last_cons;
 
@@ -4083,11 +4039,11 @@ builtin_list (struct object *list, struct environment *env,
 
 struct object *
 builtin_write (struct object *list, struct environment *env,
-	       enum eval_outcome *outcome, struct object **cursor)
+	       struct eval_outcome *outcome)
 {
   if (list_length (list) != 1)
     {
-      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
@@ -4100,7 +4056,7 @@ builtin_write (struct object *list, struct environment *env,
 
 struct object *
 builtin_load (struct object *list, struct environment *env,
-	      enum eval_outcome *outcome, struct object **cursor)
+	      struct eval_outcome *outcome)
 {
   FILE *f;
   long l;
@@ -4114,18 +4070,18 @@ builtin_load (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      *outcome = TOO_FEW_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
   if (list_length (list) > 1)
     {
-      *outcome = TOO_MANY_ARGUMENTS;
+      outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
@@ -4133,25 +4089,25 @@ builtin_load (struct object *list, struct environment *env,
 
   if (!f)
     {
-      *outcome = COULD_NOT_OPEN_FILE_FOR_READING;
+      outcome->type = COULD_NOT_OPEN_FILE_FOR_READING;
       return NULL;
     }
 
   if (fseek (f, 0l, SEEK_END))
     {
-      *outcome = COULD_NOT_SEEK_FILE;
+      outcome->type = COULD_NOT_SEEK_FILE;
       return NULL;
     }
 
   if ((l = ftell (f)) == -1)
     {
-      *outcome = COULD_NOT_TELL_FILE;
+      outcome->type = COULD_NOT_TELL_FILE;
       return NULL;
     }
 
   if (fseek (f, 0l, SEEK_SET))
     {
-      *outcome = COULD_NOT_SEEK_FILE;
+      outcome->type = COULD_NOT_SEEK_FILE;
       return NULL;
     }
 
@@ -4159,11 +4115,11 @@ builtin_load (struct object *list, struct environment *env,
 
   if (!fread (buf, l, 1, f))
     {
-      *outcome = ERROR_READING_FILE;
+      outcome->type = ERROR_READING_FILE;
       return NULL;
     }
 
-  out = read_object (&obj, 0, buf, l, env, outcome, cursor, &obj_b, &obj_e,
+  out = read_object (&obj, 0, buf, l, env, outcome, &obj_b, &obj_e,
 		     &mult_comm_depth);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
@@ -4179,18 +4135,18 @@ builtin_load (struct object *list, struct environment *env,
 	}
       else if (out == COMPLETE_OBJECT)
 	{
-	  res = evaluate_object (obj, env, outcome, cursor);
+	  res = evaluate_object (obj, env, outcome);
 
 	  if (res)
 	    {
-	      out = read_object (&obj, 0, in, sz, env, outcome, cursor, &obj_b,
-				 &obj_e, &mult_comm_depth);
+	      out = read_object (&obj, 0, in, sz, env, outcome, &obj_b, &obj_e,
+				 &mult_comm_depth);
 	      sz = sz - (obj_e + 1 - in);
 	      in = obj_e + 1;
 	    }
 	  else
 	    {
-	      print_eval_error (*outcome, *cursor, env);
+	      print_eval_error (outcome, env);
 
 	      free (buf);
 	      fclose (f);
@@ -4225,13 +4181,13 @@ builtin_load (struct object *list, struct environment *env,
 
 struct object *
 builtin_eq (struct object *list, struct environment *env,
-	    enum eval_outcome *outcome, struct object **cursor)
+	    struct eval_outcome *outcome)
 {
   struct object *arg1, *arg2;
 
   if (list_length (list) != 2)
     {
-      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
@@ -4254,11 +4210,11 @@ builtin_eq (struct object *list, struct environment *env,
 
 struct object *
 builtin_not (struct object *list, struct environment *env,
-	     enum eval_outcome *outcome, struct object **cursor)
+	     struct eval_outcome *outcome)
 {
   if (list_length (list) != 1)
     {
-      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
@@ -4345,21 +4301,21 @@ apply_arithmetic_operation (struct object *list,
 			    void (*opz) (mpz_t, const mpz_t, const mpz_t),
 			    void (*opq) (mpq_t, const mpq_t, const mpq_t),
 			    void (*opf) (mpf_t, const mpf_t, const mpf_t),
-			    struct environment *env, enum eval_outcome *outcome,
-			    struct object **cursor)
+			    struct environment *env, struct eval_outcome *outcome)
 {
   struct object *ret, *op;
 
   if (!(CAR (list)->type & TYPE_NUMBER) || !(CAR (CDR (list))->type & TYPE_NUMBER))
     {
-      *outcome = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
   if (highest_num_type (CAR (list)->type, CAR (CDR (list))->type) == CAR (list)->type)
     ret = copy_number (CAR (list));
   else
-    ret = promote_number (CAR (list), highest_num_type (CAR (list)->type, CAR (CDR (list))->type));
+    ret = promote_number (CAR (list), highest_num_type (CAR (list)->type,
+							CAR (CDR (list))->type));
 
   list = CDR (list);
 
@@ -4390,7 +4346,7 @@ apply_arithmetic_operation (struct object *list,
 
 struct object *
 builtin_plus (struct object *list, struct environment *env,
-	      enum eval_outcome *outcome, struct object **cursor)
+	      struct eval_outcome *outcome)
 {
   struct object *ret;
 
@@ -4410,26 +4366,26 @@ builtin_plus (struct object *list, struct environment *env,
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
-	  *outcome = WRONG_TYPE_OF_ARGUMENT;
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
       return CAR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_add, mpq_add, mpf_add, env, outcome, cursor);
+  return apply_arithmetic_operation (list, mpz_add, mpq_add, mpf_add, env, outcome);
 }
 
 
 struct object *
 builtin_minus (struct object *list, struct environment *env,
-	       enum eval_outcome *outcome, struct object **cursor)
+	       struct eval_outcome *outcome)
 {
   struct object *ret;
 
   if (!list_length (list))
     {
-      *outcome = TOO_FEW_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
 
@@ -4437,7 +4393,7 @@ builtin_minus (struct object *list, struct environment *env,
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
-	  *outcome = WRONG_TYPE_OF_ARGUMENT;
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
@@ -4459,13 +4415,13 @@ builtin_minus (struct object *list, struct environment *env,
       return ret;
     }
 
-  return apply_arithmetic_operation (list, mpz_sub, mpq_sub, mpf_sub, env, outcome, cursor);
+  return apply_arithmetic_operation (list, mpz_sub, mpq_sub, mpf_sub, env, outcome);
 }
 
 
 struct object *
 builtin_multiply (struct object *list, struct environment *env,
-		  enum eval_outcome *outcome, struct object **cursor)
+		  struct eval_outcome *outcome)
 {
   struct object *ret;
 
@@ -4485,20 +4441,20 @@ builtin_multiply (struct object *list, struct environment *env,
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
-	  *outcome = WRONG_TYPE_OF_ARGUMENT;
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
       return CAR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_mul, mpq_mul, mpf_mul, env, outcome, cursor);
+  return apply_arithmetic_operation (list, mpz_mul, mpq_mul, mpf_mul, env, outcome);
 }
 
 
 struct object *
 builtin_divide (struct object *list, struct environment *env,
-		enum eval_outcome *outcome, struct object **cursor)
+		struct eval_outcome *outcome)
 {
   return NULL;
 }
@@ -4506,7 +4462,7 @@ builtin_divide (struct object *list, struct environment *env,
 
 struct binding *
 create_binding_from_let_form (struct object *form, struct environment *env,
-			      enum eval_outcome *outcome, struct object **cursor)
+			      struct eval_outcome *outcome)
 {
   struct object *sym, *val;
 
@@ -4516,7 +4472,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
       if (sym->value_ptr.symbol->is_const)
 	{
-	  *outcome = CANT_REBIND_CONSTANT;
+	  outcome->type = CANT_REBIND_CONSTANT;
 	  return NULL;
 	}
 
@@ -4530,7 +4486,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
       if (list_length (form) != 2
 	  || (CAR (form)->type != TYPE_SYMBOL_NAME && CAR (form)->type != TYPE_SYMBOL)) 
 	{
-	  *outcome = INCORRECT_SYNTAX_IN_LET;
+	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
 	}
 
@@ -4538,11 +4494,11 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
       if (sym->value_ptr.symbol->is_const)
 	{
-	  *outcome = CANT_REBIND_CONSTANT;
+	  outcome->type = CANT_REBIND_CONSTANT;
 	  return NULL;
 	}
 
-      val = evaluate_object (CAR (CDR (form)), env, outcome, cursor);
+      val = evaluate_object (CAR (CDR (form)), env, outcome);
 
       if (!val)
 	return NULL;
@@ -4554,7 +4510,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
     }
   else
     {
-      *outcome = INCORRECT_SYNTAX_IN_LET;
+      outcome->type = INCORRECT_SYNTAX_IN_LET;
       return NULL;
     }
 }
@@ -4562,8 +4518,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
 struct object *
 evaluate_let (struct object *bind_forms, struct object *body,
-	      struct environment *env, enum eval_outcome *outcome,
-	      struct object **cursor)
+	      struct environment *env, struct eval_outcome *outcome)
 {
   struct object *res;
   int binding_num = 0;
@@ -4571,7 +4526,7 @@ evaluate_let (struct object *bind_forms, struct object *body,
 
   while (bind_forms != &nil_object)
     {
-      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, cursor);
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
 
       if (!bin)
 	return NULL;
@@ -4584,7 +4539,7 @@ evaluate_let (struct object *bind_forms, struct object *body,
 
   env->vars = chain_bindings (bins, env->vars);
 
-  res = evaluate_progn (body, env, outcome, cursor);
+  res = evaluate_progn (body, env, outcome);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
@@ -4594,8 +4549,7 @@ evaluate_let (struct object *bind_forms, struct object *body,
 
 struct object *
 evaluate_let_star (struct object *bind_forms, struct object *body,
-		   struct environment *env, enum eval_outcome *outcome,
-		   struct object **cursor)
+		   struct environment *env, struct eval_outcome *outcome)
 {
   struct object *res;
   int binding_num = 0;
@@ -4603,7 +4557,7 @@ evaluate_let_star (struct object *bind_forms, struct object *body,
 
   while (bind_forms != &nil_object)
     {
-      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, cursor);
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
 
       if (!bin)
 	return NULL;
@@ -4614,7 +4568,7 @@ evaluate_let_star (struct object *bind_forms, struct object *body,
       bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_progn (body, env, outcome, cursor);
+  res = evaluate_progn (body, env, outcome);
 
   env->vars = remove_bindings (env->vars, binding_num);
 
@@ -4624,17 +4578,17 @@ evaluate_let_star (struct object *bind_forms, struct object *body,
 
 struct object *
 evaluate_if (struct object *list, struct environment *env,
-	     enum eval_outcome *outcome, struct object **cursor)
+	     struct eval_outcome *outcome)
 {
   struct object *if_clause;
 
   if (!list)
     {
-      *outcome = MALFORMED_IF;
+      outcome->type = MALFORMED_IF;
       return NULL;
     }
 
-  if_clause = evaluate_object (CAR (list), env, outcome, cursor);
+  if_clause = evaluate_object (CAR (list), env, outcome);
 
   if (!if_clause)
     return NULL;
@@ -4643,11 +4597,11 @@ evaluate_if (struct object *list, struct environment *env,
     {
       if (CDR (list) == &nil_object)
 	{
-	  *outcome = MALFORMED_IF;
+	  outcome->type = MALFORMED_IF;
 	  return NULL;
 	}
 
-      return evaluate_object (CAR (CDR (list)), env, outcome, cursor);
+      return evaluate_object (CAR (CDR (list)), env, outcome);
     }
   else
     {
@@ -4656,44 +4610,45 @@ evaluate_if (struct object *list, struct environment *env,
 	  return &nil_object;
 	}
       else
-	return evaluate_object (nth (2, list), env, outcome, cursor);
+	return evaluate_object (nth (2, list), env, outcome);
     }
 }
 
 
 struct object *
 evaluate_progn (struct object *list, struct environment *env,
-		enum eval_outcome *outcome, struct object **cursor)
+		struct eval_outcome *outcome)
 {
-  return evaluate_body (list, 0, env, outcome, cursor);
+  return evaluate_body (list, 0, env, outcome);
 }
 
 
 struct object *
 evaluate_defconstant (struct object *list, struct environment *env,
-		      enum eval_outcome *outcome, struct object **cursor)
+		      struct eval_outcome *outcome)
 {
-  return define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)), env, outcome, cursor);
+  return define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)),
+			  env, outcome);
 }
 
 
 struct object *
 evaluate_defparameter (struct object *list, struct environment *env,
-		       enum eval_outcome *outcome, struct object **cursor)
+		       struct eval_outcome *outcome)
 {
   if (list_length (list) != 2)
     {
-      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  return define_parameter (CAR (list), CAR (CDR (list)), env, outcome, cursor);
+  return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
 }
 
 
 struct object *
 evaluate_defvar (struct object *list, struct environment *env,
-		 enum eval_outcome *outcome, struct object **cursor)
+		 struct eval_outcome *outcome)
 {
   struct object *s = CAR (list);
   
@@ -4709,11 +4664,11 @@ evaluate_defvar (struct object *list, struct environment *env,
       s->value_ptr.symbol->is_special = 1;
       
       if (!s->value_ptr.symbol->value_cell)
-	return define_parameter (CAR (list), CAR (CDR (list)), env, outcome, cursor);
+	return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
     }
   else
     {
-      *outcome = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
@@ -4723,14 +4678,14 @@ evaluate_defvar (struct object *list, struct environment *env,
 
 struct object *
 evaluate_defun (struct object *list, struct environment *env,
-		enum eval_outcome *outcome, struct object **cursor)
+		struct eval_outcome *outcome)
 {
   struct object *fun;
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME
       || !(CAR (CDR (list))->type & TYPE_LIST))
     {
-      *outcome = INCORRECT_SYNTAX_IN_DEFUN;
+      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
     }
 
@@ -4745,14 +4700,14 @@ evaluate_defun (struct object *list, struct environment *env,
 
 struct object *
 evaluate_defmacro (struct object *list, struct environment *env,
-		   enum eval_outcome *outcome, struct object **cursor)
+		   struct eval_outcome *outcome)
 {
   struct object *fun;
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME
       || !(CAR (CDR (list))->type & TYPE_LIST))
     {
-      *outcome = INCORRECT_SYNTAX_IN_DEFUN;
+      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
     }
 
@@ -5124,79 +5079,78 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
 
 
 void
-print_eval_error (enum eval_outcome err, struct object *arg,
-		  struct environment *env)
+print_eval_error (struct eval_outcome *err, struct environment *env)
 {
-  if (err == UNBOUND_SYMBOL)
+  if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
-      print_symbol (arg->value_ptr.symbol, env);
+      print_symbol (err->obj->value_ptr.symbol, env);
       printf (" not bound to any object\n");
     }
-  else if (err == UNKNOWN_FUNCTION)
+  else if (err->type == UNKNOWN_FUNCTION)
     {
       printf ("eval error: symbol ");
-      print_symbol (arg->value_ptr.symbol, env);
+      print_symbol (err->obj->value_ptr.symbol, env);
       printf (" not bound to any function\n");
     }
-  else if (err == INVALID_FUNCTION_CALL)
+  else if (err->type == INVALID_FUNCTION_CALL)
     {
       printf ("eval error: invalid function call\n");
     }
-  else if (err == DOTTED_LIST_NOT_ALLOWED_HERE)
+  else if (err->type == DOTTED_LIST_NOT_ALLOWED_HERE)
     {
       printf ("eval error: dotted list not allowed here\n");
     }
-  else if (err == COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL)
+  else if (err->type == COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL)
     {
       printf ("eval error: comma-at and comma-dot syntax are not allowed on "
 	      "top-level forms\n");
     }
-  else if (err == WRONG_NUMBER_OF_ARGUMENTS)
+  else if (err->type == WRONG_NUMBER_OF_ARGUMENTS)
     {
       printf ("eval error: wrong number of arguments\n");
     }
-  else if (err == INCORRECT_SYNTAX_IN_LET)
+  else if (err->type == INCORRECT_SYNTAX_IN_LET)
     {
       printf ("eval error: incorrect syntax in let\n");
     }
-  else if (err == INCORRECT_SYNTAX_IN_DEFUN)
+  else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
       printf ("eval error: incorrect syntax in defun\n");
     }
-  else if (err == CANT_REDEFINE_CONSTANT)
+  else if (err->type == CANT_REDEFINE_CONSTANT)
     {
       printf ("eval error: redefining constants is not allowed\n");
     }
-  else if (err == CANT_REBIND_CONSTANT)
+  else if (err->type == CANT_REBIND_CONSTANT)
     {
       printf ("eval error: rebinding constants is not allowed\n");
     }
-  else if (err == TOO_FEW_ARGUMENTS)
+  else if (err->type == TOO_FEW_ARGUMENTS)
     {
       printf ("eval error: too few arguments to function call\n");
     }
-  else if (err == TOO_MANY_ARGUMENTS)
+  else if (err->type == TOO_MANY_ARGUMENTS)
     {
       printf ("eval error: too many arguments to function call\n");
     }
-  else if (err == WRONG_TYPE_OF_ARGUMENT)
+  else if (err->type == WRONG_TYPE_OF_ARGUMENT)
     {
       printf ("type error: wrong type of argument\n");
     }
-  else if (err == COULD_NOT_OPEN_FILE_FOR_READING)
+  else if (err->type == COULD_NOT_OPEN_FILE_FOR_READING)
     {
       printf ("file error: could not open file for reading\n");
     }
-  else if (err == COULD_NOT_SEEK_FILE)
+  else if (err->type == COULD_NOT_SEEK_FILE)
     {
       printf ("file error: could not seek file\n");
     }
-  else if (err == COULD_NOT_TELL_FILE)
+  else if (err->type == COULD_NOT_TELL_FILE)
     {
       printf ("file error: could not tell file\n");
     }
-  else if (err == ERROR_READING_FILE)
+  else if (err->type == ERROR_READING_FILE)
     {
       printf ("file error: could not read file\n");
     }
