@@ -103,6 +103,9 @@ lexical_environment
 struct
 environment
 {
+  struct object_list *type_syms;
+  struct binding *types;
+
   struct binding *vars;
   struct binding *funcs;
   /*struct binding *macros;
