@@ -233,20 +233,6 @@ package_record_visibility
 
 
 struct
-package_record
-{
-  enum package_record_visibility visibility;
-
-  char *symname;
-  size_t symname_len;
-
-  struct symbol *symbol;
-
-  struct package_record *next;
-};
-
-
-struct
 package
 {
   struct object *name;
