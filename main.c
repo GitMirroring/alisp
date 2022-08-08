@@ -216,6 +216,7 @@ eval_outcome
   enum eval_outcome_type type;
 
   struct object *obj;
+  struct typespec *typesp;
 };
 
 
@@ -3612,9 +3613,7 @@ check_type (const struct object *obj, const struct typespec *type)
   if (type->type == TYPESPEC_INTERNAL_OR)
     return obj->type & type->int_value;
   else if (type->type == TYPESPEC_INTERNAL_AND)
-    {
-
-    }
+    return !((obj->type & type->int_value) ^ type->int_value);
   else if (type->type == TYPESPEC_OR)
     return check_type (obj, type->first) || check_type (obj, type->second);
   else if (type->type == TYPESPEC_AND)
