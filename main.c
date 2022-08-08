@@ -714,7 +714,8 @@ struct object *create_vector (struct object *list);
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
-struct object *intern_symbol (char *name, size_t len, struct object *package);
+struct object *intern_symbol (char *name, size_t len,
+			      struct object_list **symlist);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env);
 
@@ -2871,12 +2872,10 @@ find_package (const char *name, size_t len, struct environment *env)
 
 
 struct object *
-intern_symbol (char *name, size_t len, struct object *package)
+intern_symbol (char *name, size_t len, struct object_list **symlist)
 {
   struct object *sym;
-  struct object_list *cur, *new_sym;
-
-  cur = package->value_ptr.package->symlist;
+  struct object_list *cur = *symlist, *new_sym;
 
   while (cur)
     {
@@ -2894,9 +2893,9 @@ intern_symbol (char *name, size_t len, struct object *package)
 
   new_sym = malloc_and_check (sizeof (*new_sym));
   new_sym->obj = sym;
-  new_sym->next = package->value_ptr.package->symlist;
+  new_sym->next = *symlist;
 
-  package->value_ptr.package->symlist = new_sym;
+  *symlist = new_sym;
 
   return sym;  
 }
@@ -2913,7 +2912,7 @@ intern_symbol_name (struct object *symname, struct environment *env)
       if (!s->used_size)
 	{
 	  s->sym = intern_symbol (s->actual_symname, s->actual_symname_used_s,
-				  env->keyword_package);
+				  &env->keyword_package->value_ptr.package->symlist);
 	  s->sym->value_ptr.symbol->home_package = env->keyword_package;
 
 	  return s->sym;
@@ -2926,14 +2925,15 @@ intern_symbol_name (struct object *symname, struct environment *env)
       else
 	{
 	  s->sym = intern_symbol (s->actual_symname, s->actual_symname_used_s,
-				  pack);
+				  &pack->value_ptr.package->symlist);
 	  s->sym->value_ptr.symbol->home_package = pack;
 	  return s->sym;
 	}
     }
 
   pack = env->current_package;
-  return (s->sym = intern_symbol (s->value, s->used_size, pack));
+  return (s->sym = intern_symbol (s->value, s->used_size,
+				  &pack->value_ptr.package->symlist));
 }
 
 
@@ -3025,7 +3025,9 @@ add_builtin_form (char *name, struct environment *env,
 						  struct eval_outcome *outcome),
 		  int eval_args)
 {
-  struct object *sym = intern_symbol (name, strlen (name), env->current_package);
+  struct object *sym = intern_symbol (name, strlen (name),
+				      &env->current_package->
+				      value_ptr.package->symlist);
 
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
@@ -3061,7 +3063,9 @@ struct object *
 define_constant_by_name (char *name, size_t size, struct object *form,
 			 struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *sym = intern_symbol (name, size, env->current_package);
+  struct object *sym = intern_symbol (name, size,
+				      &env->current_package->value_ptr.package->
+				      symlist);
 
   return define_constant (sym, form, env, outcome);
 }
@@ -3093,7 +3097,9 @@ struct object *
 define_parameter_by_name (char *name, size_t size, struct object *form,
 			  struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *sym = intern_symbol (name, size, env->current_package);
+  struct object *sym = intern_symbol (name, size,
+				      &env->current_package->value_ptr.package->
+				      symlist);
 
   return define_parameter (sym, form, env, outcome);
 }
