@@ -103,13 +103,8 @@ lexical_environment
 struct
 environment
 {
-  struct object_list *type_syms;
-  struct binding *types;
-
   struct binding *vars;
   struct binding *funcs;
-  /*struct binding *macros;
-    struct binding *spec_ops;*/
 
   struct binding *packages;
 
@@ -254,6 +249,13 @@ symbol
 {
   char *name;
   size_t name_len;
+
+  int is_type;
+  int is_builtin_type;
+  int is_standard_type;
+  int (*builtin_type) (struct object *obj, struct object *typespec,
+		       struct environment *env, struct eval_outcome *outcome);
+  struct object *typespec;
 
   int is_builtin_form;
   struct parameter *lambda_list;
@@ -727,6 +729,12 @@ struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env,
 			      enum binding_type type);
 
+
+void add_builtin_type (char *name, struct environment *env,
+		       int (*builtin_type)
+		       (struct object *obj, struct object *typespec,
+			struct environment *env, struct eval_outcome *outcome),
+		       int is_standard);
 void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
 		       (struct object *list, struct environment *env,
@@ -782,7 +790,8 @@ struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int eval_twice,
  struct environment *env, struct eval_outcome *outcome);
 
-int check_type (const struct object *obj, const struct typespec *type);
+int check_type (const struct object *obj, const struct object *type,
+		const struct environment *env);
 
 struct object *evaluate_object
 (struct object *obj, struct environment *env, struct eval_outcome *outcome);
@@ -3019,6 +3028,27 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 
 
 void
+add_builtin_type (char *name, struct environment *env,
+		  int (*builtin_type) (struct object *obj,
+				       struct object *typespec,
+				       struct environment *env,
+				       struct eval_outcome *outcome),
+		  int is_standard)
+{
+  struct object *sym = intern_symbol (name, strlen (name),
+				      &env->current_package->
+				      value_ptr.package->symlist);
+
+  sym->value_ptr.symbol->is_type = 1;
+  sym->value_ptr.symbol->is_builtin_type = 1;
+  sym->value_ptr.symbol->is_standard_type = is_standard;
+  sym->value_ptr.symbol->builtin_type = builtin_type;
+
+  increment_refcount (sym);
+}
+
+
+void
 add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form) (struct object *list,
 						  struct environment *env,
@@ -3032,6 +3062,7 @@ add_builtin_form (char *name, struct environment *env,
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
   sym->value_ptr.symbol->evaluate_args = eval_args;
+
   increment_refcount (sym);
 }
 
@@ -3614,17 +3645,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
 int
-check_type (const struct object *obj, const struct typespec *type)
+check_type (const struct object *obj, const struct object *type,
+	    const struct environment *env)
 {
-  if (type->type == TYPESPEC_INTERNAL_OR)
-    return obj->type & type->int_value;
-  else if (type->type == TYPESPEC_INTERNAL_AND)
-    return !((obj->type & type->int_value) ^ type->int_value);
-  else if (type->type == TYPESPEC_OR)
-    return check_type (obj, type->first) || check_type (obj, type->second);
-  else if (type->type == TYPESPEC_AND)
-    return check_type (obj, type->first) && check_type (obj, type->second);
-
   return 0;
 }
 
