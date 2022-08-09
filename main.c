@@ -201,7 +201,8 @@ eval_outcome_type
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
     COULD_NOT_TELL_FILE,
-    ERROR_READING_FILE
+    ERROR_READING_FILE,
+    UNKNOWN_TYPE
   };
 
 
@@ -804,6 +805,9 @@ struct object *evaluate_list
 struct object *evaluate_through_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
+int type_string (struct object *obj, struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome);
+
 struct object *builtin_car
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_cdr
@@ -829,14 +833,16 @@ struct object *apply_arithmetic_operation
  void (*opq) (mpq_t, const mpq_t, const mpq_t),
  void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
  struct eval_outcome *outcome);
-struct object *builtin_plus
-(struct object *list, struct environment *env, struct eval_outcome *outcome);
-struct object *builtin_minus
-(struct object *list, struct environment *env, struct eval_outcome *outcome);
-struct object *builtin_multiply
-(struct object *list, struct environment *env, struct eval_outcome *outcome);
-struct object *builtin_divide
-(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_plus (struct object *list, struct environment *env,
+			     struct eval_outcome *outcome);
+struct object *builtin_minus (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
+struct object *builtin_multiply (struct object *list, struct environment *env,
+				 struct eval_outcome *outcome);
+struct object *builtin_divide (struct object *list, struct environment *env,
+			       struct eval_outcome *outcome);
+struct object *builtin_typep (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
@@ -1054,6 +1060,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFVAR", env, evaluate_defvar, 0);
   add_builtin_form ("DEFUN", env, evaluate_defun, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0);
+  add_builtin_form ("TYPEP", env, builtin_typep, 1);
+
+  add_builtin_type ("STRING", env, type_string, 1);
 }
 
 
@@ -3956,6 +3965,14 @@ evaluate_through_list (struct object *list, struct environment *env,
 }
 
 
+int
+type_string (struct object *obj, struct object *typespec,
+	     struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_STRING;
+}
+
+
 struct object *
 builtin_car (struct object *list, struct environment *env,
 	     struct eval_outcome *outcome)
@@ -4474,6 +4491,40 @@ builtin_divide (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
   return NULL;
+}
+
+
+struct object *
+builtin_typep (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  struct object *t;
+  int ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  t = nth (1, list);
+
+  if (t->type != TYPE_SYMBOL_NAME
+      || !t->value_ptr.symbol_name->sym->value_ptr.symbol->is_type)
+    {
+      outcome->type = UNKNOWN_TYPE;
+
+      return NULL;
+    }
+
+  ret = t->value_ptr.symbol_name->sym->value_ptr.symbol->builtin_type
+    (nth (0, list), nth (1, list), env, outcome);
+
+  if (ret)
+    return &t_object;
+  else
+    return &nil_object;
 }
 
 
@@ -5170,6 +5221,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == ERROR_READING_FILE)
     {
       printf ("file error: could not read file\n");
+    }
+  else if (err->type == UNKNOWN_TYPE)
+    {
+      printf ("eval error: type not known\n");
     }
 }
 
