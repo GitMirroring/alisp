@@ -254,7 +254,7 @@ symbol
   int is_type;
   int is_builtin_type;
   int is_standard_type;
-  int (*builtin_type) (struct object *obj, struct object *typespec,
+  int (*builtin_type) (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct eval_outcome *outcome);
   struct object *typespec;
 
@@ -733,7 +733,7 @@ struct binding *find_binding (struct symbol *sym, struct binding *env,
 
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
-		       (struct object *obj, struct object *typespec,
+		       (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct eval_outcome *outcome),
 		       int is_standard);
 void add_builtin_form (char *name, struct environment *env,
@@ -791,8 +791,8 @@ struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int eval_twice,
  struct environment *env, struct eval_outcome *outcome);
 
-int check_type (const struct object *obj, const struct object *type,
-		const struct environment *env);
+int check_type (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct eval_outcome *outcome);
 
 struct object *evaluate_object
 (struct object *obj, struct environment *env, struct eval_outcome *outcome);
@@ -805,7 +805,7 @@ struct object *evaluate_list
 struct object *evaluate_through_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
-int type_string (struct object *obj, struct object *typespec,
+int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 
 struct object *builtin_car
@@ -3038,8 +3038,8 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 
 void
 add_builtin_type (char *name, struct environment *env,
-		  int (*builtin_type) (struct object *obj,
-				       struct object *typespec,
+		  int (*builtin_type) (const struct object *obj,
+				       const struct object *typespec,
 				       struct environment *env,
 				       struct eval_outcome *outcome),
 		  int is_standard)
@@ -3654,10 +3654,19 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
 int
-check_type (const struct object *obj, const struct object *type,
-	    const struct environment *env)
+check_type (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct eval_outcome *outcome)
 {
-  return 0;
+  if (typespec->type != TYPE_SYMBOL_NAME
+      || !typespec->value_ptr.symbol_name->sym->value_ptr.symbol->is_type)
+    {
+      outcome->type = UNKNOWN_TYPE;
+
+      return -1;
+    }
+
+  return typespec->value_ptr.symbol_name->sym->value_ptr.symbol->builtin_type
+    (obj, typespec, env, outcome);
 }
 
 
@@ -3966,7 +3975,7 @@ evaluate_through_list (struct object *list, struct environment *env,
 
 
 int
-type_string (struct object *obj, struct object *typespec,
+type_string (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_STRING;
@@ -4498,7 +4507,6 @@ struct object *
 builtin_typep (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  struct object *t;
   int ret;
 
   if (list_length (list) != 2)
@@ -4508,20 +4516,12 @@ builtin_typep (struct object *list, struct environment *env,
       return NULL;
     }
 
-  t = nth (1, list);
-
-  if (t->type != TYPE_SYMBOL_NAME
-      || !t->value_ptr.symbol_name->sym->value_ptr.symbol->is_type)
-    {
-      outcome->type = UNKNOWN_TYPE;
-
-      return NULL;
-    }
-
-  ret = t->value_ptr.symbol_name->sym->value_ptr.symbol->builtin_type
+  ret = check_type
     (nth (0, list), nth (1, list), env, outcome);
 
-  if (ret)
+  if (ret == -1)
+    return NULL;
+  else if (ret)
     return &t_object;
   else
     return &nil_object;
