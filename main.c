@@ -452,7 +452,6 @@ object_type
     TYPE_FUNCTION = 1 << 21,
     TYPE_MACRO = 1 << 22,
     TYPE_SHARP_MACRO_CALL = 1 << 23,
-    TYPE_T = 1 << 24,
     TYPE_NIL = 1 << 25
   };
 
@@ -466,9 +465,9 @@ object_type
 union
 object_ptr_union
 {
-  struct object *next;
-  struct symbol_name *symbol_name;
   struct symbol *symbol;
+  struct symbol_name *symbol_name;
+  struct object *next;
   mpz_t integer;
   mpq_t ratio;
   mpf_t floating;
@@ -631,8 +630,9 @@ const char *jump_to_end_of_multiline_comment
 
 struct line_list *append_line_to_list
 (char *line, size_t size, struct line_list *list, int do_copy);
-struct object_list *append_object_to_list
-(struct object *obj, struct object_list *list);
+
+void prepend_object_to_list
+(struct object *obj, struct object_list **list);
 
 enum read_outcome read_object
 (struct object **obj, int backt_commas_balance, const char *input, size_t size,
@@ -920,15 +920,16 @@ const struct option long_options[] =
 
 
 
-struct object nil_object = {1, NULL, NULL, TYPE_NIL};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, 1, type_nil, NULL, 0, NULL, 0, NULL,
+  1, 0, 0};
 
-struct symbol _nil_symbol = {"NIL", 3};
-
-struct object nil_symbol = {1, NULL, NULL, TYPE_SYMBOL,
-  .value_ptr.symbol = &_nil_symbol};
+struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct object t_object = {1, NULL, NULL, TYPE_T};
+struct symbol t_symbol = {"T", 1, 1, 1, 1, type_t, NULL, 0, NULL, 0, NULL,
+  1, 0, 0};
+
+struct object t_object = {1, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
 
 
@@ -1024,7 +1025,6 @@ void
 add_standard_definitions (struct environment *env)
 {
   struct object *cluser_package;
-  struct eval_outcome eval_out;
 
   env->keyword_package = create_package ("KEYWORD",
 					 strlen ("KEYWORD"));
@@ -1045,8 +1045,13 @@ add_standard_definitions (struct environment *env)
 				cluser_package, DYNAMIC_BINDING),
 			       env->packages);
 
-  define_constant_by_name ("NIL", strlen ("NIL"), &nil_object, env, &eval_out);
-  define_constant_by_name ("T", strlen ("T"), &t_object, env, &eval_out);
+  t_symbol.value_cell = &t_object;
+  nil_symbol.value_cell = &nil_object;
+
+  prepend_object_to_list (&t_object,
+			  &env->current_package->value_ptr.package->symlist);
+  prepend_object_to_list (&nil_object,
+			  &env->current_package->value_ptr.package->symlist);
 
   add_builtin_form ("CAR", env, builtin_car, 1);
   add_builtin_form ("CDR", env, builtin_cdr, 1);
@@ -1432,27 +1437,15 @@ append_line_to_list (char *line, size_t size, struct line_list *list,
 }
 
 
-struct object_list *
-append_object_to_list (struct object *obj, struct object_list *list)
+void
+prepend_object_to_list (struct object *obj, struct object_list **list)
 {
-  struct object_list *l, *prev, *beg = list;
+  struct object_list *l = malloc_and_check (sizeof (*l));
 
-  l = malloc_and_check (sizeof (*l));
   l->obj = obj;
-  l->next = NULL;
-  
-  if (!list)
-    return l;      
+  l->next = *list;
 
-  while (list)
-    {
-      prev = list;
-      list = list->next;
-    }
-
-  prev->next = l;
-  
-  return beg;
+  *list = l;
 }
 
 
@@ -2411,8 +2404,7 @@ alloc_empty_cons_pair (void)
   struct cons_pair *cons = malloc_and_check (sizeof (*cons));
   struct object *car = malloc_and_check (sizeof (*car));
 
-  car->type = TYPE_NIL;
-  car->refcount = 1;
+  car = &nil_object;
 
   cons->filling_car = 0;
   cons->empty_list_in_car = 0;
@@ -3090,11 +3082,13 @@ add_builtin_form (char *name, struct environment *env,
 
 
 struct object *
-define_constant (struct object *sym, struct object *form,
+define_constant (struct object *sym, struct object *form, 
 		 struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *val = evaluate_object (form, env, outcome);
-  
+  struct object *val;
+
+  val = evaluate_object (form, env, outcome);
+
   if (!val)
     return NULL;
 
@@ -3289,7 +3283,7 @@ list_length (const struct object *list)
       list = list->value_ptr.cons_pair->cdr;
     }
 
-  if (list && list->type != TYPE_NIL)
+  if (list && list != &nil_object)
     l++;
 
   return l;
@@ -3301,7 +3295,7 @@ last_cons_pair (struct object *list)
 {
   struct object *prev;
 
-  while (list && list->type != TYPE_NIL)
+  while (list && list != &nil_object)
     {
       prev = list;
       list = list->value_ptr.cons_pair->cdr;
@@ -3514,7 +3508,7 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
   struct parameter *first = NULL, *last = NULL, *newlast = NULL;
   struct object *car;
   
-  if (obj->type == TYPE_NIL)
+  if (obj == &nil_object)
     return NULL;
   
   if (obj->type != TYPE_CONS_PAIR)
@@ -3567,7 +3561,7 @@ evaluate_body (struct object *body, int eval_twice, struct environment *env,
 
       body = CDR (body);
 
-    } while (res && body->type != TYPE_NIL);
+    } while (res && body != &nil_object);
 
   return res;
 }
@@ -3859,7 +3853,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	  first_cons = 0;
 	}
 
-      if (cur_cons->type != TYPE_NIL)
+      if (cur_cons != &nil_object)
 	{
 	  ret = apply_backquote (cur_cons, cons, 0, NULL, backts_commas_balance,
 				 env, outcome);
@@ -4307,7 +4301,7 @@ builtin_not (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_NIL)
+  if (CAR (list) == &nil_object)
     return &t_object;
 
   return &nil_object;
@@ -4741,8 +4735,8 @@ struct object *
 evaluate_defconstant (struct object *list, struct environment *env,
 		      struct eval_outcome *outcome)
 {
-  return define_constant (CAR (list)->value_ptr.symbol_name->sym, CAR (CDR (list)),
-			  env, outcome);
+  return define_constant (CAR (list)->value_ptr.symbol_name->sym,
+			  CAR (CDR (list)), env, outcome);
 }
 
 
@@ -5006,7 +5000,7 @@ print_list (const struct cons_pair *list, struct environment *env)
 
   cdr = list->cdr;
   
-  while (cdr && cdr->type != TYPE_NIL)
+  while (cdr && cdr != &nil_object)
     {
       if (cdr->type == TYPE_CONS_PAIR)
 	{
@@ -5053,10 +5047,8 @@ print_array (const struct array *array, struct environment *env)
 void
 print_object (const struct object *obj, struct environment *env)
 {
-  if (obj->type == TYPE_NIL)
+  if (obj == &nil_object)
     printf ("()");
-  else if (obj->type == TYPE_T)
-    printf ("T");
   else if (obj->type == TYPE_QUOTE)
     {
       printf ("'");
@@ -5278,7 +5270,7 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 void
 increment_refcount (struct object *obj)
 {
-  if (!obj || obj == &nil_object  || obj == &nil_symbol || obj == &t_object)
+  if (!obj || obj == &nil_object  || obj == &t_object)
     return;
 
   obj->refcount++;
@@ -5296,10 +5288,7 @@ increment_refcount (struct object *obj)
 int
 decrement_refcount (struct object *obj)
 {
-  if (!obj)
-    return 0;
-
-  if (obj == &nil_object || obj == &nil_symbol || obj == &t_object)
+  if (!obj || obj == &nil_object || obj == &t_object)
     return 0;
 
   obj->refcount--;
