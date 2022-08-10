@@ -110,6 +110,8 @@ make_test ("(load \"cl.lisp\")", "T");
 make_test ("(1+ 5)", "6");
 make_test ("(typep \"abc\" 'string)", "T");
 make_test ("(typep 0 'string)", "()");
+make_test ("(typep \"\" t)", "T");
+make_test ("(typep 0 'nil)", "()");
 
 
 # arithmetic tests
