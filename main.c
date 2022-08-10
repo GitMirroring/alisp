@@ -3664,16 +3664,19 @@ int
 check_type (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome)
 {
-  if (typespec->type != TYPE_SYMBOL_NAME
-      || !typespec->value_ptr.symbol_name->sym->value_ptr.symbol->is_type)
+  const struct object *sym;
+
+  if (!(typespec->type & (TYPE_SYMBOL_NAME | TYPE_SYMBOL))
+      || !(sym = SYMBOL (typespec))
+      || !sym->value_ptr.symbol->is_type)
     {
       outcome->type = UNKNOWN_TYPE;
 
       return -1;
     }
 
-  return typespec->value_ptr.symbol_name->sym->value_ptr.symbol->builtin_type
-    (obj, typespec, env, outcome);
+  return sym->value_ptr.symbol->builtin_type
+    (obj, sym, env, outcome);
 }
 
 
