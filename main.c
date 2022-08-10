@@ -805,6 +805,10 @@ struct object *evaluate_list
 struct object *evaluate_through_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
+int type_t (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct eval_outcome *outcome);
+int type_nil (const struct object *obj, const struct object *typespec,
+	      struct environment *env, struct eval_outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 int type_array (const struct object *obj, const struct object *typespec,
@@ -1066,6 +1070,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, 1);
 
+  add_builtin_type ("T", env, type_t, 1);
+  add_builtin_type ("NIL", env, type_nil, 1);
   add_builtin_type ("VECTOR", env, type_vector, 1);
   add_builtin_type ("ARRAY", env, type_array, 1);
   add_builtin_type ("STRING", env, type_string, 1);
@@ -3977,6 +3983,22 @@ evaluate_through_list (struct object *list, struct environment *env,
     return &nil_object;
 
   return args;
+}
+
+
+int
+type_t (const struct object *obj, const struct object *typespec,
+	struct environment *env, struct eval_outcome *outcome)
+{
+  return 1;
+}
+
+
+int
+type_nil (const struct object *obj, const struct object *typespec,
+	  struct environment *env, struct eval_outcome *outcome)
+{
+  return obj == &nil_object;
 }
 
 
