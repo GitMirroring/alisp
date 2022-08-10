@@ -2807,6 +2807,7 @@ create_symbol (char *name, size_t size)
   sym = malloc_and_check (sizeof (*sym));
   sym->name = name;
   sym->name_len = size;
+  sym->is_type = 0;
   sym->is_builtin_form = 0;
   sym->is_const = 0;
   sym->is_parameter = 0;
