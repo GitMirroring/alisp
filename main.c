@@ -809,12 +809,30 @@ int type_t (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome);
 int type_nil (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct eval_outcome *outcome);
+int type_cons (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome);  
+int type_symbol (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome);
+int type_function (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct eval_outcome *outcome);
+int type_package (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct eval_outcome *outcome);
+int type_integer (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct eval_outcome *outcome);
+int type_ratio (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct eval_outcome *outcome);
+int type_float (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct eval_outcome *outcome);
+int type_character (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct eval_outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 int type_array (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct eval_outcome *outcome);
 int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
+int type_pathname (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct eval_outcome *outcome);
 
 struct object *builtin_car
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1077,9 +1095,18 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_type ("T", env, type_t, 1);
   add_builtin_type ("NIL", env, type_nil, 1);
+  add_builtin_type ("CONS", env, type_cons, 1);
+  add_builtin_type ("SYMBOL", env, type_symbol, 1);
+  add_builtin_type ("FUNCTION", env, type_function, 1);
+  add_builtin_type ("PACKAGE", env, type_package, 1);
+  add_builtin_type ("INTEGER", env, type_integer, 1);
+  add_builtin_type ("RATIO", env, type_ratio, 1);
+  add_builtin_type ("FLOAT", env, type_float, 1);
+  add_builtin_type ("CHARACTER", env, type_character, 1);
   add_builtin_type ("VECTOR", env, type_vector, 1);
   add_builtin_type ("ARRAY", env, type_array, 1);
   add_builtin_type ("STRING", env, type_string, 1);
+  add_builtin_type ("PATHNAME", env, type_pathname, 1);
 }
 
 
@@ -4001,6 +4028,70 @@ type_nil (const struct object *obj, const struct object *typespec,
 
 
 int
+type_cons (const struct object *obj, const struct object *typespec,
+	   struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_CONS_PAIR;
+}
+
+
+int
+type_symbol (const struct object *obj, const struct object *typespec,
+	     struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME;
+}
+
+
+int
+type_function (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FUNCTION;
+}
+
+
+int
+type_package (const struct object *obj, const struct object *typespec,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_PACKAGE;
+}
+
+
+int
+type_integer (const struct object *obj, const struct object *typespec,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_INTEGER;
+}
+
+
+int
+type_ratio (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_RATIO;
+}
+
+
+int
+type_float (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_character (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_CHARACTER;
+}
+
+
+int
 type_vector (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
@@ -4022,6 +4113,14 @@ type_string (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_STRING;
+}
+
+
+int
+type_pathname (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FILENAME;
 }
 
 
