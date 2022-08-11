@@ -3691,19 +3691,23 @@ int
 check_type (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome)
 {
-  const struct object *sym;
+  const struct object *car, *sym;
 
-  if (!(typespec->type & (TYPE_SYMBOL_NAME | TYPE_SYMBOL))
-      || !(sym = SYMBOL (typespec))
-      || !sym->value_ptr.symbol->is_type)
+  if ((typespec->type == TYPE_CONS_PAIR
+       && (car = CAR (typespec))
+       && car->type & (TYPE_SYMBOL_NAME | TYPE_SYMBOL)
+       && (sym = SYMBOL (car))
+       && sym->value_ptr.symbol->is_type)
+      || (typespec->type & (TYPE_SYMBOL_NAME | TYPE_SYMBOL)
+	  && (sym = SYMBOL (typespec))
+	  && sym->value_ptr.symbol->is_type))
     {
-      outcome->type = UNKNOWN_TYPE;
-
-      return -1;
+      return sym->value_ptr.symbol->builtin_type (obj, sym, env, outcome);
     }
 
-  return sym->value_ptr.symbol->builtin_type
-    (obj, sym, env, outcome);
+  outcome->type = UNKNOWN_TYPE;
+
+  return -1;
 }
 
 
