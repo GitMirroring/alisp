@@ -112,6 +112,7 @@ make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep 0 'integer)", "T");
 make_test ("(typep 1/2 'ratio)", "T");
 make_test ("(typep \"abc\" 'string)", "T");
+make_test ("(typep \"abc\" '(string))", "T");
 make_test ("(typep 0 'string)", "()");
 make_test ("(typep \"\" t)", "T");
 make_test ("(typep 0 'nil)", "()");
