@@ -920,8 +920,6 @@ void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
 void free_array_size (struct array_size *size);
 void free_array (struct object *obj);
-void free_list_structure (struct object *obj);
-void free_list_recursively (struct object *obj);
 
 void print_welcome_message (void);
 void print_version (void);
@@ -5513,25 +5511,6 @@ free_array (struct object *obj)
       free (obj->value_ptr.array);
       free (obj);
     }
-}
-
-
-void
-free_list_structure (struct object *obj)
-{
-  if (!obj->value_ptr.cons_pair->cdr)
-    free (obj);
-  else
-    free_list_structure (obj->value_ptr.cons_pair->cdr);
-}
-
-
-void
-free_list_recursively (struct object *obj)
-{
-  free_object (obj->value_ptr.cons_pair->car);
-  free_object (obj->value_ptr.cons_pair->cdr);
-  free (obj);
 }
 
 
