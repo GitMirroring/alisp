@@ -731,7 +731,6 @@ struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env,
 			      enum binding_type type);
 
-
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
 		       (const struct object *obj, const struct object *typespec,
