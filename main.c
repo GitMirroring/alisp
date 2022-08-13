@@ -5485,10 +5485,12 @@ free_cons_pair (struct object *obj)
 void
 free_array_size (struct array_size *size)
 {
-  if (size->next)
-    free_array_size (size->next);
+  struct array_size *next = size->next;
 
   free (size);
+
+  if (next)
+    free_array_size (next);
 }
 
 
