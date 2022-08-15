@@ -5520,9 +5520,6 @@ free_symbol (struct object *obj)
 void
 free_cons_pair (struct object *obj)
 {
-  decrement_refcount (obj->value_ptr.cons_pair->car);
-  decrement_refcount (obj->value_ptr.cons_pair->cdr);
-
   free (obj->value_ptr.cons_pair);
   free (obj);
 }
