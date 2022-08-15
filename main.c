@@ -3616,15 +3616,21 @@ evaluate_body (struct object *body, int eval_twice, struct environment *env,
     {
       res = evaluate_object (CAR (body), env, outcome);
 
+      body = CDR (body);
+
       if (eval_twice)
 	{
 	  if (!res)
 	    return NULL;
 
 	  res = evaluate_object (res, env, outcome);
+
+	  if (body != &nil_object)
+	    decrement_refcount (res);
 	}
 
-      body = CDR (body);
+      if (body != &nil_object)
+	decrement_refcount (res);
 
     } while (res && body != &nil_object);
 
