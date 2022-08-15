@@ -3018,9 +3018,11 @@ intern_symbol_name (struct object *symname, struct environment *env)
     }
 
   pack = env->current_package;
-  return (s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1,
-						   &pack->
-						   value_ptr.package->symlist));
+  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1,
+					   &pack->value_ptr.package->symlist);
+  s->sym->value_ptr.symbol->home_package = pack;
+
+  return s->sym;
 }
 
 
