@@ -2846,6 +2846,7 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->is_special = 0;
   sym->value_cell = NULL;
   sym->function_cell = NULL;
+  sym->home_package = NULL;
 
   obj->value_ptr.symbol = sym;
 
