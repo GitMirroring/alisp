@@ -33,6 +33,7 @@
 #include <string.h>
 #include <locale.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <getopt.h>
 
@@ -5477,6 +5478,8 @@ increment_refcount (struct object *obj)
       increment_refcount (obj->value_ptr.cons_pair->car);
       increment_refcount (obj->value_ptr.cons_pair->cdr);
     }
+  else if (obj->type == TYPE_SYMBOL_NAME)
+    obj->value_ptr.symbol_name->sym->refcount++;
 }
 
 
@@ -5488,16 +5491,16 @@ decrement_refcount (struct object *obj)
 
   obj->refcount--;
 
-  if (obj->type & TYPE_PREFIX && decrement_refcount (obj->value_ptr.next))
-    obj->value_ptr.next = NULL;
+  if (obj->type & TYPE_PREFIX)
+    decrement_refcount (obj->value_ptr.next);
+
+  if (obj->type == TYPE_SYMBOL_NAME)
+    decrement_refcount (obj->value_ptr.symbol_name->sym);
 
   if (obj->type == TYPE_CONS_PAIR)
     {
-      if (decrement_refcount (obj->value_ptr.cons_pair->car))
-	obj->value_ptr.cons_pair->car = NULL;
-
-      if (decrement_refcount (obj->value_ptr.cons_pair->cdr))
-	obj->value_ptr.cons_pair->cdr = NULL;
+      decrement_refcount (obj->value_ptr.cons_pair->car);
+      decrement_refcount (obj->value_ptr.cons_pair->cdr);
     }
 
   if (!obj->refcount)
@@ -5513,20 +5516,18 @@ decrement_refcount (struct object *obj)
 void
 free_object (struct object *obj)
 {
-  if (!obj || obj->refcount < 0)
+  if (!obj)
     return;
 
   if (obj->type == TYPE_STRING)
     free_string (obj);
-  else if (obj->type == TYPE_SYMBOL && !obj->value_ptr.symbol->is_special)
+  else if (obj->type == TYPE_SYMBOL_NAME)
+    free_symbol_name (obj);
+  else if (obj->type == TYPE_SYMBOL && !obj->value_ptr.symbol->is_const
+	   && !obj->value_ptr.symbol->is_special)
     free_symbol (obj);
   else if (obj->type & TYPE_PREFIX)
-    {
-      if (decrement_refcount (obj->value_ptr.next))
-	obj->value_ptr.next = NULL;
-
-      free (obj);
-    }
+    free (obj);
   else if (obj->type == TYPE_CONS_PAIR)
     free_cons_pair (obj);
   else if (obj->type == TYPE_FILENAME)
@@ -5578,7 +5579,21 @@ free_symbol_name (struct object *obj)
 void
 free_symbol (struct object *obj)
 {
+  struct package *pack = obj->value_ptr.symbol->home_package->value_ptr.package;
+  struct object_list *prev, *entry = find_package_entry (obj, pack->symlist,
+							 &prev);
+
+  assert (entry);
+
+  if (prev)
+    prev->next = entry->next;
+  else
+    pack->symlist = entry->next;
+
+  free (entry);
+
   free (obj->value_ptr.symbol->name);
+  free (obj->value_ptr.symbol);
   free (obj);
 }
 
