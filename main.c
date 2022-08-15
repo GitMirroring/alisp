@@ -717,6 +717,10 @@ struct object *create_vector (struct object *list);
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
+struct object_list *find_package_entry (struct object *symbol,
+					struct object_list *symlist,
+					struct object_list **prev);
+
 struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int do_copy,
 					       struct object_list **symlist);
@@ -2927,6 +2931,22 @@ find_package (const char *name, size_t len, struct environment *env)
     }
 
   return NULL;
+}
+
+
+struct object_list *
+find_package_entry (struct object *symbol, struct object_list *symlist,
+		    struct object_list **prev)
+{
+  *prev = NULL;
+
+  while (symlist && symlist->obj != symbol)
+    {
+      *prev = symlist;
+      symlist = symlist->next;
+    }
+
+  return symlist;
 }
 
 
