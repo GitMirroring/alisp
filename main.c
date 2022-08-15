@@ -3834,7 +3834,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 		 struct object *prev_prefix, int backts_commas_balance,
 		 struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *prev_cons, *cur_cons, *next_cons, *ret, *pref_copy;
+  struct object *prev_cons, *cur_cons, *next_cons, *ret, *pref_copy/*, *tmp*/;
 
   if (!backts_commas_balance)
     {
@@ -3842,6 +3842,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
     }
   else if (form->type == TYPE_BACKQUOTE)
     {
+      form->refcount++;
       ret = apply_backquote (form->value_ptr.next, cons, first_cons, form,
 			     backts_commas_balance + 1, env, outcome);
 
@@ -3878,8 +3879,16 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 		   : copy_prefix (CAR (CDR (cons)), prev_prefix, NULL))
 		: NULL;
 
-	      if (form->value_ptr.next->type == TYPE_AT || prev_prefix)
-		ret = copy_list_structure (ret, pref_copy);
+	      if (prev_prefix
+		  || (form->value_ptr.next->type == TYPE_AT
+		      && list_length (cons) > 1))
+		{
+		  ret = copy_list_structure (ret, pref_copy);
+		  /*decrement_refcount (ret);
+		    ret = tmp;*/
+		}
+
+	      increment_refcount (ret);
 
 	      if (first_cons)
 		{
@@ -3898,10 +3907,28 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	      return CAR (ret);
 	    }
 
-	  return evaluate_object (form->value_ptr.next, env, outcome);
+	  ret = evaluate_object (form->value_ptr.next, env, outcome);
+
+	  if (!ret)
+	    return NULL;
+
+	  if (cons)
+	    {
+	      ret->refcount = form->value_ptr.next->refcount + 1;
+
+	      decrement_refcount (form->value_ptr.next);
+
+	      form->refcount--;
+
+	      if (!form->refcount)
+		free_object (form);
+	    }
+
+	  return ret;
 	}
       else
 	{
+	  form->refcount++;
 	  ret = apply_backquote (form->value_ptr.next, cons, first_cons, form, 
 				 backts_commas_balance - 1, env, outcome);
 
@@ -3922,6 +3949,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	{
 	  next_cons = CDR (cur_cons);
 
+	  cur_cons->refcount++;
 	  ret = apply_backquote (CAR (cur_cons), prev_cons, first_cons, NULL,
 				 backts_commas_balance, env, outcome);
 
@@ -3945,7 +3973,11 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 
 	  prev_cons->value_ptr.cons_pair->cdr = ret;
 	}
+
+      return form;
     }
+
+  increment_refcount (form);
 
   return form;
 }
