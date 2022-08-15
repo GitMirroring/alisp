@@ -920,6 +920,9 @@ void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
 void free_array_size (struct array_size *size);
 void free_array (struct object *obj);
+void free_integer (struct object *obj);
+void free_ratio (struct object *obj);
+void free_float (struct object *obj);
 
 void print_welcome_message (void);
 void print_version (void);
@@ -5467,6 +5470,12 @@ free_object (struct object *obj)
       free (obj->value_ptr.character);
       free (obj);
     }
+  else if (obj->type == TYPE_INTEGER)
+    free_integer (obj);
+  else if (obj->type == TYPE_RATIO)
+    free_ratio (obj);
+  else if (obj->type == TYPE_FLOAT)
+    free_float (obj);
 }
 
 
@@ -5529,6 +5538,30 @@ free_array (struct object *obj)
       free (obj->value_ptr.array);
       free (obj);
     }
+}
+
+
+void
+free_integer (struct object *obj)
+{
+  mpz_clear (obj->value_ptr.integer);
+  free (obj);
+}
+
+
+void
+free_ratio (struct object *obj)
+{
+  mpq_clear (obj->value_ptr.ratio);
+  free (obj);
+}
+
+
+void
+free_float (struct object *obj)
+{
+  mpf_clear (obj->value_ptr.floating);
+  free (obj);
 }
 
 
