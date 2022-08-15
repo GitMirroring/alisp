@@ -920,6 +920,7 @@ int decrement_refcount (struct object *obj);
 
 void free_object (struct object *obj);
 void free_string (struct object *obj);
+void free_symbol_name (struct object *obj);
 void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
 void free_array_size (struct array_size *size);
@@ -5511,6 +5512,21 @@ free_string (struct object *obj)
 {
   free (obj->value_ptr.string->value);
   free (obj->value_ptr.string);
+  free (obj);
+}
+
+
+void
+free_symbol_name (struct object *obj)
+{
+  struct symbol_name *s = obj->value_ptr.symbol_name;
+
+  free (s->value);
+
+  if (s->packname_present)
+    free (s->actual_symname);
+
+  free (s);
   free (obj);
 }
 
