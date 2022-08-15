@@ -3954,7 +3954,7 @@ evaluate_list (struct object *list, struct environment *env,
 {
   struct symbol_name *symname;
   struct binding *bind;
-  struct object *args;
+  struct object *args, *ret;
 
   if (is_dotted_list (list))
     {
@@ -3984,7 +3984,12 @@ evaluate_list (struct object *list, struct environment *env,
       else
 	args = CDR (list);
 
-      return symname->sym->value_ptr.symbol->builtin_form (args, env, outcome);
+      ret = symname->sym->value_ptr.symbol->builtin_form (args, env, outcome);
+
+      if (symname->sym->value_ptr.symbol->evaluate_args)
+	decrement_refcount (args);
+
+      return ret;
     }
 
   if (symname_equals (symname, "LET"))
