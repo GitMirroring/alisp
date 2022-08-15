@@ -3772,8 +3772,6 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      increment_refcount (obj->value_ptr.next);
-
       return apply_backquote (obj->value_ptr.next, NULL, 0, NULL, 1, env,
 			      outcome);
     }
