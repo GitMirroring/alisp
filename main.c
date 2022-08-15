@@ -3789,7 +3789,7 @@ evaluate_object (struct object *obj, struct environment *env,
 
       if (sym->value_ptr.symbol->is_const)
 	{
-	  increment_refcount (sym);
+	  increment_refcount (sym->value_ptr.symbol->value_cell);
 	  return sym->value_ptr.symbol->value_cell;
 	}
       else if (sym->value_ptr.symbol->is_parameter
@@ -3800,6 +3800,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	  if (bind)
 	    return bind->obj;
 
+	  increment_refcount (sym->value_ptr.symbol->value_cell);
 	  return sym->value_ptr.symbol->value_cell;
 	}
       else
