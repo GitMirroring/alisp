@@ -19,7 +19,7 @@
 
 
 AC_PREREQ([2.69])
-AC_INIT([al], [0.1], [andrea.monaco@autistici.org])
+AC_INIT([al], [0.4], [andrea.monaco@autistici.org])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 AC_CONFIG_SRCDIR([main.c])
 AC_CONFIG_HEADERS([config.h])
