@@ -802,9 +802,9 @@ int check_type (const struct object *obj, const struct object *typespec,
 struct object *evaluate_object
 (struct object *obj, struct environment *env, struct eval_outcome *outcome);
 struct object *apply_backquote
-(struct object *form, struct object *cons, int first_cons,
+(struct object *form, struct object *cons, int writing_first_cons,
  struct object *prev_prefix, int backts_commas_balance, struct environment *env,
- struct eval_outcome *outcome);
+ struct eval_outcome *outcome, int *expanded_into_empty_list);
 struct object *evaluate_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_through_list
@@ -3774,7 +3774,7 @@ evaluate_object (struct object *obj, struct environment *env,
   else if (obj->type == TYPE_BACKQUOTE)
     {
       return apply_backquote (obj->value_ptr.next, NULL, 0, NULL, 1, env,
-			      outcome);
+			      outcome, NULL);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
@@ -3829,11 +3829,14 @@ evaluate_object (struct object *obj, struct environment *env,
 
 
 struct object *
-apply_backquote (struct object *form, struct object *cons, int first_cons,
-		 struct object *prev_prefix, int backts_commas_balance,
-		 struct environment *env, struct eval_outcome *outcome)
+apply_backquote (struct object *form, struct object *cons,
+		 int writing_first_cons, struct object *prev_prefix,
+		 int backts_commas_balance, struct environment *env,
+		 struct eval_outcome *outcome, int *expanded_into_empty_list)
 {
-  struct object *prev_cons, *cur_cons, *next_cons, *ret, *pref_copy/*, *tmp*/;
+  struct object *writing_cons, *first_or_prev_written_cons, *reading_cons, *ret,
+    *pref_copy;
+  int exp_to_empty_list;
 
   if (!backts_commas_balance)
     {
@@ -3842,8 +3845,9 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
   else if (form->type == TYPE_BACKQUOTE)
     {
       form->refcount++;
-      ret = apply_backquote (form->value_ptr.next, cons, first_cons, form,
-			     backts_commas_balance + 1, env, outcome);
+      ret = apply_backquote (form->value_ptr.next, cons, writing_first_cons,
+			     form, backts_commas_balance + 1, env, outcome,
+			     expanded_into_empty_list);
 
       if (!ret)
 	return NULL;
@@ -3872,8 +3876,15 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 	      if (!ret)
 		return NULL;
 
+	      if (ret == &nil_object)
+		{
+		  *expanded_into_empty_list = 1;
+
+		  return &nil_object;
+		}
+
 	      pref_copy = prev_prefix
-		? (first_cons
+		? (writing_first_cons
 		   ? copy_prefix (CAR (cons), prev_prefix, NULL)
 		   : copy_prefix (CAR (CDR (cons)), prev_prefix, NULL))
 		: NULL;
@@ -3889,7 +3900,7 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
 
 	      increment_refcount (ret);
 
-	      if (first_cons)
+	      if (writing_first_cons)
 		{
 		  cons->value_ptr.cons_pair->car = CAR (ret);
 		  last_cons_pair (ret)->value_ptr.cons_pair->cdr = CDR (cons);
@@ -3928,8 +3939,9 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
       else
 	{
 	  form->refcount++;
-	  ret = apply_backquote (form->value_ptr.next, cons, first_cons, form, 
-				 backts_commas_balance - 1, env, outcome);
+	  ret = apply_backquote (form->value_ptr.next, cons, writing_first_cons,
+				 form, backts_commas_balance - 1, env, outcome,
+				 expanded_into_empty_list);
 
 	  if (!ret)
 	    return NULL;
@@ -3941,37 +3953,50 @@ apply_backquote (struct object *form, struct object *cons, int first_cons,
     }
   else if (form->type == TYPE_CONS_PAIR)
     {
-      prev_cons = cur_cons = form;
-      first_cons = 1;
+      first_or_prev_written_cons = writing_cons = reading_cons = form;
+      writing_first_cons = 1;
 
-      while (cur_cons->type == TYPE_CONS_PAIR)
+      while (reading_cons->type == TYPE_CONS_PAIR)
 	{
-	  next_cons = CDR (cur_cons);
+	  exp_to_empty_list = 0;
 
-	  cur_cons->refcount++;
-	  ret = apply_backquote (CAR (cur_cons), prev_cons, first_cons, NULL,
-				 backts_commas_balance, env, outcome);
+	  reading_cons->refcount++;
+	  ret = apply_backquote (CAR (reading_cons), first_or_prev_written_cons,
+				 writing_first_cons, NULL, backts_commas_balance,
+				 env, outcome, &exp_to_empty_list);
 
 	  if (!ret)
 	    return NULL;
 
-	  cur_cons->value_ptr.cons_pair->car = ret;
+	  if (!exp_to_empty_list)
+	    {
+	      writing_cons->value_ptr.cons_pair->car = ret;
 
-	  prev_cons = cur_cons;
-	  cur_cons = next_cons;
-	  first_cons = 0;
+	      first_or_prev_written_cons = writing_cons;
+	      writing_cons = CDR (writing_cons);
+	      writing_first_cons = 0;
+	    }
+
+	  reading_cons = CDR (reading_cons);
 	}
 
-      if (cur_cons != &nil_object)
+      if (reading_cons != &nil_object)
 	{
-	  ret = apply_backquote (cur_cons, cons, 0, NULL, backts_commas_balance,
-				 env, outcome);
+	  ret = apply_backquote (reading_cons, cons, 0, NULL,
+				 backts_commas_balance, env, outcome,
+				 &exp_to_empty_list);
 
 	  if (!ret)
 	    return NULL;
 
-	  prev_cons->value_ptr.cons_pair->cdr = ret;
+	  if (!exp_to_empty_list)
+	    first_or_prev_written_cons->value_ptr.cons_pair->cdr = ret;
 	}
+      else
+	first_or_prev_written_cons->value_ptr.cons_pair->cdr = &nil_object;
+
+      if (writing_first_cons && exp_to_empty_list)
+	return &nil_object;
 
       return form;
     }
