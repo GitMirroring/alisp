@@ -213,7 +213,6 @@ eval_outcome
   enum eval_outcome_type type;
 
   struct object *obj;
-  struct typespec *typesp;
 };
 
 
@@ -504,7 +503,7 @@ structure_slot
 {
   struct object *name;
   struct object *initform;
-  struct typespec *type;
+  struct object *type;
   int read_only;
 
   struct structure_slot *next;
@@ -530,32 +529,6 @@ sharp_macro_call
 
   int is_empty_list;
   struct object *obj;
-};
-
-
-enum
-typespec_type
-  {
-    TYPESPEC_SYMBOL,
-    TYPESPEC_CLASS,
-    TYPESPEC_LIST,
-    TYPESPEC_INTERNAL_OR,
-    TYPESPEC_INTERNAL_AND,
-    TYPESPEC_OR,
-    TYPESPEC_AND,
-    TYPESPEC_NOT,
-    TYPESPEC_SATISFIES
-  };
-
-
-struct
-typespec
-{
-  enum typespec_type type;
-  enum object_type int_value;
-  struct object *obj_value;
-  struct typespec *first;
-  struct typespec *second;
 };
 
 
