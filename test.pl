@@ -121,6 +121,8 @@ make_test ("(typep \"abc\" '(string))", "T");
 make_test ("(typep 0 'string)", "()");
 make_test ("(typep \"\" t)", "T");
 make_test ("(typep 0 'nil)", "()");
+make_test ("(typep nil nil)", "()");
+make_test ("(typep nil 'null)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
 
 
