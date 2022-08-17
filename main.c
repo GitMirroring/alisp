@@ -787,6 +787,8 @@ int type_t (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome);
 int type_nil (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct eval_outcome *outcome);
+int type_null (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome);
 int type_cons (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);  
 int type_symbol (const struct object *obj, const struct object *typespec,
@@ -1075,6 +1077,7 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_type ("T", env, type_t, 1);
   add_builtin_type ("NIL", env, type_nil, 1);
+  add_builtin_type ("NULL", env, type_null, 1);
   add_builtin_type ("CONS", env, type_cons, 1);
   add_builtin_type ("SYMBOL", env, type_symbol, 1);
   add_builtin_type ("FUNCTION", env, type_function, 1);
@@ -4108,6 +4111,13 @@ type_t (const struct object *obj, const struct object *typespec,
 int
 type_nil (const struct object *obj, const struct object *typespec,
 	  struct environment *env, struct eval_outcome *outcome)
+{
+  return 0;
+}
+
+
+int type_null (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome)
 {
   return obj == &nil_object;
 }
