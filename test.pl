@@ -128,6 +128,8 @@ make_test ("(typep nil 'null)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
 make_test ("(nth 0 '(0))", "0");
 make_test ("(nth 1 '(0))", "()");
+make_test ("(second '(0))", "()");
+make_test ("(fifth '(0 1 2 3 4))", "4");
 
 
 # arithmetic tests
