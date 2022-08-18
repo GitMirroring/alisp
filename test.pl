@@ -119,11 +119,15 @@ make_test ("(typep 1/2 'ratio)", "T");
 make_test ("(typep \"abc\" 'string)", "T");
 make_test ("(typep \"abc\" '(string))", "T");
 make_test ("(typep 0 'string)", "()");
+make_test ("(typep '(1 2) 'list)", "T");
+make_test ("(typep #(1 2) 'sequence)", "T");
 make_test ("(typep \"\" t)", "T");
 make_test ("(typep 0 'nil)", "()");
 make_test ("(typep nil nil)", "()");
 make_test ("(typep nil 'null)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
+make_test ("(nth 0 '(0))", "0");
+make_test ("(nth 1 '(0))", "()");
 
 
 # arithmetic tests
