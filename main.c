@@ -790,6 +790,8 @@ int type_nil (const struct object *obj, const struct object *typespec,
 int type_null (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);
 int type_cons (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome);
+int type_list (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);  
 int type_symbol (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
@@ -809,6 +811,8 @@ int type_vector (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 int type_array (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct eval_outcome *outcome);
+int type_sequence (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct eval_outcome *outcome);
 int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 int type_pathname (const struct object *obj, const struct object *typespec,
@@ -1079,6 +1083,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("NIL", env, type_nil, 1);
   add_builtin_type ("NULL", env, type_null, 1);
   add_builtin_type ("CONS", env, type_cons, 1);
+  add_builtin_type ("LIST", env, type_list, 1);
   add_builtin_type ("SYMBOL", env, type_symbol, 1);
   add_builtin_type ("FUNCTION", env, type_function, 1);
   add_builtin_type ("PACKAGE", env, type_package, 1);
@@ -1088,6 +1093,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("CHARACTER", env, type_character, 1);
   add_builtin_type ("VECTOR", env, type_vector, 1);
   add_builtin_type ("ARRAY", env, type_array, 1);
+  add_builtin_type ("SEQUENCE", env, type_sequence, 1);
   add_builtin_type ("STRING", env, type_string, 1);
   add_builtin_type ("PATHNAME", env, type_pathname, 1);
 }
@@ -4132,6 +4138,14 @@ type_cons (const struct object *obj, const struct object *typespec,
 
 
 int
+type_list (const struct object *obj, const struct object *typespec,
+	   struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_CONS_PAIR || obj == &nil_object;
+}
+
+
+int
 type_symbol (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
@@ -4201,6 +4215,15 @@ type_array (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING;
+}
+
+
+int
+type_sequence (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING
+    || obj->type == TYPE_CONS_PAIR || obj == &nil_object;
 }
 
 
