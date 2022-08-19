@@ -828,6 +828,8 @@ struct object *builtin_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_nthcdr
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
@@ -1064,6 +1066,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CONS", env, builtin_cons, 1);
   add_builtin_form ("LIST", env, builtin_list, 1);
   add_builtin_form ("NTH", env, builtin_nth, 1);
+  add_builtin_form ("NTHCDR", env, builtin_nthcdr, 1);
   add_builtin_form ("WRITE", env, builtin_write, 1);
   add_builtin_form ("LOAD", env, builtin_load, 1);
   add_builtin_form ("EQ", env, builtin_eq, 1);
@@ -4377,6 +4380,34 @@ builtin_nth (struct object *list, struct environment *env,
     }
 
   ret = nth (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
+
+  increment_refcount (ret);
+
+  return ret;
+}
+
+
+struct object *
+builtin_nthcdr (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER
+      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
+	  && CAR (CDR (list)) != &nil_object))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = nthcdr (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
 
   increment_refcount (ret);
 
