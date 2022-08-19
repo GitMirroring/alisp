@@ -132,6 +132,9 @@ make_test ("(car ())", "()");
 make_test ("(cdr ())", "()");
 make_test ("(nth 0 '(0))", "0");
 make_test ("(nth 1 '(0))", "()");
+make_test ("(nthcdr 1 ())", "()");
+make_test ("(nthcdr 2 '(a b c))", "(C)");
+make_test ("(nthcdr 1 '(0 . 1))", "1");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 
