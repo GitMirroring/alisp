@@ -44,8 +44,8 @@ There's a small test script too.  Run it with
   $ ./test.pl
 
 if you have perl on your machine.  You should expect a 100% success
-rate, or maybe some failures if floating-point operations give
-slightly different results.
+rate, or maybe some failures if floating-point operations yield
+slightly different results on your system.
 
 
 
