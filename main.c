@@ -3319,9 +3319,9 @@ nthcdr (unsigned int ind, struct object *list)
 
   for (i = 0; i < ind; i++)
     {
-      list = list->value_ptr.cons_pair->cdr;
-
-      if (!list)
+      if (list->type == TYPE_CONS_PAIR)
+	list = list->value_ptr.cons_pair->cdr;
+      else
 	return &nil_object;
     }
 
