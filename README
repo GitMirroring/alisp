@@ -31,7 +31,15 @@ plus optionally
   # make install
 
 
-There's a small test script.  Run it with
+Many standard definitions are in a lisp file named cl.lisp.  To add
+them, you have to run
+
+  al> (load "cl.lisp")
+
+at the beginning of your session.
+
+
+There's a small test script too.  Run it with
 
   $ ./test.pl
 
