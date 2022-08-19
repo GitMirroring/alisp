@@ -33,6 +33,8 @@
 (defun ninth (list) (nth 8 list))
 (defun tenth (list) (nth 9 list))
 
+(defun rest (list) (cdr list))
+
 
 (defmacro when (clause &rest body)
   `(if ,clause (progn ,@body)))
