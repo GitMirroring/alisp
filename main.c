@@ -4261,7 +4261,10 @@ builtin_car (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!(list->value_ptr.cons_pair->car->type & TYPE_LIST))
+  if (CAR (list) == &nil_object)
+    return &nil_object;
+
+  if (CAR (list)->type != TYPE_CONS_PAIR)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -4289,7 +4292,10 @@ builtin_cdr (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!(list->value_ptr.cons_pair->car->type & TYPE_LIST))
+  if (CAR (list) == &nil_object)
+    return &nil_object;
+
+  if (CAR (list)->type != TYPE_CONS_PAIR)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
