@@ -3076,6 +3076,10 @@ remove_bindings (struct binding *env, int num)
   else if (num == 1)
     {
       b = env->next;
+
+      decrement_refcount (env->sym);
+      decrement_refcount (env->obj);
+
       free (env);
       return b;
     }
