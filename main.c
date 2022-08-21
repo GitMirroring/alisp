@@ -268,7 +268,10 @@ symbol
   int is_parameter;
   int is_special;
 
+  int value_cell_active;
   struct object *value_cell;
+
+  int function_cell_active;
   struct object *function_cell;
 
   struct object *home_package;
@@ -2834,7 +2837,9 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
+  sym->value_cell_active = 0;
   sym->value_cell = NULL;
+  sym->function_cell_active = 0;
   sym->function_cell = NULL;
   sym->home_package = NULL;
 
