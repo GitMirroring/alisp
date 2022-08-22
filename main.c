@@ -5688,6 +5688,7 @@ free_symbol (struct object *obj)
   struct package *pack = obj->value_ptr.symbol->home_package->value_ptr.package;
   struct object_list *prev, *entry = find_package_entry (obj, pack->symlist,
 							 &prev);
+  struct symbol *s = obj->value_ptr.symbol;
 
   assert (entry);
 
@@ -5698,8 +5699,11 @@ free_symbol (struct object *obj)
 
   free (entry);
 
-  free (obj->value_ptr.symbol->name);
-  free (obj->value_ptr.symbol);
+  decrement_refcount (s->value_cell);
+  decrement_refcount (s->function_cell);
+
+  free (s->name);
+  free (s);
   free (obj);
 }
 
