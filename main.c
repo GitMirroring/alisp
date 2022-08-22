@@ -3164,6 +3164,7 @@ define_constant (struct object *sym, struct object *form,
 
   SYMBOL (sym)->value_ptr.symbol->is_const = 1;
   SYMBOL (sym)->value_ptr.symbol->value_cell = val;
+
   increment_refcount (SYMBOL (sym));
 
   return sym;
