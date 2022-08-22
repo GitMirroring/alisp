@@ -3113,9 +3113,9 @@ add_builtin_type (char *name, struct environment *env,
 				       struct eval_outcome *outcome),
 		  int is_standard)
 {
-  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       &env->current_package->
-						       value_ptr.package->symlist);
+  struct object *sym =
+    intern_symbol_from_char_vector (name, strlen (name), 1, &env->
+				    current_package->value_ptr.package->symlist);
 
   sym->value_ptr.symbol->is_type = 1;
   sym->value_ptr.symbol->is_builtin_type = 1;
@@ -3133,9 +3133,9 @@ add_builtin_form (char *name, struct environment *env,
 						  struct eval_outcome *outcome),
 		  int eval_args)
 {
-  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       &env->current_package->
-						       value_ptr.package->symlist);
+  struct object *sym =
+    intern_symbol_from_char_vector (name, strlen (name), 1, &env->
+				    current_package->value_ptr.package->symlist);
 
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
@@ -3174,10 +3174,9 @@ struct object *
 define_constant_by_name (char *name, size_t size, struct object *form,
 			 struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *sym = intern_symbol_from_char_vector (name, size, 1,
-						       &env->current_package->
-						       value_ptr.package->
-						       symlist);
+  struct object *sym =
+    intern_symbol_from_char_vector (name, size, 1, &env->current_package->
+				    value_ptr.package->symlist);
 
   return define_constant (sym, form, env, outcome);
 }
@@ -3209,10 +3208,9 @@ struct object *
 define_parameter_by_name (char *name, size_t size, struct object *form,
 			  struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *sym = intern_symbol_from_char_vector (name, size, 1,
-						       &env->current_package->
-						       value_ptr.package->
-						       symlist);
+  struct object *sym =
+    intern_symbol_from_char_vector (name, size, 1, &env->current_package->
+				    value_ptr.package->symlist);
 
   return define_parameter (sym, form, env, outcome);
 }
