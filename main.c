@@ -268,10 +268,10 @@ symbol
   int is_parameter;
   int is_special;
 
-  int value_cell_active;
+  int value_dyn_bins;
   struct object *value_cell;
 
-  int function_cell_active;
+  int function_dyn_bins;
   struct object *function_cell;
 
   struct object *home_package;
@@ -869,6 +869,8 @@ struct object *evaluate_let
 struct object *evaluate_let_star
 (struct object *bind_forms, struct object *body, struct environment *env,
  struct eval_outcome *outcome);
+
+struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
 struct object *evaluate_if
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -2837,9 +2839,9 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
-  sym->value_cell_active = 0;
+  sym->value_dyn_bins = 0;
   sym->value_cell = NULL;
-  sym->function_cell_active = 0;
+  sym->function_dyn_bins = 0;
   sym->function_cell = NULL;
   sym->home_package = NULL;
 
@@ -3077,6 +3079,9 @@ remove_bindings (struct binding *env, int num)
     {
       b = env->next;
 
+      if (env->type == DYNAMIC_BINDING)
+	env->sym->value_ptr.symbol->value_dyn_bins--;
+
       decrement_refcount (env->sym);
       decrement_refcount (env->obj);
 
@@ -3198,7 +3203,7 @@ define_parameter (struct object *sym, struct object *form,
   else
     s = sym;
   
-  s->value_ptr.symbol->is_special = 1;
+  s->value_ptr.symbol->is_parameter = 1;
   s->value_ptr.symbol->value_cell = val;
 
   increment_refcount (s);
@@ -3762,7 +3767,7 @@ evaluate_object (struct object *obj, struct environment *env,
 		 struct eval_outcome *outcome)
 {
   struct binding *bind;
-  struct object *sym;
+  struct object *sym, *ret;
 
   if (obj->type == TYPE_QUOTE)
     {
@@ -3784,21 +3789,19 @@ evaluate_object (struct object *obj, struct environment *env,
 	  return sym;
 	}
 
-      if (sym->value_ptr.symbol->is_const)
+      if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter
+	  || sym->value_ptr.symbol->is_special)
 	{
-	  increment_refcount (sym->value_ptr.symbol->value_cell);
-	  return sym->value_ptr.symbol->value_cell;
-	}
-      else if (sym->value_ptr.symbol->is_parameter
-	       || sym->value_ptr.symbol->is_special)
-	{
-	  bind = find_binding (sym->value_ptr.symbol, env->vars, DYNAMIC_BINDING);
+	  ret = get_dynamic_value (sym, env);
 
-	  if (bind)
-	    return bind->obj;
+	  if (!ret)
+	    {
+	      outcome->type = UNBOUND_SYMBOL;
+	      outcome->obj = sym;
+	      return NULL;
+	    }
 
-	  increment_refcount (sym->value_ptr.symbol->value_cell);
-	  return sym->value_ptr.symbol->value_cell;
+	  return ret;
 	}
       else
 	{
@@ -4882,22 +4885,13 @@ create_binding_from_let_form (struct object *form, struct environment *env,
   if (form->type == TYPE_SYMBOL_NAME || form->type == TYPE_SYMBOL)
     {
       sym = SYMBOL (form);
-
-      if (sym->value_ptr.symbol->is_const)
-	{
-	  outcome->type = CANT_REBIND_CONSTANT;
-	  return NULL;
-	}
-
-      if (sym->value_ptr.symbol->is_parameter)
-	return create_binding (sym, &nil_object, DYNAMIC_BINDING);
-      else
-	return create_binding (sym, &nil_object, LEXICAL_BINDING);
+      val = &nil_object;
     }
   else if (form->type == TYPE_CONS_PAIR)
     {
       if (list_length (form) != 2
-	  || (CAR (form)->type != TYPE_SYMBOL_NAME && CAR (form)->type != TYPE_SYMBOL)) 
+	  || (CAR (form)->type != TYPE_SYMBOL_NAME
+	      && CAR (form)->type != TYPE_SYMBOL))
 	{
 	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
@@ -4915,17 +4909,27 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
       if (!val)
 	return NULL;
-
-      if (sym->value_ptr.symbol->is_parameter)
-	return create_binding (sym, val, DYNAMIC_BINDING);
-      else
-	return create_binding (sym, val, LEXICAL_BINDING);
     }
   else
     {
       outcome->type = INCORRECT_SYNTAX_IN_LET;
       return NULL;
     }
+
+  if (sym->value_ptr.symbol->is_const)
+    {
+      outcome->type = CANT_REBIND_CONSTANT;
+      return NULL;
+    }
+
+  if (sym->value_ptr.symbol->is_parameter)
+    {
+      sym->value_ptr.symbol->value_dyn_bins++;
+
+      return create_binding (sym, val, DYNAMIC_BINDING);
+    }
+  else
+    return create_binding (sym, val, LEXICAL_BINDING);
 }
 
 
@@ -4986,6 +4990,35 @@ evaluate_let_star (struct object *bind_forms, struct object *body,
   env->vars = remove_bindings (env->vars, binding_num);
 
   return res;
+}
+
+
+struct object *
+get_dynamic_value (struct object *sym, struct environment *env)
+{
+  struct symbol *s = sym->value_ptr.symbol;
+  struct binding *b;
+
+  if (!s->value_dyn_bins && !s->value_cell)
+    return NULL;
+
+  if (s->is_const || !s->value_dyn_bins)
+    {
+      increment_refcount (s->value_cell);
+
+      return s->value_cell;
+    }
+
+  b = find_binding (s, env->vars, DYNAMIC_BINDING);
+
+  if (b)
+    {
+      increment_refcount (b->obj);
+
+      return b->obj;
+    }
+
+  return NULL;
 }
 
 
@@ -5070,11 +5103,11 @@ evaluate_defvar (struct object *list, struct environment *env,
   
   if (list_length (list) == 1)
     {
-      s->value_ptr.symbol->is_special = 1;
+      s->value_ptr.symbol->is_parameter = 1;
     }
   else if (list_length (list) == 2)
     {
-      s->value_ptr.symbol->is_special = 1;
+      s->value_ptr.symbol->is_parameter = 1;
       
       if (!s->value_ptr.symbol->value_cell)
 	return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
