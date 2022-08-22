@@ -3200,6 +3200,8 @@ define_parameter (struct object *sym, struct object *form,
   s->value_ptr.symbol->is_special = 1;
   s->value_ptr.symbol->value_cell = val;
 
+  increment_refcount (s);
+
   return s;
 }
 
@@ -5082,6 +5084,7 @@ evaluate_defvar (struct object *list, struct environment *env,
       return NULL;
     }
 
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -5630,6 +5633,7 @@ free_object (struct object *obj)
   else if (obj->type == TYPE_SYMBOL_NAME)
     free_symbol_name (obj);
   else if (obj->type == TYPE_SYMBOL && !obj->value_ptr.symbol->is_const
+	   && !obj->value_ptr.symbol->is_parameter
 	   && !obj->value_ptr.symbol->is_special)
     free_symbol (obj);
   else if (obj->type & TYPE_PREFIX)
