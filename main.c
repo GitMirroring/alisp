@@ -5550,7 +5550,7 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: symbol ");
       print_symbol (err->obj->value_ptr.symbol, env);
-      printf (" not bound to any function\n");
+      printf (" not bound to any function or macro\n");
     }
   else if (err->type == INVALID_FUNCTION_CALL)
     {
