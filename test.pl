@@ -116,6 +116,8 @@ make_test ("b", "9");
 make_test ("(let ((b 10)) b)", "10");
 make_test ("b", "9");
 make_test ("(let* ((x 1) (y x)) y)", "1");
+make_test ("(defun f ())", "F");
+make_test ("(f)", "()");
 make_test ("(load \"cl.lisp\")", "T");
 make_test ("(1+ 5)", "6");
 make_test ("(typep '(1 . 2) 'cons)", "T");
@@ -142,6 +144,7 @@ make_test ("(nthcdr 2 '(a b c))", "(C)");
 make_test ("(nthcdr 1 '(0 . 1))", "1");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
+make_test ("(when t \"\" \"\" \"\")", "\"\"");
 
 
 # arithmetic tests
