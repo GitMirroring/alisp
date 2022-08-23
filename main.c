@@ -4015,7 +4015,7 @@ evaluate_list (struct object *list, struct environment *env,
   struct symbol_name *symname;
   struct symbol *sym;
   struct binding *bind;
-  struct object *args, *ret;
+  struct object *args, *ret, *fun;
 
   if (is_dotted_list (list))
     {
@@ -4092,13 +4092,15 @@ evaluate_list (struct object *list, struct environment *env,
     {
       bind = find_binding (sym, env->funcs, DYNAMIC_BINDING);
 
-      if (bind->obj->type == TYPE_FUNCTION)
-	return call_function (bind->obj, CDR (list), 1, 0, env, outcome);
-      else
-	return call_function (bind->obj, CDR (list), 0, 1, env, outcome);
+      fun = bind->obj;
     }
+  else
+    fun = sym->function_cell;
 
-  return call_function (sym->function_cell, CDR (list), 1, 0, env, outcome);
+  if (fun->type == TYPE_FUNCTION)
+    return call_function (fun, CDR (list), 1, 0, env, outcome);
+  else
+    return call_function (fun, CDR (list), 0, 1, env, outcome);
 }
 
 
@@ -5161,8 +5163,9 @@ evaluate_defmacro (struct object *list, struct environment *env,
 {
   struct object *fun;
 
-  if (CAR (list)->type != TYPE_SYMBOL_NAME
-      || !(CAR (CDR (list))->type & TYPE_LIST))
+  if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
+      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
+	  && CAR (CDR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
@@ -5172,9 +5175,10 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   fun->type = TYPE_MACRO;
 
-  env->funcs = add_binding (create_binding (SYMBOL (CAR (list)), fun,
-					    DYNAMIC_BINDING), env->funcs);
+  SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
+  increment_refcount (SYMBOL (CAR (list)));
 
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
