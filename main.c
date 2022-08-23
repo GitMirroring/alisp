@@ -4013,6 +4013,7 @@ evaluate_list (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   struct symbol_name *symname;
+  struct symbol *sym;
   struct binding *bind;
   struct object *args, *ret;
 
@@ -4078,19 +4079,26 @@ evaluate_list (struct object *list, struct environment *env,
       return CAR (CDR (list));
     }
 
-  bind = find_binding (symname->sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
+  sym = symname->sym->value_ptr.symbol;
 
-  if (bind)
+  if (!sym->function_dyn_bins && !sym->function_cell)
     {
+      outcome->type = UNKNOWN_FUNCTION;
+      outcome->obj = CAR (list);
+      return NULL;
+    }
+
+  if (sym->function_dyn_bins)
+    {
+      bind = find_binding (sym, env->funcs, DYNAMIC_BINDING);
+
       if (bind->obj->type == TYPE_FUNCTION)
 	return call_function (bind->obj, CDR (list), 1, 0, env, outcome);
       else
 	return call_function (bind->obj, CDR (list), 0, 1, env, outcome);
     }
 
-  outcome->type = UNKNOWN_FUNCTION;
-  outcome->obj = CAR (list);
-  return NULL;
+  return call_function (sym->function_cell, CDR (list), 1, 0, env, outcome);
 }
 
 
@@ -5129,8 +5137,9 @@ evaluate_defun (struct object *list, struct environment *env,
 {
   struct object *fun;
 
-  if (CAR (list)->type != TYPE_SYMBOL_NAME
-      || !(CAR (CDR (list))->type & TYPE_LIST))
+  if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
+      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
+	  && CAR (CDR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
@@ -5138,9 +5147,10 @@ evaluate_defun (struct object *list, struct environment *env,
 
   fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
-  env->funcs = add_binding (create_binding (SYMBOL (CAR (list)), fun,
-					    DYNAMIC_BINDING), env->funcs);
+  SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
+  increment_refcount (SYMBOL (CAR (list)));
 
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
