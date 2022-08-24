@@ -1050,11 +1050,19 @@ add_standard_definitions (struct environment *env)
 			       (env->current_package->value_ptr.package->name,
 				env->current_package, DYNAMIC_BINDING),
 			       env->packages);
+  env->packages = add_binding (create_binding
+			       (create_symbol ("CL", strlen ("CL"), 1),
+				env->current_package, DYNAMIC_BINDING),
+			       env->packages);
 
   cluser_package = create_package ("COMMON-LISP-USER",
 				   strlen ("COMMON-LISP-USER"));
   env->packages = add_binding (create_binding
 			       (cluser_package->value_ptr.package->name,
+				cluser_package, DYNAMIC_BINDING),
+			       env->packages);
+  env->packages = add_binding (create_binding
+			       (create_symbol ("CL-USER", strlen ("CL-USER"), 1),
 				cluser_package, DYNAMIC_BINDING),
 			       env->packages);
 
