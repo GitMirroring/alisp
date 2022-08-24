@@ -105,7 +105,7 @@ make_test ("(progn)", "()");
 make_test ("(progn 1 2 3)", "3");
 make_test ("(if nil 1)", "()");
 make_test ("(common-lisp:if '(1) 2)", "2");
-make_test ("(eq 1 1)", "()");
+make_test ("(cl:eq 1 1)", "()");
 make_test ("(eq 'a 'a)", "T");
 make_test ("(null 1)", "()");
 make_test ("(not nil)", "T");
