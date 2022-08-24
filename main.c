@@ -5420,6 +5420,16 @@ print_object (const struct object *obj, struct environment *env)
       printf (",");
       print_object (obj->value_ptr.next, env);
     }
+  else if (obj->type == TYPE_AT)
+    {
+      printf ("@");
+      print_object (obj->value_ptr.next, env);
+    }
+  else if (obj->type == TYPE_DOT)
+    {
+      printf (".");
+      print_object (obj->value_ptr.next, env);
+    }
   else if (obj->type == TYPE_INTEGER)
     mpz_out_str (NULL, 10, obj->value_ptr.integer);
   else if (obj->type == TYPE_RATIO)
