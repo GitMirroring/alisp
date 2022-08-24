@@ -3884,6 +3884,9 @@ apply_backquote (struct object *form, struct object *cons,
 		  return &nil_object;
 		}
 
+	      if (ret->type != TYPE_CONS_PAIR)
+		return ret;
+
 	      pref_copy = prev_prefix
 		? (writing_first_cons
 		   ? copy_prefix (CAR (cons), prev_prefix, NULL)
