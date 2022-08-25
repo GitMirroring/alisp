@@ -5100,9 +5100,27 @@ struct object *
 evaluate_defparameter (struct object *list, struct environment *env,
 		       struct eval_outcome *outcome)
 {
+  struct object *s;
+
   if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  s = CAR (list);
+
+  if (s->type != TYPE_SYMBOL && s->type != TYPE_SYMBOL_NAME)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  s = SYMBOL (s);
+
+  if (s->value_ptr.symbol->is_const)
+    {
+      outcome->type = CANT_REBIND_CONSTANT;
       return NULL;
     }
 
@@ -5115,15 +5133,27 @@ evaluate_defvar (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
   struct object *s = CAR (list);
+  unsigned int l = list_length (list);
+
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
   
-  if (s->type == TYPE_SYMBOL_NAME)
-    s = s->value_ptr.symbol_name->sym;
-  
-  if (list_length (list) == 1)
+  s = SYMBOL (s);
+
+  if (s->value_ptr.symbol->is_const)
+    {
+      outcome->type = CANT_REBIND_CONSTANT;
+      return NULL;
+    }
+
+  if (l == 1)
     {
       s->value_ptr.symbol->is_parameter = 1;
     }
-  else if (list_length (list) == 2)
+  else if (l == 2)
     {
       s->value_ptr.symbol->is_parameter = 1;
       
