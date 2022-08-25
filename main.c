@@ -858,8 +858,12 @@ struct object *builtin_multiply (struct object *list, struct environment *env,
 				 struct eval_outcome *outcome);
 struct object *builtin_divide (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
+
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *builtin_symbol_value (struct object *list,
+				     struct environment *env,
+				     struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
@@ -1097,6 +1101,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFUN", env, evaluate_defun, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, 1);
+  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 1);
 
   add_builtin_type ("T", env, type_t, 1);
   add_builtin_type ("NIL", env, type_nil, 1);
@@ -4891,6 +4896,40 @@ builtin_typep (struct object *list, struct environment *env,
     return &t_object;
   else
     return &nil_object;
+}
+
+
+struct object *
+builtin_symbol_value (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  struct object *s, *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  s = CAR (list);
+
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = get_dynamic_value (SYMBOL (s), env);
+
+  if (!ret)
+    {
+      outcome->type = UNBOUND_SYMBOL;
+      outcome->obj = s;
+      return NULL;
+    }
+
+  return ret;
 }
 
 
