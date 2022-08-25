@@ -3003,6 +3003,9 @@ intern_symbol_name (struct object *symname, struct environment *env)
 						   value_ptr.package->symlist);
 	  s->sym->value_ptr.symbol->home_package = env->keyword_package;
 
+	  s->sym->value_ptr.symbol->is_const = 1;
+	  s->sym->value_ptr.symbol->value_cell = s->sym;
+
 	  return s->sym;
 	}
 
@@ -3790,12 +3793,6 @@ evaluate_object (struct object *obj, struct environment *env,
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
       sym = SYMBOL (obj);
-
-      if (sym->value_ptr.symbol->home_package == env->keyword_package)
-	{
-	  increment_refcount (sym);
-	  return sym;
-	}
 
       if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter
 	  || sym->value_ptr.symbol->is_special)
