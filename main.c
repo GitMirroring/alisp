@@ -155,12 +155,13 @@ read_outcome
     NO_OBJ_BEFORE_DOT_IN_LIST = 1 << 22,
     NO_OBJ_AFTER_DOT_IN_LIST = 1 << 23,
     MULTIPLE_OBJS_AFTER_DOT_IN_LIST = 1 << 24,
+    MORE_THAN_A_CONSING_DOT_NOT_ALLOWED = 1 << 25,
 
-    TOO_MANY_COLONS = 1 << 25,
-    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 26,
-    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 27,
-    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 28,
-    PACKAGE_NOT_FOUND = 1 << 29
+    TOO_MANY_COLONS = 1 << 26,
+    CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 27,
+    CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 28,
+    MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 29,
+    PACKAGE_NOT_FOUND = 1 << 30
   };
 
 
@@ -175,7 +176,8 @@ read_outcome
 		    | COMMA_WITHOUT_BACKQUOTE | TOO_MANY_COMMAS | SINGLE_DOT \
 		    | MULTIPLE_DOTS | NO_OBJ_BEFORE_DOT_IN_LIST		\
 		    | NO_OBJ_AFTER_DOT_IN_LIST				\
-		    | MULTIPLE_OBJS_AFTER_DOT_IN_LIST | TOO_MANY_COLONS \
+		    | MULTIPLE_OBJS_AFTER_DOT_IN_LIST			\
+		    | MORE_THAN_A_CONSING_DOT_NOT_ALLOWED | TOO_MANY_COLONS \
 		    | CANT_BEGIN_WITH_TWO_COLONS_OR_MORE		\
 		    | CANT_END_WITH_PACKAGE_SEPARATOR			\
 		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND)
@@ -1693,6 +1695,9 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	}
       else if (out == SINGLE_DOT)
 	{
+	  if (found_dot)
+	    return MORE_THAN_A_CONSING_DOT_NOT_ALLOWED;
+
 	  found_dot = 1;
 	}
       else if (out & READ_ERROR)
@@ -5632,6 +5637,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
   else if (err == MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
     {
       printf ("read error: more than one object follows dot in list\n");
+    }
+  else if (err == MORE_THAN_A_CONSING_DOT_NOT_ALLOWED)
+    {
+      printf ("read error: more than one consing dot not allowed in list\n");
     }
   else if (err == TOO_MANY_COLONS)
     {
