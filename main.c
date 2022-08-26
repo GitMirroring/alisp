@@ -189,6 +189,9 @@ eval_outcome_type
     INVALID_FUNCTION_CALL,
     DOTTED_LIST_NOT_ALLOWED_HERE,
     COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
+    CANT_SPLICE_AFTER_CONSING_DOT,
+    SPLICING_OF_ATOM_NOT_ALLOWED_HERE,
+    NOTHING_EXPANDED_BEFORE_CONSING_DOT,
     WRONG_NUMBER_OF_ARGUMENTS,
     UNKNOWN_FUNCTION,
     MALFORMED_IF,
@@ -778,7 +781,7 @@ int check_type (const struct object *obj, const struct object *typespec,
 struct object *evaluate_object
 (struct object *obj, struct environment *env, struct eval_outcome *outcome);
 struct object *apply_backquote
-(struct object *form, struct object *cons, int writing_first_cons,
+(struct object *form, struct object *cons, int writing_first_cons, int passed_dot,
  struct object *prev_prefix, int backts_commas_balance, struct environment *env,
  struct eval_outcome *outcome, int *expanded_into_empty_list);
 struct object *evaluate_list
@@ -3792,7 +3795,7 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      return apply_backquote (obj->value_ptr.next, NULL, 0, NULL, 1, env,
+      return apply_backquote (obj->value_ptr.next, NULL, 0, 0, NULL, 1, env,
 			      outcome, NULL);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
@@ -3841,9 +3844,10 @@ evaluate_object (struct object *obj, struct environment *env,
 
 struct object *
 apply_backquote (struct object *form, struct object *cons,
-		 int writing_first_cons, struct object *prev_prefix,
-		 int backts_commas_balance, struct environment *env,
-		 struct eval_outcome *outcome, int *expanded_into_empty_list)
+		 int writing_first_cons, int passed_dot,
+		 struct object *prev_prefix, int backts_commas_balance,
+		 struct environment *env, struct eval_outcome *outcome,
+		 int *expanded_into_empty_list)
 {
   struct object *writing_cons, *first_or_prev_written_cons, *reading_cons, *ret,
     *pref_copy;
@@ -3857,8 +3861,8 @@ apply_backquote (struct object *form, struct object *cons,
     {
       form->refcount++;
       ret = apply_backquote (form->value_ptr.next, cons, writing_first_cons,
-			     form, backts_commas_balance + 1, env, outcome,
-			     expanded_into_empty_list);
+			     passed_dot, form, backts_commas_balance + 1, env,
+			     outcome, expanded_into_empty_list);
 
       if (!ret)
 	return NULL;
@@ -3874,6 +3878,13 @@ apply_backquote (struct object *form, struct object *cons,
 	  if (form->value_ptr.next->type == TYPE_AT
 	      || form->value_ptr.next->type == TYPE_DOT)
 	    {
+	      if (passed_dot)
+		{
+		  outcome->type = CANT_SPLICE_AFTER_CONSING_DOT;
+
+		  return NULL;
+		}
+
 	      if (!cons)
 		{
 		  outcome->type = COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL;
@@ -3895,7 +3906,18 @@ apply_backquote (struct object *form, struct object *cons,
 		}
 
 	      if (ret->type != TYPE_CONS_PAIR)
-		return ret;
+		{
+		  if (writing_first_cons || list_length (cons) > 2)
+		    {
+		      outcome->type = SPLICING_OF_ATOM_NOT_ALLOWED_HERE;
+
+		      return NULL;
+		    }
+
+		  cons->value_ptr.cons_pair->cdr = ret;
+
+		  return ret;
+		}
 
 	      pref_copy = prev_prefix
 		? (writing_first_cons
@@ -3954,8 +3976,8 @@ apply_backquote (struct object *form, struct object *cons,
 	{
 	  form->refcount++;
 	  ret = apply_backquote (form->value_ptr.next, cons, writing_first_cons,
-				 form, backts_commas_balance - 1, env, outcome,
-				 expanded_into_empty_list);
+				 passed_dot, form, backts_commas_balance - 1,
+				 env, outcome, expanded_into_empty_list);
 
 	  if (!ret)
 	    return NULL;
@@ -3976,8 +3998,9 @@ apply_backquote (struct object *form, struct object *cons,
 
 	  reading_cons->refcount++;
 	  ret = apply_backquote (CAR (reading_cons), first_or_prev_written_cons,
-				 writing_first_cons, NULL, backts_commas_balance,
-				 env, outcome, &exp_to_empty_list);
+				 writing_first_cons, passed_dot, NULL,
+				 backts_commas_balance, env, outcome,
+				 &exp_to_empty_list);
 
 	  if (!ret)
 	    return NULL;
@@ -3994,9 +4017,16 @@ apply_backquote (struct object *form, struct object *cons,
 	  reading_cons = CDR (reading_cons);
 	}
 
-      if (reading_cons != &nil_object)
+      if (reading_cons != &nil_object && writing_first_cons)
 	{
-	  ret = apply_backquote (reading_cons, cons, 0, NULL,
+	  outcome->type = NOTHING_EXPANDED_BEFORE_CONSING_DOT;
+
+	  return NULL;
+	}
+      else if (reading_cons != &nil_object)
+	{
+	  ret = apply_backquote (reading_cons, first_or_prev_written_cons,
+				 writing_first_cons, 1, NULL,
 				 backts_commas_balance, env, outcome,
 				 &exp_to_empty_list);
 
@@ -4005,6 +4035,8 @@ apply_backquote (struct object *form, struct object *cons,
 
 	  if (!exp_to_empty_list)
 	    first_or_prev_written_cons->value_ptr.cons_pair->cdr = ret;
+	  else
+	    first_or_prev_written_cons->value_ptr.cons_pair->cdr = &nil_object;
 	}
       else
 	first_or_prev_written_cons->value_ptr.cons_pair->cdr = &nil_object;
@@ -5651,6 +5683,18 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: comma-at and comma-dot syntax are not allowed on "
 	      "top-level forms\n");
+    }
+  else if (err->type == CANT_SPLICE_AFTER_CONSING_DOT)
+    {
+      printf ("eval error: splicing after consing dot is not allowed\n");
+    }
+  else if (err->type == SPLICING_OF_ATOM_NOT_ALLOWED_HERE)
+    {
+      printf ("eval error: splicing of an atom is not allowed here\n");
+    }
+  else if (err->type == NOTHING_EXPANDED_BEFORE_CONSING_DOT)
+    {
+      printf ("eval error: splicing produced nothing before consing dot\n");
     }
   else if (err->type == WRONG_NUMBER_OF_ARGUMENTS)
     {
