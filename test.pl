@@ -62,6 +62,12 @@ make_test ("'( \"\" #||# )", "(\"\")");
 make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'\\\n ", "|\n|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
+
+
+# now we extensively test backtick notation.  maybe some of these
+# cases are not specified by the standard or are undefined behavior,
+# so I chose the most consistent behavior to me
+
 make_test ("`,'a", "A");
 make_test ("``,a", "`,A");
 make_test ("`,`a", "A");
@@ -76,14 +82,18 @@ make_test ("`(,.())", "()");
 make_test ("`(,@() ,.())", "()");
 make_test ("`(1 2 ,@() ,.() 3)", "(1 2 3)");
 make_test ("``(1 2 ,,@() ,,.())", "`(1 2)");
-make_test ("`(,\@1 ,\@2)", "(1 2)");
 make_test ("``(,@())", "`(,@())");
+make_test ("`(1 ,\@5)", "(1 . 5)");
 make_test ("`(,1 ,@(cdr '(1 2 3 4)))", "(1 2 3 4)");
 make_test ("`(,1 ,@(cdr '(1 2 3 4)) ,5)", "(1 2 3 4 5)");
 make_test ("`(,@(cdr '(0 1 2 3 4)) 5)", "(1 2 3 4 5)");
 make_test ("`(,@(cdr '(0 1 2 3)) ,4)", "(1 2 3 4)");
 make_test ("`(,.(cdr '(0 1 2 3)) ,4)", "(1 2 3 4)");
 make_test ("``(,,.(cdr '(0 1 2 3)) ,4)", "`(,1 ,2 ,3 ,4)");
+
+
+# other reader tests
+
 make_test ("#\\a", "#\\a");
 make_test ("#\\κ", "#\\κ");
 make_test ("#\\newLINE", "#\\Newline");
