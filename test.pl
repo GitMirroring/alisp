@@ -138,6 +138,8 @@ make_test ("b", "9");
 make_test ("(let* ((x 1) (y x)) y)", "1");
 make_test ("(defun f ())", "F");
 make_test ("(f)", "()");
+make_test ("(defun f () \"\")", "F");
+make_test ("(f)", "\"\"");
 make_test ("(load \"cl.lisp\")", "T");
 make_test ("(1+ 5)", "6");
 make_test ("(typep '(1 . 2) 'cons)", "T");
