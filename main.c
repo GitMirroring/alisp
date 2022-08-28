@@ -2535,6 +2535,7 @@ create_function (struct object *lambda_list, struct object *body)
 
   fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, &out);
 
+  increment_refcount (body);
   fun->value_ptr.function->body = body;
 
   return fun;
