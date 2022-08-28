@@ -368,6 +368,12 @@ cons_pair
   int filling_car;  /* when car is incomplete but already partly allocated */
   int empty_list_in_car;  /* when car is a still empty list so nothing
 			     allocated yet */
+
+  int found_dot;
+
+  int filling_cdr;
+  int empty_list_in_cdr;
+
   struct object *car;
   struct object *cdr;
 };
@@ -1611,67 +1617,71 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	   size_t size, struct environment *env, struct eval_outcome *outcome,
 	   const char **list_end, size_t *out_arg)
 {
-  struct object *last_cons = NULL, *car = NULL, *ob = *obj, *cons;
-  const char *obj_beg, *obj_end = NULL;
+  struct object *last_cons = *obj, *car = NULL, *ob = *obj, *cons;
+  const char *obj_beg, *obj_end = input;
   enum read_outcome out;
-  int found_dot = 0, dotted_list_full = 0;
 
 
   if (!size)
     return INCOMPLETE_EMPTY_LIST;
 
-  while (ob && ob != &nil_object)
+  while (ob && ob->type == TYPE_CONS_PAIR)
     {
-      if (ob->value_ptr.cons_pair->filling_car)
+      if (ob->value_ptr.cons_pair->filling_car
+	  || ob->value_ptr.cons_pair->filling_cdr)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car,
+	  out = read_object_continued (ob->value_ptr.cons_pair->filling_car
+				       ? &ob->value_ptr.cons_pair->car
+				       : &ob->value_ptr.cons_pair->cdr,
 				       backts_commas_balance, 0, input,
 				       size, env, outcome, &obj_beg,
 				       &obj_end, out_arg);
 
 	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
-	    ob->value_ptr.cons_pair->filling_car = 0;
-	  else if (out == NO_OBJECT || out == INCOMPLETE_EMPTY_LIST
-		   || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR
-		   || out & INCOMPLETE_OBJECT)
+	    ob->value_ptr.cons_pair->filling_car =
+	      ob->value_ptr.cons_pair->filling_cdr = 0;
+	  else if (out == NO_OBJECT || out & INCOMPLETE_OBJECT
+		   || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
 	    return out;
+
+	  obj_end++;
 	}
-      else if (ob->value_ptr.cons_pair->empty_list_in_car)
+      else if (ob->value_ptr.cons_pair->empty_list_in_car
+	       || ob->value_ptr.cons_pair->empty_list_in_cdr)
 	{
-	  out = read_object_continued (&ob->value_ptr.cons_pair->car,
+	  out = read_object_continued (ob->value_ptr.cons_pair->empty_list_in_car
+				       ? &ob->value_ptr.cons_pair->car
+				       : &ob->value_ptr.cons_pair->cdr,
 				       backts_commas_balance, 1, input,
 				       size, env, outcome, &obj_beg,
 				       &obj_end, out_arg);
 
 	  if (out != INCOMPLETE_EMPTY_LIST)
-	    ob->value_ptr.cons_pair->empty_list_in_car = 0;
+	    ob->value_ptr.cons_pair->empty_list_in_car =
+	      ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
 
 	  if (out & INCOMPLETE_OBJECT)
 	    {
-	      ob->value_ptr.cons_pair->filling_car = 1;
+	      ob->value_ptr.cons_pair->empty_list_in_car
+		? (ob->value_ptr.cons_pair->filling_car = 1)
+		: (ob->value_ptr.cons_pair->filling_cdr = 1);
 	      return out;
 	    }
 
 	  if (out == NO_OBJECT || out == INCOMPLETE_EMPTY_LIST
 	      || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
 	    return out;
+
+	  obj_end++;
 	}
 
       last_cons = ob;
       ob = ob->value_ptr.cons_pair->cdr;      
     }
 
-  if (obj_end)
-    {
-      out = read_object (&car, backts_commas_balance, obj_end + 1,
-			 size - (obj_end + 1 - input), env, outcome, &obj_beg,
-			 &obj_end, out_arg);
-    }
-  else
-    {
-      out = read_object (&car, backts_commas_balance, input, size, env,
-			 outcome, &obj_beg, &obj_end, out_arg);
-    }
+  out = read_object (&car, backts_commas_balance, obj_end,
+		     size - (obj_end - input), env, outcome, &obj_beg, &obj_end,
+		     out_arg);
 
   if (out == NO_OBJECT && !last_cons)
     return INCOMPLETE_EMPTY_LIST;
@@ -1687,18 +1697,25 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
     {
       if (out == CLOSING_PARENTHESIS)
 	{
-	  if (found_dot && !dotted_list_full)
+	  if (last_cons->value_ptr.cons_pair->found_dot
+	      && !last_cons->value_ptr.cons_pair->cdr)
 	    return NO_OBJ_AFTER_DOT_IN_LIST;
+
+	  if (!last_cons->value_ptr.cons_pair->found_dot)
+	    last_cons->value_ptr.cons_pair->cdr = &nil_object;
 
 	  *list_end = obj_end;
 	  return COMPLETE_OBJECT;
 	}
       else if (out == SINGLE_DOT)
 	{
-	  if (found_dot)
+	  if (!last_cons)
+	    return NO_OBJ_BEFORE_DOT_IN_LIST;
+
+	  if (last_cons->value_ptr.cons_pair->found_dot)
 	    return MORE_THAN_A_CONSING_DOT_NOT_ALLOWED;
 
-	  found_dot = 1;
+	  last_cons->value_ptr.cons_pair->found_dot = 1;
 	}
       else if (out & READ_ERROR)
 	{
@@ -1706,17 +1723,20 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	}
       else if (out == COMPLETE_OBJECT || out & INCOMPLETE_OBJECT)
 	{
-	  if (dotted_list_full)
+	  if (last_cons && last_cons->value_ptr.cons_pair->found_dot
+	      && last_cons->value_ptr.cons_pair->cdr
+	      && !last_cons->value_ptr.cons_pair->filling_cdr)
 	    return MULTIPLE_OBJS_AFTER_DOT_IN_LIST;
-	  else if (found_dot)
+	  else if (last_cons && last_cons->value_ptr.cons_pair->found_dot)
 	    {
-	      if (last_cons)
+	      last_cons->value_ptr.cons_pair->cdr = car;
+
+	      if (out & INCOMPLETE_OBJECT)
 		{
-		  last_cons->value_ptr.cons_pair->cdr = car;
-		  dotted_list_full = 1;
+		  last_cons->value_ptr.cons_pair->filling_cdr = 1;
+
+		  return INCOMPLETE_NONEMPTY_LIST;
 		}
-	      else
-		return NO_OBJ_BEFORE_DOT_IN_LIST;
 	    }
 	  else
 	    {
@@ -1748,13 +1768,18 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
   if (out == INCOMPLETE_EMPTY_LIST)
     {
-      cons = alloc_empty_cons_pair ();
-      cons->value_ptr.cons_pair->empty_list_in_car = 1;
-
-      if (last_cons)
-	last_cons->value_ptr.cons_pair->cdr = cons;
+      if (last_cons && last_cons->value_ptr.cons_pair->found_dot)
+	last_cons->value_ptr.cons_pair->empty_list_in_cdr = 1;
       else
-	*obj = cons;
+	{
+	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->empty_list_in_car = 1;
+
+	  if (last_cons)
+	    last_cons->value_ptr.cons_pair->cdr = cons;
+	  else
+	    *obj = cons;
+	}
     }
 
   return INCOMPLETE_NONEMPTY_LIST;
@@ -2450,14 +2475,14 @@ alloc_empty_cons_pair (void)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct cons_pair *cons = malloc_and_check (sizeof (*cons));
-  struct object *car = malloc_and_check (sizeof (*car));
-
-  car = &nil_object;
 
   cons->filling_car = 0;
   cons->empty_list_in_car = 0;
-  cons->car = car;
-  cons->cdr = &nil_object;
+  cons->found_dot = 0;
+  cons->filling_cdr = 0;
+  cons->empty_list_in_cdr = 0;
+  cons->car = NULL;
+  cons->cdr = NULL;
 
   obj->type = TYPE_CONS_PAIR;
   obj->refcount = 1;
