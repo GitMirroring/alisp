@@ -4207,6 +4207,8 @@ evaluate_through_list (struct object *list, struct environment *env,
   if (!args)
     return &nil_object;
 
+  last_cons->value_ptr.cons_pair->cdr = &nil_object;
+
   return args;
 }
 
