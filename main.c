@@ -869,6 +869,9 @@ struct object *builtin_multiply (struct object *list, struct environment *env,
 				 struct eval_outcome *outcome);
 struct object *builtin_divide (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
+struct object *builtin_numbers_equal (struct object *list,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
 
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
@@ -1104,6 +1107,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("-", env, builtin_minus, 1);
   add_builtin_form ("*", env, builtin_multiply, 1);
   add_builtin_form ("/", env, builtin_divide, 1);
+  add_builtin_form ("=", env, builtin_numbers_equal, 1);
   add_builtin_form ("IF", env, evaluate_if, 0);
   add_builtin_form ("PROGN", env, evaluate_progn, 0);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 0);
@@ -4936,6 +4940,65 @@ builtin_divide (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
   return NULL;
+}
+
+
+struct object *
+builtin_numbers_equal (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  int l = list_length (list), i, eq;
+  struct object *first, *second, *first_p, *second_p;
+  enum object_type tp;
+
+  if (!l)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (l == 1 && CAR (list)->type & TYPE_NUMBER)
+    return &t_object;
+  else if (l == 1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  first = CAR (list);
+  second = CAR (CDR (list));
+
+  for (i = 0; i + 1 < l; i++)
+    {
+      if (!(first->type & TYPE_NUMBER) || !(second->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+	  return NULL;
+	}
+
+      tp = highest_num_type (first->type, second->type);
+
+      first_p = promote_number (first, tp);
+      second_p = promote_number (second, tp);
+
+      if (tp == TYPE_INTEGER)
+	eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
+      else if (tp == TYPE_RATIO)
+	eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
+      else
+	eq = mpf_cmp (first_p->value_ptr.floating, second_p->value_ptr.floating);
+
+      if (eq)
+	return &nil_object;
+
+      first = second;
+      second = nth (i+2, list);
+    }
+
+  return &t_object;
 }
 
 
