@@ -273,10 +273,10 @@ symbol
   int is_parameter;
   int is_special;
 
-  int value_dyn_bins;
+  int value_dyn_bins_num;
   struct object *value_cell;
 
-  int function_dyn_bins;
+  int function_dyn_bins_num;
   struct object *function_cell;
 
   struct object *home_package;
@@ -2890,9 +2890,9 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
-  sym->value_dyn_bins = 0;
+  sym->value_dyn_bins_num = 0;
   sym->value_cell = NULL;
-  sym->function_dyn_bins = 0;
+  sym->function_dyn_bins_num = 0;
   sym->function_cell = NULL;
   sym->home_package = NULL;
 
@@ -3134,7 +3134,7 @@ remove_bindings (struct binding *env, int num)
       b = env->next;
 
       if (env->type == DYNAMIC_BINDING)
-	env->sym->value_ptr.symbol->value_dyn_bins--;
+	env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
       decrement_refcount (env->sym);
       decrement_refcount (env->obj);
@@ -4161,14 +4161,14 @@ evaluate_list (struct object *list, struct environment *env,
 
   sym = symname->sym->value_ptr.symbol;
 
-  if (!sym->function_dyn_bins && !sym->function_cell)
+  if (!sym->function_dyn_bins_num && !sym->function_cell)
     {
       outcome->type = UNKNOWN_FUNCTION;
       outcome->obj = CAR (list);
       return NULL;
     }
 
-  if (sym->function_dyn_bins)
+  if (sym->function_dyn_bins_num)
     {
       bind = find_binding (sym, env->funcs, DYNAMIC_BINDING);
 
@@ -5109,7 +5109,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
   if (sym->value_ptr.symbol->is_parameter)
     {
-      sym->value_ptr.symbol->value_dyn_bins++;
+      sym->value_ptr.symbol->value_dyn_bins_num++;
 
       return create_binding (sym, val, DYNAMIC_BINDING);
     }
@@ -5184,10 +5184,10 @@ get_dynamic_value (struct object *sym, struct environment *env)
   struct symbol *s = sym->value_ptr.symbol;
   struct binding *b;
 
-  if (!s->value_dyn_bins && !s->value_cell)
+  if (!s->value_dyn_bins_num && !s->value_cell)
     return NULL;
 
-  if (s->is_const || !s->value_dyn_bins)
+  if (s->is_const || !s->value_dyn_bins_num)
     {
       increment_refcount (s->value_cell);
 
