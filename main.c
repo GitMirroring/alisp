@@ -4756,9 +4756,13 @@ promote_number (struct object *num, enum object_type type)
   struct object *ret;
 
   if (num->type == type)
-    return num;
+    {
+      increment_refcount (num);
+      return num;
+    }
 
   ret = malloc_and_check (sizeof (*ret));
+  ret->refcount = 1;
   ret->type = type;
 
   if (type == TYPE_RATIO)
