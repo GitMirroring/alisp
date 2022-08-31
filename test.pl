@@ -167,6 +167,12 @@ make_test ("(nthcdr 1 '(0 . 1))", "1");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
+make_test ("(tagbody\n" .
+	   "  (write \"1\")\n" .
+	   "  (go jmp)\n" .
+	   "  (write \"2\")\n" .
+	   "  jmp\n" .
+	   "  (write \"3\"))", "\"1\"\n\"3\"\n()");
 
 
 # arithmetic tests
