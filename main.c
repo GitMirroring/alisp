@@ -853,6 +853,7 @@ struct object *builtin_eq
 struct object *builtin_not
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
+int compare_numbers (struct object *num1, struct object *num2);
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
 struct object *promote_number (struct object *num, enum object_type type);
@@ -4709,6 +4710,28 @@ builtin_not (struct object *list, struct environment *env,
 }
 
 
+int
+compare_numbers (struct object *num1, struct object *num2)
+{
+  enum object_type tp = highest_num_type (num1->type, num2->type);
+  struct object *first_p = promote_number (num1, tp);
+  struct object *second_p = promote_number (num2, tp);
+  int eq;
+
+  if (tp == TYPE_INTEGER)
+    eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
+  else if (tp == TYPE_RATIO)
+    eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
+  else
+    eq = mpf_cmp (first_p->value_ptr.floating, second_p->value_ptr.floating);
+
+  decrement_refcount (first_p);
+  decrement_refcount (second_p);
+
+  return eq;
+}
+
+
 enum object_type
 highest_num_type (enum object_type t1, enum object_type t2)
 {
@@ -4959,8 +4982,7 @@ builtin_numbers_equal (struct object *list, struct environment *env,
 		       struct eval_outcome *outcome)
 {
   int l = list_length (list), i, eq;
-  struct object *first, *second, *first_p, *second_p;
-  enum object_type tp;
+  struct object *first, *second;
 
   if (!l)
     {
@@ -4990,17 +5012,7 @@ builtin_numbers_equal (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      tp = highest_num_type (first->type, second->type);
-
-      first_p = promote_number (first, tp);
-      second_p = promote_number (second, tp);
-
-      if (tp == TYPE_INTEGER)
-	eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
-      else if (tp == TYPE_RATIO)
-	eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
-      else
-	eq = mpf_cmp (first_p->value_ptr.floating, second_p->value_ptr.floating);
+      eq = compare_numbers (first, second);
 
       if (eq)
 	return &nil_object;
