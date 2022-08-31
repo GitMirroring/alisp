@@ -4929,6 +4929,8 @@ apply_arithmetic_operation (struct object *list,
 	       op->value_ptr.floating);
 	}
 
+      decrement_refcount (op);
+
       list = CDR (list);
 
     } while (list != &nil_object);
