@@ -4784,7 +4784,8 @@ apply_arithmetic_operation (struct object *list,
 			    void (*opz) (mpz_t, const mpz_t, const mpz_t),
 			    void (*opq) (mpq_t, const mpq_t, const mpq_t),
 			    void (*opf) (mpf_t, const mpf_t, const mpf_t),
-			    struct environment *env, struct eval_outcome *outcome)
+			    struct environment *env,
+			    struct eval_outcome *outcome)
 {
   struct object *ret, *op;
 
@@ -4794,7 +4795,8 @@ apply_arithmetic_operation (struct object *list,
       return NULL;
     }
 
-  if (highest_num_type (CAR (list)->type, CAR (CDR (list))->type) == CAR (list)->type)
+  if (highest_num_type (CAR (list)->type, CAR (CDR (list))->type)
+      == CAR (list)->type)
     ret = copy_number (CAR (list));
   else
     ret = promote_number (CAR (list), highest_num_type (CAR (list)->type,
@@ -4804,11 +4806,13 @@ apply_arithmetic_operation (struct object *list,
 
   do
     {
-      op = promote_number (CAR (list), highest_num_type (ret->type, CAR (list)->type));
+      op = promote_number (CAR (list), highest_num_type (ret->type,
+							 CAR (list)->type));
 
       if (ret->type == TYPE_INTEGER)
 	{
-	  opz (ret->value_ptr.integer, ret->value_ptr.integer, op->value_ptr.integer);
+	  opz (ret->value_ptr.integer, ret->value_ptr.integer,
+	       op->value_ptr.integer);
 	}
       else if (ret->type == TYPE_RATIO)
 	{
@@ -4816,7 +4820,8 @@ apply_arithmetic_operation (struct object *list,
 	}
       else if (ret->type == TYPE_FLOAT)
 	{
-	  opf (ret->value_ptr.floating, ret->value_ptr.floating, op->value_ptr.floating);
+	  opf (ret->value_ptr.floating, ret->value_ptr.floating,
+	       op->value_ptr.floating);
 	}
 
       list = CDR (list);
@@ -4856,7 +4861,8 @@ builtin_plus (struct object *list, struct environment *env,
       return CAR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_add, mpq_add, mpf_add, env, outcome);
+  return apply_arithmetic_operation (list, mpz_add, mpq_add, mpf_add, env,
+				     outcome);
 }
 
 
