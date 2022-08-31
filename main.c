@@ -70,6 +70,17 @@ string
 
 
 struct
+go_tag
+{
+  struct object *name;
+
+  struct object *dest;
+
+  struct go_tag *next;
+};
+
+
+struct
 global_environment
 {
   struct binding *dyn_vars;
@@ -111,6 +122,9 @@ environment
 
   struct object *keyword_package;
   struct object *current_package;
+
+  struct go_tag *go_tags;
+  int active_go_tags_num;
 
   /*struct global_environment *glob_env;
   struct dynamic_environment *dyn_env;
@@ -208,7 +222,8 @@ eval_outcome_type
     COULD_NOT_SEEK_FILE,
     COULD_NOT_TELL_FILE,
     ERROR_READING_FILE,
-    UNKNOWN_TYPE
+    UNKNOWN_TYPE,
+    CANT_GO_TO_NONEXISTENT_TAG
   };
 
 
@@ -723,6 +738,11 @@ struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env,
 			      enum binding_type type);
 
+struct go_tag *add_go_tag (struct object *tagname, struct object *tagdest,
+			   struct go_tag *tags);
+struct go_tag *remove_go_tags (struct go_tag *tags, int num);
+struct go_tag *find_go_tag (struct object *tagname, struct go_tag *tags);
+
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
 		       (const struct object *obj, const struct object *typespec,
@@ -904,6 +924,8 @@ struct object *evaluate_defvar
 struct object *evaluate_defun
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defmacro
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
@@ -1116,6 +1138,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFVAR", env, evaluate_defvar, 0);
   add_builtin_form ("DEFUN", env, evaluate_defun, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0);
+  add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, 1);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 1);
 
@@ -3159,6 +3182,60 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 	return env;
 
       env = env->next;
+    }
+
+  return NULL;
+}
+
+
+struct go_tag *
+add_go_tag (struct object *tagname, struct object *tagdest, struct go_tag *tags)
+{
+  struct go_tag *new = malloc_and_check (sizeof (*new));
+
+  new->name = tagname;
+  new->dest = tagdest;
+
+  new->next = tags;
+
+  return new;
+}
+
+
+struct go_tag *
+remove_go_tags (struct go_tag *tags, int num)
+{
+  int i;
+  struct go_tag *n;
+
+  for (i = 0; i < num; i++)
+    {
+      n = tags->next;
+      free (tags);
+      tags = n;
+    }
+
+  return n;
+}
+
+
+struct go_tag *
+find_go_tag (struct object *tagname, struct go_tag *tags)
+{
+  while (tags)
+    {
+      if (tagname->type == tags->name->type)
+	{
+	  if ((tagname->type == TYPE_SYMBOL_NAME
+	       && tagname->value_ptr.symbol_name->sym
+	       == tags->name->value_ptr.symbol_name->sym)
+	      || (tagname->type == TYPE_INTEGER
+		  && !mpz_cmp (tagname->value_ptr.integer,
+			       tags->name->value_ptr.integer)))
+	    return tags;
+	}
+
+      tags = tags->next;
     }
 
   return NULL;
@@ -5411,6 +5488,80 @@ evaluate_defmacro (struct object *list, struct environment *env,
 }
 
 
+struct object *
+evaluate_tagbody (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  struct object *cons = list, *destfind, *car, *dest, *ret;
+  struct go_tag *tag;
+  int tags = 0;
+
+  while (cons != &nil_object)
+    {
+      car = CAR (cons);
+
+      if (car->type == TYPE_SYMBOL_NAME || car->type == TYPE_INTEGER)
+	{
+	  destfind = CDR (cons);
+
+	  while (destfind != &nil_object && (dest = CAR (destfind))
+		 && (dest->type == TYPE_SYMBOL_NAME
+		     || dest->type == TYPE_INTEGER))
+	    destfind = CDR (cons);
+
+	  env->go_tags = add_go_tag (car, destfind, env->go_tags);
+	  env->active_go_tags_num++;
+	  tags++;
+	}
+
+      cons = CDR (cons);
+    }
+
+  cons = list;
+
+  while (cons != &nil_object)
+    {
+      car = CAR (cons);
+
+      if (car->type == TYPE_CONS_PAIR)
+	{
+	  if (CAR (car)->type == TYPE_SYMBOL_NAME &&
+	      symname_equals (CAR (car)->value_ptr.symbol_name, "GO"))
+	    {
+	      tag = find_go_tag (CAR (CDR (car)), env->go_tags);
+
+	      if (!tag)
+		{
+		  outcome->type = CANT_GO_TO_NONEXISTENT_TAG;
+
+		  return NULL;
+		}
+
+	      cons = tag->dest;
+	    }
+	  else
+	    {
+	      ret = evaluate_object (car, env, outcome);
+
+	      if (!ret)
+		return NULL;
+
+	      decrement_refcount (ret);
+
+	      cons = CDR (cons);
+	    }
+	}
+      else
+	cons = CDR (cons);
+    }
+
+  env->go_tags = remove_go_tags (env->go_tags, tags);
+  env->active_go_tags_num -= tags;
+
+  return &nil_object;
+}
+
+
 int
 eqmem (const char *s1, size_t n1, const char *s2, size_t n2)
 {
@@ -5870,6 +6021,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == UNKNOWN_TYPE)
     {
       printf ("eval error: type not known\n");
+    }
+  else if (err->type == CANT_GO_TO_NONEXISTENT_TAG)
+    {
+      printf ("eval error: can't GO to a tag that doesn't exist\n");
     }
 }
 
