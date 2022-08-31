@@ -4533,6 +4533,7 @@ builtin_write (struct object *list, struct environment *env,
   print_object (CAR (list), env);
   printf ("\n");
 
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
