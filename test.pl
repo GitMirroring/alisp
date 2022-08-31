@@ -173,6 +173,10 @@ make_test ("(tagbody\n" .
 	   "  (write \"2\")\n" .
 	   "  jmp\n" .
 	   "  (write \"3\"))", "\"1\"\n\"3\"\n()");
+make_test ("(cddr '(0 1 2))", "(2)");
+make_test ("(cddddr '(0 1 2 3 4))", "(4)");
+make_test ("(cadddr '(0 1 2 3 4))", "3");
+make_test ("(caar '((4) 1 2 3))", "4");
 
 
 # arithmetic tests
