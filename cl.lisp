@@ -22,6 +22,7 @@
 (defun 1- (num)
   (- num 1))
 
+
 (defun first (list) (nth 0 list))
 (defun second (list) (nth 1 list))
 (defun third (list) (nth 2 list))
@@ -32,6 +33,7 @@
 (defun eighth (list) (nth 7 list))
 (defun ninth (list) (nth 8 list))
 (defun tenth (list) (nth 9 list))
+
 
 (defun rest (list) (cdr list))
 
