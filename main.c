@@ -213,6 +213,7 @@ eval_outcome_type
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
     INCORRECT_SYNTAX_IN_DEFUN,
+    CANT_REDEFINE_SPECIAL_OPERATOR,
     CANT_REDEFINE_CONSTANT,
     CANT_REBIND_CONSTANT,
     TOO_FEW_ARGUMENTS,
@@ -279,6 +280,7 @@ symbol
   struct object *typespec;
 
   int is_builtin_form;
+  int is_special_operator;
   struct parameter *lambda_list;
   int evaluate_args;
   struct object *(*builtin_form)
@@ -751,7 +753,8 @@ void add_builtin_type (char *name, struct environment *env,
 void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
 		       (struct object *list, struct environment *env,
-			struct eval_outcome *outcome), int eval_args);
+			struct eval_outcome *outcome), int eval_args,
+		       int is_special_operator);
 
 struct object *define_constant
 (struct object *sym, struct object *form, struct environment *env,
@@ -974,14 +977,14 @@ const struct option long_options[] =
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, 1, type_nil, NULL, 0, NULL, 0, NULL,
-  1, 0, 0};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, 1, type_nil, NULL, 0, 0, NULL, 0,
+  NULL, 1, 0, 0};
 
 struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, 1, type_t, NULL, 0, NULL, 0, NULL,
-  1, 0, 0};
+struct symbol t_symbol = {"T", 1, 1, 1, 1, type_t, NULL, 0, 0, NULL, 0, NULL, 1,
+  0, 0};
 
 struct object t_object = {1, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
@@ -1115,32 +1118,32 @@ add_standard_definitions (struct environment *env)
   prepend_object_to_list (&nil_object,
 			  &env->current_package->value_ptr.package->symlist);
 
-  add_builtin_form ("CAR", env, builtin_car, 1);
-  add_builtin_form ("CDR", env, builtin_cdr, 1);
-  add_builtin_form ("CONS", env, builtin_cons, 1);
-  add_builtin_form ("LIST", env, builtin_list, 1);
-  add_builtin_form ("NTH", env, builtin_nth, 1);
-  add_builtin_form ("NTHCDR", env, builtin_nthcdr, 1);
-  add_builtin_form ("WRITE", env, builtin_write, 1);
-  add_builtin_form ("LOAD", env, builtin_load, 1);
-  add_builtin_form ("EQ", env, builtin_eq, 1);
-  add_builtin_form ("NOT", env, builtin_not, 1);
-  add_builtin_form ("NULL", env, builtin_not, 1);
-  add_builtin_form ("+", env, builtin_plus, 1);
-  add_builtin_form ("-", env, builtin_minus, 1);
-  add_builtin_form ("*", env, builtin_multiply, 1);
-  add_builtin_form ("/", env, builtin_divide, 1);
-  add_builtin_form ("=", env, builtin_numbers_equal, 1);
-  add_builtin_form ("IF", env, evaluate_if, 0);
-  add_builtin_form ("PROGN", env, evaluate_progn, 0);
-  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 0);
-  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, 0);
-  add_builtin_form ("DEFVAR", env, evaluate_defvar, 0);
-  add_builtin_form ("DEFUN", env, evaluate_defun, 0);
-  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0);
-  add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0);
-  add_builtin_form ("TYPEP", env, builtin_typep, 1);
-  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 1);
+  add_builtin_form ("CAR", env, builtin_car, 1, 0);
+  add_builtin_form ("CDR", env, builtin_cdr, 1, 0);
+  add_builtin_form ("CONS", env, builtin_cons, 1, 0);
+  add_builtin_form ("LIST", env, builtin_list, 1, 0);
+  add_builtin_form ("NTH", env, builtin_nth, 1, 0);
+  add_builtin_form ("NTHCDR", env, builtin_nthcdr, 1, 0);
+  add_builtin_form ("WRITE", env, builtin_write, 1, 0);
+  add_builtin_form ("LOAD", env, builtin_load, 1, 0);
+  add_builtin_form ("EQ", env, builtin_eq, 1, 0);
+  add_builtin_form ("NOT", env, builtin_not, 1, 0);
+  add_builtin_form ("NULL", env, builtin_not, 1, 0);
+  add_builtin_form ("+", env, builtin_plus, 1, 0);
+  add_builtin_form ("-", env, builtin_minus, 1, 0);
+  add_builtin_form ("*", env, builtin_multiply, 1, 0);
+  add_builtin_form ("/", env, builtin_divide, 1, 0);
+  add_builtin_form ("=", env, builtin_numbers_equal, 1, 0);
+  add_builtin_form ("IF", env, evaluate_if, 0, 1);
+  add_builtin_form ("PROGN", env, evaluate_progn, 0, 1);
+  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 0, 0);
+  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, 0, 0);
+  add_builtin_form ("DEFVAR", env, evaluate_defvar, 0, 0);
+  add_builtin_form ("DEFUN", env, evaluate_defun, 0, 0);
+  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0, 0);
+  add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0, 1);
+  add_builtin_form ("TYPEP", env, builtin_typep, 1, 0);
+  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 1, 0);
 
   add_builtin_type ("T", env, type_t, 1);
   add_builtin_type ("NIL", env, type_nil, 1);
@@ -3268,7 +3271,7 @@ add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form) (struct object *list,
 						  struct environment *env,
 						  struct eval_outcome *outcome),
-		  int eval_args)
+		  int eval_args, int is_special_operator)
 {
   struct object *sym =
     intern_symbol_from_char_vector (name, strlen (name), 1, &env->
@@ -3277,6 +3280,7 @@ add_builtin_form (char *name, struct environment *env,
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
   sym->value_ptr.symbol->evaluate_args = eval_args;
+  sym->value_ptr.symbol->is_special_operator = is_special_operator;
 
   increment_refcount (sym);
 }
@@ -5444,13 +5448,21 @@ struct object *
 evaluate_defun (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
-  struct object *fun;
+  struct object *fun, *sym;
 
   if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && CAR (CDR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  if (sym->value_ptr.symbol->is_special_operator)
+    {
+      outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
       return NULL;
     }
 
@@ -5468,13 +5480,21 @@ struct object *
 evaluate_defmacro (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
-  struct object *fun;
+  struct object *fun, *sym;
 
   if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && CAR (CDR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  if (sym->value_ptr.symbol->is_special_operator)
+    {
+      outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
       return NULL;
     }
 
@@ -5983,6 +6003,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
       printf ("eval error: incorrect syntax in defun\n");
+    }
+  else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
+    {
+      printf ("eval error: redefining special operators is not allowed\n");
     }
   else if (err->type == CANT_REDEFINE_CONSTANT)
     {
