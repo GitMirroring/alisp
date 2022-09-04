@@ -5850,7 +5850,7 @@ print_object (const struct object *obj, struct environment *env)
   else if (obj->type == TYPE_ARRAY)
     print_array (obj->value_ptr.array, env);
   else if (obj->type == TYPE_FUNCTION)
-    printf ("#<FUNCTION %p>", obj);
+    printf ("#<FUNCTION %p>", (void *)obj);
   else if (obj->type == TYPE_PACKAGE)
     {
       printf ("#<PACKAGE \"");
