@@ -6228,9 +6228,6 @@ free_symbol (struct object *obj)
 
   free (entry);
 
-  decrement_refcount (s->value_cell);
-  decrement_refcount (s->function_cell);
-
   free (s->name);
   free (s);
   free (obj);
