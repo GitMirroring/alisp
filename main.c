@@ -370,6 +370,8 @@ parameter
 struct
 function
 {
+  struct object *name;
+
   struct parameter *lambda_list;
   int allow_other_keys;
 
@@ -2529,6 +2531,7 @@ alloc_function (void)
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct function *fun = malloc_and_check (sizeof (*fun));
 
+  fun->name = NULL;
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
   fun->eval_args = 0;
