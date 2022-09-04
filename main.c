@@ -3296,16 +3296,15 @@ add_builtin_form (char *name, struct environment *env,
 						  struct eval_outcome *outcome),
 		  int eval_args, int is_special_operator)
 {
-  struct object *sym =
-    intern_symbol_from_char_vector (name, strlen (name), 1, &env->
-				    current_package->value_ptr.package->symlist);
+  struct object *sym = create_symbol (name, strlen (name), 1);
 
   sym->value_ptr.symbol->is_builtin_form = 1;
   sym->value_ptr.symbol->builtin_form = builtin_form;
   sym->value_ptr.symbol->evaluate_args = eval_args;
   sym->value_ptr.symbol->is_special_operator = is_special_operator;
 
-  increment_refcount (sym);
+  prepend_object_to_list (sym,
+			  &env->current_package->value_ptr.package->symlist);
 }
 
 
