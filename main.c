@@ -6181,6 +6181,9 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 }
 
 
+#define ANTILOOP_HASH_TABLE_SIZE 1024
+
+
 void
 increment_refcount (struct object *obj, struct object_list **antiloop_hash_table)
 {
@@ -6196,17 +6199,18 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
     {
       if (!antiloop_hash_table)
 	{
-	  antiloop_hash_table = alloc_empty_hash_table (1024);
+	  antiloop_hash_table = alloc_empty_hash_table (ANTILOOP_HASH_TABLE_SIZE);
 	  allocated_now = 1;
 	}
 
       if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_table,
-						     1024))
+						     ANTILOOP_HASH_TABLE_SIZE))
 	return;
 
       obj->refcount++;
 
-      prepend_object_to_list (obj, &antiloop_hash_table [hash_object (obj, 1024)]);
+      prepend_object_to_list
+	(obj, &antiloop_hash_table [hash_object (obj, ANTILOOP_HASH_TABLE_SIZE)]);
 
       if (obj->type & TYPE_PREFIX)
 	increment_refcount (obj->value_ptr.next, antiloop_hash_table);
@@ -6229,7 +6233,7 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	}
 
       if (allocated_now)
-	free_hash_table (antiloop_hash_table, 1024);
+	free_hash_table (antiloop_hash_table, ANTILOOP_HASH_TABLE_SIZE);
     }
 }
 
@@ -6249,17 +6253,18 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
     {
       if (!antiloop_hash_table)
 	{
-	  antiloop_hash_table = alloc_empty_hash_table (1024);
+	  antiloop_hash_table = alloc_empty_hash_table (ANTILOOP_HASH_TABLE_SIZE);
 	  allocated_now = 1;
 	}
 
       if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_table,
-						     1024))
+						     ANTILOOP_HASH_TABLE_SIZE))
 	return 0;
 
       obj->refcount--;
 
-      prepend_object_to_list (obj, &antiloop_hash_table [hash_object (obj, 1024)]);
+      prepend_object_to_list
+	(obj, &antiloop_hash_table [hash_object (obj, ANTILOOP_HASH_TABLE_SIZE)]);
 
       if (obj->type & TYPE_PREFIX)
 	decrement_refcount (obj->value_ptr.next, antiloop_hash_table);
@@ -6282,7 +6287,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	}
 
       if (allocated_now)
-	free_hash_table (antiloop_hash_table, 1024);
+	free_hash_table (antiloop_hash_table, ANTILOOP_HASH_TABLE_SIZE);
     }
 
   if (!obj->refcount)
