@@ -485,12 +485,10 @@ object_type
     TYPE_FUNCTION = 1 << 21,
     TYPE_MACRO = 1 << 22,
     TYPE_SHARP_MACRO_CALL = 1 << 23,
-    TYPE_NIL = 1 << 25
   };
 
 
 #define TYPE_PREFIX (TYPE_QUOTE | TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT | TYPE_DOT)
-#define TYPE_LIST (TYPE_NIL | TYPE_CONS_PAIR)
 #define TYPE_REAL (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT)
 #define TYPE_NUMBER (TYPE_REAL)
 
@@ -526,8 +524,7 @@ object
   const char *begin;
   const char *end;
   enum object_type type;
-  union object_ptr_union value_ptr;  /* only when type is TYPE_NIL, this is
-					allowed to be NULL */
+  union object_ptr_union value_ptr;
 };  
 
 
@@ -4221,7 +4218,7 @@ evaluate_list (struct object *list, struct environment *env,
 
   if (symname_equals (symname, "LET"))
     {
-      if (!(CDR (list)->type & TYPE_LIST))
+      if (CDR (list)->type != TYPE_CONS_PAIR && CDR (list) != &nil_object)
 	{
 	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
@@ -4231,7 +4228,7 @@ evaluate_list (struct object *list, struct environment *env,
     }
   else if (symname_equals (symname, "LET*"))
     {
-      if (!(CDR (list)->type & TYPE_LIST))
+      if (CDR (list)->type != TYPE_CONS_PAIR && CDR (list) != &nil_object)
 	{
 	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
