@@ -2914,6 +2914,7 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->name_len = size;
   sym->is_type = 0;
   sym->is_builtin_form = 0;
+  sym->is_special_operator = 0;
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
