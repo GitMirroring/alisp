@@ -646,6 +646,9 @@ struct line_list *append_line_to_list
 void prepend_object_to_list
 (struct object *obj, struct object_list **list);
 
+int is_object_in_list
+(const struct object *obj, const struct object_list *list);
+
 enum read_outcome read_object
 (struct object **obj, int backt_commas_balance, const char *input, size_t size,
  struct environment *env, struct eval_outcome *outcome, const char **obj_begin,
@@ -701,6 +704,13 @@ struct object *alloc_prefix (enum element type);
 struct object *alloc_empty_cons_pair (void);
 struct object *alloc_function (void);
 struct object *alloc_sharp_macro_call (void);
+
+struct object_list **alloc_empty_hash_table (size_t table_size);
+void free_hash_table (struct object_list **hash_table, size_t table_size);
+int hash_object (const struct object *object, size_t table_size);
+int is_object_in_hash_table (const struct object *object,
+			     struct object_list **hash_table,
+			     size_t table_size);
 
 struct object *create_function (struct object *lambda_list, struct object *body);
 struct object *create_package (char *name, size_t name_len);
@@ -958,8 +968,10 @@ void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const struct read_outcome_args *args);
 void print_eval_error (struct eval_outcome *err, struct environment *env);
 
-void increment_refcount (struct object *obj);
-int decrement_refcount (struct object *obj);
+void increment_refcount (struct object *obj,
+			 struct object_list **antiloop_hash_table);
+int decrement_refcount (struct object *obj,
+			struct object_list **antiloop_hash_table);
 
 void free_object (struct object *obj);
 void free_string (struct object *obj);
@@ -1059,8 +1071,8 @@ main (int argc, char *argv [])
 	  else
 	    print_eval_error (&eval_out, &env);
 
-	  decrement_refcount (result);
-	  decrement_refcount (obj);
+	  decrement_refcount (result, NULL);
+	  decrement_refcount (obj, NULL);
 
 	  obj = read_object_interactively_continued (input_left, input_left_s,
 						     &env, &eval_out,
@@ -1080,8 +1092,8 @@ main (int argc, char *argv [])
 	  else
 	    print_eval_error (&eval_out, &env);
 
-	  decrement_refcount (result);
-	  decrement_refcount (obj);
+	  decrement_refcount (result, NULL);
+	  decrement_refcount (obj, NULL);
 	}
     }
   
@@ -1546,6 +1558,21 @@ prepend_object_to_list (struct object *obj, struct object_list **list)
   l->next = *list;
 
   *list = l;
+}
+
+
+int
+is_object_in_list (const struct object *obj, const struct object_list *list)
+{
+  while (list)
+    {
+      if (obj == list->obj)
+	return 1;
+
+      list = list->next;
+    }
+
+  return 0;
 }
 
 
@@ -2597,6 +2624,63 @@ alloc_sharp_macro_call (void)
 }
 
 
+struct object_list **
+alloc_empty_hash_table (size_t table_size)
+{
+  struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
+  int i;
+
+  for (i = 0; i < table_size; i++)
+    ret [i] = NULL;
+
+  return ret;
+}
+
+
+void
+free_hash_table (struct object_list **hash_table, size_t table_size)
+{
+  size_t i;
+  struct object_list *l, *n;
+
+  for (i = 0; i < table_size; i++)
+    {
+      if (hash_table [i])
+	{
+	  l = hash_table [i];
+
+	  while (l)
+	    {
+	      n = l->next;
+	      free (l);
+	      l = n;
+	    }
+	}
+    }
+
+  free (hash_table);
+}
+
+
+int
+hash_object (const struct object *object, size_t table_size)
+{
+  return (long int)object % table_size;  /* FIXME this cast is not portable, but
+					  it works on common platforms.  we
+					  should probably change to a hash
+					  function on object fields */
+}
+
+
+int
+is_object_in_hash_table (const struct object *object,
+			 struct object_list **hash_table, size_t table_size)
+{
+  return is_object_in_list (object,
+			    hash_table [hash_object (object, table_size)]);
+}
+
+
 struct object *
 create_function (struct object *lambda_list, struct object *body)
 {
@@ -2605,7 +2689,7 @@ create_function (struct object *lambda_list, struct object *body)
 
   fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, &out);
 
-  increment_refcount (body);
+  increment_refcount (body, NULL);
   fun->value_ptr.function->body = body;
 
   return fun;
@@ -3078,7 +3162,7 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
       if (eqmem (cur->obj->value_ptr.symbol->name,
 		 cur->obj->value_ptr.symbol->name_len, name, len))
 	{
-	  increment_refcount (cur->obj);
+	  increment_refcount (cur->obj, NULL);
 	  return cur->obj;
 	}
 
@@ -3153,8 +3237,8 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type)
   bin->obj = obj;
   bin->next = NULL;
 
-  increment_refcount (sym);
-  increment_refcount (obj);
+  increment_refcount (sym, NULL);
+  increment_refcount (obj, NULL);
 
   return bin;
 }
@@ -3203,8 +3287,8 @@ remove_bindings (struct binding *env, int num)
       if (env->type == DYNAMIC_BINDING)
 	env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
-      decrement_refcount (env->sym);
-      decrement_refcount (env->obj);
+      decrement_refcount (env->sym, NULL);
+      decrement_refcount (env->obj, NULL);
 
       free (env);
       return b;
@@ -3302,7 +3386,7 @@ add_builtin_type (char *name, struct environment *env,
   sym->value_ptr.symbol->is_standard_type = is_standard;
   sym->value_ptr.symbol->builtin_type = builtin_type;
 
-  increment_refcount (sym);
+  increment_refcount (sym, NULL);
 }
 
 
@@ -3345,9 +3429,10 @@ define_constant (struct object *sym, struct object *form,
   SYMBOL (sym)->value_ptr.symbol->is_const = 1;
   SYMBOL (sym)->value_ptr.symbol->value_cell = val;
 
-  increment_refcount (SYMBOL (sym));
+  increment_refcount (SYMBOL (sym), NULL);
+  increment_refcount (SYMBOL (sym), NULL);
 
-  return sym;
+  return SYMBOL (sym);
 }
 
 
@@ -3373,15 +3458,13 @@ define_parameter (struct object *sym, struct object *form,
   if (!val)
     return NULL;
   
-  if (sym->type == TYPE_SYMBOL_NAME)
-    s = sym->value_ptr.symbol_name->sym;
-  else
-    s = sym;
+  s = SYMBOL (sym);
   
   s->value_ptr.symbol->is_parameter = 1;
   s->value_ptr.symbol->value_cell = val;
 
-  increment_refcount (s);
+  increment_refcount (s, NULL);
+  increment_refcount (s, NULL);
 
   return s;
 }
@@ -3808,11 +3891,11 @@ evaluate_body (struct object *body, int eval_twice, struct environment *env,
 	  res = evaluate_object (res, env, outcome);
 
 	  if (body != &nil_object)
-	    decrement_refcount (res);
+	    decrement_refcount (res, NULL);
 	}
 
       if (body != &nil_object)
-	decrement_refcount (res);
+	decrement_refcount (res, NULL);
 
     } while (res && body != &nil_object);
 
@@ -3946,7 +4029,7 @@ evaluate_object (struct object *obj, struct environment *env,
 
   if (obj->type == TYPE_QUOTE)
     {
-      increment_refcount (obj->value_ptr.next);
+      increment_refcount (obj->value_ptr.next, NULL);
       return obj->value_ptr.next;
     }
   else if (obj->type == TYPE_BACKQUOTE)
@@ -3992,7 +4075,7 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else
     {
-      increment_refcount (obj);
+      increment_refcount (obj, NULL);
       return obj;
     }
 }
@@ -4090,7 +4173,7 @@ apply_backquote (struct object *form, struct object *cons,
 		    ret = tmp;*/
 		}
 
-	      increment_refcount (ret);
+	      increment_refcount (ret, NULL);
 
 	      if (writing_first_cons)
 		{
@@ -4118,7 +4201,7 @@ apply_backquote (struct object *form, struct object *cons,
 	    {
 	      ret->refcount = form->value_ptr.next->refcount + 1;
 
-	      decrement_refcount (form->value_ptr.next);
+	      decrement_refcount (form->value_ptr.next, NULL);
 
 	      form->refcount--;
 
@@ -4203,7 +4286,7 @@ apply_backquote (struct object *form, struct object *cons,
       return form;
     }
 
-  increment_refcount (form);
+  increment_refcount (form, NULL);
 
   return form;
 }
@@ -4249,7 +4332,7 @@ evaluate_list (struct object *list, struct environment *env,
       ret = symname->sym->value_ptr.symbol->builtin_form (args, env, outcome);
 
       if (symname->sym->value_ptr.symbol->evaluate_args)
-	decrement_refcount (args);
+	decrement_refcount (args, NULL);
 
       return ret;
     }
@@ -4276,7 +4359,7 @@ evaluate_list (struct object *list, struct environment *env,
     }
   else if (symname_equals (symname, "QUOTE"))
     {
-      increment_refcount (CAR (CDR (list)));
+      increment_refcount (CAR (CDR (list)), NULL);
       return CAR (CDR (list));
     }
 
@@ -4500,7 +4583,7 @@ builtin_car (struct object *list, struct environment *env,
     }
 
   if (CAR (CAR (list)) != &nil_object && CAR (CAR (list)) != &t_object)
-    increment_refcount (CAR (CAR (list)));
+    increment_refcount (CAR (CAR (list)), NULL);
 
   return CAR (CAR (list));
 }
@@ -4531,7 +4614,7 @@ builtin_cdr (struct object *list, struct environment *env,
     }
 
   if (CDR (CAR (list)) != &nil_object && CDR (CAR (list)) != &t_object)
-    increment_refcount (CDR (CAR (list)));
+    increment_refcount (CDR (CAR (list)), NULL);
 
   return CDR (CAR (list));
 }
@@ -4607,7 +4690,7 @@ builtin_nth (struct object *list, struct environment *env,
 
   ret = nth (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
 
-  increment_refcount (ret);
+  increment_refcount (ret, NULL);
 
   return ret;
 }
@@ -4635,7 +4718,7 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
   ret = nthcdr (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
 
-  increment_refcount (ret);
+  increment_refcount (ret, NULL);
 
   return ret;
 }
@@ -4654,7 +4737,7 @@ builtin_write (struct object *list, struct environment *env,
   print_object (CAR (list), env);
   printf ("\n");
 
-  increment_refcount (CAR (list));
+  increment_refcount (CAR (list), NULL);
   return CAR (list);
 }
 
@@ -4845,8 +4928,8 @@ compare_numbers (struct object *num1, struct object *num2)
   else
     eq = mpf_cmp (first_p->value_ptr.floating, second_p->value_ptr.floating);
 
-  decrement_refcount (first_p);
-  decrement_refcount (second_p);
+  decrement_refcount (first_p, NULL);
+  decrement_refcount (second_p, NULL);
 
   return eq;
 }
@@ -4900,7 +4983,7 @@ promote_number (struct object *num, enum object_type type)
 
   if (num->type == type)
     {
-      increment_refcount (num);
+      increment_refcount (num, NULL);
       return num;
     }
 
@@ -4972,7 +5055,7 @@ apply_arithmetic_operation (struct object *list,
 	       op->value_ptr.floating);
 	}
 
-      decrement_refcount (op);
+      decrement_refcount (op, NULL);
 
       list = CDR (list);
 
@@ -5334,7 +5417,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
   if (s->is_const || !s->value_dyn_bins_num)
     {
-      increment_refcount (s->value_cell);
+      increment_refcount (s->value_cell, NULL);
 
       return s->value_cell;
     }
@@ -5343,7 +5426,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
   if (b)
     {
-      increment_refcount (b->obj);
+      increment_refcount (b->obj, NULL);
 
       return b->obj;
     }
@@ -5478,7 +5561,7 @@ evaluate_defvar (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (CAR (list));
+  increment_refcount (CAR (list), NULL);
   return CAR (list);
 }
 
@@ -5507,11 +5590,11 @@ evaluate_defun (struct object *list, struct environment *env,
 
   fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
-  SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
-  increment_refcount (SYMBOL (CAR (list)));
+  sym->value_ptr.symbol->function_cell = fun;
+  increment_refcount (sym, NULL);
 
-  increment_refcount (CAR (list));
-  return CAR (list);
+  increment_refcount (sym, NULL);
+  return sym;
 }
 
 
@@ -5542,9 +5625,9 @@ evaluate_defmacro (struct object *list, struct environment *env,
   fun->type = TYPE_MACRO;
 
   SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
-  increment_refcount (SYMBOL (CAR (list)));
+  increment_refcount (SYMBOL (CAR (list)), NULL);
 
-  increment_refcount (CAR (list));
+  increment_refcount (CAR (list), NULL);
   return CAR (list);
 }
 
@@ -5607,7 +5690,7 @@ evaluate_tagbody (struct object *list, struct environment *env,
 	      if (!ret)
 		return NULL;
 
-	      decrement_refcount (ret);
+	      decrement_refcount (ret, NULL);
 
 	      cons = CDR (cons);
 	    }
@@ -6099,43 +6182,107 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 
 
 void
-increment_refcount (struct object *obj)
+increment_refcount (struct object *obj, struct object_list **antiloop_hash_table)
 {
+  int allocated_now = 0;
+
   if (!obj || obj == &nil_object  || obj == &t_object)
     return;
 
-  obj->refcount++;
-
-  if (obj->type & TYPE_PREFIX)
-    increment_refcount (obj->value_ptr.next);
-  else if (obj->type == TYPE_CONS_PAIR)
+  if (obj->type & (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT | TYPE_STRING
+		   | TYPE_CHARACTER | TYPE_FILENAME))
+    obj->refcount++;
+  else
     {
-      increment_refcount (obj->value_ptr.cons_pair->car);
-      increment_refcount (obj->value_ptr.cons_pair->cdr);
+      if (!antiloop_hash_table)
+	{
+	  antiloop_hash_table = alloc_empty_hash_table (1024);
+	  allocated_now = 1;
+	}
+
+      if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_table,
+						     1024))
+	return;
+
+      obj->refcount++;
+
+      prepend_object_to_list (obj, &antiloop_hash_table [hash_object (obj, 1024)]);
+
+      if (obj->type & TYPE_PREFIX)
+	increment_refcount (obj->value_ptr.next, antiloop_hash_table);
+      else if (obj->type == TYPE_CONS_PAIR)
+	{
+	  increment_refcount (obj->value_ptr.cons_pair->car, antiloop_hash_table);
+	  increment_refcount (obj->value_ptr.cons_pair->cdr, antiloop_hash_table);
+	}
+      else if (obj->type == TYPE_SYMBOL_NAME)
+	increment_refcount (obj->value_ptr.symbol_name->sym, antiloop_hash_table);
+      else if (obj->type == TYPE_SYMBOL)
+	{
+	  increment_refcount (obj->value_ptr.symbol->value_cell, antiloop_hash_table);
+	  increment_refcount (obj->value_ptr.symbol->function_cell,
+			      antiloop_hash_table);
+	}
+      else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+	{
+	  increment_refcount (obj->value_ptr.function->body, antiloop_hash_table);
+	}
+
+      if (allocated_now)
+	free_hash_table (antiloop_hash_table, 1024);
     }
-  else if (obj->type == TYPE_SYMBOL_NAME)
-    obj->value_ptr.symbol_name->sym->refcount++;
 }
 
 
 int
-decrement_refcount (struct object *obj)
+decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table)
 {
+  int allocated_now = 0;
+
   if (!obj || obj == &nil_object || obj == &t_object)
     return 0;
 
-  obj->refcount--;
-
-  if (obj->type & TYPE_PREFIX)
-    decrement_refcount (obj->value_ptr.next);
-
-  if (obj->type == TYPE_SYMBOL_NAME)
-    decrement_refcount (obj->value_ptr.symbol_name->sym);
-
-  if (obj->type == TYPE_CONS_PAIR)
+  if (obj->type & (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT | TYPE_STRING
+		   | TYPE_CHARACTER | TYPE_FILENAME))
+    obj->refcount--;
+  else
     {
-      decrement_refcount (obj->value_ptr.cons_pair->car);
-      decrement_refcount (obj->value_ptr.cons_pair->cdr);
+      if (!antiloop_hash_table)
+	{
+	  antiloop_hash_table = alloc_empty_hash_table (1024);
+	  allocated_now = 1;
+	}
+
+      if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_table,
+						     1024))
+	return 0;
+
+      obj->refcount--;
+
+      prepend_object_to_list (obj, &antiloop_hash_table [hash_object (obj, 1024)]);
+
+      if (obj->type & TYPE_PREFIX)
+	decrement_refcount (obj->value_ptr.next, antiloop_hash_table);
+      else if (obj->type == TYPE_SYMBOL_NAME)
+	decrement_refcount (obj->value_ptr.symbol_name->sym, antiloop_hash_table);
+      else if (obj->type == TYPE_SYMBOL)
+	{
+	  decrement_refcount (obj->value_ptr.symbol->value_cell, antiloop_hash_table);
+	  decrement_refcount (obj->value_ptr.symbol->function_cell,
+			      antiloop_hash_table);
+	}
+      else if (obj->type == TYPE_CONS_PAIR)
+	{
+	  decrement_refcount (obj->value_ptr.cons_pair->car, antiloop_hash_table);
+	  decrement_refcount (obj->value_ptr.cons_pair->cdr, antiloop_hash_table);
+	}
+      else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+	{
+	  decrement_refcount (obj->value_ptr.function->body, antiloop_hash_table);
+	}
+
+      if (allocated_now)
+	free_hash_table (antiloop_hash_table, 1024);
     }
 
   if (!obj->refcount)
