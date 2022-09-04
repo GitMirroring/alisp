@@ -694,6 +694,7 @@ size_t mbslen (const char *string);
 
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
+void *calloc_and_check (size_t nmemb, size_t size);
 
 struct object *alloc_object (void);
 struct object *alloc_prefix (enum element type);
@@ -2466,6 +2467,21 @@ void *
 realloc_and_check (void *ptr, size_t size)
 {
   void *mem = realloc (ptr, size);
+
+  if (size && !mem)
+    {
+      fprintf (stderr, "could not allocate %lu bytes. Aborting...\n", size);
+      exit (1);
+    }
+
+  return mem;
+}
+
+
+void *
+calloc_and_check (size_t nmemb, size_t size)
+{
+  void *mem = calloc (nmemb, size);
 
   if (size && !mem)
     {
