@@ -953,7 +953,8 @@ void print_array (const struct array *array, struct environment *env);
 void print_object (const struct object *obj, struct environment *env);
 
 void print_read_error (enum read_outcome err, const char *input, size_t size,
-		       const char *begin, const char *end);
+		       const char *begin, const char *end,
+		       const struct read_outcome_args *args);
 void print_eval_error (struct eval_outcome *err, struct environment *env);
 
 void increment_refcount (struct object *obj);
@@ -1256,7 +1257,10 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE);
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
-	return PACKAGE_NOT_FOUND;
+	{
+	  args->obj = ob;
+	  return PACKAGE_NOT_FOUND;
+	}
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
     {
@@ -1309,7 +1313,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
     {
       if (read_out & READ_ERROR)
 	{
-	  print_read_error (read_out, line, len, begin, end);
+	  print_read_error (read_out, line, len, begin, end, &args);
 	  return NULL;
 	}
 
@@ -1363,7 +1367,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
     }
   else if (read_out & READ_ERROR)
     {
-      print_read_error (read_out, input, input_size, begin, end);
+      print_read_error (read_out, input, input_size, begin, end, &args);
 
       return NULL;
     }
@@ -1636,7 +1640,10 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
-		return PACKAGE_NOT_FOUND;
+		{
+		  args->obj = ob;
+		  return PACKAGE_NOT_FOUND;
+		}
 	    }
 
 	  break;
@@ -4745,7 +4752,7 @@ builtin_load (struct object *list, struct environment *env,
 	}
       else if (out & READ_ERROR || out & INCOMPLETE_OBJECT)
 	{
-	  print_read_error (out, buf, l, obj_b, obj_e);
+	  print_read_error (out, buf, l, obj_b, obj_e, &args);
 
 	  free (buf);
 	  fclose (f);
@@ -5879,7 +5886,8 @@ print_object (const struct object *obj, struct environment *env)
 
 void
 print_read_error (enum read_outcome err, const char *input, size_t size,
-		  const char *begin, const char *end)
+		  const char *begin, const char *end,
+		  const struct read_outcome_args *args)
 {
   if (err == CLOSING_PARENTHESIS)
     {
@@ -5963,7 +5971,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     }
   else if (err == PACKAGE_NOT_FOUND)
     {
-      printf ("read error: package not found\n");
+      printf ("read error: package ");
+      fwrite (args->obj->value_ptr.symbol_name->value,
+	      args->obj->value_ptr.symbol_name->used_size, 1, stdout);
+      printf (" not found\n");
     }
 }
 
