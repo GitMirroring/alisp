@@ -971,6 +971,7 @@ void free_array (struct object *obj);
 void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
+void free_function_or_macro (struct object *obj);
 
 void print_welcome_message (void);
 void print_version (void);
@@ -6184,6 +6185,8 @@ free_object (struct object *obj)
     free_ratio (obj);
   else if (obj->type == TYPE_FLOAT)
     free_float (obj);
+  else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+    free_function_or_macro (obj);
 }
 
 
@@ -6296,6 +6299,23 @@ void
 free_float (struct object *obj)
 {
   mpf_clear (obj->value_ptr.floating);
+  free (obj);
+}
+
+
+void
+free_function_or_macro (struct object *obj)
+{
+  struct parameter *n, *l = obj->value_ptr.function->lambda_list;
+
+  while (l)
+    {
+      n = l->next;
+      free (l);
+      l = n;
+    }
+
+  free (obj->value_ptr.function);
   free (obj);
 }
 
