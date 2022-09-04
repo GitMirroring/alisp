@@ -132,6 +132,14 @@ environment
 };
 
 
+struct
+read_outcome_args
+{
+  size_t multiline_comment_depth;
+  struct object *obj;
+};
+
+
 enum
 read_outcome
   {
@@ -611,10 +619,10 @@ enum read_outcome read_object_continued
 (struct object **obj, int backts_commas_balance, int is_empty_list,
  const char *input, size_t size, struct environment *env,
  struct eval_outcome *outcome,  const char **obj_begin, const char **obj_end,
- size_t *mult_comm_depth);
+ struct read_outcome_args *args);
 struct object *complete_object_interactively
 (struct object *obj, int is_empty_list, struct environment *env,
- struct eval_outcome *outcome, size_t multiline_comm_depth,
+ struct eval_outcome *outcome, size_t multiline_comment_depth,
  const char **input_left, size_t *input_left_size);
 struct object *read_object_interactively_continued
 (const char *input, size_t input_size, struct environment *env,
@@ -641,12 +649,12 @@ void prepend_object_to_list
 enum read_outcome read_object
 (struct object **obj, int backt_commas_balance, const char *input, size_t size,
  struct environment *env, struct eval_outcome *outcome, const char **obj_begin,
- const char **obj_end, size_t *out_arg);
+ const char **obj_end, struct read_outcome_args *args);
 
 enum read_outcome read_list
 (struct object **obj, int backts_commas_balance, const char *input, size_t size,
  struct environment *env, struct eval_outcome *outcome, const char **list_end,
- size_t *out_arg);
+ struct read_outcome_args *args);
 
 enum read_outcome read_string
 (struct object **obj, const char *input, size_t size, const char **string_end);
@@ -661,7 +669,8 @@ enum read_outcome read_prefix
 
 enum read_outcome read_sharp_macro_call
 (struct object **obj, const char *input, size_t size, struct environment *env,
- struct eval_outcome *e_outcome, const char **macro_end, size_t *out_arg);
+ struct eval_outcome *e_outcome, const char **macro_end,
+ struct read_outcome_args *args);
 struct object *call_sharp_macro
 (struct sharp_macro_call *macro_call, struct environment *env,
  struct eval_outcome *e_outcome, enum read_outcome *r_outcome);
@@ -1192,7 +1201,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 		       int is_empty_list, const char *input, size_t size,
 		       struct environment *env, struct eval_outcome *outcome,
 		       const char **obj_begin, const char **obj_end,
-		       size_t *mult_comm_depth)
+		       struct read_outcome_args *args)
 {
   enum read_outcome out;
   int bts, cs;
@@ -1202,17 +1211,18 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
   backts_commas_balance += (bts - cs);
 
-  if (*mult_comm_depth)
+  if (args->multiline_comment_depth)
     {
-      input = jump_to_end_of_multiline_comment (input, size, *mult_comm_depth,
-						mult_comm_depth);
+      input = jump_to_end_of_multiline_comment (input, size,
+						args->multiline_comment_depth,
+						&args->multiline_comment_depth);
 
       if (!input)
 	return NO_OBJECT;
 
       input++;
-      size = --(*mult_comm_depth);
-      *mult_comm_depth = 0;
+      size = --(args->multiline_comment_depth);
+      args->multiline_comment_depth = 0;
     }
 
   if (is_empty_list)
@@ -1220,14 +1230,14 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       l = NULL;
 
       out = read_list (&l, backts_commas_balance, input, size, env, outcome,
-		       obj_end, mult_comm_depth);
+		       obj_end, args);
 
       ob = l;
     }
   else if (!ob)
     {
       out = read_object (&ob, backts_commas_balance, input, size, env,
-			 outcome, obj_begin, obj_end, mult_comm_depth);
+			 outcome, obj_begin, obj_end, args);
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
@@ -1235,7 +1245,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
   else if (ob->type == TYPE_CONS_PAIR)
     {
       out = read_list (&ob, backts_commas_balance, input, size, env, outcome,
-		       obj_end, mult_comm_depth);
+		       obj_end, args);
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -1251,7 +1261,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
     {
       out = read_sharp_macro_call (&ob, input, size, env, outcome, obj_end,
-				   mult_comm_depth);
+				   args);
 
       if (out == COMPLETE_OBJECT)
 	ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
@@ -1271,27 +1281,31 @@ struct object *
 complete_object_interactively (struct object *obj, int is_empty_list,
 			       struct environment *env,
 			       struct eval_outcome *outcome,
-			       size_t multiline_comm_depth,
+			       size_t multiline_comment_depth,
 			       const char **input_left, size_t *input_left_size)
 {
   char *line;
   enum read_outcome read_out;
+  struct read_outcome_args args;
   const char *begin, *end;
   size_t len;
 
+  args.multiline_comment_depth = multiline_comment_depth;
+  args.obj = NULL;
   
   line = read_line_interactively ("> ");
   len = strlen (line);
   
   read_out = read_object_continued (&obj, 0, is_empty_list, line, len, env,
-				    outcome, &begin, &end, &multiline_comm_depth);
+				    outcome, &begin, &end,
+				    &args);
 
   while (read_out & (INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING |
 		     INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
 		     | INCOMPLETE_SHARP_MACRO_CALL |
 		     UNFINISHED_MULTILINE_COMMENT | INCOMPLETE_EMPTY_LIST)
 	 || read_out & READ_ERROR
-	 || multiline_comm_depth)
+	 || args.multiline_comment_depth)
     {
       if (read_out & READ_ERROR)
 	{
@@ -1304,12 +1318,10 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
       if (read_out & INCOMPLETE_EMPTY_LIST)
 	read_out = read_object_continued (&obj, 0, 1, line, len, env, outcome,
-					  &begin, &end,
-					  &multiline_comm_depth);
+					  &begin, &end, &args);
       else
 	read_out = read_object_continued (&obj, 0, 0, line, len, env, outcome,
-					  &begin, &end,
-					  &multiline_comm_depth);
+					  &begin, &end, &args);
     }
 
   *input_left = end + 1;
@@ -1329,20 +1341,20 @@ read_object_interactively_continued (const char *input, size_t input_size,
   enum read_outcome read_out;
   struct object *obj = NULL;
   const char *begin, *end;
-  size_t mult_comm_depth = 0;
+  struct read_outcome_args args = {0};
 
   
   read_out = read_object (&obj, 0, input, input_size, env, outcome, &begin,
-			  &end, &mult_comm_depth);
+			  &end, &args);
   
-  if (read_out == COMPLETE_OBJECT  && !mult_comm_depth)
+  if (read_out == COMPLETE_OBJECT  && !args.multiline_comment_depth)
     {
       *input_left = end + 1;
       *input_left_size = (input + input_size) - end - 1;
       
       return obj;
     }
-  else if (read_out == NO_OBJECT && !mult_comm_depth)
+  else if (read_out == NO_OBJECT && !args.multiline_comment_depth)
     {
       *input_left = NULL;
       *input_left_size = 0;
@@ -1358,11 +1370,12 @@ read_object_interactively_continued (const char *input, size_t input_size,
   else if (read_out == INCOMPLETE_EMPTY_LIST)
     {
       return complete_object_interactively (obj, 1, env, outcome,
-					    mult_comm_depth, input_left,
-					    input_left_size);
+					    args.multiline_comment_depth,
+					    input_left, input_left_size);
     }
   else
-    return complete_object_interactively (obj, 0, env, outcome, mult_comm_depth,
+    return complete_object_interactively (obj, 0, env, outcome,
+					  args.multiline_comment_depth,
 					  input_left, input_left_size);
 }
 
@@ -1533,7 +1546,8 @@ prepend_object_to_list (struct object *obj, struct object_list **list)
 enum read_outcome
 read_object (struct object **obj, int backts_commas_balance, const char *input,
 	     size_t size, struct environment *env, struct eval_outcome *outcome,
-	     const char **obj_begin, const char **obj_end, size_t *out_arg)
+	     const char **obj_begin, const char **obj_end,
+	     struct read_outcome_args *args)
 {
   int found_prefix = 0;
   struct object *last_pref, *ob = NULL;
@@ -1556,12 +1570,13 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
       else if (*input == '#' && size > 1 && *(input+1) == '|')
 	{
 	  if (!(input = jump_to_end_of_multiline_comment (input+2, size-2, 1,
-							  out_arg)))
+							  &args->
+							  multiline_comment_depth)))
 	    return NO_OBJECT;
 	  else
 	    {
-	      size = *out_arg;
-	      *out_arg = 0;
+	      size = args->multiline_comment_depth;
+	      args->multiline_comment_depth = 0;
 	    }
 	}
       else if (*input == '\'' || *input == '`' || *input == ',')
@@ -1586,7 +1601,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  *obj_begin = input;
 	  out = read_list (&ob, backts_commas_balance, input+1, size-1, env,
-			   outcome, obj_end, out_arg);
+			   outcome, obj_end, args);
 	  break;
 	}
       else if (*input == '"')
@@ -1599,7 +1614,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  *obj_begin = input;
 	  out = read_sharp_macro_call (&ob, input+1, size-1, env, outcome,
-				       obj_end, out_arg);
+				       obj_end, args);
 
 	  if (out == COMPLETE_OBJECT)
 	    ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
@@ -1645,7 +1660,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 enum read_outcome
 read_list (struct object **obj, int backts_commas_balance, const char *input,
 	   size_t size, struct environment *env, struct eval_outcome *outcome,
-	   const char **list_end, size_t *out_arg)
+	   const char **list_end, struct read_outcome_args *args)
 {
   struct object *last_cons = *obj, *car = NULL, *ob = *obj, *cons;
   const char *obj_beg, *obj_end = input;
@@ -1665,7 +1680,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       : &ob->value_ptr.cons_pair->cdr,
 				       backts_commas_balance, 0, input,
 				       size, env, outcome, &obj_beg,
-				       &obj_end, out_arg);
+				       &obj_end, args);
 
 	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
 	    ob->value_ptr.cons_pair->filling_car =
@@ -1684,7 +1699,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       : &ob->value_ptr.cons_pair->cdr,
 				       backts_commas_balance, 1, input,
 				       size, env, outcome, &obj_beg,
-				       &obj_end, out_arg);
+				       &obj_end, args);
 
 	  if (out != INCOMPLETE_EMPTY_LIST)
 	    ob->value_ptr.cons_pair->empty_list_in_car =
@@ -1711,7 +1726,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
   out = read_object (&car, backts_commas_balance, obj_end,
 		     size - (obj_end - input), env, outcome, &obj_beg, &obj_end,
-		     out_arg);
+		     args);
 
   if (out == NO_OBJECT && !last_cons)
     return INCOMPLETE_EMPTY_LIST;
@@ -1793,7 +1808,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
       car = NULL;
       out = read_object (&car, backts_commas_balance, obj_end + 1,
 			 size - (obj_end + 1 - input), env, outcome, &obj_beg,
-			 &obj_end, out_arg);
+			 &obj_end, args);
     }
 
   if (out == INCOMPLETE_EMPTY_LIST)
@@ -1969,7 +1984,7 @@ read_prefix (struct object **obj, const char *input, size_t size,
 enum read_outcome
 read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 		       struct environment *env, struct eval_outcome *e_outcome,
-		       const char **macro_end, size_t *out_arg)
+		       const char **macro_end, struct read_outcome_args *args)
 {
   int arg;
   size_t i = 0;
@@ -1986,7 +2001,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
 				    (*obj)->value_ptr.sharp_macro_call->
 				    is_empty_list, input, size, env, e_outcome,
-				    &obj_b, macro_end, out_arg);
+				    &obj_b, macro_end, args);
     }
 
   *obj = alloc_sharp_macro_call ();
@@ -2040,7 +2055,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     {
       call->obj = NULL;
       out = read_list (&call->obj, 0, input+i+1, size-i-1, env, e_outcome,
-		       macro_end, out_arg);
+		       macro_end, args);
 
       if (out == INCOMPLETE_EMPTY_LIST)
 	call->is_empty_list = 1;
@@ -2053,7 +2068,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
   call->obj = NULL;
   out = read_object (&call->obj, 0, input+i+1, size-i-1, env, e_outcome, &obj_b,
-		     macro_end, out_arg);
+		     macro_end, args);
 
   if (out == INCOMPLETE_EMPTY_LIST)
     call->is_empty_list = 1;
@@ -4630,9 +4645,9 @@ builtin_load (struct object *list, struct environment *env,
   char *buf;
   int end_loop = 0;
   enum read_outcome out;
+  struct read_outcome_args args = {0};
   const char *in, *obj_b, *obj_e;
   size_t sz;
-  size_t mult_comm_depth = 0;
   struct object *obj = NULL, *res;
 
   if (!list_length (list))
@@ -4687,13 +4702,13 @@ builtin_load (struct object *list, struct environment *env,
     }
 
   out = read_object (&obj, 0, buf, l, env, outcome, &obj_b, &obj_e,
-		     &mult_comm_depth);
+		     &args);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
 
   while (!end_loop)
     {
-      if (mult_comm_depth)
+      if (args.multiline_comment_depth)
 	{
 	  free (buf);
 	  fclose (f);
@@ -4707,7 +4722,7 @@ builtin_load (struct object *list, struct environment *env,
 	  if (res)
 	    {
 	      out = read_object (&obj, 0, in, sz, env, outcome, &obj_b, &obj_e,
-				 &mult_comm_depth);
+				 &args);
 	      sz = sz - (obj_e + 1 - in);
 	      in = obj_e + 1;
 	    }
