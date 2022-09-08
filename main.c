@@ -4641,7 +4641,11 @@ builtin_cons (struct object *list, struct environment *env,
     }
 
   cons = alloc_empty_cons_pair ();
+
+  increment_refcount (CAR (list), NULL);
   cons->value_ptr.cons_pair->car = CAR (list);
+
+  increment_refcount (CAR (CDR (list)), NULL);
   cons->value_ptr.cons_pair->cdr = CAR (CDR (list));
 
   return cons;
@@ -4657,7 +4661,9 @@ builtin_list (struct object *list, struct environment *env,
   while (list != &nil_object)
     {
       cons = alloc_empty_cons_pair ();
-      cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+
+      increment_refcount (CAR (list), NULL);
+      cons->value_ptr.cons_pair->car = CAR (list);
 
       if (!l)
 	l = last_cons = cons;
