@@ -127,6 +127,8 @@ make_test ("(cl:eq 1 1)", "()");
 make_test ("(eq 'a 'a)", "T");
 make_test ("(null 1)", "()");
 make_test ("(not nil)", "T");
+make_test ("(cons 1 2)", "(1 . 2)");
+make_test ("(list 1 2 3)", "(1 2 3)");
 make_test ("(let ((a 2)) a)", "2");
 make_test ("(defconstant a 8)", "A");
 make_test ("a", "8");
