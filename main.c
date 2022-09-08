@@ -221,6 +221,7 @@ eval_outcome_type
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
     INCORRECT_SYNTAX_IN_DEFUN,
+    INCORRECT_SYNTAX_IN_DEFMACRO,
     CANT_REDEFINE_SPECIAL_OPERATOR,
     CANT_REDEFINE_CONSTANT,
     CANT_REBIND_CONSTANT,
@@ -5608,7 +5609,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && CAR (CDR (list)) != &nil_object))
     {
-      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+      outcome->type = INCORRECT_SYNTAX_IN_DEFMACRO;
       return NULL;
     }
 
@@ -6129,6 +6130,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
       printf ("eval error: incorrect syntax in defun\n");
+    }
+  else if (err->type == INCORRECT_SYNTAX_IN_DEFMACRO)
+    {
+      printf ("eval error: incorrect syntax in defmacro\n");
     }
   else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
     {
