@@ -29,92 +29,142 @@ class AlPrintObject (gdb.Command):
 
 
     def invoke (self, arg, from_tty):
-        print_object (arg, False, True)
+        out = print_object (arg, False)
+        gdb.write ("%s\n%s\n" % out)
 
 
 
-def print_object (arg, in_list, do_print):
-    type = gdb.execute ("out %s->type" % arg, False, True)
+def print_object (arg, in_cons):
+    if in_cons:
+        type = gdb.execute ("output %s->value_ptr.cons_pair->car->type" % arg, False, True)
+    else:
+        type = gdb.execute ("output %s->type" % arg, False, True)
 
     if type == "TYPE_STRING":
-        out = print_string (arg, do_print)
+        out = print_string (arg, in_cons)
     elif type == "TYPE_SYMBOL_NAME":
-        out = print_symbol_name (arg, do_print)
+        out = print_symbol_name (arg, in_cons)
     elif type == "TYPE_SYMBOL":
-        out = print_symbol (arg, do_print, True)
+        out = print_symbol (arg, in_cons)
     elif type == "TYPE_CONS_PAIR":
-        out = print_list (arg, do_print)
+        out = print_list (arg, in_cons)
+    elif type == "TYPE_QUOTE" or type == "TYPE_BACKQUOTE" or type == "TYPE_COMMA" or type == "TYPE_AT":
+        out = print_prefix (arg, type, in_cons)
     else:
         if type == "TYPE_INTEGER":
-            out = "#<INTEGER>"
+            obj = "#<INTEGER>"
         elif type == "TYPE_RATIO":
-            out = "#<RATIO>"
+            obj = "#<RATIO>"
         elif type == "TYPE_FLOATING":
-            out = "#<FLOAT>"
+            obj = "#<FLOAT>"
         elif type == "TYPE_FUNCTION":
-            out = "#<FUNCTION>"
+            obj = "#<FUNCTION>"
+        elif type == "TYPE_MACRO":
+            obj = "#<MACRO>"
         else:
-            out = "???"
+            obj = "???"
 
-        if do_print:
-            gdb.write (out)
+        ref = print_refcount (arg, in_cons)
 
-    if type != "TYPE_CONS_PAIR" and do_print:
-        gdb.write ("\n")
-        print_refcount (arg, False, do_print)
+        out = justify_right (obj, ref)
 
-    if do_print:
-        gdb.write ("\n")
 
     return out
 
 
 
-def print_string (arg, do_print):
-    if gdb.execute ("output %s->value_ptr.string->used_size" % arg, False, True) == "0":
-        out = "\"\""
+def print_string (arg, in_cons):
+    if in_cons:
+        str = "%s->value_ptr.cons_pair->car" % arg
     else:
-        out = gdb.execute ("output *%s->value_ptr.string->value@%s->value_ptr.string->used_size" % (arg, arg), False, True)
+        str = arg
 
-    if do_print:
-        gdb.write (out)
+    if gdb.execute ("output %s->value_ptr.string->used_size" % str, False, True) == "0":
+        obj = "\"\""
+    else:
+        obj = gdb.execute ("output *%s->value_ptr.string->value@%s->value_ptr.string->used_size" % (str, str), False, True)
 
-    return out
+    ref = print_refcount (arg, in_cons)
 
-
-
-def print_symbol_name (arg, do_print):
-    out = gdb.execute ("output *%s->value_ptr.symbol_name->value@%s->value_ptr.string->used_size" % (arg, arg), False, True)
-    out = out [1 : len(out) - 1]
-
-    if do_print:
-        gdb.write (out)
-
-    return out
+    return justify_right (obj, ref)
 
 
 
-def print_symbol (arg, do_print, verbose):
-    out = gdb.execute ("output *%s->value_ptr.symbol->name@%s->value_ptr.symbol->name_len" % (arg, arg), False, True)
-    out = out [1 : len(out) - 1]
+def print_symbol_name (arg, in_cons):
+    if in_cons:
+        sym = "%s->value_ptr.cons_pair->car" % arg
+    else:
+        sym = arg
 
-    if do_print:
-        gdb.write (out)
+    obj = gdb.execute ("output *%s->value_ptr.symbol_name->value@%s->value_ptr.string->used_size" % (sym, sym), False, True)
+    obj = obj [1 : len(obj) - 1]
 
-    return out
+    ref = print_refcount (arg, in_cons)
+
+    return justify_right (obj, ref)
 
 
 
-def print_refcount (arg, in_list, do_print):
+def print_symbol (arg, in_cons):
+    if in_cons:
+        sym = "%s->value_ptr.cons_pair->car" % arg
+    else:
+        sym = arg
+
+    obj = gdb.execute ("output *%s->value_ptr.symbol->name@%s->value_ptr.symbol->name_len" % (sym, sym), False, True)
+    obj = obj [1 : len (obj) - 1]
+
+    ref = print_refcount (arg, in_cons)
+
+    return justify_right (obj, ref)
+
+
+
+def print_prefix (arg, type, in_cons):
+    if in_cons:
+        pr = "%s->value_ptr.cons_pair->car" % arg
+    else:
+        pr = arg
+
+    if type == "TYPE_QUOTE":
+        obj = "'"
+    elif type == "TYPE_BACKQUOTE":
+        obj = "`"
+    elif type == "TYPE_COMMA":
+        obj = ","
+    else:
+        obj = "@"
+
+    ref = print_refcount (arg, in_cons)
+
+    (obj, ref) = justify_right (obj, ref)
+
+    obj += " "
+    ref += " "
+
+    out = print_object (pr + "->value_ptr.next", False)
+
+    obj += out [0]
+    ref += out [1]
+
+    return (obj, ref)
+
+
+
+def print_refcount (arg, in_cons):
     out = gdb.execute ("output %s->refcount" % arg, False, True)
 
-    if in_list:
+    if in_cons:
         out += "(%s)" % gdb.execute ("output %s->value_ptr.cons_pair->car->refcount" % arg, False, True)
 
-    if do_print:
-        gdb.write (out)
-
     return out
+
+
+
+def justify_right (str1, str2):
+    field = max (len (str1), len (str2))
+
+    return (str1.rjust (field), str2.rjust (field))
 
 
 
@@ -131,45 +181,34 @@ def nth (arg, n):
 
 
 
-def print_list (arg, do_print):
+def print_list (arg, in_cons):
+    if in_cons:
+        o = "("
+        r = print_refcount (arg, False)
+        (obj, ref) = justify_right (o, r)
+        obj += " "
+        ref += " "
+        arg = "%s->value_ptr.cons_pair->car" % arg
+    else:
+        obj = "("
+        ref = " "
+
     list_length = int (gdb.execute ("output list_length (%s)" % arg, False, True))
-    obj_out = "("
-    refc_out = " "
 
     for i in range (list_length):
-        o_out = print_object (nth (arg, i), True, False)
+        out = print_object (nthcdr (arg, i), True)
 
-        if (type (o_out) == str):
-            r_out = print_refcount (nthcdr (arg, i), True, False)
+        obj += out [0]
+        ref += out [1]
 
-            field_l = max (len (o_out), len (r_out))
+        if i < list_length - 1:
+            obj += " "
+            ref += " "
 
-            obj_out += o_out.rjust (field_l)
-            refc_out += r_out.rjust (field_l)
+    obj += ")"
+    ref += " "
 
-            if i < list_length - 1:
-                obj_out = obj_out + " "
-                refc_out = refc_out + " "
-
-        else:
-            r = print_refcount (nth (arg, i), False, False)
-            obj_out += " " * (len (r) - 1)
-            obj_out += "( "
-            refc_out += r
-            refc_out += " "
-
-            obj_out += o_out [0] [1:]
-            refc_out += o_out [1] [1:]
-
-
-    obj_out += ")"
-    refc_out += " "  
-
-    if (do_print):
-        gdb.write ("%s\n%s" % (obj_out, refc_out))
-
-    return (obj_out, refc_out)
-
+    return (obj, ref)
 
 
 
