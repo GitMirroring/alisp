@@ -318,6 +318,8 @@ symbol_name
   size_t used_size;
 
   int packname_present;
+  enum package_record_visibility visibility;
+
   char *actual_symname;
   size_t actual_symname_alloc_s;
   size_t actual_symname_used_s;
