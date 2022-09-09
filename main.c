@@ -2668,9 +2668,9 @@ free_hash_table (struct object_list **hash_table, size_t table_size)
 int
 hash_object (const struct object *object, size_t table_size)
 {
-  return (long int)object % table_size;  /* FIXME this cast is not portable, but
-					  it works on common platforms.  we
-					  should probably change to a hash
+  return (long int)object % table_size;  /* FIXME the cast works on common
+					  platforms, but is not allowed by ansi.
+					  we should probably change to a hash
 					  function on object fields */
 }
 
