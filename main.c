@@ -823,7 +823,7 @@ struct parameter *parse_lambda_list (struct object *obj,
 				     enum parse_lambda_list_outcome *out);
 
 struct object *evaluate_body
-(struct object *body, int eval_twice, struct environment *env,
+(struct object *body, int eval_body_twice, struct environment *env,
  struct eval_outcome *outcome);
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int eval_twice,
@@ -3881,32 +3881,39 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 
 
 struct object *
-evaluate_body (struct object *body, int eval_twice, struct environment *env,
+evaluate_body (struct object *body, int eval_body_twice, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  struct object *res;
+  struct object *res, *res2;
 
   do
     {
       res = evaluate_object (CAR (body), env, outcome);
 
+      if (!res)
+	return NULL;
+
       body = CDR (body);
 
-      if (eval_twice)
+      if (eval_body_twice)
 	{
-	  if (!res)
+	  res2 = evaluate_object (res, env, outcome);
+
+	  decrement_refcount (res, NULL);
+
+	  if (!res2)
 	    return NULL;
 
-	  res = evaluate_object (res, env, outcome);
-
 	  if (body != &nil_object)
-	    decrement_refcount (res, NULL);
+	    decrement_refcount (res2, NULL);
 	}
-
-      if (body != &nil_object)
+      else if (body != &nil_object)
 	decrement_refcount (res, NULL);
 
-    } while (res && body != &nil_object);
+    } while (body != &nil_object);
+
+  if (eval_body_twice)
+    return res2;
 
   return res;
 }
