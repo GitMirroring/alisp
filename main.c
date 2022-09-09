@@ -3617,9 +3617,6 @@ list_length (const struct object *list)
       list = list->value_ptr.cons_pair->cdr;
     }
 
-  if (list && list != &nil_object)
-    l++;
-
   return l;
 }
 
