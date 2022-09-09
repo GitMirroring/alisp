@@ -828,7 +828,7 @@ struct object *evaluate_body
 (struct object *body, int eval_body_twice, struct environment *env,
  struct eval_outcome *outcome);
 struct object *call_function
-(struct object *func, struct object *arglist, int eval_args, int eval_twice,
+(struct object *func, struct object *arglist, int eval_args, int eval_body_twice,
  struct environment *env, struct eval_outcome *outcome);
 
 int check_type (const struct object *obj, const struct object *typespec,
@@ -3964,7 +3964,7 @@ evaluate_body (struct object *body, int eval_body_twice, struct environment *env
 
 struct object *
 call_function (struct object *func, struct object *arglist, int eval_args,
-	       int eval_twice, struct environment *env,
+	       int eval_body_twice, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   struct parameter *par = func->value_ptr.function->lambda_list;
@@ -3983,7 +3983,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	    return NULL;
 	}
       else
-	val = CAR (arglist);
+	{
+	  increment_refcount (CAR (arglist), NULL);
+	  val = CAR (arglist);
+	}
 
       bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
       args++;
@@ -4043,11 +4046,26 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
   if (par && par->type == REST_PARAM)
-    bins = add_binding (create_binding (par->name, arglist, LEXICAL_BINDING), bins);
+    {
+      if (eval_args)
+	{
+	  arglist = evaluate_through_list (arglist, env, outcome);
+
+	  if (!arglist)
+	    return NULL;
+	}
+      else
+	increment_refcount (arglist, NULL);
+
+      bins = add_binding (create_binding (par->name, arglist, LEXICAL_BINDING),
+			  bins);
+      args++;
+    }
 
   env->vars = chain_bindings (bins, env->vars);
 
-  res = evaluate_body (func->value_ptr.function->body, eval_twice, env, outcome);
+  res = evaluate_body (func->value_ptr.function->body, eval_body_twice, env,
+		       outcome);
 
   env->vars = remove_bindings (env->vars, args);
 
