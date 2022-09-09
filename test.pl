@@ -83,6 +83,7 @@ make_test ("``(a ,,(+ 1 2))", "`(A ,3)");
 make_test ("``(a ,,(+ 1 2) ,(+ 3 4))", "`(A ,3 ,(+ 3 4))");
 make_test ("``(a ,(+ ,1 2))", "`(A ,(+ 1 2))");
 make_test ("`(,1 . ,2)", "(1 . 2)");
+make_test ("`(,1 ,2 . ,3)", "(1 2 . 3)");
 make_test ("`(if ``(progn ,,1))", "(IF ``(PROGN ,,1))");
 make_test ("'@", "@");
 make_test ("`(,@())", "()");
@@ -142,6 +143,8 @@ make_test ("(defun f ())", "F");
 make_test ("(f)", "()");
 make_test ("(defun f () \"\")", "F");
 make_test ("(f)", "\"\"");
+make_test ("(defun fun (x &rest y) y)", "FUN");
+make_test ("(fun 1 2 3 4)", "(2 3 4)");
 make_test ("(load \"cl.lisp\")", "T");
 make_test ("(1+ 5)", "6");
 make_test ("(typep '(1 . 2) 'cons)", "T");
@@ -169,6 +172,7 @@ make_test ("(nthcdr 1 '(0 . 1))", "1");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
+make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
