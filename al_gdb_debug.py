@@ -47,8 +47,8 @@ def print_object (arg, in_cons):
     elif type == "TYPE_SYMBOL":
         out = print_symbol (arg, in_cons)
     elif type == "TYPE_CONS_PAIR":
-        out = print_list (arg, in_cons)
-    elif type == "TYPE_QUOTE" or type == "TYPE_BACKQUOTE" or type == "TYPE_COMMA" or type == "TYPE_AT":
+        out = print_cons (arg, in_cons)
+    elif type == "TYPE_QUOTE" or type == "TYPE_BACKQUOTE" or type == "TYPE_COMMA" or type == "TYPE_AT" or type == "TYPE_DOT":
         out = print_prefix (arg, type, in_cons)
     else:
         if type == "TYPE_INTEGER":
@@ -132,8 +132,10 @@ def print_prefix (arg, type, in_cons):
         obj = "`"
     elif type == "TYPE_COMMA":
         obj = ","
-    else:
+    elif type == "TYPE_AT":
         obj = "@"
+    else:
+        obj = "."
 
     ref = print_refcount (arg, in_cons)
 
