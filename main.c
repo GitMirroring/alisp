@@ -709,6 +709,8 @@ struct object *alloc_function (void);
 struct object *alloc_sharp_macro_call (void);
 
 struct object_list **alloc_empty_hash_table (size_t table_size);
+struct object_list **clone_hash_table (struct object_list **hash_table,
+				       size_t table_size);
 void free_hash_table (struct object_list **hash_table, size_t table_size);
 int hash_object (const struct object *object, size_t table_size);
 int is_object_in_hash_table (const struct object *object,
@@ -2636,6 +2638,45 @@ alloc_empty_hash_table (size_t table_size)
 
   for (i = 0; i < table_size; i++)
     ret [i] = NULL;
+
+  return ret;
+}
+
+
+struct object_list **
+clone_hash_table (struct object_list **hash_table, size_t table_size)
+{
+  struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
+  struct object_list *orig, *cp;
+  int i;
+
+  for (i = 0; i < table_size; i++)
+    {
+      if (hash_table [i])
+	{
+	  ret [i] = malloc_and_check (sizeof (*cp));
+
+	  ret [i]->obj = hash_table [i]->obj;
+
+	  orig = hash_table [i];
+	  cp = ret [i];
+
+	  orig = orig->next;
+
+	  while (orig)
+	    {
+	      cp = cp->next = malloc_and_check (sizeof (*cp));
+
+	      cp->obj = orig->obj;
+
+	      orig = orig->next;
+	    }
+
+	  cp->next = NULL;
+	}
+      else
+	ret [i] = NULL;
+    }
 
   return ret;
 }
@@ -6214,13 +6255,14 @@ void
 increment_refcount (struct object *obj, struct object_list **antiloop_hash_table)
 {
   int allocated_now = 0;
+  struct object_list **second_hash_table = NULL;
 
   if (!obj || obj == &nil_object  || obj == &t_object)
     return;
 
   if (obj->type & (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT | TYPE_STRING
 		   | TYPE_CHARACTER | TYPE_FILENAME))
-    obj->refcount++;
+      obj->refcount++;
   else
     {
       if (!antiloop_hash_table)
@@ -6229,11 +6271,11 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	  allocated_now = 1;
 	}
 
+      obj->refcount++;
+
       if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_table,
 						     ANTILOOP_HASH_TABLE_SIZE))
 	return;
-
-      obj->refcount++;
 
       prepend_object_to_list
 	(obj, &antiloop_hash_table [hash_object (obj, ANTILOOP_HASH_TABLE_SIZE)]);
@@ -6242,16 +6284,40 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	increment_refcount (obj->value_ptr.next, antiloop_hash_table);
       else if (obj->type == TYPE_CONS_PAIR)
 	{
-	  increment_refcount (obj->value_ptr.cons_pair->car, antiloop_hash_table);
-	  increment_refcount (obj->value_ptr.cons_pair->cdr, antiloop_hash_table);
+	  if (obj->value_ptr.cons_pair->cdr == &nil_object)
+	    increment_refcount (obj->value_ptr.cons_pair->car,
+				antiloop_hash_table);
+	  else
+	    {
+	      second_hash_table = clone_hash_table (antiloop_hash_table,
+						    ANTILOOP_HASH_TABLE_SIZE);
+	      increment_refcount (obj->value_ptr.cons_pair->car,
+				  antiloop_hash_table);
+	      increment_refcount (obj->value_ptr.cons_pair->cdr,
+				  second_hash_table);
+	    }
 	}
       else if (obj->type == TYPE_SYMBOL_NAME)
 	increment_refcount (obj->value_ptr.symbol_name->sym, antiloop_hash_table);
       else if (obj->type == TYPE_SYMBOL)
 	{
-	  increment_refcount (obj->value_ptr.symbol->value_cell, antiloop_hash_table);
-	  increment_refcount (obj->value_ptr.symbol->function_cell,
-			      antiloop_hash_table);
+	  if (obj->value_ptr.symbol->value_cell
+	      && obj->value_ptr.symbol->function_cell)
+	    {
+	      second_hash_table = clone_hash_table (antiloop_hash_table,
+						    ANTILOOP_HASH_TABLE_SIZE);
+	      increment_refcount (obj->value_ptr.symbol->value_cell,
+				  antiloop_hash_table);
+	      increment_refcount (obj->value_ptr.symbol->function_cell,
+				  second_hash_table);
+	    }
+	  else
+	    {
+	      increment_refcount (obj->value_ptr.symbol->value_cell,
+				  antiloop_hash_table);
+	      increment_refcount (obj->value_ptr.symbol->function_cell,
+				  antiloop_hash_table);
+	    }
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
@@ -6260,6 +6326,9 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
 
       if (allocated_now)
 	free_hash_table (antiloop_hash_table, ANTILOOP_HASH_TABLE_SIZE);
+
+      if (second_hash_table)
+	free_hash_table (second_hash_table, ANTILOOP_HASH_TABLE_SIZE);
     }
 }
 
@@ -6268,6 +6337,7 @@ int
 decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table)
 {
   int allocated_now = 0;
+  struct object_list **second_hash_table = NULL;
 
   if (!obj || obj == &nil_object || obj == &t_object)
     return 0;
@@ -6283,11 +6353,11 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	  allocated_now = 1;
 	}
 
+      obj->refcount--;
+
       if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_table,
 						     ANTILOOP_HASH_TABLE_SIZE))
 	return 0;
-
-      obj->refcount--;
 
       prepend_object_to_list
 	(obj, &antiloop_hash_table [hash_object (obj, ANTILOOP_HASH_TABLE_SIZE)]);
@@ -6298,14 +6368,38 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	decrement_refcount (obj->value_ptr.symbol_name->sym, antiloop_hash_table);
       else if (obj->type == TYPE_SYMBOL)
 	{
-	  decrement_refcount (obj->value_ptr.symbol->value_cell, antiloop_hash_table);
-	  decrement_refcount (obj->value_ptr.symbol->function_cell,
-			      antiloop_hash_table);
+	  if (obj->value_ptr.symbol->value_cell
+	      && obj->value_ptr.symbol->function_cell)
+	    {
+	      second_hash_table = clone_hash_table (antiloop_hash_table,
+						    ANTILOOP_HASH_TABLE_SIZE);
+	      decrement_refcount (obj->value_ptr.symbol->value_cell,
+				  antiloop_hash_table);
+	      decrement_refcount (obj->value_ptr.symbol->function_cell,
+				  second_hash_table);
+	    }
+	  else
+	    {
+	      decrement_refcount (obj->value_ptr.symbol->value_cell,
+				  antiloop_hash_table);
+	      decrement_refcount (obj->value_ptr.symbol->function_cell,
+				  antiloop_hash_table);
+	    }
 	}
       else if (obj->type == TYPE_CONS_PAIR)
 	{
-	  decrement_refcount (obj->value_ptr.cons_pair->car, antiloop_hash_table);
-	  decrement_refcount (obj->value_ptr.cons_pair->cdr, antiloop_hash_table);
+	  if (obj->value_ptr.cons_pair->cdr == &nil_object)
+	    decrement_refcount (obj->value_ptr.cons_pair->car,
+				antiloop_hash_table);
+	  else
+	    {
+	      second_hash_table = clone_hash_table (antiloop_hash_table,
+						    ANTILOOP_HASH_TABLE_SIZE);
+	      decrement_refcount (obj->value_ptr.cons_pair->car,
+				  antiloop_hash_table);
+	      decrement_refcount (obj->value_ptr.cons_pair->cdr,
+				  second_hash_table);
+	    }
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
@@ -6314,6 +6408,9 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
 
       if (allocated_now)
 	free_hash_table (antiloop_hash_table, ANTILOOP_HASH_TABLE_SIZE);
+
+      if (second_hash_table)
+	free_hash_table (second_hash_table, ANTILOOP_HASH_TABLE_SIZE);
     }
 
   if (!obj->refcount)
