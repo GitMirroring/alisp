@@ -803,9 +803,10 @@ struct object *nthcdr (unsigned int ind, struct object *list);
 unsigned int list_length (const struct object *list);
 struct object *last_cons_pair (struct object *list);
 int is_dotted_list (const struct object *list);
+
 struct object *copy_prefix (const struct object *begin, const struct object *end,
 			    struct object **last_prefix);
-struct object *copy_list_structure (const struct object *list,
+struct object *copy_list_structure (struct object *list,
 				    const struct object *prefix);
 
 int array_rank (const struct array *array);
@@ -3696,30 +3697,38 @@ copy_prefix (const struct object *begin, const struct object *end,
 
 
 struct object *
-copy_list_structure (const struct object *list, const struct object *prefix)
+copy_list_structure (struct object *list, const struct object *prefix)
 {
   struct object *cons, *out, *lastpref;
 
   out = cons = alloc_empty_cons_pair ();
 
-  cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+  increment_refcount (CAR (list), NULL);
+  out->value_ptr.cons_pair->car = CAR (list);
 
-  list = list->value_ptr.cons_pair->cdr;
+  list = CDR (list);
 
   while (list->type == TYPE_CONS_PAIR)
     {
       cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
+      increment_refcount (CAR (list), NULL);
+
       if (prefix)
 	{
 	  cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref);
-	  lastpref->value_ptr.next = list->value_ptr.cons_pair->car;
+	  lastpref->value_ptr.next = CAR (list);
 	}
       else
-	cons->value_ptr.cons_pair->car = list->value_ptr.cons_pair->car;
+	cons->value_ptr.cons_pair->car = CAR (list);
 
-      list = list->value_ptr.cons_pair->cdr;
+      list = CDR (list);
     }
+
+  if (list != &nil_object)
+    increment_refcount (list, NULL);
+
+  cons->value_ptr.cons_pair->cdr = list;
 
   return out;
 }
