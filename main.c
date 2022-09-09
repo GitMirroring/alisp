@@ -5684,11 +5684,11 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   fun->type = TYPE_MACRO;
 
-  SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
-  increment_refcount (SYMBOL (CAR (list)), NULL);
+  sym->value_ptr.symbol->function_cell = fun;
+  increment_refcount (sym, NULL);
 
-  increment_refcount (CAR (list), NULL);
-  return CAR (list);
+  increment_refcount (sym, NULL);
+  return sym;
 }
 
 
