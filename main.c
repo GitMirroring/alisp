@@ -4638,8 +4638,7 @@ builtin_car (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (CAR (list)) != &nil_object && CAR (CAR (list)) != &t_object)
-    increment_refcount (CAR (CAR (list)), NULL);
+  increment_refcount (CAR (CAR (list)), NULL);
 
   return CAR (CAR (list));
 }
@@ -4669,8 +4668,7 @@ builtin_cdr (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CDR (CAR (list)) != &nil_object && CDR (CAR (list)) != &t_object)
-    increment_refcount (CDR (CAR (list)), NULL);
+  increment_refcount (CDR (CAR (list)), NULL);
 
   return CDR (CAR (list));
 }
