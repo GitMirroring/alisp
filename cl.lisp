@@ -70,3 +70,6 @@
 
 (defmacro when (clause &rest body)
   `(if ,clause (progn ,@body)))
+
+(defmacro unless (clause &rest body)
+  `(if (not ,clause) (progn ,@body)))
