@@ -3624,12 +3624,12 @@ list_length (const struct object *list)
 struct object *
 last_cons_pair (struct object *list)
 {
-  struct object *prev;
+  struct object *prev = &nil_object;
 
   while (list && list != &nil_object)
     {
       prev = list;
-      list = list->value_ptr.cons_pair->cdr;
+      list = CDR (list);
     }
 
   return prev;
