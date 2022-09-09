@@ -183,7 +183,7 @@ def nth (arg, n):
 
 
 
-def print_list (arg, in_cons):
+def print_cons (arg, in_cons):
     if in_cons:
         o = "("
         r = print_refcount (arg, False)
@@ -206,6 +206,13 @@ def print_list (arg, in_cons):
         if i < list_length - 1:
             obj += " "
             ref += " "
+
+    last_cdr = gdb.execute ("output nthcdr (%d, %s)" % (list_length, arg), False, True)
+
+    if len (last_cdr.split ()) <= 4:
+        out = print_object (nthcdr (arg, list_length), False)
+        obj = "%s . %s" % (obj, out [0])
+        ref = "%s   %s" % (ref, out [1])
 
     obj += ")"
     ref += " "
