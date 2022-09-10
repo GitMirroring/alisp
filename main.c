@@ -4373,10 +4373,8 @@ struct object *
 evaluate_list (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  struct symbol_name *symname;
-  struct symbol *sym;
   struct binding *bind;
-  struct object *args, *ret, *fun;
+  struct object *sym, *args, *ret, *fun = NULL;
 
   if (is_dotted_list (list))
     {
@@ -4392,11 +4390,27 @@ evaluate_list (struct object *list, struct environment *env,
       return NULL;
     }
 
-  symname = CAR (list)->value_ptr.symbol_name;
 
-  if (symname->sym->value_ptr.symbol->is_builtin_form)
+  sym = SYMBOL (CAR (list));
+
+  if (sym->value_ptr.symbol->function_dyn_bins_num)
     {
-      if (symname->sym->value_ptr.symbol->evaluate_args)
+      bind = find_binding (sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
+
+      fun = bind->obj;
+    }
+  else
+    fun = sym->value_ptr.symbol->function_cell;
+
+
+  if (fun && fun->type == TYPE_FUNCTION)
+    return call_function (fun, CDR (list), 1, 0, env, outcome);
+  else if (fun)
+    return call_function (fun, CDR (list), 0, 1, env, outcome);
+
+  if (sym->value_ptr.symbol->is_builtin_form)
+    {
+      if (sym->value_ptr.symbol->evaluate_args)
 	{
 	  args = evaluate_through_list (CDR (list), env, outcome);
 
@@ -4406,36 +4420,17 @@ evaluate_list (struct object *list, struct environment *env,
       else
 	args = CDR (list);
 
-      ret = symname->sym->value_ptr.symbol->builtin_form (args, env, outcome);
+      ret = sym->value_ptr.symbol->builtin_form (args, env, outcome);
 
-      if (symname->sym->value_ptr.symbol->evaluate_args)
+      if (sym->value_ptr.symbol->evaluate_args)
 	decrement_refcount (args, NULL);
 
       return ret;
     }
 
-  sym = symname->sym->value_ptr.symbol;
-
-  if (!sym->function_dyn_bins_num && !sym->function_cell)
-    {
-      outcome->type = UNKNOWN_FUNCTION;
-      outcome->obj = CAR (list);
-      return NULL;
-    }
-
-  if (sym->function_dyn_bins_num)
-    {
-      bind = find_binding (sym, env->funcs, DYNAMIC_BINDING);
-
-      fun = bind->obj;
-    }
-  else
-    fun = sym->function_cell;
-
-  if (fun->type == TYPE_FUNCTION)
-    return call_function (fun, CDR (list), 1, 0, env, outcome);
-  else
-    return call_function (fun, CDR (list), 0, 1, env, outcome);
+  outcome->type = UNKNOWN_FUNCTION;
+  outcome->obj = CAR (list);
+  return NULL;
 }
 
 
