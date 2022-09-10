@@ -933,14 +933,14 @@ struct object *builtin_symbol_value (struct object *list,
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_let
-(struct object *bind_forms, struct object *body, struct environment *env,
- struct eval_outcome *outcome);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_let_star
-(struct object *bind_forms, struct object *body, struct environment *env,
- struct eval_outcome *outcome);
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
+struct object *evaluate_quote
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_if
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_progn
@@ -1165,6 +1165,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("*", env, builtin_multiply, 1, 0);
   add_builtin_form ("/", env, builtin_divide, 1, 0);
   add_builtin_form ("=", env, builtin_numbers_equal, 1, 0);
+  add_builtin_form ("QUOTE", env, evaluate_quote, 0, 1);
+  add_builtin_form ("LET", env, evaluate_let, 0, 1);
+  add_builtin_form ("LET*", env, evaluate_let_star, 0, 1);
   add_builtin_form ("IF", env, evaluate_if, 0, 1);
   add_builtin_form ("PROGN", env, evaluate_progn, 0, 1);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 0, 0);
@@ -4411,32 +4414,6 @@ evaluate_list (struct object *list, struct environment *env,
       return ret;
     }
 
-  if (symname_equals (symname, "LET"))
-    {
-      if (CDR (list)->type != TYPE_CONS_PAIR && CDR (list) != &nil_object)
-	{
-	  outcome->type = INCORRECT_SYNTAX_IN_LET;
-	  return NULL;
-	}
-
-      return evaluate_let (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
-    }
-  else if (symname_equals (symname, "LET*"))
-    {
-      if (CDR (list)->type != TYPE_CONS_PAIR && CDR (list) != &nil_object)
-	{
-	  outcome->type = INCORRECT_SYNTAX_IN_LET;
-	  return NULL;
-	}
-
-      return evaluate_let_star (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
-    }
-  else if (symname_equals (symname, "QUOTE"))
-    {
-      increment_refcount (CAR (CDR (list)), NULL);
-      return CAR (CDR (list));
-    }
-
   sym = symname->sym->value_ptr.symbol;
 
   if (!sym->function_dyn_bins_num && !sym->function_cell)
@@ -5425,12 +5402,21 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 
 
 struct object *
-evaluate_let (struct object *bind_forms, struct object *body,
-	      struct environment *env, struct eval_outcome *outcome)
+evaluate_let (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
 {
-  struct object *res;
+  struct object *res, *bind_forms, *body;
   int binding_num = 0;
   struct binding *bins = NULL, *bin;
+
+  if (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LET;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+  body = CDR (list);
 
   while (bind_forms != &nil_object)
     {
@@ -5456,12 +5442,21 @@ evaluate_let (struct object *bind_forms, struct object *body,
 
 
 struct object *
-evaluate_let_star (struct object *bind_forms, struct object *body,
-		   struct environment *env, struct eval_outcome *outcome)
+evaluate_let_star (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
 {
-  struct object *res;
+  struct object *res, *bind_forms, *body;
   int binding_num = 0;
   struct binding *bin;
+
+  if (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LET;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+  body = CDR (list);
 
   while (bind_forms != &nil_object)
     {
@@ -5510,6 +5505,20 @@ get_dynamic_value (struct object *sym, struct environment *env)
     }
 
   return NULL;
+}
+
+
+struct object *evaluate_quote (struct object *list, struct environment *env,
+			       struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list), NULL);
+  return CAR (list);
 }
 
 
