@@ -5409,7 +5409,8 @@ evaluate_let (struct object *list, struct environment *env,
   int binding_num = 0;
   struct binding *bins = NULL, *bin;
 
-  if (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
+			      && CAR (list) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_LET;
       return NULL;
@@ -5449,7 +5450,8 @@ evaluate_let_star (struct object *list, struct environment *env,
   int binding_num = 0;
   struct binding *bin;
 
-  if (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
+			      && CAR (list) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_LET;
       return NULL;
@@ -6211,7 +6213,7 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     }
   else if (err->type == INCORRECT_SYNTAX_IN_LET)
     {
-      printf ("eval error: incorrect syntax in let\n");
+      printf ("eval error: incorrect syntax in LET or LET*\n");
     }
   else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
