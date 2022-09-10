@@ -5679,6 +5679,9 @@ evaluate_defun (struct object *list, struct environment *env,
 
   fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
+  if (sym->value_ptr.symbol->function_cell)
+    decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
+
   sym->value_ptr.symbol->function_cell = fun;
   increment_refcount (sym, NULL);
 
@@ -5712,6 +5715,9 @@ evaluate_defmacro (struct object *list, struct environment *env,
   fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
   fun->type = TYPE_MACRO;
+
+  if (sym->value_ptr.symbol->function_cell)
+    decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
 
   sym->value_ptr.symbol->function_cell = fun;
   increment_refcount (sym, NULL);
