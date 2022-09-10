@@ -6181,11 +6181,12 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: symbol ");
       print_symbol (err->obj->value_ptr.symbol, env);
-      printf (" not bound to any function or macro\n");
+      printf (" not bound to any function, macro or special operator\n");
     }
   else if (err->type == INVALID_FUNCTION_CALL)
     {
-      printf ("eval error: invalid function call\n");
+      printf ("eval error: not a function form, a macro form or a special "
+	      "form\n");
     }
   else if (err->type == DOTTED_LIST_NOT_ALLOWED_HERE)
     {
