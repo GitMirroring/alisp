@@ -20,6 +20,10 @@ use strict;
 #
 
 
+# Test script
+
+
+
 use IPC::Open2;
 
 
@@ -234,9 +238,18 @@ sub make_test
 
     my $result = 1;
 
+    my $out;
+
     for (my $i = 0; $i < scalar (@expected_outlines); $i++)
     {
-	my $out = <$al_out>;
+	$out = <$al_out>;
+
+	if (not defined ($out) and eof ($al_out))
+	{
+	    print "\n\nEOF reached, probably al crashed\n";
+
+	    exit;
+	}
 
 	print $out;
 
