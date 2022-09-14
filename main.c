@@ -349,9 +349,8 @@ binding
 enum
 parse_lambda_list_outcome
   {
-    EMPTY_LAMBDA_LIST,
-    NOT_NIL_NOR_CONS,
-    LAMBDA_LIST_OK
+    PARSE_LAMBDA_LIST_OK,
+    PARSE_LAMBDA_LIST_INVALID
   };
 
 
@@ -2739,6 +2738,13 @@ create_function (struct object *lambda_list, struct object *body)
 
   fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, &out);
 
+  if (!fun->value_ptr.function->lambda_list && out == PARSE_LAMBDA_LIST_INVALID)
+    {
+      free_function_or_macro (fun);
+
+      return NULL;
+    }
+
   increment_refcount (body, NULL);
   fun->value_ptr.function->body = body;
 
@@ -3808,13 +3814,14 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 
 struct parameter *
 parse_required_parameters (struct object *obj, struct parameter **last,
-			   struct object **rest, enum parse_lambda_list_outcome *out)
+			   struct object **rest,
+			   enum parse_lambda_list_outcome *out)
 {
   struct object *car;
   struct parameter *first = NULL;
 
   *last = NULL;
-  
+
   while (obj && (car = CAR (obj))
 	 && car->type == TYPE_SYMBOL_NAME 
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
@@ -3824,26 +3831,27 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	*last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
       else
 	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
-      
+
       obj = CDR (obj);
     }
 
   *rest = obj;
-  
+
   return first;
 }
 
 
 struct parameter *
 parse_optional_parameters (struct object *obj, struct parameter **last,
-			   struct object **next, enum parse_lambda_list_outcome *out)
+			   struct object **next,
+			   enum parse_lambda_list_outcome *out)
 {
   struct object *car;
   struct parameter *first = NULL;
 
   *last = NULL;
-  
-  while (obj && (car = obj->value_ptr.cons_pair->car))
+
+  while (obj && (car = CAR (obj)))
     {
       if (car->type == TYPE_SYMBOL_NAME 
 	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
@@ -3856,7 +3864,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
 	  else
-	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
+	    *last = (*last)->next =
+	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
 
 	  (*last)->init_form = NULL;
 	  (*last)->supplied_p_param = NULL;
@@ -3866,7 +3875,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 	  else
-	    *last = (*last)->next = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
+	    *last = (*last)->next =
+	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 
 	  (*last)->init_form = NULL;
 	  (*last)->supplied_p_param = NULL;
@@ -3877,12 +3887,12 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  if (list_length (car) == 3)
 	    (*last)->supplied_p_param = SYMBOL (nth (2, car));
 	}
-      
-      obj = obj->value_ptr.cons_pair->cdr;
+
+      obj = CDR (obj);
     }
-  
+
   *next = obj;
-  
+
   return first;
 }
 
@@ -3892,16 +3902,23 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 {
   struct parameter *first = NULL, *last = NULL, *newlast = NULL;
   struct object *car;
-  
+
   if (obj == &nil_object)
-    return NULL;
-  
+    {
+      *out = PARSE_LAMBDA_LIST_OK;
+      return NULL;
+    }
+
   if (obj->type != TYPE_CONS_PAIR)
-    return NULL;
+    {
+      *out = PARSE_LAMBDA_LIST_INVALID;
+      return NULL;
+    }
 
   first = parse_required_parameters (obj, &last, &obj, out);
 
-  if (obj && obj->type == TYPE_CONS_PAIR && (car = obj->value_ptr.cons_pair->car)
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && car->type == TYPE_SYMBOL_NAME
       && symname_equals (car->value_ptr.symbol_name, "&OPTIONAL"))
     {
       if (first)
@@ -3913,13 +3930,22 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 					   &last, &obj, out);
     }
 
-  if (obj && obj->type == TYPE_CONS_PAIR && (car = obj->value_ptr.cons_pair->car)
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && car->type == TYPE_SYMBOL_NAME
       && symname_equals (car->value_ptr.symbol_name, "&REST"))
     {
       if (first)
 	last->next = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
       else
 	first = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+
+      obj = CDR (CDR (obj));
+    }
+
+  if (obj != &nil_object)
+    {
+      *out = PARSE_LAMBDA_LIST_INVALID;
+      return NULL;
     }
 
   return first;
@@ -5674,6 +5700,12 @@ evaluate_defun (struct object *list, struct environment *env,
 
   fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
+  if (!fun)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
   if (sym->value_ptr.symbol->function_cell)
     decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
 
@@ -5689,7 +5721,7 @@ struct object *
 evaluate_defmacro (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
-  struct object *fun, *sym;
+  struct object *mac, *sym;
 
   if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
@@ -5707,14 +5739,20 @@ evaluate_defmacro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)));
 
-  fun->type = TYPE_MACRO;
+  if (!mac)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_DEFMACRO;
+      return NULL;
+    }
+
+  mac->type = TYPE_MACRO;
 
   if (sym->value_ptr.symbol->function_cell)
     decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
 
-  sym->value_ptr.symbol->function_cell = fun;
+  sym->value_ptr.symbol->function_cell = mac;
   increment_refcount (sym, NULL);
 
   increment_refcount (sym, NULL);
@@ -6219,11 +6257,11 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     }
   else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
-      printf ("eval error: incorrect syntax in defun\n");
+      printf ("eval error: incorrect syntax in DEFUN\n");
     }
   else if (err->type == INCORRECT_SYNTAX_IN_DEFMACRO)
     {
-      printf ("eval error: incorrect syntax in defmacro\n");
+      printf ("eval error: incorrect syntax in DEFMACRO\n");
     }
   else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
     {
