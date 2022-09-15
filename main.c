@@ -3827,6 +3827,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
 			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
     {
+      increment_refcount (SYMBOL (car), NULL);
+
       if (!first)
 	*last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
       else
@@ -3861,6 +3863,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	}
       else if (car->type == TYPE_SYMBOL_NAME)
 	{
+	  increment_refcount (SYMBOL (car), NULL);
+
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
 	  else
@@ -3880,12 +3884,18 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
 	  (*last)->init_form = NULL;
 	  (*last)->supplied_p_param = NULL;
-	  
+
 	  if (list_length (car) == 2)
-	    (*last)->init_form = nth (1, car);
-	  
+	    {
+	      increment_refcount (nth (1, car), NULL);
+	      (*last)->init_form = nth (1, car);
+	    }
+
 	  if (list_length (car) == 3)
-	    (*last)->supplied_p_param = SYMBOL (nth (2, car));
+	    {
+	      increment_refcount (SYMBOL (nth (2, car)), NULL);
+	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
+	    }
 	}
 
       obj = CDR (obj);
@@ -3934,6 +3944,8 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
       && car->type == TYPE_SYMBOL_NAME
       && symname_equals (car->value_ptr.symbol_name, "&REST"))
     {
+      increment_refcount (SYMBOL (CAR (CDR (obj))), NULL);
+
       if (first)
 	last->next = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
       else
@@ -6322,6 +6334,7 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
 {
   int allocated_now = 0;
   struct object_list **second_hash_table = NULL;
+  struct parameter *par;
 
   if (!obj || obj == &nil_object  || obj == &t_object)
     return;
@@ -6387,7 +6400,24 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
-	  increment_refcount (obj->value_ptr.function->body, antiloop_hash_table);
+	  second_hash_table = clone_hash_table (antiloop_hash_table,
+						ANTILOOP_HASH_TABLE_SIZE);
+
+	  increment_refcount (obj->value_ptr.function->body, second_hash_table);
+
+	  par = obj->value_ptr.function->lambda_list;
+
+	  while (par)
+	    {
+	      free_hash_table (second_hash_table, ANTILOOP_HASH_TABLE_SIZE);
+
+	      second_hash_table = clone_hash_table (antiloop_hash_table,
+						    ANTILOOP_HASH_TABLE_SIZE);
+
+	      increment_refcount (par->name, second_hash_table);
+
+	      par = par->next;
+	    }
 	}
 
       if (allocated_now)
@@ -6404,6 +6434,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
 {
   int allocated_now = 0;
   struct object_list **second_hash_table = NULL;
+  struct parameter *par;
 
   if (!obj || obj == &nil_object || obj == &t_object)
     return 0;
@@ -6469,7 +6500,24 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_table
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
-	  decrement_refcount (obj->value_ptr.function->body, antiloop_hash_table);
+	  second_hash_table = clone_hash_table (antiloop_hash_table,
+						ANTILOOP_HASH_TABLE_SIZE);
+
+	  decrement_refcount (obj->value_ptr.function->body, second_hash_table);
+
+	  par = obj->value_ptr.function->lambda_list;
+
+	  while (par)
+	    {
+	      free_hash_table (second_hash_table, ANTILOOP_HASH_TABLE_SIZE);
+
+	      second_hash_table = clone_hash_table (antiloop_hash_table,
+						    ANTILOOP_HASH_TABLE_SIZE);
+
+	      decrement_refcount (par->name, second_hash_table);
+
+	      par = par->next;
+	    }
 	}
 
       if (allocated_now)
