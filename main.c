@@ -3822,7 +3822,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && (car = CAR (obj))
+  while (obj && obj != &nil_object && (car = CAR (obj))
 	 && car->type == TYPE_SYMBOL_NAME 
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
 			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
@@ -3853,7 +3853,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && (car = CAR (obj)))
+  while (obj && obj != &nil_object && (car = CAR (obj)))
     {
       if (car->type == TYPE_SYMBOL_NAME 
 	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
@@ -3910,7 +3910,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 struct parameter *
 parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
 {
-  struct parameter *first = NULL, *last = NULL, *newlast = NULL;
+  struct parameter *first = NULL, *last = NULL;
   struct object *car;
 
   if (obj == &nil_object)
@@ -3933,11 +3933,9 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
     {
       if (first)
 	last->next =
-	  parse_optional_parameters (obj->value_ptr.cons_pair->cdr, &newlast,
-				     &obj, out);
+	  parse_optional_parameters (CDR (obj), &last, &obj, out);
       else
-	first = parse_optional_parameters (obj->value_ptr.cons_pair->cdr,
-					   &last, &obj, out);
+	first = parse_optional_parameters (CDR (obj), &last, &obj, out);
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
