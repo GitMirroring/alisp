@@ -32,7 +32,7 @@ AC_CONFIG_FILES([Makefile])
 AC_PROG_CC
 
 
-AC_CHECK_HEADERS([stdlib.h string.h])
+AC_CHECK_HEADERS([stdlib.h string.h locale.h])
 
 
 AC_TYPE_SIZE_T
@@ -40,7 +40,7 @@ AC_TYPE_SIZE_T
 
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([memchr strchr])
+AC_CHECK_FUNCS([memchr strchr setlocale strerror])
 
 
 AC_SEARCH_LIBS([readline], [readline], , [AC_MSG_ERROR([GNU readline not found])])
