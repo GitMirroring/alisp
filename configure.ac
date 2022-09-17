@@ -20,17 +20,16 @@
 
 AC_PREREQ([2.69])
 AC_INIT([al], [0.4], [andrea.monaco@autistici.org])
+
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
+
+
 AC_CONFIG_SRCDIR([main.c])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_FILES([Makefile])
 
 
 AC_PROG_CC
-
-
-AC_SEARCH_LIBS([readline], [readline], , [AC_MSG_ERROR([GNU readline not found])])
-AC_SEARCH_LIBS([__gmpz_init], [gmp], , [AC_MSG_ERROR([GNU mp not found])])
 
 
 AC_CHECK_HEADERS([stdlib.h string.h])
@@ -42,6 +41,10 @@ AC_TYPE_SIZE_T
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([memchr strchr])
+
+
+AC_SEARCH_LIBS([readline], [readline], , [AC_MSG_ERROR([GNU readline not found])])
+AC_SEARCH_LIBS([__gmpz_init], [gmp], , [AC_MSG_ERROR([GNU mp not found])])
 
 
 
