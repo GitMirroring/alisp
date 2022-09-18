@@ -765,6 +765,9 @@ struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env,
 			      enum binding_type type);
 
+struct binding *bind_variable (struct object *sym, struct object *val,
+			       struct binding *bins);
+
 struct go_tag *add_go_tag (struct object *tagname, struct object *tagdest,
 			   struct go_tag *tags);
 struct go_tag *remove_go_tags (struct go_tag *tags, int num);
@@ -3376,6 +3379,21 @@ find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
 }
 
 
+struct binding *
+bind_variable (struct object *sym, struct object *val, struct binding *bins)
+{
+  if (sym->value_ptr.symbol->is_parameter)
+    {
+      sym->value_ptr.symbol->value_dyn_bins_num++;
+
+      return add_binding (create_binding (sym, val, DYNAMIC_BINDING),
+			  bins);
+    }
+  else
+    return add_binding (create_binding (sym, val, LEXICAL_BINDING), bins);
+}
+
+
 struct go_tag *
 add_go_tag (struct object *tagname, struct object *tagdest, struct go_tag *tags)
 {
@@ -4034,13 +4052,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  val = CAR (arglist);
 	}
 
-      bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
+      bins = bind_variable (par->name, val, bins);
+
       args++;
 
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
-	  bins = add_binding (create_binding (par->supplied_p_param, &t_object,
-					      LEXICAL_BINDING), bins);
+	  bins = bind_variable (par->supplied_p_param, &t_object, bins);
+
 	  args++;
 	}
 
@@ -4070,21 +4089,21 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  if (!val)
 	    return NULL;
 
-	  bins = add_binding (create_binding (par->name, val, LEXICAL_BINDING), bins);
+	  bins = bind_variable (par->name, val, bins);
+
 	  args++;
 	}
       else
 	{
-	  bins = add_binding (create_binding
-			      (par->name, &nil_object, LEXICAL_BINDING), bins);
+	  bins = bind_variable (par->name, &nil_object, bins);
+
 	  args++;
 	}
 
       if (par->supplied_p_param)
 	{
-	  bins = add_binding (create_binding
-			      (par->supplied_p_param, &nil_object, LEXICAL_BINDING),
-			      bins);
+	  bins = bind_variable (par->supplied_p_param, &nil_object, bins);
+
 	  args++;
 	}
 
@@ -4103,8 +4122,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       else
 	increment_refcount (arglist, NULL);
 
-      bins = add_binding (create_binding (par->name, arglist, LEXICAL_BINDING),
-			  bins);
+      bins = bind_variable (par->name, arglist, bins);
+
       args++;
     }
 
