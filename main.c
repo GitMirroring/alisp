@@ -233,6 +233,8 @@ eval_outcome_type
     COULD_NOT_TELL_FILE,
     ERROR_READING_FILE,
     UNKNOWN_TYPE,
+    CANT_GO_OUTSIDE_TAGBODY,
+    INVALID_GO_TAG,
     CANT_GO_TO_NONEXISTENT_TAG
   };
 
@@ -956,6 +958,8 @@ struct object *evaluate_defmacro
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_go
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
@@ -1175,6 +1179,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFUN", env, evaluate_defun, 0, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0, 1);
+  add_builtin_form ("GO", env, evaluate_go, 0, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, 1, 0);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 1, 0);
 
@@ -5803,6 +5808,12 @@ evaluate_tagbody (struct object *list, struct environment *env,
 	  env->active_go_tags_num++;
 	  tags++;
 	}
+      else if (car->type != TYPE_CONS_PAIR && car != &nil_object)
+	{
+	  outcome->type = INVALID_GO_TAG;
+
+	  return NULL;
+	}
 
       cons = CDR (cons);
     }
@@ -5849,6 +5860,16 @@ evaluate_tagbody (struct object *list, struct environment *env,
   env->active_go_tags_num -= tags;
 
   return &nil_object;
+}
+
+
+struct object *
+evaluate_go (struct object *list, struct environment *env,
+	     struct eval_outcome *outcome)
+{
+  outcome->type = CANT_GO_OUTSIDE_TAGBODY;
+
+  return NULL;
 }
 
 
@@ -6324,6 +6345,14 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == UNKNOWN_TYPE)
     {
       printf ("eval error: type not known\n");
+    }
+  else if (err->type == CANT_GO_OUTSIDE_TAGBODY)
+    {
+      printf ("eval error: can't perform GO outside of a TAGBODY\n");
+    }
+  else if (err->type == INVALID_GO_TAG)
+    {
+      printf ("eval error: not a valid go tag\n");
     }
   else if (err->type == CANT_GO_TO_NONEXISTENT_TAG)
     {
