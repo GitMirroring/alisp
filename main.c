@@ -3344,23 +3344,21 @@ remove_bindings (struct binding *env, int num)
 
   if (!num)
     return env;  
-  else if (num == 1)
-    {
-      b = env->next;
 
-      if (env->type == DYNAMIC_BINDING)
-	env->sym->value_ptr.symbol->value_dyn_bins_num--;
+  b = env->next;
 
-      decrement_refcount (env->sym, NULL);
-      decrement_refcount (env->obj, NULL);
+  if (env->type == DYNAMIC_BINDING)
+    env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
-      free (env);
-      return b;
-    }
+  decrement_refcount (env->sym, NULL);
+  decrement_refcount (env->obj, NULL);
+
+  free (env);
+
+  if (num == 1)
+    return b;
   else
-    {
-      return remove_bindings (env->next, num-1);
-    }
+    return remove_bindings (env->next, num-1);
 }
 
 
