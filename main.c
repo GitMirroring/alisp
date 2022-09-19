@@ -235,7 +235,8 @@ eval_outcome_type
     UNKNOWN_TYPE,
     CANT_GO_OUTSIDE_TAGBODY,
     INVALID_GO_TAG,
-    CANT_GO_TO_NONEXISTENT_TAG
+    CANT_GO_TO_NONEXISTENT_TAG,
+    INVALID_ACCESSOR
   };
 
 
@@ -943,6 +944,9 @@ struct object *evaluate_let_star
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
+struct object *parse_accessor (struct object *acc, struct environment *env,
+			       struct eval_outcome *outcome);
+
 struct object *evaluate_quote
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_if
@@ -958,6 +962,8 @@ struct object *evaluate_defvar
 struct object *evaluate_defun
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defmacro
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_setf
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1181,6 +1187,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFVAR", env, evaluate_defvar, 0, 0);
   add_builtin_form ("DEFUN", env, evaluate_defun, 0, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0, 0);
+  add_builtin_form ("SETF", env, evaluate_setf, 0, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0, 1);
   add_builtin_form ("GO", env, evaluate_go, 0, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, 1, 0);
@@ -5568,8 +5575,19 @@ get_dynamic_value (struct object *sym, struct environment *env)
 }
 
 
-struct object *evaluate_quote (struct object *list, struct environment *env,
-			       struct eval_outcome *outcome)
+struct object *
+parse_accessor (struct object *acc, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  outcome->type = INVALID_ACCESSOR;
+
+  return NULL;
+}
+
+
+struct object *
+evaluate_quote (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
 {
   if (list_length (list) != 1)
     {
@@ -5800,6 +5818,87 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   increment_refcount (sym, NULL);
   return sym;
+}
+
+
+struct object *
+evaluate_setf (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  struct symbol *s;
+  struct binding *b;
+  struct object *val;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (nth (0, list)->type != TYPE_SYMBOL_NAME)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  s = CAR (list)->value_ptr.symbol_name->sym->value_ptr.symbol;
+
+  if (s->is_const)
+    {
+      outcome->type = CANT_REDEFINE_CONSTANT;
+
+      return NULL;
+    }
+
+  val = evaluate_object (nth (1, list), env, outcome);
+
+  if (!val)
+    return NULL;
+
+  if (s->is_parameter || s->is_special)
+    {
+      if (!s->value_dyn_bins_num)
+	{
+	  s->value_cell = val;
+	}
+      else
+	{
+	  b = find_binding (s, env->vars, DYNAMIC_BINDING);
+
+	  if (b)
+	    {
+	      b->obj = val;
+	    }
+	  else
+	    {
+	      env->vars = add_binding (create_binding (SYMBOL (CAR (list)),
+						       val, DYNAMIC_BINDING),
+				       env->vars);
+	    }
+	}
+    }
+  else
+    {
+      b = find_binding (s, env->vars, LEXICAL_BINDING);
+
+      if (b)
+	{
+	  b->obj = val;
+	}
+      else
+	{
+	  s->value_dyn_bins_num++;
+	  s->is_special = 1;
+	  env->vars = add_binding (create_binding (SYMBOL (CAR (list)), val,
+						   DYNAMIC_BINDING),
+				   env->vars);
+	}
+    }
+
+  increment_refcount (val, NULL);
+  return val;
 }
 
 
@@ -6377,6 +6476,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == CANT_GO_TO_NONEXISTENT_TAG)
     {
       printf ("eval error: can't GO to a tag that doesn't exist\n");
+    }
+  else if (err->type == INVALID_ACCESSOR)
+    {
+      printf ("eval error: not a valid accessor\n");
     }
 }
 
