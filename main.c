@@ -4200,7 +4200,10 @@ evaluate_object (struct object *obj, struct environment *env,
 	  bind = find_binding (sym->value_ptr.symbol, env->vars, LEXICAL_BINDING);
 
 	  if (bind)
-	    return bind->obj;
+	    {
+	      increment_refcount (bind->obj, NULL);
+	      return bind->obj;
+	    }
 	  else
 	    {
 	      outcome->type = UNBOUND_SYMBOL;
