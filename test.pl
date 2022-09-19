@@ -135,6 +135,7 @@ make_test ("(not nil)", "T");
 make_test ("(cons 1 2)", "(1 . 2)");
 make_test ("(list 1 2 3)", "(1 2 3)");
 make_test ("(let ((a 2)) a)", "2");
+make_test ("(let ((x 0)) x x x)", "0");
 make_test ("(defconstant a 8)", "A");
 make_test ("a", "8");
 make_test ("(defparameter b 9)", "B");
