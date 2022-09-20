@@ -944,8 +944,9 @@ struct object *evaluate_let_star
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
-struct object *parse_accessor (struct object *acc, struct environment *env,
-			       struct eval_outcome *outcome);
+struct object *setf_from_accessor (struct object *acc, struct object *valform,
+				   struct environment *env,
+				   struct eval_outcome *outcome);
 
 struct object *evaluate_quote
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -5576,8 +5577,8 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 
 struct object *
-parse_accessor (struct object *acc, struct environment *env,
-		struct eval_outcome *outcome)
+setf_from_accessor (struct object *acc, struct object *valform,
+		    struct environment *env, struct eval_outcome *outcome)
 {
   outcome->type = INVALID_ACCESSOR;
 
@@ -5836,36 +5837,47 @@ evaluate_setf (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (nth (0, list)->type != TYPE_SYMBOL_NAME)
+  if (nth (0, list)->type == TYPE_SYMBOL_NAME)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      s = CAR (list)->value_ptr.symbol_name->sym->value_ptr.symbol;
 
-      return NULL;
-    }
-
-  s = CAR (list)->value_ptr.symbol_name->sym->value_ptr.symbol;
-
-  if (s->is_const)
-    {
-      outcome->type = CANT_REDEFINE_CONSTANT;
-
-      return NULL;
-    }
-
-  val = evaluate_object (nth (1, list), env, outcome);
-
-  if (!val)
-    return NULL;
-
-  if (s->is_parameter || s->is_special)
-    {
-      if (!s->value_dyn_bins_num)
+      if (s->is_const)
 	{
-	  s->value_cell = val;
+	  outcome->type = CANT_REDEFINE_CONSTANT;
+
+	  return NULL;
+	}
+
+      val = evaluate_object (nth (1, list), env, outcome);
+
+      if (!val)
+	return NULL;
+
+      if (s->is_parameter || s->is_special)
+	{
+	  if (!s->value_dyn_bins_num)
+	    {
+	      s->value_cell = val;
+	    }
+	  else
+	    {
+	      b = find_binding (s, env->vars, DYNAMIC_BINDING);
+
+	      if (b)
+		{
+		  b->obj = val;
+		}
+	      else
+		{
+		  env->vars = add_binding (create_binding (SYMBOL (CAR (list)),
+							   val, DYNAMIC_BINDING),
+					   env->vars);
+		}
+	    }
 	}
       else
 	{
-	  b = find_binding (s, env->vars, DYNAMIC_BINDING);
+	  b = find_binding (s, env->vars, LEXICAL_BINDING);
 
 	  if (b)
 	    {
@@ -5873,28 +5885,23 @@ evaluate_setf (struct object *list, struct environment *env,
 	    }
 	  else
 	    {
-	      env->vars = add_binding (create_binding (SYMBOL (CAR (list)),
-						       val, DYNAMIC_BINDING),
+	      s->value_dyn_bins_num++;
+	      s->is_special = 1;
+	      env->vars = add_binding (create_binding (SYMBOL (CAR (list)), val,
+						       DYNAMIC_BINDING),
 				       env->vars);
 	    }
 	}
     }
+  else if (nth (0, list)->type == TYPE_CONS_PAIR)
+    {
+      val = setf_from_accessor (nth (0, list), nth (1, list), env, outcome);
+    }
   else
     {
-      b = find_binding (s, env->vars, LEXICAL_BINDING);
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
-      if (b)
-	{
-	  b->obj = val;
-	}
-      else
-	{
-	  s->value_dyn_bins_num++;
-	  s->is_special = 1;
-	  env->vars = add_binding (create_binding (SYMBOL (CAR (list)), val,
-						   DYNAMIC_BINDING),
-				   env->vars);
-	}
+      return NULL;
     }
 
   increment_refcount (val, NULL);
