@@ -5928,7 +5928,7 @@ evaluate_tagbody (struct object *list, struct environment *env,
 	  while (destfind != &nil_object && (dest = CAR (destfind))
 		 && (dest->type == TYPE_SYMBOL_NAME
 		     || dest->type == TYPE_INTEGER))
-	    destfind = CDR (cons);
+	    destfind = CDR (destfind);
 
 	  env->go_tags = add_go_tag (car, destfind, env->go_tags);
 	  env->active_go_tags_num++;
