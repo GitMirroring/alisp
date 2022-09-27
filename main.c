@@ -81,6 +81,15 @@ go_tag
 
 
 struct
+go_tag_frame
+{
+  struct go_tag *frame;
+
+  struct go_tag_frame *next;
+};
+
+
+struct
 global_environment
 {
   struct binding *dyn_vars;
@@ -123,8 +132,7 @@ environment
   struct object *keyword_package;
   struct object *current_package;
 
-  struct go_tag *go_tags;
-  int active_go_tags_num;
+  struct go_tag_frame *go_tag_stack;
 
   /*struct global_environment *glob_env;
   struct dynamic_environment *dyn_env;
@@ -246,6 +254,11 @@ eval_outcome
   enum eval_outcome_type type;
 
   struct object *obj;
+
+  struct object *tag_to_find;
+  int find_tag_now;
+
+  struct object *cont;
 };
 
 
@@ -648,11 +661,9 @@ const char *jump_to_end_of_multiline_comment
 struct line_list *append_line_to_list
 (char *line, size_t size, struct line_list *list, int do_copy);
 
-void prepend_object_to_list
-(struct object *obj, struct object_list **list);
-
-int is_object_in_list
-(const struct object *obj, const struct object_list *list);
+void prepend_object_to_list (struct object *obj, struct object_list **list);
+struct object *pop_object_from_list (struct object_list **list);
+int is_object_in_list (const struct object *obj, const struct object_list *list);
 
 enum read_outcome read_object
 (struct object **obj, int backt_commas_balance, const char *input, size_t size,
@@ -769,10 +780,11 @@ struct binding *find_binding (struct symbol *sym, struct binding *env,
 struct binding *bind_variable (struct object *sym, struct object *val,
 			       struct binding *bins);
 
-struct go_tag *add_go_tag (struct object *tagname, struct object *tagdest,
-			   struct go_tag *tags);
-struct go_tag *remove_go_tags (struct go_tag *tags, int num);
-struct go_tag *find_go_tag (struct object *tagname, struct go_tag *tags);
+struct go_tag_frame *add_go_tag_frame (struct go_tag_frame *stack);
+struct go_tag_frame *add_go_tag (struct object *tagname, struct object *tagdest,
+				 struct go_tag_frame *frame);
+struct go_tag_frame *remove_go_tag_frame (struct go_tag_frame *stack);
+struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
@@ -966,6 +978,10 @@ struct object *evaluate_defmacro
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+
+struct object *execute_body_of_tagbody (struct object *body,
+					struct environment *env,
+					struct eval_outcome *outcome);
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_go
@@ -1584,6 +1600,27 @@ prepend_object_to_list (struct object *obj, struct object_list **list)
   l->next = *list;
 
   *list = l;
+}
+
+
+struct object *
+pop_object_from_list (struct object_list **list)
+{
+  struct object *ret;
+  struct object_list *first;
+
+  if (!*list)
+    return NULL;
+
+  ret = (*list)->obj;
+
+  first = (*list);
+
+  *list = (*list)->next;
+
+  free (first);
+
+  return ret;
 }
 
 
@@ -3400,54 +3437,72 @@ bind_variable (struct object *sym, struct object *val, struct binding *bins)
 }
 
 
-struct go_tag *
-add_go_tag (struct object *tagname, struct object *tagdest, struct go_tag *tags)
+struct go_tag_frame *
+add_go_tag_frame (struct go_tag_frame *stack)
+{
+  struct go_tag_frame *f = malloc_and_check (sizeof (*f));
+
+  f->frame = NULL;
+  f->next = stack;
+
+  return f;
+}
+
+
+struct go_tag_frame *
+add_go_tag (struct object *tagname, struct object *tagdest,
+	    struct go_tag_frame *frame)
 {
   struct go_tag *new = malloc_and_check (sizeof (*new));
 
   new->name = tagname;
   new->dest = tagdest;
+  new->next = frame->frame;
 
-  new->next = tags;
+  frame->frame = new;
 
-  return new;
+  return frame;
 }
 
 
-struct go_tag *
-remove_go_tags (struct go_tag *tags, int num)
+struct go_tag_frame *
+remove_go_tag_frame (struct go_tag_frame *stack)
 {
-  int i;
-  struct go_tag *n;
+  struct go_tag_frame *next = stack->next;
+  struct go_tag *n, *t = stack->frame;
 
-  for (i = 0; i < num; i++)
+  while (t)
     {
-      n = tags->next;
-      free (tags);
-      tags = n;
+      n = t->next;
+      free (t);
+      t = n;
     }
 
-  return n;
+  free (stack);
+
+  return next;
 }
 
 
 struct go_tag *
-find_go_tag (struct object *tagname, struct go_tag *tags)
+find_go_tag (struct object *tagname, struct go_tag_frame *frame)
 {
-  while (tags)
+  struct go_tag *t = frame->frame;
+
+  while (t)
     {
-      if (tagname->type == tags->name->type)
+      if (tagname->type == t->name->type)
 	{
 	  if ((tagname->type == TYPE_SYMBOL_NAME
 	       && tagname->value_ptr.symbol_name->sym
-	       == tags->name->value_ptr.symbol_name->sym)
+	       == t->name->value_ptr.symbol_name->sym)
 	      || (tagname->type == TYPE_INTEGER
 		  && !mpz_cmp (tagname->value_ptr.integer,
-			       tags->name->value_ptr.integer)))
-	    return tags;
+			       t->name->value_ptr.integer)))
+	    return t;
 	}
 
-      tags = tags->next;
+      t = t->next;
     }
 
   return NULL;
@@ -5910,11 +5965,77 @@ evaluate_setf (struct object *list, struct environment *env,
 
 
 struct object *
+execute_body_of_tagbody (struct object *body, struct environment *env,
+			 struct eval_outcome *outcome)
+{
+  struct object *car, *ret;
+  struct go_tag *t;
+
+  while (body != &nil_object)
+    {
+      car = CAR (body);
+
+      if (car->type == TYPE_CONS_PAIR)
+	{
+	  ret = evaluate_object (car, env, outcome);
+
+	  if (!ret)
+	    {
+	      if (!outcome->tag_to_find && !outcome->cont)
+		return NULL;
+	      else if (outcome->tag_to_find && outcome->find_tag_now)
+		{
+		  t = find_go_tag (outcome->tag_to_find, env->go_tag_stack);
+
+		  if (!t)
+		    {
+		      env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
+
+		      if (!env->go_tag_stack)
+			{
+			  outcome->tag_to_find = NULL;
+			  outcome->find_tag_now = 0;
+			  outcome->type = CANT_GO_TO_NONEXISTENT_TAG;
+			}
+
+		      return NULL;
+		    }
+
+		  outcome->tag_to_find = NULL;
+		  outcome->find_tag_now = 0;
+
+		  body = t->dest;
+		}
+	      else if (outcome->tag_to_find)
+		{
+		  outcome->find_tag_now = 1;
+		  return NULL;
+		}
+	      else if (outcome->cont)
+		{
+		  body = outcome->cont;
+
+		  outcome->cont = NULL;
+		}
+	    }
+	  else
+	    body = CDR (body);
+
+	  decrement_refcount (ret, NULL);
+	}
+      else
+	body = CDR (body);
+    }
+
+  return &nil_object;
+}
+
+
+struct object *
 evaluate_tagbody (struct object *list, struct environment *env,
 		  struct eval_outcome *outcome)
 {
   struct object *cons = list, *destfind, *car, *dest, *ret;
-  struct go_tag *tag;
   int tags = 0;
 
   while (cons != &nil_object)
@@ -5930,60 +6051,22 @@ evaluate_tagbody (struct object *list, struct environment *env,
 		     || dest->type == TYPE_INTEGER))
 	    destfind = CDR (destfind);
 
-	  env->go_tags = add_go_tag (car, destfind, env->go_tags);
-	  env->active_go_tags_num++;
-	  tags++;
-	}
-      else if (car->type != TYPE_CONS_PAIR && car != &nil_object)
-	{
-	  outcome->type = INVALID_GO_TAG;
+	  if (!tags)
+	    env->go_tag_stack = add_go_tag_frame (env->go_tag_stack);
 
-	  return NULL;
+	  env->go_tag_stack = add_go_tag (car, destfind, env->go_tag_stack);
+	  tags++;
 	}
 
       cons = CDR (cons);
     }
 
-  cons = list;
+  ret = execute_body_of_tagbody (list, env, outcome);
 
-  while (cons != &nil_object)
-    {
-      car = CAR (cons);
+  if (!ret)
+    return NULL;
 
-      if (car->type == TYPE_CONS_PAIR)
-	{
-	  if (CAR (car)->type == TYPE_SYMBOL_NAME &&
-	      symname_equals (CAR (car)->value_ptr.symbol_name, "GO"))
-	    {
-	      tag = find_go_tag (CAR (CDR (car)), env->go_tags);
-
-	      if (!tag)
-		{
-		  outcome->type = CANT_GO_TO_NONEXISTENT_TAG;
-
-		  return NULL;
-		}
-
-	      cons = tag->dest;
-	    }
-	  else
-	    {
-	      ret = evaluate_object (car, env, outcome);
-
-	      if (!ret)
-		return NULL;
-
-	      decrement_refcount (ret, NULL);
-
-	      cons = CDR (cons);
-	    }
-	}
-      else
-	cons = CDR (cons);
-    }
-
-  env->go_tags = remove_go_tags (env->go_tags, tags);
-  env->active_go_tags_num -= tags;
+  env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
 
   return &nil_object;
 }
@@ -5993,7 +6076,34 @@ struct object *
 evaluate_go (struct object *list, struct environment *env,
 	     struct eval_outcome *outcome)
 {
-  outcome->type = CANT_GO_OUTSIDE_TAGBODY;
+  struct go_tag *t;
+
+  if (!env->go_tag_stack)
+    {
+      outcome->type = CANT_GO_OUTSIDE_TAGBODY;
+
+      return NULL;
+    }
+
+  t = find_go_tag (CAR (list), env->go_tag_stack);
+
+  if (!t)
+    {
+      env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
+
+      if (!env->go_tag_stack)
+	{
+	  outcome->type = CANT_GO_TO_NONEXISTENT_TAG;
+
+	  return NULL;
+	}
+
+      outcome->tag_to_find = CAR (list);
+
+      return NULL;
+    }
+
+  outcome->cont = t->dest;
 
   return NULL;
 }
