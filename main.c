@@ -1324,8 +1324,17 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 				   args);
 
       if (out == COMPLETE_OBJECT)
-	ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
-			       &out);
+	{
+	  ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
+				 &out);
+
+	  if (!ob)
+	    {
+	      print_eval_error (outcome, env);
+
+	      out = NO_OBJECT;
+	    }
+	}
     }
 
   if (last_pref)
@@ -1713,8 +1722,17 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 				       obj_end, args);
 
 	  if (out == COMPLETE_OBJECT)
-	    ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
-				   &out);
+	    {
+	      ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
+				     &out);
+
+	      if (!ob)
+		{
+		  print_eval_error (outcome, env);
+
+		  out = NO_OBJECT;
+		}
+	    }
 
 	  break;
 	}
