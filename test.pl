@@ -117,6 +117,7 @@ make_test ("#(1 2\n" .
 	   "3)", "#(1 2 3)");
 make_test ("#(\n" .
 	   ")", "#()");
+make_test ("'#:a", "#:A");
 
 
 # eval tests
