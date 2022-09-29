@@ -191,7 +191,8 @@ read_outcome
     CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 27,
     CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 28,
     MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 29,
-    PACKAGE_NOT_FOUND = 1 << 30
+    PACKAGE_NOT_FOUND = 1 << 30,
+    PACKAGE_MARKER_IN_SHARP_COLON = 1 << 31
   };
 
 
@@ -210,7 +211,8 @@ read_outcome
 		    | MORE_THAN_A_CONSING_DOT_NOT_ALLOWED | TOO_MANY_COLONS \
 		    | CANT_BEGIN_WITH_TWO_COLONS_OR_MORE		\
 		    | CANT_END_WITH_PACKAGE_SEPARATOR			\
-		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND)
+		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND \
+		    | PACKAGE_MARKER_IN_SHARP_COLON)
 
 
 enum
@@ -992,6 +994,8 @@ int symname_equals (const struct symbol_name *sym, const char *s);
 int symname_is_among (const struct symbol_name *sym, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
 
+void print_as_symbol (const char *sym, size_t len);
+void print_symbol_name (const struct symbol_name *sym, struct environment *env);
 void print_symbol (const struct symbol *sym, struct environment *env);
 void print_string (const struct string *str);
 void print_character (const char *character);
@@ -1327,6 +1331,11 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 	{
 	  ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
 				 &out);
+
+	  if (out & READ_ERROR)
+	    {
+	      print_read_error (out, input, size, *obj_begin, *obj_end, NULL);
+	    }
 
 	  if (!ob)
 	    {
@@ -1725,6 +1734,11 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    {
 	      ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
 				     &out);
+
+	      if (out & READ_ERROR)
+		{
+		  print_read_error (out, input, size, *obj_begin, *obj_end, NULL);
+		}
 
 	      if (!ob)
 		{
@@ -2148,7 +2162,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(", call->dispatch_ch))
+  if (!strchr ("'\\.pP(:", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -2282,6 +2296,36 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == '(')
     return create_vector (obj);
+  else if (macro_call->dispatch_ch == ':')
+    {
+      if (!obj)
+	{
+	  *r_outcome = PACKAGE_MARKER_IN_SHARP_COLON;
+
+	  return NULL;
+	}
+
+      if (obj->type != TYPE_SYMBOL_NAME)
+	{
+	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+
+	  return NULL;
+	}
+
+      if (obj->value_ptr.symbol_name->packname_present)
+	{
+	  *r_outcome = PACKAGE_MARKER_IN_SHARP_COLON;
+
+	  return NULL;
+	}
+
+      decrement_refcount (obj->value_ptr.symbol_name->sym, NULL);
+      obj->value_ptr.symbol_name->sym =
+	create_symbol (obj->value_ptr.symbol_name->value,
+		       obj->value_ptr.symbol_name->used_size, 1);
+
+      return obj;
+    }
 
   return NULL;
 }
@@ -6189,36 +6233,56 @@ equal_strings (const struct string *s1, const struct string *s2)
 
 
 void
-print_symbol (const struct symbol *sym, struct environment *env)
-{  
+print_as_symbol (const char *sym, size_t len)
+{
   size_t i;
-  char *nm = sym->name;
   char need_escape [] = "().,;'#\"\n\\";
   int do_need_escape = 0;
 
-  if (sym->home_package == env->keyword_package)
-    printf (":");
-
-  /* first we make a pass to understand if we need vertical escape */
-  for (i = 0; i < sym->name_len && !do_need_escape; i++)
+  for (i = 0; i < len && !do_need_escape; i++)
     {
-      if (strchr (need_escape, nm [i]) || !nm [i] || islower (nm [i]))
+      if (strchr (need_escape, sym [i]) || !sym [i] || islower (sym [i]))
 	do_need_escape = 1;
     }
 
   if (do_need_escape)
     putchar ('|');
 
-  for (i = 0; i < sym->name_len; i++)
+  for (i = 0; i < len; i++)
     {
-      if (nm [i] == '|' || nm [i] == '\\')
+      if (sym [i] == '|' || sym [i] == '\\')
 	putchar ('\\');
-      
-      putchar (nm [i]);
+
+      putchar (sym [i]);
     }
 
   if (do_need_escape)
     putchar ('|');
+}
+
+
+void
+print_symbol_name (const struct symbol_name *sym, struct environment *env)
+{
+  if (sym->sym->value_ptr.symbol->home_package)
+    print_symbol (sym->sym->value_ptr.symbol, env);
+  else
+    {
+      printf ("#:");
+      print_as_symbol (sym->value, sym->used_size);
+    }
+}
+
+
+void
+print_symbol (const struct symbol *sym, struct environment *env)
+{
+  if (!sym->home_package)
+    printf ("#:");
+  else if (sym->home_package == env->keyword_package)
+    printf (":");
+
+  print_as_symbol (sym->name, sym->name_len);
 }
 
 
@@ -6384,7 +6448,7 @@ print_object (const struct object *obj, struct environment *env)
   else if (obj->type == TYPE_FILENAME)
     print_filename (obj->value_ptr.filename);
   else if (obj->type == TYPE_SYMBOL_NAME)
-    print_symbol (obj->value_ptr.symbol_name->sym->value_ptr.symbol, env);
+    print_symbol_name (obj->value_ptr.symbol_name, env);
   else if (obj->type == TYPE_SYMBOL)
     print_symbol (obj->value_ptr.symbol, env);
   else if (obj->type == TYPE_CONS_PAIR)
@@ -6495,6 +6559,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
       fwrite (args->obj->value_ptr.symbol_name->value,
 	      args->obj->value_ptr.symbol_name->used_size, 1, stdout);
       printf (" not found\n");
+    }
+  else if (err == PACKAGE_MARKER_IN_SHARP_COLON)
+    {
+      printf ("read error: a package marker can't appear in a sharp-colon macro\n");
     }
 }
 
@@ -6949,19 +7017,23 @@ free_symbol_name (struct object *obj)
 void
 free_symbol (struct object *obj)
 {
-  struct package *pack = obj->value_ptr.symbol->home_package->value_ptr.package;
-  struct object_list *prev, *entry = find_package_entry (obj, pack->symlist,
-							 &prev);
+  struct object *p = obj->value_ptr.symbol->home_package;
+  struct object_list *prev, *entry;
   struct symbol *s = obj->value_ptr.symbol;
 
-  assert (entry);
+  if (p)
+    {
+      entry = find_package_entry (obj, p->value_ptr.package->symlist, &prev);
 
-  if (prev)
-    prev->next = entry->next;
-  else
-    pack->symlist = entry->next;
+      assert (entry);
 
-  free (entry);
+      if (prev)
+	prev->next = entry->next;
+      else
+	p->value_ptr.package->symlist = entry->next;
+
+      free (entry);
+    }
 
   free (s->name);
   free (s);
