@@ -1240,6 +1240,9 @@ read_line_interactively (const char prompt [])
   char *line = readline (prompt);
   int err;
 
+  if (!line)
+    exit (0);
+
   if (line && *line)
     add_history (line);
 
