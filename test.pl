@@ -142,6 +142,8 @@ make_test ("a", "8");
 make_test ("(defparameter b 9)", "B");
 make_test ("(defvar b (0))", "B");
 make_test ("b", "9");
+make_test ("(setf b 10)", "10");
+make_test ("(setf b 9)", "9");
 make_test ("(setf c 4)", "4");
 make_test ("c", "4");
 make_test ("(let ((b 10)) b)", "10");
