@@ -5957,9 +5957,13 @@ evaluate_setf (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (nth (0, list)->type == TYPE_SYMBOL_NAME)
+  if (nth (0, list)->type == TYPE_SYMBOL_NAME ||
+      nth (0, list)->type == TYPE_SYMBOL)
     {
-      s = CAR (list)->value_ptr.symbol_name->sym->value_ptr.symbol;
+      if (nth (0, list)->type == TYPE_SYMBOL_NAME)
+	s = CAR (list)->value_ptr.symbol_name->sym->value_ptr.symbol;
+      else
+	s = CAR (list)->value_ptr.symbol;
 
       if (s->is_const)
 	{
