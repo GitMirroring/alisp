@@ -1175,7 +1175,10 @@ add_standard_definitions (struct environment *env)
 			       env->packages);
 
   t_symbol.value_cell = &t_object;
+  t_symbol.home_package = env->current_package;
+
   nil_symbol.value_cell = &nil_object;
+  nil_symbol.home_package = env->current_package;
 
   prepend_object_to_list (&t_object,
 			  &env->current_package->value_ptr.package->symlist);
