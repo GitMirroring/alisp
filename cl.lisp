@@ -71,5 +71,14 @@
 (defmacro when (clause &rest body)
   `(if ,clause (progn ,@body)))
 
+
 (defmacro unless (clause &rest body)
   `(if (not ,clause) (progn ,@body)))
+
+
+(defmacro incf (place &optional (delta 1))
+  `(setf ,place (+ ,place ,delta)))
+
+
+(defmacro decf (place &optional (delta 1))
+  `(setf ,place (- ,place ,delta)))
