@@ -1009,8 +1009,11 @@ void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const struct read_outcome_args *args);
 void print_eval_error (struct eval_outcome *err, struct environment *env);
 
+void increment_refcount_by (struct object *obj, int count);
 void increment_refcount (struct object *obj,
 			 struct object_list **antiloop_hash_t);
+
+int decrement_refcount_by (struct object *obj, int count);
 int decrement_refcount (struct object *obj,
 			struct object_list **antiloop_hash_t);
 
@@ -6708,6 +6711,16 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 
 
 void
+increment_refcount_by (struct object *obj, int count)
+{
+  int i;
+
+  for (i = 0; i < count; i++)
+    increment_refcount (obj, NULL);
+}
+
+
+void
 increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 {
   int allocated_now = 0;
@@ -6829,6 +6842,18 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
       if (hash_t_clone)
 	free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
     }
+}
+
+
+int
+decrement_refcount_by (struct object *obj, int count)
+{
+  int i, ret;
+
+  for (i = 0; i < count; i++)
+    ret = decrement_refcount (obj, NULL);
+
+  return ret;
 }
 
 
