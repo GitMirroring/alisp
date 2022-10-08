@@ -5988,12 +5988,10 @@ evaluate_setf (struct object *list, struct environment *env,
 	  if (!s->value_dyn_bins_num)
 	    {
 	      if (s->value_cell)
-		{
-		  decrement_refcount (s->value_cell, NULL);
-		  decrement_refcount (s->value_cell, NULL);
-		}
+		decrement_refcount_by (s->value_cell,
+				       SYMBOL (CAR (list))->refcount);
 
-	      increment_refcount (val, NULL);
+	      increment_refcount_by (val, SYMBOL (CAR (list))->refcount - 1);
 	      s->value_cell = val;
 	    }
 	  else
