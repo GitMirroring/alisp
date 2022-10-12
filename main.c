@@ -6591,13 +6591,13 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
-      print_symbol (err->obj->value_ptr.symbol, env);
+      print_object (err->obj, env);
       printf (" not bound to any object\n");
     }
   else if (err->type == UNKNOWN_FUNCTION)
     {
       printf ("eval error: symbol ");
-      print_symbol (err->obj->value_ptr.symbol, env);
+      print_object (err->obj, env);
       printf (" not bound to any function, macro or special operator\n");
     }
   else if (err->type == INVALID_FUNCTION_CALL)
