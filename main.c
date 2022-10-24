@@ -170,7 +170,7 @@ read_outcome
     UNKNOWN_SHARP_DISPATCH = 1 << 12,
     WRONG_OBJECT_TYPE_TO_SHARP_MACRO = 1 << 13,
     UNKNOWN_CHARACTER_NAME = 1 << 14,
-    FUNCTION_NOT_FOUND = 1 << 15,
+    FUNCTION_NOT_FOUND_IN_READ = 1 << 15,
 
     UNFINISHED_SINGLELINE_COMMENT = 1 << 16,
     UNFINISHED_MULTILINE_COMMENT = 1 << 17,
@@ -203,7 +203,7 @@ read_outcome
 #define READ_ERROR (CLOSING_PARENTHESIS_AFTER_PREFIX | CLOSING_PARENTHESIS \
 		    | INVALID_SHARP_DISPATCH | UNKNOWN_SHARP_DISPATCH	\
 		    | WRONG_OBJECT_TYPE_TO_SHARP_MACRO | UNKNOWN_CHARACTER_NAME	\
-		    | FUNCTION_NOT_FOUND				\
+		    | FUNCTION_NOT_FOUND_IN_READ			\
 		    | COMMA_WITHOUT_BACKQUOTE | TOO_MANY_COMMAS | SINGLE_DOT \
 		    | MULTIPLE_DOTS | NO_OBJ_BEFORE_DOT_IN_LIST		\
 		    | NO_OBJ_AFTER_DOT_IN_LIST				\
@@ -246,7 +246,8 @@ eval_outcome_type
     CANT_GO_OUTSIDE_TAGBODY,
     INVALID_GO_TAG,
     CANT_GO_TO_NONEXISTENT_TAG,
-    INVALID_ACCESSOR
+    INVALID_ACCESSOR,
+    FUNCTION_NOT_FOUND_IN_EVAL
   };
 
 
@@ -958,6 +959,8 @@ struct object *evaluate_let_star
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
+struct object *get_function (struct object *sym, struct environment *env);
+
 struct object *setf_from_accessor (struct object *acc, struct object *valform,
 				   struct environment *env,
 				   struct eval_outcome *outcome);
@@ -979,6 +982,8 @@ struct object *evaluate_defun
 struct object *evaluate_defmacro
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_setf
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_function
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *execute_body_of_tagbody (struct object *body,
@@ -1215,6 +1220,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFUN", env, evaluate_defun, 0, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0, 0);
   add_builtin_form ("SETF", env, evaluate_setf, 0, 0);
+  add_builtin_form ("FUNCTION", env, evaluate_function, 0, 1);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0, 1);
   add_builtin_form ("GO", env, evaluate_go, 0, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, 1, 0);
@@ -2224,8 +2230,7 @@ struct object *
 call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 		  struct eval_outcome *e_outcome, enum read_outcome *r_outcome)
 {
-  struct binding *bind;
-  struct object *obj = macro_call->obj;
+  struct object *obj = macro_call->obj, *fun;
   struct symbol_name *s;
 
   if (macro_call->dispatch_ch == '\'')
@@ -2237,16 +2242,12 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      bind = find_binding (SYMBOL (obj)->value_ptr.symbol, env->funcs,
-			   DYNAMIC_BINDING);
+      fun = get_function (SYMBOL (obj), env);
 
-      if (!bind)
-	{
-	  *r_outcome = FUNCTION_NOT_FOUND;
-	  return NULL;
-	}
+      if (!fun)
+	*r_outcome = FUNCTION_NOT_FOUND_IN_READ;
 
-      return bind->obj;
+      return fun;
     }
   else if (macro_call->dispatch_ch == '\\')
     {
@@ -5703,6 +5704,29 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 
 struct object *
+get_function (struct object *sym, struct environment *env)
+{
+  struct object *f;
+  struct binding *bind = find_binding (SYMBOL (sym)->value_ptr.symbol, env->funcs,
+				       DYNAMIC_BINDING);
+
+  if (!bind && !SYMBOL (sym)->value_ptr.symbol->function_cell)
+    return NULL;
+
+  if (bind)
+    f = bind->obj;
+  else
+    f = SYMBOL (sym)->value_ptr.symbol->function_cell;
+
+  if (f->type != TYPE_FUNCTION)
+    return NULL;
+
+  increment_refcount (f, NULL);
+  return f;
+}
+
+
+struct object *
 setf_from_accessor (struct object *acc, struct object *valform,
 		    struct environment *env, struct eval_outcome *outcome)
 {
@@ -6041,6 +6065,39 @@ evaluate_setf (struct object *list, struct environment *env,
 
   increment_refcount (val, NULL);
   return val;
+}
+
+
+struct object *
+evaluate_function (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  struct object *f;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  f = get_function (SYMBOL (CAR (list)), env);
+
+  if (!f)
+    {
+      outcome->type = FUNCTION_NOT_FOUND_IN_EVAL;
+
+      return NULL;
+    }
+
+  return f;
 }
 
 
@@ -6516,7 +6573,7 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     {
       printf ("read error: unknown character name\n");
     }
-  else if (err == FUNCTION_NOT_FOUND)
+  else if (err == FUNCTION_NOT_FOUND_IN_READ)
     {
       printf ("read error: function not found\n");
     }
@@ -6701,6 +6758,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == INVALID_ACCESSOR)
     {
       printf ("eval error: not a valid accessor\n");
+    }
+  else if (err->type == FUNCTION_NOT_FOUND_IN_EVAL)
+    {
+      printf ("eval error: function not found\n");
     }
 }
 
