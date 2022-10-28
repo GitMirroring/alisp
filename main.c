@@ -1009,6 +1009,7 @@ void print_character (const char *character);
 void print_filename (const struct filename *fn);
 void print_list (const struct cons_pair *list, struct environment *env);
 void print_array (const struct array *array, struct environment *env);
+void print_function_or_macro (const struct object *obj, struct environment *env);
 void print_object (const struct object *obj, struct environment *env);
 
 void print_read_error (enum read_outcome err, const char *input, size_t size,
@@ -6483,6 +6484,36 @@ print_array (const struct array *array, struct environment *env)
 
 
 void
+print_function_or_macro (const struct object *obj, struct environment *env)
+{
+  if (obj->type == TYPE_FUNCTION)
+    {
+      printf ("#<FUNCTION ");
+
+      if (obj->value_ptr.function->name)
+	print_symbol (obj->value_ptr.function->name->value_ptr.symbol, env);
+
+      printf (">");
+
+      return;
+    }
+  else
+    {
+      printf ("#<MACRO ");
+
+      if (obj->value_ptr.macro->name)
+	print_symbol (obj->value_ptr.macro->name->value_ptr.symbol, env);
+
+      printf (">");
+
+      return;
+    }
+
+  printf ("%p>", (void *)obj);
+}
+
+
+void
 print_object (const struct object *obj, struct environment *env)
 {
   if (obj == &nil_object)
@@ -6532,8 +6563,8 @@ print_object (const struct object *obj, struct environment *env)
     print_list (obj->value_ptr.cons_pair, env);
   else if (obj->type == TYPE_ARRAY)
     print_array (obj->value_ptr.array, env);
-  else if (obj->type == TYPE_FUNCTION)
-    printf ("#<FUNCTION %p>", (void *)obj);
+  else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+    print_function_or_macro (obj, env);
   else if (obj->type == TYPE_PACKAGE)
     {
       printf ("#<PACKAGE \"");
