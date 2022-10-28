@@ -307,13 +307,6 @@ symbol
 		       struct environment *env, struct eval_outcome *outcome);
   struct object *typespec;
 
-  int is_builtin_form;
-  int is_special_operator;
-  struct parameter *lambda_list;
-  int evaluate_args;
-  struct object *(*builtin_form)
-    (struct object *list, struct environment *env, struct eval_outcome *outcome);
-
   int is_const;
   int is_parameter;
   int is_special;
@@ -406,7 +399,9 @@ function
   struct parameter *lambda_list;
   int allow_other_keys;
 
-  int eval_args;
+  int is_special_operator;
+  struct object *(*builtin_form)
+    (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
   struct object *body;
 };
@@ -799,7 +794,7 @@ void add_builtin_type (char *name, struct environment *env,
 void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
 		       (struct object *list, struct environment *env,
-			struct eval_outcome *outcome), int eval_args,
+			struct eval_outcome *outcome), enum object_type type,
 		       int is_special_operator);
 
 struct object *define_constant
@@ -1052,14 +1047,12 @@ const struct option long_options[] =
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, 1, type_nil, NULL, 0, 0, NULL, 0,
-  NULL, 1, 0, 0};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, 1, type_nil, NULL, 1};
 
 struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, 1, type_t, NULL, 0, 0, NULL, 0, NULL, 1,
-  0, 0};
+struct symbol t_symbol = {"T", 1, 1, 1, 1, type_t, NULL, 1};
 
 struct object t_object = {1, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
@@ -1196,38 +1189,38 @@ add_standard_definitions (struct environment *env)
   prepend_object_to_list (&nil_object,
 			  &env->current_package->value_ptr.package->symlist);
 
-  add_builtin_form ("CAR", env, builtin_car, 1, 0);
-  add_builtin_form ("CDR", env, builtin_cdr, 1, 0);
-  add_builtin_form ("CONS", env, builtin_cons, 1, 0);
-  add_builtin_form ("LIST", env, builtin_list, 1, 0);
-  add_builtin_form ("NTH", env, builtin_nth, 1, 0);
-  add_builtin_form ("NTHCDR", env, builtin_nthcdr, 1, 0);
-  add_builtin_form ("WRITE", env, builtin_write, 1, 0);
-  add_builtin_form ("LOAD", env, builtin_load, 1, 0);
-  add_builtin_form ("EQ", env, builtin_eq, 1, 0);
-  add_builtin_form ("NOT", env, builtin_not, 1, 0);
-  add_builtin_form ("NULL", env, builtin_not, 1, 0);
-  add_builtin_form ("+", env, builtin_plus, 1, 0);
-  add_builtin_form ("-", env, builtin_minus, 1, 0);
-  add_builtin_form ("*", env, builtin_multiply, 1, 0);
-  add_builtin_form ("/", env, builtin_divide, 1, 0);
-  add_builtin_form ("=", env, builtin_numbers_equal, 1, 0);
-  add_builtin_form ("QUOTE", env, evaluate_quote, 0, 1);
-  add_builtin_form ("LET", env, evaluate_let, 0, 1);
-  add_builtin_form ("LET*", env, evaluate_let_star, 0, 1);
-  add_builtin_form ("IF", env, evaluate_if, 0, 1);
-  add_builtin_form ("PROGN", env, evaluate_progn, 0, 1);
-  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 0, 0);
-  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, 0, 0);
-  add_builtin_form ("DEFVAR", env, evaluate_defvar, 0, 0);
-  add_builtin_form ("DEFUN", env, evaluate_defun, 0, 0);
-  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, 0, 0);
-  add_builtin_form ("SETF", env, evaluate_setf, 0, 0);
-  add_builtin_form ("FUNCTION", env, evaluate_function, 0, 1);
-  add_builtin_form ("TAGBODY", env, evaluate_tagbody, 0, 1);
-  add_builtin_form ("GO", env, evaluate_go, 0, 1);
-  add_builtin_form ("TYPEP", env, builtin_typep, 1, 0);
-  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 1, 0);
+  add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, 0);
+  add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, 0);
+  add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, 0);
+  add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, 0);
+  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
+  add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
+  add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
+  add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
+  add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
+  add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
+  add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
+  add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, 0);
+  add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
+  add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
+  add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, 0);
+  add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, 0);
+  add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, 1);
+  add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, 1);
+  add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, 1);
+  add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, 1);
+  add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, 1);
+  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, 0);
+  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, 0);
+  add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, 0);
+  add_builtin_form ("DEFUN", env, evaluate_defun, TYPE_MACRO, 0);
+  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, 0);
+  add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, 0);
+  add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, 1);
+  add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, 1);
+  add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
+  add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
+  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION, 0);
 
   add_builtin_type ("T", env, type_t, 1);
   add_builtin_type ("NIL", env, type_nil, 1);
@@ -2735,7 +2728,9 @@ alloc_function (void)
   fun->name = NULL;
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
-  fun->eval_args = 0;
+
+  fun->is_special_operator = 0;
+  fun->builtin_form = NULL;
   fun->body = NULL;
 
   obj->type = TYPE_FUNCTION;
@@ -3220,8 +3215,6 @@ create_symbol (char *name, size_t size, int do_copy)
 
   sym->name_len = size;
   sym->is_type = 0;
-  sym->is_builtin_form = 0;
-  sym->is_special_operator = 0;
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
@@ -3607,17 +3600,22 @@ add_builtin_type (char *name, struct environment *env,
 
 void
 add_builtin_form (char *name, struct environment *env,
-		  struct object *(*builtin_form) (struct object *list,
-						  struct environment *env,
-						  struct eval_outcome *outcome),
-		  int eval_args, int is_special_operator)
+		  struct object *(*builtin_form)
+		  (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome), enum object_type type,
+		  int is_special_operator)
 {
   struct object *sym = create_symbol (name, strlen (name), 1);
+  struct object *fun = alloc_function ();
+  struct function *f = fun->value_ptr.function;
 
-  sym->value_ptr.symbol->is_builtin_form = 1;
-  sym->value_ptr.symbol->builtin_form = builtin_form;
-  sym->value_ptr.symbol->evaluate_args = eval_args;
-  sym->value_ptr.symbol->is_special_operator = is_special_operator;
+  fun->type = type;
+
+  f->name = sym;
+  f->is_special_operator = is_special_operator;
+  f->builtin_form = builtin_form;
+
+  sym->value_ptr.symbol->function_cell = fun;
 
   prepend_object_to_list (sym,
 			  &env->current_package->value_ptr.package->symlist);
@@ -4169,8 +4167,29 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 {
   struct parameter *par = func->value_ptr.function->lambda_list;
   struct binding *bins = NULL;
-  struct object *val, *res;
-  int args = 0;
+  struct object *val, *res, *ret, *args;
+  int argsnum = 0; /*, rest_found = 0;*/
+
+  if (func->value_ptr.function->builtin_form)
+    {
+      if (eval_args)
+	{
+	  args = evaluate_through_list (arglist, env, outcome);
+
+	  if (!args)
+	    return NULL;
+	}
+      else
+	args = arglist;
+
+      ret = func->value_ptr.function->builtin_form (args, env, outcome);
+
+      if (eval_args)
+	decrement_refcount (args, NULL);
+
+      return ret;
+    }
+
 
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -4190,13 +4209,13 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       bins = bind_variable (par->name, val, bins);
 
-      args++;
+      argsnum++;
 
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
 	  bins = bind_variable (par->supplied_p_param, &t_object, bins);
 
-	  args++;
+	  argsnum++;
 	}
 
       par = par->next;
@@ -4227,20 +4246,20 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  bins = bind_variable (par->name, val, bins);
 
-	  args++;
+	  argsnum++;
 	}
       else
 	{
 	  bins = bind_variable (par->name, &nil_object, bins);
 
-	  args++;
+	  argsnum++;
 	}
 
       if (par->supplied_p_param)
 	{
 	  bins = bind_variable (par->supplied_p_param, &nil_object, bins);
 
-	  args++;
+	  argsnum++;
 	}
 
       par = par->next;
@@ -4248,6 +4267,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (par && par->type == REST_PARAM)
     {
+      /*rest_found = 1;*/
+
       if (eval_args)
 	{
 	  arglist = evaluate_through_list (arglist, env, outcome);
@@ -4260,7 +4281,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       bins = bind_variable (par->name, arglist, bins);
 
-      args++;
+      argsnum++;
     }
 
   env->vars = chain_bindings (bins, env->vars);
@@ -4268,7 +4289,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   res = evaluate_body (func->value_ptr.function->body, eval_body_twice, env,
 		       outcome);
 
-  env->vars = remove_bindings (env->vars, args);
+  env->vars = remove_bindings (env->vars, argsnum);
+
+  /*if (rest_found)
+    decrement_refcount (arglist, NULL);*/
 
   return res;
 }
@@ -4575,7 +4599,7 @@ evaluate_list (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   struct binding *bind;
-  struct object *sym, *args, *ret, *fun = NULL;
+  struct object *sym, *fun = NULL;
 
   if (is_dotted_list (list))
     {
@@ -4608,26 +4632,6 @@ evaluate_list (struct object *list, struct environment *env,
     return call_function (fun, CDR (list), 1, 0, env, outcome);
   else if (fun)
     return call_function (fun, CDR (list), 0, 1, env, outcome);
-
-  if (sym->value_ptr.symbol->is_builtin_form)
-    {
-      if (sym->value_ptr.symbol->evaluate_args)
-	{
-	  args = evaluate_through_list (CDR (list), env, outcome);
-
-	  if (!args)
-	    return NULL;
-	}
-      else
-	args = CDR (list);
-
-      ret = sym->value_ptr.symbol->builtin_form (args, env, outcome);
-
-      if (sym->value_ptr.symbol->evaluate_args)
-	decrement_refcount (args, NULL);
-
-      return ret;
-    }
 
   outcome->type = UNKNOWN_FUNCTION;
   outcome->obj = CAR (list);
@@ -5901,7 +5905,9 @@ evaluate_defun (struct object *list, struct environment *env,
 
   sym = SYMBOL (CAR (list));
 
-  if (sym->value_ptr.symbol->is_special_operator)
+  if (sym->value_ptr.symbol->function_cell
+      && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
+      && sym->value_ptr.symbol->function_cell->value_ptr.macro->is_special_operator)
     {
       outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
       return NULL;
@@ -5948,7 +5954,9 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   sym = SYMBOL (CAR (list));
 
-  if (sym->value_ptr.symbol->is_special_operator)
+  if (sym->value_ptr.symbol->function_cell
+      && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
+      && sym->value_ptr.symbol->function_cell->value_ptr.macro->is_special_operator)
     {
       outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
       return NULL;
