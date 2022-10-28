@@ -387,7 +387,9 @@ struct
 parameter
 {
   enum parameter_type type;
+
   struct object *name;
+  struct object *typespec;
 
   struct object *init_form;
   struct object *supplied_p_param;
