@@ -5917,12 +5917,15 @@ evaluate_defun (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell)
     {
-      decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
-      decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
+      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount);
     }
+  else
+    increment_refcount (sym, NULL);
+
+  fun->value_ptr.function->name = sym;
 
   sym->value_ptr.symbol->function_cell = fun;
-  increment_refcount (sym, NULL);
+  increment_refcount_by (fun, sym->refcount - 1);
 
   increment_refcount (sym, NULL);
   return sym;
@@ -5963,12 +5966,15 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell)
     {
-      decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
-      decrement_refcount (sym->value_ptr.symbol->function_cell, NULL);
+      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount);
     }
+  else
+    increment_refcount (sym, NULL);
+
+  mac->value_ptr.function->name = sym;
 
   sym->value_ptr.symbol->function_cell = mac;
-  increment_refcount (sym, NULL);
+  increment_refcount_by (mac, sym->refcount - 1);
 
   increment_refcount (sym, NULL);
   return sym;
