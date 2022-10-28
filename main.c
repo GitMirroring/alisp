@@ -6800,11 +6800,11 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 	  allocated_now = 1;
 	}
 
-      obj->refcount++;
-
       if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_t,
 						     ANTILOOP_HASH_T_SIZE))
 	return;
+
+      obj->refcount++;
 
       prepend_object_to_list
 	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
@@ -6937,11 +6937,11 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 	  allocated_now = 1;
 	}
 
-      obj->refcount--;
-
       if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_t,
 						     ANTILOOP_HASH_T_SIZE))
 	return 0;
+
+      obj->refcount--;
 
       prepend_object_to_list
 	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
