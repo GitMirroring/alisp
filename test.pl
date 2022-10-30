@@ -224,6 +224,16 @@ make_test ("(incf c)", "6");
 make_test ("(incf c 3)", "9");
 make_test ("(decf c)", "8");
 make_test ("(decf c c)", "0");
+make_test ("(and)", "T");
+make_test ("(and t)", "T");
+make_test ("(and t t t)", "T");
+make_test ("(and t nil t)", "()");
+make_test ("(and (= 1 1) t)", "T");
+make_test ("(and t (= 1 2) t)", "()");
+make_test ("(or)", "()");
+make_test ("(or nil nil nil)", "()");
+make_test ("(or (= 1 2) t)", "T");
+make_test ("(or t nil t)", "T");
 
 
 # arithmetic tests
