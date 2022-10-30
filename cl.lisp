@@ -82,3 +82,18 @@
 
 (defmacro decf (place &optional (delta 1))
   `(setf ,place (- ,place ,delta)))
+
+
+(defmacro and (&rest forms)
+  `(if ,(not forms)
+       t
+       (if ,(car forms)
+	   (and ,@(cdr forms)))))
+
+
+(defmacro or (&rest forms)
+  `(if ,(not forms)
+       nil
+       (if ,(car forms)
+	   t
+	   (or ,@(cdr forms)))))
