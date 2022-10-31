@@ -943,9 +943,14 @@ struct object *builtin_numbers_equal (struct object *list,
 
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
+
+struct object *builtin_boundp (struct object *list, struct environment *env,
+			       struct eval_outcome *outcome);
 struct object *builtin_symbol_value (struct object *list,
 				     struct environment *env,
 				     struct eval_outcome *outcome);
+struct object *builtin_fboundp (struct object *list, struct environment *env,
+				struct eval_outcome *outcome);
 struct object *builtin_symbol_function (struct object *list,
 					struct environment *env,
 					struct eval_outcome *outcome);
@@ -1224,7 +1229,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
+  add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, 0);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION, 0);
+  add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
 		    TYPE_FUNCTION, 0);
 
@@ -5517,6 +5524,37 @@ builtin_typep (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_boundp (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *s, *sym;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  s = CAR (list);
+
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (s);
+
+  if (sym->value_ptr.symbol->value_cell
+      || sym->value_ptr.symbol->value_dyn_bins_num)
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
 builtin_symbol_value (struct object *list, struct environment *env,
 		      struct eval_outcome *outcome)
 {
@@ -5547,6 +5585,37 @@ builtin_symbol_value (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_fboundp (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *s, *sym;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  s = CAR (list);
+
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (s);
+
+  if (sym->value_ptr.symbol->function_cell
+      || sym->value_ptr.symbol->function_dyn_bins_num)
+    return &t_object;
+
+  return &nil_object;
 }
 
 
