@@ -946,6 +946,9 @@ struct object *builtin_typep (struct object *list, struct environment *env,
 struct object *builtin_symbol_value (struct object *list,
 				     struct environment *env,
 				     struct eval_outcome *outcome);
+struct object *builtin_symbol_function (struct object *list,
+					struct environment *env,
+					struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
@@ -956,7 +959,8 @@ struct object *evaluate_let_star
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
-struct object *get_function (struct object *sym, struct environment *env);
+struct object *get_function (struct object *sym, struct environment *env,
+			     int only_functions);
 
 struct object *setf_from_accessor (struct object *acc, struct object *valform,
 				   struct environment *env,
@@ -1221,6 +1225,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION, 0);
+  add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
+		    TYPE_FUNCTION, 0);
 
   add_builtin_type ("T", env, type_t, 1);
   add_builtin_type ("NIL", env, type_nil, 1);
@@ -2238,7 +2244,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      fun = get_function (SYMBOL (obj), env);
+      fun = get_function (SYMBOL (obj), env, 1);
 
       if (!fun)
 	*r_outcome = FUNCTION_NOT_FOUND_IN_READ;
@@ -5544,6 +5550,40 @@ builtin_symbol_value (struct object *list, struct environment *env,
 }
 
 
+struct object *
+builtin_symbol_function (struct object *list, struct environment *env,
+			 struct eval_outcome *outcome)
+{
+  struct object *s, *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  s = CAR (list);
+
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = get_function (SYMBOL (s), env, 0);
+
+  if (!ret)
+    {
+      outcome->type = UNKNOWN_FUNCTION;
+      outcome->obj = s;
+      return NULL;
+    }
+
+  return ret;
+}
+
+
 struct binding *
 create_binding_from_let_form (struct object *form, struct environment *env,
 			      struct eval_outcome *outcome)
@@ -5711,7 +5751,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 
 struct object *
-get_function (struct object *sym, struct environment *env)
+get_function (struct object *sym, struct environment *env, int only_functions)
 {
   struct object *f;
   struct binding *bind = find_binding (SYMBOL (sym)->value_ptr.symbol, env->funcs,
@@ -5725,7 +5765,7 @@ get_function (struct object *sym, struct environment *env)
   else
     f = SYMBOL (sym)->value_ptr.symbol->function_cell;
 
-  if (f->type != TYPE_FUNCTION)
+  if (f->type != TYPE_FUNCTION && only_functions)
     return NULL;
 
   increment_refcount (f, NULL);
@@ -6105,7 +6145,7 @@ evaluate_function (struct object *list, struct environment *env,
       return NULL;
     }
 
-  f = get_function (SYMBOL (CAR (list)), env);
+  f = get_function (SYMBOL (CAR (list)), env, 1);
 
   if (!f)
     {
