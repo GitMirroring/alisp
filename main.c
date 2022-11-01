@@ -6677,6 +6677,9 @@ print_function_or_macro (const struct object *obj, struct environment *env)
     {
       printf ("#<FUNCTION ");
 
+      if (obj->value_ptr.function->builtin_form)
+	printf ("BUILTIN ");
+
       if (obj->value_ptr.function->name)
 	print_symbol (obj->value_ptr.function->name->value_ptr.symbol, env);
 
@@ -6686,7 +6689,17 @@ print_function_or_macro (const struct object *obj, struct environment *env)
     }
   else
     {
-      printf ("#<MACRO ");
+      if (obj->value_ptr.macro->is_special_operator)
+	{
+	  printf ("#<SPECIAL OPERATOR ");
+	}
+      else
+	{
+	  printf ("#<MACRO ");
+
+	  if (obj->value_ptr.function->builtin_form)
+	    printf ("BUILTIN ");
+	}
 
       if (obj->value_ptr.macro->name)
 	print_symbol (obj->value_ptr.macro->name->value_ptr.symbol, env);
