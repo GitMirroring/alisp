@@ -697,11 +697,12 @@ struct object *call_sharp_macro
 enum element find_next_element
 (const char *input, size_t size, const char **elem_begin);
 
-int is_number
-(const char *token, size_t size, int radix, enum object_type *numtype,
- const char **number_end, const char **token_end);
-struct object *alloc_number
-(const char *token, size_t size, int radix, enum object_type numtype);
+int is_number (const char *token, size_t size, int radix,
+	       enum object_type *numtype, const char **number_end,
+	       const char **token_end);
+struct object *alloc_number (const char *token, size_t size, int radix,
+			     enum object_type numtype);
+struct object *create_integer_from_int (int num);
 
 void print_range (const char *begin, const char *end);
 
@@ -910,6 +911,8 @@ struct object *builtin_list
 struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nthcdr
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1204,6 +1207,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
+  add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
@@ -2537,6 +2541,21 @@ alloc_number (const char *token, size_t size, int radix, enum object_type numtyp
 
   free (buf);
   
+  return obj;
+}
+
+
+struct object *
+create_integer_from_int (int num)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+
+  obj->type = TYPE_INTEGER;
+  obj->refcount = 1;
+
+  mpz_init (obj->value_ptr.integer);
+  mpz_set_si (obj->value_ptr.integer, num);
+
   return obj;
 }
 
@@ -4989,6 +5008,51 @@ builtin_nthcdr (struct object *list, struct environment *env,
   increment_refcount (ret, NULL);
 
   return ret;
+}
+
+
+struct object *
+builtin_length (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *seq;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  seq = CAR (list);
+
+  if (seq->type != TYPE_STRING && seq->type != TYPE_CONS_PAIR
+      && seq->type != TYPE_ARRAY && seq != &nil_object)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (seq->type == TYPE_STRING)
+    {
+      return create_integer_from_int (seq->value_ptr.string->used_size);
+    }
+  else if (seq->type == TYPE_CONS_PAIR || seq == &nil_object)
+    {
+      return create_integer_from_int (list_length (seq));
+    }
+  else
+    {
+      if (array_rank (seq->value_ptr.array) != 1)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (seq->value_ptr.array->fill_pointer >= 0)
+	return create_integer_from_int (seq->value_ptr.array->fill_pointer);
+
+      return create_integer_from_int (seq->value_ptr.array->alloc_size->size);
+    }
 }
 
 
