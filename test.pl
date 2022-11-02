@@ -35,7 +35,7 @@ my $passed_tests = 0;
 my $failed_tests = 0;
 
 
-my $pid = open2 (my $al_out, my $al_in, './al');
+my $pid = open2 (my $al_out, my $al_in, './al -q');
 
 
 
