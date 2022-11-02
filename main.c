@@ -7604,5 +7604,8 @@ print_version (void)
 void
 print_help (void)
 {
-
+  puts ("Usage: al [OPTIONS]...\n\n"
+	"  -q, --dont-load-cl   don't load cl.lisp at startup\n"
+	"  -h, --help           display this help and exit\n"
+	"  -v, --version        display version information and exit");
 }
