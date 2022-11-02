@@ -827,7 +827,8 @@ int is_dotted_list (const struct object *list);
 struct object *copy_prefix (const struct object *begin, const struct object *end,
 			    struct object **last_prefix);
 struct object *copy_list_structure (struct object *list,
-				    const struct object *prefix);
+				    const struct object *prefix, int cell_num,
+				    struct object **last_cell);
 
 int array_rank (const struct array *array);
 
@@ -993,6 +994,10 @@ struct object *evaluate_defmacro
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_function
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_lambda
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_apply
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *execute_body_of_tagbody (struct object *body,
@@ -1230,6 +1235,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, 0);
   add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, 1);
+  add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, 0);
+  add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
@@ -3935,9 +3942,11 @@ copy_prefix (const struct object *begin, const struct object *end,
 
 
 struct object *
-copy_list_structure (struct object *list, const struct object *prefix)
+copy_list_structure (struct object *list, const struct object *prefix,
+		     int cell_num, struct object **last_cell)
 {
   struct object *cons, *out, *lastpref;
+  int i = 1;
 
   out = cons = alloc_empty_cons_pair ();
 
@@ -3946,7 +3955,7 @@ copy_list_structure (struct object *list, const struct object *prefix)
 
   list = CDR (list);
 
-  while (list->type == TYPE_CONS_PAIR)
+  while (list->type == TYPE_CONS_PAIR && (i < cell_num || cell_num < 0))
     {
       cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
@@ -3961,12 +3970,17 @@ copy_list_structure (struct object *list, const struct object *prefix)
 	cons->value_ptr.cons_pair->car = CAR (list);
 
       list = CDR (list);
+      i++;
     }
 
-  if (list != &nil_object)
+  if (list != &nil_object && cell_num < 0)
     increment_refcount (list, NULL);
 
-  cons->value_ptr.cons_pair->cdr = list;
+  if (cell_num < 0)
+    cons->value_ptr.cons_pair->cdr = list;
+
+  if (last_cell)
+    *last_cell = cons;
 
   return out;
 }
@@ -4503,7 +4517,7 @@ apply_backquote (struct object *form, struct object *reading_cons,
 
 	      /*if (prev_prefix || form->value_ptr.next->type == TYPE_AT)
 		{*/
-	      tmp = copy_list_structure (ret, pref_copy);
+	      tmp = copy_list_structure (ret, pref_copy, -1, NULL);
 	      decrement_refcount (ret, NULL);
 	      ret = tmp;
 		  /*}*/
@@ -6288,6 +6302,92 @@ evaluate_function (struct object *list, struct environment *env,
     }
 
   return f;
+}
+
+
+struct object *
+evaluate_lambda (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *fun;
+
+  if (list_length (list) < 1 || (CAR (list)->type != TYPE_CONS_PAIR
+				 && CAR (list) != &nil_object))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
+  fun = create_function (CAR (list), CDR (list));
+
+  if (!fun)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+      return NULL;
+    }
+
+  return fun;
+}
+
+
+struct object *
+evaluate_apply (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *s, *fun, *last, *l, *args;
+  int length = list_length (list);
+
+  if (length < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
+      && CAR (list)->type != TYPE_FUNCTION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
+    {
+      s = SYMBOL (CAR (list));
+
+      fun = get_function (s, env, 1);
+
+      if (!fun)
+	{
+	  outcome->type = UNKNOWN_FUNCTION;
+	  outcome->obj = s;
+	  return NULL;
+	}
+    }
+  else
+    fun = CAR (list);
+
+  list = CDR (list);
+  length--;
+  last = nth (length - 1, list);
+
+  if (last->type != TYPE_CONS_PAIR && last != &nil_object)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  if (length == 1)
+    args = CAR (list);
+  else
+    {
+      args = copy_list_structure (list, NULL, length - 1, &l);
+      l->value_ptr.cons_pair->cdr = last;
+    }
+
+  return call_function (fun, args, 0, 0, env, outcome);
 }
 
 
