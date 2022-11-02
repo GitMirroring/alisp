@@ -6682,10 +6682,10 @@ print_function_or_macro (const struct object *obj, struct environment *env)
 
       if (obj->value_ptr.function->name)
 	print_symbol (obj->value_ptr.function->name->value_ptr.symbol, env);
+      else
+	printf ("%p", (void *)obj);
 
       printf (">");
-
-      return;
     }
   else
     {
@@ -6703,13 +6703,11 @@ print_function_or_macro (const struct object *obj, struct environment *env)
 
       if (obj->value_ptr.macro->name)
 	print_symbol (obj->value_ptr.macro->name->value_ptr.symbol, env);
+      else
+	printf ("%p", (void *)obj);
 
       printf (">");
-
-      return;
     }
-
-  printf ("%p>", (void *)obj);
 }
 
 
