@@ -1057,8 +1057,9 @@ void print_help (void);
 
 const struct option long_options[] =
   {
-    {"version", no_argument, NULL, 'v'},
+    {"dont-load-cl", no_argument, NULL, 'q'},
     {"help", no_argument, NULL, 'h'},
+    {"version", no_argument, NULL, 'v'},
     {0, 0, 0, 0}
   };
 
@@ -1080,27 +1081,30 @@ main (int argc, char *argv [])
 {
   int end_repl = 0;
 
-  struct object *result, *obj;
+  struct object *result, *obj, *load_form;
   struct environment env = {NULL};
   
   struct eval_outcome eval_out = {EVAL_OK};
 
-  const char *input_left = NULL;
+  const char *input_left = NULL, *obj_b, *obj_e;
   size_t input_left_s = 0;
   
-  int c, option_index = 0, err;
+  int c, option_index = 0, load_cl = 1, err;
 
   
-  while ((c = getopt_long (argc, argv, "vh",
+  while ((c = getopt_long (argc, argv, "qhv",
 			   long_options, &option_index)) != -1)
     {
       switch (c)
 	{
-	case 'v':
-	  print_version ();
-	  exit (0);
+	case 'q':
+	  load_cl = 0;
+	  break;
 	case 'h':
 	  print_help ();
+	  exit (0);
+	case 'v':
+	  print_version ();
 	  exit (0);
 	}
     }
@@ -1110,6 +1114,26 @@ main (int argc, char *argv [])
   add_standard_definitions (&env);
 
   print_welcome_message ();
+
+  if (load_cl)
+    {
+      printf ("Loading cl.lisp... ");
+
+      read_object (&load_form, 0, "(load \"cl.lisp\")",
+		   strlen ("(load \"cl.lisp\")"), &env, NULL, &obj_b, &obj_e,
+		   NULL);
+
+      load_form = evaluate_object (load_form, &env, &eval_out);
+
+      if (load_form)
+	print_object (load_form, &env);
+      else
+	print_eval_error (&eval_out, &env);
+
+      eval_out.type = EVAL_OK;
+
+      printf ("\n");
+    }
 
   err = read_history ("al_history");
 
