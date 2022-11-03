@@ -769,6 +769,7 @@ struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       struct object_list **symlist);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env);
+void unintern_symbol (struct object *sym);
 
 struct binding *create_binding (struct object *sym, struct object *obj,
 				enum binding_type type);
@@ -950,6 +951,8 @@ struct object *builtin_numbers_equal (struct object *list,
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 
+struct object *builtin_make_symbol (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome);
 struct object *builtin_boundp (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
 struct object *builtin_symbol_value (struct object *list,
@@ -1267,6 +1270,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
+  add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, 0);
   add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, 0);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION, 0);
   add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, 0);
@@ -2376,10 +2380,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      decrement_refcount (obj->value_ptr.symbol_name->sym, NULL);
-      obj->value_ptr.symbol_name->sym =
-	create_symbol (obj->value_ptr.symbol_name->value,
-		       obj->value_ptr.symbol_name->used_size, 1);
+      unintern_symbol (obj->value_ptr.symbol_name->sym);
 
       return obj;
     }
@@ -3467,6 +3468,27 @@ intern_symbol_name (struct object *symname, struct environment *env)
   s->sym->value_ptr.symbol->home_package = pack;
 
   return s->sym;
+}
+
+
+void
+unintern_symbol (struct object *sym)
+{
+  struct object *s = SYMBOL (sym);
+  struct object *p = s->value_ptr.symbol->home_package;
+  struct object_list *prev, *entry;
+
+  entry = find_package_entry (s, p->value_ptr.package->symlist, &prev);
+
+  if (prev)
+    prev->next = entry->next;
+  else
+    p->value_ptr.package->symlist = entry->next;
+
+  free (entry);
+
+  /*decrement_refcount (s->value_ptr.symbol->home_package, NULL);*/
+  s->value_ptr.symbol->home_package = NULL;
 }
 
 
@@ -5668,6 +5690,31 @@ builtin_typep (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_make_symbol (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  struct string *s;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  s = CAR (list)->value_ptr.string;
+
+  return create_symbol (s->value, s->used_size, 1);
+}
+
+
+struct object *
 builtin_boundp (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
@@ -7516,22 +7563,10 @@ void
 free_symbol (struct object *obj)
 {
   struct object *p = obj->value_ptr.symbol->home_package;
-  struct object_list *prev, *entry;
   struct symbol *s = obj->value_ptr.symbol;
 
   if (p)
-    {
-      entry = find_package_entry (obj, p->value_ptr.package->symlist, &prev);
-
-      assert (entry);
-
-      if (prev)
-	prev->next = entry->next;
-      else
-	p->value_ptr.package->symlist = entry->next;
-
-      free (entry);
-    }
+    unintern_symbol (obj);
 
   free (s->name);
   free (s);
