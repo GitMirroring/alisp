@@ -910,6 +910,8 @@ struct object *builtin_cons
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_append
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nthcdr
@@ -1239,6 +1241,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, 0);
   add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, 0);
   add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, 0);
+  add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
@@ -5015,6 +5018,52 @@ builtin_list (struct object *list, struct environment *env,
     }
 
   return l;
+}
+
+
+struct object *
+builtin_append (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  int length = list_length (list), i;
+  struct object *obj;
+  struct object *ret = &nil_object, *last = NULL;
+
+  if (!length)
+    return &nil_object;
+
+  for (i = 0; i < length - 1; i++)
+    {
+      obj = nth (i, list);
+
+      if (obj->type != TYPE_CONS_PAIR && obj != &nil_object)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+
+  for (i = 0; i < length - 1; i++)
+    {
+      obj = nth (i, list);
+
+      if (last)
+	last->value_ptr.cons_pair->cdr = copy_list_structure (obj, NULL, -1,
+							      &last);
+      else
+	ret = copy_list_structure (obj, NULL, -1, &last);
+    }
+
+  obj = nth (length - 1, list);
+
+  if (last)
+    last->value_ptr.cons_pair->cdr = obj;
+  else
+    ret = obj;
+
+  increment_refcount (obj, NULL);
+
+  return ret;
 }
 
 
