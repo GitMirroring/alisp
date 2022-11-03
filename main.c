@@ -915,6 +915,8 @@ struct object *builtin_nthcdr
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_last
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
@@ -1237,6 +1239,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
+  add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
@@ -5091,6 +5094,45 @@ builtin_length (struct object *list, struct environment *env,
 
       return create_integer_from_int (seq->value_ptr.array->alloc_size->size);
     }
+}
+
+
+struct object *
+builtin_last (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
+{
+  int length = list_length (list);
+  int n = 1;
+  struct object *ret;
+
+  if (!length || length > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if ((CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+      || (length == 2 && CAR (CDR (list))->type != TYPE_INTEGER))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (length == 2)
+    {
+      n = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+      if (n < 0)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+
+  ret = nthcdr (list_length (CAR (list)) - n, CAR (list));
+
+  increment_refcount (ret, NULL);
+  return ret;
 }
 
 
