@@ -200,6 +200,7 @@ make_test ("(typep 0 'nil)", "()");
 make_test ("(typep nil nil)", "()");
 make_test ("(typep nil 'null)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
+make_test ("(make-symbol \"aaa\")", "#:|aaa|");
 make_test ("(boundp 'b)", "T");
 make_test ("(boundp 'g3)", "()");
 make_test ("(symbol-value 'b)", "9");
