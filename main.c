@@ -38,8 +38,11 @@
 #include <getopt.h>
 
 #include <gmp.h>
+
+#ifdef HAVE_LIBREADLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#endif
 
 
 #define CAR(list) ((list) == &nil_object ? &nil_object :\
@@ -631,6 +634,7 @@ line_list
 
 void add_standard_definitions (struct environment *env);
 
+char *al_readline (const char prompt []);
 char *read_line_interactively (const char prompt []);
 
 enum read_outcome read_object_continued
@@ -1142,10 +1146,14 @@ main (int argc, char *argv [])
       printf ("\n");
     }
 
+
+#ifdef HAVE_LIBREADLINE
   err = read_history ("al_history");
 
   if (err && err != ENOENT)
     printf ("could not read line history from al_history: %s\n", strerror (err));
+#endif
+
 
   while (!end_repl)
     {
@@ -1301,8 +1309,46 @@ add_standard_definitions (struct environment *env)
 
 
 char *
+al_readline (const char prompt [])
+{
+  int sz = 32;
+  char *line = malloc_and_check (sz);
+  int i = 0, c;
+
+  printf (prompt);
+
+  c = getchar ();
+
+  while (c && c != '\n')
+    {
+      if (c == EOF)
+	exit (0);
+
+      if (i == sz)
+	{
+	  sz *= 2;
+	  line = realloc_and_check (line, sz);
+	}
+
+      line [i++] = c;
+
+      c = getchar ();
+    }
+
+  if (i == sz || i+1 == sz)
+    line = realloc_and_check (line, sz + 2);
+
+  line [i++] = '\n';
+  line [i] = 0;
+
+  return line;
+}
+
+
+char *
 read_line_interactively (const char prompt [])
 {
+#ifdef HAVE_LIBREADLINE
   char *line = readline (prompt);
   int err;
 
@@ -1323,6 +1369,9 @@ read_line_interactively (const char prompt [])
   line = append_newline (line);
 
   return line;
+#else
+  return al_readline (prompt);
+#endif
 }
 
 

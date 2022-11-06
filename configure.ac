@@ -42,8 +42,27 @@ AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([memchr strchr setlocale strerror])
 
+AC_ARG_WITH([readline],
+            [AS_HELP_STRING([--with-readline],
+              [support command line editing @<:@default=check@:>@])],
+            [],
+            [with_readline=check])
 
-AC_SEARCH_LIBS([readline], [readline], , [AC_MSG_ERROR([GNU readline not found])])
+
+LIBREADLINE=
+
+AS_IF([test "x$with_readline" != xno],
+      [AC_SEARCH_LIBS([readline], [readline],
+                        [AC_SUBST([LIBREADLINE], ["-lreadline"])
+                         AC_DEFINE([HAVE_LIBREADLINE], [1],
+                                     [Define if you have libreadline])
+                        ],
+                        [if test "x$with_readline" != xcheck; then
+                          AC_MSG_FAILURE(
+                            [user gave --with-readline, but GNU readline wasn't found])
+                          fi
+		          ], )])
+
 AC_SEARCH_LIBS([__gmpz_init], [gmp], , [AC_MSG_ERROR([GNU mp not found])])
 
 
