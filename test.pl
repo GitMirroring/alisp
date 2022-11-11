@@ -258,6 +258,9 @@ make_test ("(or)", "()");
 make_test ("(or nil nil nil)", "()");
 make_test ("(or (= 1 2) t)", "T");
 make_test ("(or t nil t)", "T");
+make_test ("(concatenate 'string)", "\"\"");
+make_test ("(concatenate 'string \"\")", "\"\"");
+make_test ("(concatenate 'string \"aa\" \"bb\")", "\"aabb\"");
 
 
 # arithmetic tests
