@@ -279,6 +279,14 @@ make_test ("(= 1 1)", "T");
 make_test ("(= 1 2)", "()");
 make_test ("(= 1 1 1.0 1/1)", "T");
 make_test ("(= 0 -0.0)", "T");
+make_test ("(< 0)", "T");
+make_test ("(< 0 1.0 2)", "T");
+make_test ("(< 0 0.0 1)", "()");
+make_test ("(<= 0 1 1)", "T");
+make_test ("(<= 1 0)", "()");
+make_test ("(> 1.1 0)", "T");
+make_test ("(> 1 1)", "()");
+make_test ("(>= 1 1.0)", "T");
 
 
 print "\ntotal tests: " . $total_tests . "\n";
