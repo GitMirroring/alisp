@@ -52,6 +52,9 @@
 		   (list)->value_ptr.cons_pair->cdr ?			\
 		   (list)->value_ptr.cons_pair->cdr : &nil_object)
 
+
+#define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
+
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :	\
 		   (s)->value_ptr.symbol_name->sym) 
 
@@ -305,11 +308,11 @@ symbol
   size_t name_len;
 
   int is_type;
-  int is_builtin_type;
   int is_standard_type;
   int (*builtin_type) (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct eval_outcome *outcome);
   struct object *typespec;
+  struct object_list *parent_types;
 
   int is_const;
   int is_parameter;
@@ -799,7 +802,7 @@ void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
 		       (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct eval_outcome *outcome),
-		       int is_standard);
+		       int is_standard, ...);
 void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
 		       (struct object *list, struct environment *env,
@@ -859,6 +862,15 @@ struct object *call_function
  struct environment *env, struct eval_outcome *outcome);
 
 int check_type (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct eval_outcome *outcome);
+int check_type_by_char_vector (const struct object *obj, char *type,
+			       struct environment *env,
+			       struct eval_outcome *outcome);
+int type_starts_with (const struct object *typespec, const char *type);
+int is_subtype_by_char_vector (const struct object *first, char *second,
+			       struct environment *env,
+			       struct eval_outcome *outcome);
+int is_subtype (const struct object *first, const struct object *second,
 		struct environment *env, struct eval_outcome *outcome);
 
 struct object *evaluate_object
@@ -1032,6 +1044,8 @@ struct object *builtin_al_print_terms_and_conditions
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
 int symname_is_among (const struct symbol_name *sym, ...);
+int symbol_equals (const struct object *sym, const char *str);
+int symbol_is_among (const struct object *sym, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
 
 void print_as_symbol (const char *sym, size_t len);
@@ -1086,12 +1100,12 @@ const struct option long_options[] =
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, 1, type_nil, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, 1};
 
 struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, 1, type_t, NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, 1};
 
 struct object t_object = {1, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
@@ -1304,23 +1318,25 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, 0);
 
-  add_builtin_type ("T", env, type_t, 1);
-  add_builtin_type ("NIL", env, type_nil, 1);
-  add_builtin_type ("NULL", env, type_null, 1);
-  add_builtin_type ("CONS", env, type_cons, 1);
-  add_builtin_type ("LIST", env, type_list, 1);
-  add_builtin_type ("SYMBOL", env, type_symbol, 1);
-  add_builtin_type ("FUNCTION", env, type_function, 1);
-  add_builtin_type ("PACKAGE", env, type_package, 1);
-  add_builtin_type ("INTEGER", env, type_integer, 1);
-  add_builtin_type ("RATIO", env, type_ratio, 1);
-  add_builtin_type ("FLOAT", env, type_float, 1);
-  add_builtin_type ("CHARACTER", env, type_character, 1);
-  add_builtin_type ("VECTOR", env, type_vector, 1);
-  add_builtin_type ("ARRAY", env, type_array, 1);
-  add_builtin_type ("SEQUENCE", env, type_sequence, 1);
-  add_builtin_type ("STRING", env, type_string, 1);
-  add_builtin_type ("PATHNAME", env, type_pathname, 1);
+  add_builtin_type ("T", env, type_t, 1, NULL);
+  add_builtin_type ("NIL", env, type_nil, 1, NULL);
+  add_builtin_type ("SYMBOL", env, type_symbol, 1, NULL);
+  add_builtin_type ("FUNCTION", env, type_function, 1, NULL);
+  add_builtin_type ("PACKAGE", env, type_package, 1, NULL);
+  add_builtin_type ("INTEGER", env, type_integer, 1, NULL);
+  add_builtin_type ("RATIO", env, type_ratio, 1, NULL);
+  add_builtin_type ("FLOAT", env, type_float, 1, NULL);
+  add_builtin_type ("CHARACTER", env, type_character, 1, NULL);
+  add_builtin_type ("SEQUENCE", env, type_sequence, 1, NULL);
+  add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", NULL);
+  add_builtin_type ("CONS", env, type_cons, 1, "LIST", "SEQUENCE", NULL);
+  add_builtin_type ("ARRAY", env, type_array, 1, NULL);
+  add_builtin_type ("VECTOR", env, type_vector, 1, "ARRAY", "SEQUENCE", NULL);
+  add_builtin_type ("STRING", env, type_string, 1, "VECTOR", "ARRAY", "SEQUENCE",
+		    NULL);
+  add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
+		    NULL);
+  add_builtin_type ("PATHNAME", env, type_pathname, 1, NULL);
 }
 
 
@@ -3350,6 +3366,9 @@ create_symbol (char *name, size_t size, int do_copy)
 
   sym->name_len = size;
   sym->is_type = 0;
+  sym->builtin_type = NULL;
+  sym->typespec = NULL;
+  sym->parent_types = NULL;
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
@@ -3739,18 +3758,33 @@ add_builtin_type (char *name, struct environment *env,
 				       const struct object *typespec,
 				       struct environment *env,
 				       struct eval_outcome *outcome),
-		  int is_standard)
+		  int is_standard, ...)
 {
+  va_list valist;
+  char *s;
   struct object *sym =
     intern_symbol_from_char_vector (name, strlen (name), 1, &env->
 				    current_package->value_ptr.package->symlist);
+  struct object *par;
+
+  va_start (valist, is_standard);
 
   sym->value_ptr.symbol->is_type = 1;
-  sym->value_ptr.symbol->is_builtin_type = 1;
   sym->value_ptr.symbol->is_standard_type = is_standard;
   sym->value_ptr.symbol->builtin_type = builtin_type;
 
   increment_refcount (sym, NULL);
+
+  while ((s = va_arg (valist, char *)))
+    {
+      par = intern_symbol_from_char_vector (s, strlen (s), 1, &env->
+					    current_package->
+					    value_ptr.package->symlist);
+
+      prepend_object_to_list (par, &sym->value_ptr.symbol->parent_types);
+    }
+
+  va_end (valist);
 }
 
 
@@ -4482,6 +4516,79 @@ check_type (const struct object *obj, const struct object *typespec,
   outcome->type = UNKNOWN_TYPE;
 
   return -1;
+}
+
+
+int
+check_type_by_char_vector (const struct object *obj, char *type,
+			   struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  return check_type (obj,
+		     intern_symbol_from_char_vector (type, strlen (type), 1,
+						     &env->current_package->
+						     value_ptr.package->symlist),
+		     env, outcome);
+}
+
+
+int
+type_starts_with (const struct object *typespec, const char *type)
+{
+  if ((typespec->type == TYPE_SYMBOL || typespec->type == TYPE_SYMBOL_NAME)
+      && symbol_equals (typespec, type))
+    return 1;
+
+  if (typespec->type == TYPE_CONS_PAIR
+      && (CAR (typespec)->type == TYPE_SYMBOL_NAME
+	  || CAR (typespec)->type == TYPE_SYMBOL)
+      && symbol_equals (CAR (typespec), type))
+    return 1;
+
+  return 0;
+}
+
+
+int
+is_subtype_by_char_vector (const struct object *first, char *second,
+			   struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  return is_subtype (first,
+		     intern_symbol_from_char_vector (second, strlen (second), 1,
+						     &env->current_package->
+						     value_ptr.package->symlist),
+		     env, outcome);
+}
+
+
+int
+is_subtype (const struct object *first, const struct object *second,
+	    struct environment *env, struct eval_outcome *outcome)
+{
+  struct object_list *p;
+
+  if (first == &nil_object || second == &t_object)
+    return 1;
+
+  if (IS_SYMBOL (second)
+      && type_starts_with (first, SYMBOL (second)->value_ptr.symbol->name))
+    return 1;
+
+  if (IS_SYMBOL (first) && IS_SYMBOL (second))
+    {
+      p = SYMBOL (first)->value_ptr.symbol->parent_types;
+
+      while (p)
+	{
+	  if (p->obj == SYMBOL (second))
+	    return 1;
+
+	  p = p->next;
+	}
+    }
+
+  return 0;
 }
 
 
@@ -7392,7 +7499,44 @@ symname_is_among (const struct symbol_name *sym, ...)
   return 0;
 }
 
-  
+
+int
+symbol_equals (const struct object *sym, const char *str)
+{
+  const struct object *s;
+
+  if (sym->type != TYPE_SYMBOL_NAME && sym->type != TYPE_SYMBOL)
+    return 0;
+
+  s = SYMBOL (sym);
+
+  return eqmem (s->value_ptr.symbol->name, s->value_ptr.symbol->name_len,
+		str, strlen (str));
+}
+
+
+int
+symbol_is_among (const struct object *sym, ...)
+{
+  va_list valist;
+  char *s;
+
+  va_start (valist, sym);
+
+  while ((s = va_arg (valist, char *)))
+    {
+      if (symbol_equals (sym, s))
+	{
+	  va_end (valist);
+	  return 1;
+	}
+    }
+
+  va_end (valist);
+  return 0;
+}
+
+
 int
 equal_strings (const struct string *s1, const struct string *s2)
 {
