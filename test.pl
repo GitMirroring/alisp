@@ -3,7 +3,7 @@ use strict;
 
 # Copyright (C) 2022 Andrea G. Monaco
 # 
-# This file is part of al.
+# This file is part of alisp, a lisp implementation.
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
