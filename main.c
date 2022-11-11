@@ -401,6 +401,8 @@ function
 
   struct parameter *lambda_list;
   int allow_other_keys;
+  int min_args;
+  int max_args;
 
   int is_special_operator;
   struct object *(*builtin_form)
