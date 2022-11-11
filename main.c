@@ -947,6 +947,8 @@ struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_not
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_concatenate
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int compare_numbers (struct object *num1, struct object *num2);
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
@@ -1283,6 +1285,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
+  add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, 0);
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
@@ -5563,6 +5566,62 @@ builtin_not (struct object *list, struct environment *env,
 
   if (CAR (list) == &nil_object)
     return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_concatenate (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  int l = list_length (list), i;
+  struct object *ret;
+
+  if (!l)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env, outcome))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  for (i = 1; i < l; i++)
+    {
+      if (!check_type (nth (i, list), CAR (list), env, outcome))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+
+  if (symbol_equals (CAR (list), "STRING"))
+    {
+      ret = alloc_string (0);
+
+      for (i = 1; i < l; i++)
+	{
+	  resize_string (ret, ret->value_ptr.string->alloc_size
+			 + nth (i, list)->value_ptr.string->used_size);
+	  memcpy (ret->value_ptr.string->value + ret->value_ptr.string->used_size,
+		  nth (i, list)->value_ptr.string->value,
+		  nth(i, list)->value_ptr.string->used_size);
+	  ret->value_ptr.string->used_size += nth (i, list)->
+	    value_ptr.string->used_size;
+	}
+
+      return ret;
+    }
 
   return &nil_object;
 }
