@@ -489,6 +489,17 @@ stream
 };
 
 
+enum
+number_comparison
+  {
+    EQUAL,
+    LESS_THAN,
+    LESS_THAN_OR_EQUAL,
+    MORE_THAN,
+    MORE_THAN_OR_EQUAL
+  };
+
+
 /* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
@@ -950,7 +961,11 @@ struct object *builtin_not
 struct object *builtin_concatenate
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
-int compare_numbers (struct object *num1, struct object *num2);
+int compare_two_numbers (struct object *num1, struct object *num2);
+struct object *compare_any_numbers (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome,
+				    enum number_comparison comp);
+
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
 struct object *promote_number (struct object *num, enum object_type type);
@@ -959,6 +974,7 @@ struct object *apply_arithmetic_operation
  void (*opq) (mpq_t, const mpq_t, const mpq_t),
  void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
  struct eval_outcome *outcome);
+
 struct object *builtin_plus (struct object *list, struct environment *env,
 			     struct eval_outcome *outcome);
 struct object *builtin_minus (struct object *list, struct environment *env,
@@ -970,6 +986,18 @@ struct object *builtin_divide (struct object *list, struct environment *env,
 struct object *builtin_numbers_equal (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
+struct object *builtin_numbers_less_than (struct object *list,
+					  struct environment *env,
+					  struct eval_outcome *outcome);
+struct object *builtin_numbers_less_than_or_equal (struct object *list,
+						   struct environment *env,
+						   struct eval_outcome *outcome);
+struct object *builtin_numbers_more_than (struct object *list,
+					  struct environment *env,
+					  struct eval_outcome *outcome);
+struct object *builtin_numbers_more_than_or_equal (struct object *list,
+						   struct environment *env,
+						   struct eval_outcome *outcome);
 
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
@@ -1291,6 +1319,12 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
   add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, 0);
   add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, 0);
+  add_builtin_form ("<", env, builtin_numbers_less_than, TYPE_FUNCTION, 0);
+  add_builtin_form ("<=", env, builtin_numbers_less_than_or_equal, TYPE_FUNCTION,
+		    0);
+  add_builtin_form (">", env, builtin_numbers_more_than, TYPE_FUNCTION, 0);
+  add_builtin_form (">=", env, builtin_numbers_more_than_or_equal, TYPE_FUNCTION,
+		    0);
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, 1);
   add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, 1);
@@ -5628,7 +5662,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 
 
 int
-compare_numbers (struct object *num1, struct object *num2)
+compare_two_numbers (struct object *num1, struct object *num2)
 {
   enum object_type tp = highest_num_type (num1->type, num2->type);
   struct object *first_p = promote_number (num1, tp);
@@ -5646,6 +5680,57 @@ compare_numbers (struct object *num1, struct object *num2)
   decrement_refcount (second_p, NULL);
 
   return eq;
+}
+
+
+struct object *
+compare_any_numbers (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome, enum number_comparison comp)
+{
+  int l = list_length (list), i, eq;
+  struct object *first, *second;
+
+  if (!l)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (l == 1 && CAR (list)->type & TYPE_NUMBER)
+    return &t_object;
+  else if (l == 1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  first = CAR (list);
+  second = CAR (CDR (list));
+
+  for (i = 0; i + 1 < l; i++)
+    {
+      if (!(first->type & TYPE_NUMBER) || !(second->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+	  return NULL;
+	}
+
+      eq = compare_two_numbers (first, second);
+
+      if ((comp == EQUAL && eq) || (comp == LESS_THAN && eq >= 0)
+	  || (comp == LESS_THAN_OR_EQUAL && eq > 0)
+	  || (comp == MORE_THAN && eq <= 0)
+	  || (comp == MORE_THAN_OR_EQUAL && eq < 0))
+	return &nil_object;
+
+      first = second;
+      second = nth (i+2, list);
+    }
+
+  return &t_object;
 }
 
 
@@ -5900,47 +5985,39 @@ struct object *
 builtin_numbers_equal (struct object *list, struct environment *env,
 		       struct eval_outcome *outcome)
 {
-  int l = list_length (list), i, eq;
-  struct object *first, *second;
+  return compare_any_numbers (list, env, outcome, EQUAL);
+}
 
-  if (!l)
-    {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
 
-      return NULL;
-    }
+struct object *
+builtin_numbers_less_than (struct object *list, struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  return compare_any_numbers (list, env, outcome, LESS_THAN);
+}
 
-  if (l == 1 && CAR (list)->type & TYPE_NUMBER)
-    return &t_object;
-  else if (l == 1)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
-      return NULL;
-    }
+struct object *
+builtin_numbers_less_than_or_equal (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome)
+{
+  return compare_any_numbers (list, env, outcome, LESS_THAN_OR_EQUAL);
+}
 
-  first = CAR (list);
-  second = CAR (CDR (list));
 
-  for (i = 0; i + 1 < l; i++)
-    {
-      if (!(first->type & TYPE_NUMBER) || !(second->type & TYPE_NUMBER))
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+struct object *
+builtin_numbers_more_than (struct object *list, struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  return compare_any_numbers (list, env, outcome, MORE_THAN);
+}
 
-	  return NULL;
-	}
 
-      eq = compare_numbers (first, second);
-
-      if (eq)
-	return &nil_object;
-
-      first = second;
-      second = nth (i+2, list);
-    }
-
-  return &t_object;
+struct object *
+builtin_numbers_more_than_or_equal (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome)
+{
+  return compare_any_numbers (list, env, outcome, MORE_THAN_OR_EQUAL);
 }
 
 
