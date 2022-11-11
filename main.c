@@ -250,7 +250,8 @@ eval_outcome_type
     INVALID_GO_TAG,
     CANT_GO_TO_NONEXISTENT_TAG,
     INVALID_ACCESSOR,
-    FUNCTION_NOT_FOUND_IN_EVAL
+    FUNCTION_NOT_FOUND_IN_EVAL,
+    DECLARE_NOT_ALLOWED_HERE
   };
 
 
@@ -1012,6 +1013,8 @@ struct object *evaluate_lambda
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_apply
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_declare
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *execute_body_of_tagbody (struct object *body,
 					struct environment *env,
@@ -1285,6 +1288,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, 1);
   add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, 0);
   add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, 0);
+  add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
@@ -6615,6 +6619,16 @@ evaluate_apply (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_declare (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  outcome->type = DECLARE_NOT_ALLOWED_HERE;
+
+  return NULL;
+}
+
+
+struct object *
 execute_body_of_tagbody (struct object *body, struct environment *env,
 			 struct eval_outcome *outcome)
 {
@@ -7891,6 +7905,11 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == FUNCTION_NOT_FOUND_IN_EVAL)
     {
       printf ("eval error: function not found\n");
+    }
+  else if (err->type == DECLARE_NOT_ALLOWED_HERE)
+    {
+      printf ("eval error: DECLARE form only allowed as first in body of "
+	      "certain forms\n");
     }
 }
 
