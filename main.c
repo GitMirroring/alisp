@@ -7681,6 +7681,8 @@ print_object (const struct object *obj, struct environment *env)
       print_symbol (obj->value_ptr.package->name->value_ptr.symbol, env);
       printf ("\">");
     }
+  else if (obj->type == TYPE_ENVIRONMENT)
+    printf ("#<ENVIRONMENT %p>", (void *)obj);
   else
     printf ("#<print not implemented>");
 }
