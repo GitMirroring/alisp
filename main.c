@@ -986,6 +986,9 @@ struct object *builtin_divide (struct object *list, struct environment *env,
 struct object *builtin_numbers_equal (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
+struct object *builtin_numbers_different (struct object *list,
+					  struct environment *env,
+					  struct eval_outcome *outcome);
 struct object *builtin_numbers_less_than (struct object *list,
 					  struct environment *env,
 					  struct eval_outcome *outcome);
@@ -1319,6 +1322,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
   add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, 0);
   add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, 0);
+  add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, 0);
   add_builtin_form ("<", env, builtin_numbers_less_than, TYPE_FUNCTION, 0);
   add_builtin_form ("<=", env, builtin_numbers_less_than_or_equal, TYPE_FUNCTION,
 		    0);
@@ -5986,6 +5990,53 @@ builtin_numbers_equal (struct object *list, struct environment *env,
 		       struct eval_outcome *outcome)
 {
   return compare_any_numbers (list, env, outcome, EQUAL);
+}
+
+
+struct object *
+builtin_numbers_different (struct object *list, struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  int l = list_length (list), i, j, eq;
+  struct object *first, *second;
+
+  if (l == 1 && CAR (list)->type & TYPE_NUMBER)
+    return &t_object;
+  else if (l == 1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  for (i = 0; i + 1 < l; i++)
+    {
+      first = nth (i, list);
+
+      if (!(first->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+	  return NULL;
+	}
+
+      for (j = i + 1; j < l; j++)
+	{
+	  second = nth (j, list);
+
+	  if (!(second->type & TYPE_NUMBER))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+	      return NULL;
+	    }
+
+	  if (!compare_two_numbers (first, second))
+	    return &nil_object;
+	}
+    }
+
+  return &t_object;
 }
 
 
