@@ -240,6 +240,7 @@ eval_outcome_type
     UNKNOWN_FUNCTION,
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
+    INCORRECT_SYNTAX_IN_FLET,
     INCORRECT_SYNTAX_IN_DEFUN,
     INCORRECT_SYNTAX_IN_DEFMACRO,
     CANT_REDEFINE_SPECIAL_OPERATOR,
@@ -1030,6 +1031,16 @@ struct object *evaluate_let
 struct object *evaluate_let_star
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
+struct binding *create_binding_from_flet_form
+(struct object *form, struct environment *env, struct eval_outcome *outcome,
+ enum object_type type);
+struct object *evaluate_flet
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_labels
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_macrolet
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 
 struct object *get_function (struct object *sym, struct environment *env,
@@ -1336,6 +1347,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, 1);
   add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, 1);
+  add_builtin_form ("FLET", env, evaluate_flet, TYPE_MACRO, 1);
+  add_builtin_form ("LABELS", env, evaluate_labels, TYPE_MACRO, 1);
+  add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, 1);
   add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, 1);
   add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, 1);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, 0);
@@ -6400,6 +6414,173 @@ evaluate_let_star (struct object *list, struct environment *env,
 }
 
 
+struct binding *
+create_binding_from_flet_form (struct object *form, struct environment *env,
+			       struct eval_outcome *outcome,
+			       enum object_type type)
+{
+  struct object *sym, *fun;
+
+  if (form->type == TYPE_CONS_PAIR)
+    {
+      if (list_length (form) < 2 || !IS_SYMBOL (CAR (form)))
+	{
+	  outcome->type = INCORRECT_SYNTAX_IN_LET;
+	  return NULL;
+	}
+
+      sym = SYMBOL (CAR (form));
+
+      if (sym->value_ptr.symbol->is_const)
+	{
+	  outcome->type = CANT_REBIND_CONSTANT;
+	  return NULL;
+	}
+
+      fun = create_function (CAR (CDR (form)), CDR (CDR (form)));
+
+      if (!fun)
+	{
+	  outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
+	  return NULL;
+	}
+
+      fun->type = type;
+    }
+  else
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_FLET;
+      return NULL;
+    }
+
+  return create_binding (sym, fun, LEXICAL_BINDING);
+}
+
+
+struct object *
+evaluate_flet (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  struct object *res, *bind_forms, *body;
+  int binding_num = 0;
+  struct binding *bins = NULL, *bin;
+
+  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
+			      && CAR (list) != &nil_object))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_FLET;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+  body = CDR (list);
+
+  while (bind_forms != &nil_object)
+    {
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
+					   TYPE_FUNCTION);
+
+      if (!bin)
+	return NULL;
+
+      bins = add_binding (bin, bins);
+      binding_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  env->funcs = chain_bindings (bins, env->funcs);
+
+  res = evaluate_progn (body, env, outcome);
+
+  env->funcs = remove_bindings (env->funcs, binding_num);
+
+  return res;
+}
+
+
+struct object *
+evaluate_labels (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *res, *bind_forms, *body;
+  int binding_num = 0;
+  struct binding *bin;
+
+  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
+			      && CAR (list) != &nil_object))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_FLET;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+  body = CDR (list);
+
+  while (bind_forms != &nil_object)
+    {
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
+					   TYPE_FUNCTION);
+
+      if (!bin)
+	return NULL;
+
+      env->funcs = add_binding (bin, env->funcs);
+      binding_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  res = evaluate_progn (body, env, outcome);
+
+  env->funcs = remove_bindings (env->funcs, binding_num);
+
+  return res;
+}
+
+
+struct object *
+evaluate_macrolet (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  struct object *res, *bind_forms, *body;
+  int binding_num = 0;
+  struct binding *bins = NULL, *bin;
+
+  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
+			      && CAR (list) != &nil_object))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_FLET;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+  body = CDR (list);
+
+  while (bind_forms != &nil_object)
+    {
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
+					   TYPE_MACRO);
+
+      if (!bin)
+	return NULL;
+
+      bins = add_binding (bin, bins);
+      binding_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  env->funcs = chain_bindings (bins, env->funcs);
+
+  res = evaluate_progn (body, env, outcome);
+
+  env->funcs = remove_bindings (env->funcs, binding_num);
+
+  return res;
+}
+
+
 struct object *
 get_dynamic_value (struct object *sym, struct environment *env)
 {
@@ -8180,6 +8361,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == INCORRECT_SYNTAX_IN_LET)
     {
       printf ("eval error: incorrect syntax in LET or LET*\n");
+    }
+  else if (err->type == INCORRECT_SYNTAX_IN_FLET)
+    {
+      printf ("eval error: incorrect syntax in FLET, LABELS or MACROLET\n");
     }
   else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
