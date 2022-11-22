@@ -267,6 +267,8 @@ make_test ("(or t nil t)", "T");
 make_test ("(concatenate 'string)", "\"\"");
 make_test ("(concatenate 'string \"\")", "\"\"");
 make_test ("(concatenate 'string \"aa\" \"bb\")", "\"aabb\"");
+make_test ("(cond (t (+ 1 2)))", "3");
+make_test ("(cond (nil 2) (t 3) (nil 4))", "3");
 
 
 # arithmetic tests
