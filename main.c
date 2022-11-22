@@ -4935,9 +4935,14 @@ evaluate_list (struct object *list, struct environment *env,
 
       fun = bind->obj;
     }
+  else if ((fun = sym->value_ptr.symbol->function_cell));
   else
-    fun = sym->value_ptr.symbol->function_cell;
+    {
+      bind = find_binding (sym->value_ptr.symbol, env->funcs, LEXICAL_BINDING);
 
+      if (bind)
+	fun = bind->obj;
+    }
 
   if (fun && fun->type == TYPE_FUNCTION)
     return call_function (fun, CDR (list), 1, 0, env, outcome);
