@@ -97,3 +97,12 @@
        (if ,(car forms)
 	   t
 	   (or ,@(cdr forms)))))
+
+
+(defmacro cond (&rest body)
+  (let ((first (car body))
+	(rest (cdr body)))
+    `(if ,(car first)
+	 (progn ,@(cdr first))
+	 (if ',rest
+	     (cond ,@rest)))))
