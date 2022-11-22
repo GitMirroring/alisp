@@ -11,18 +11,23 @@ al is a lisp implementation.  Right now it is just an interpreter, but
 I will add some compilation later.  I aim for Common Lisp conformance,
 but I'm not religious about it.
 
+It's written in C89 and compiles with the -ansi option, but uses some
+GNU extensions.
 
-Currently it depends on GNU Readline and on GNU Multiple Precision
-Arithmetic Library.  It uses autotools for building.
+Currently it depends on GNU Readline (optionally) and on GNU Multiple
+Precision Arithmetic Library.  It uses autotools for building.
 
 
 To build, start with
 
   $ autoreconf -fi
 
-and then run the usual
+and run the usual
 
   $ ./configure
+
+(configure only admits --with[out]-readline as options, to build with
+line editing or not), then
 
   $ make
 
@@ -31,21 +36,26 @@ plus optionally
   # make install
 
 
-Many standard definitions are in a lisp file named cl.lisp.  To add
-them, you have to run
+Many standard definitions are in a lisp file named cl.lisp.  By
+default, this file gets loaded at startup from the current directory,
+unless you pass -q or --dont-load-cl.  To load the file manually, run
 
   al> (load "cl.lisp")
 
-at the beginning of your session.
+at the al prompt.
 
 
-There's a small test script too.  Run it with
+There's a test script too.  Run it with
 
   $ ./test.pl
 
 if you have perl on your machine.  You should expect a 100% success
 rate, or maybe some failures if floating-point operations yield
 slightly different results on your system.
+
+There's another test script called meta_test.pl that runs test.pl many
+times.  I wrote that script because I found that some memory bugs
+manifest only a fraction of the times.
 
 
 
