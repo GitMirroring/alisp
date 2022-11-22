@@ -59,6 +59,11 @@
 		   (s)->value_ptr.symbol_name->sym) 
 
 
+#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_RATIO	\
+					   | TYPE_FLOAT | TYPE_STRING	\
+					   | TYPE_CHARACTER | TYPE_FILENAME))
+
+
 #define TERMINATING_MACRO_CHARS "()';\"`,"
 
 
@@ -1097,11 +1102,10 @@ void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const struct read_outcome_args *args);
 void print_eval_error (struct eval_outcome *err, struct environment *env);
 
-void increment_refcount_by (struct object *obj, int count);
+void increment_refcount_by (struct object *obj, int count, struct object *parent);
 void increment_refcount (struct object *obj,
 			 struct object_list **antiloop_hash_t);
-
-int decrement_refcount_by (struct object *obj, int count);
+int decrement_refcount_by (struct object *obj, int count, struct object *parent);
 int decrement_refcount (struct object *obj,
 			struct object_list **antiloop_hash_t);
 
@@ -3905,11 +3909,11 @@ define_parameter (struct object *sym, struct object *form,
   s = SYMBOL (sym);
   
   s->value_ptr.symbol->is_parameter = 1;
+
+  increment_refcount_by (val, s->refcount - 1, NULL);
   s->value_ptr.symbol->value_cell = val;
 
   increment_refcount (s, NULL);
-  increment_refcount (s, NULL);
-
   return s;
 }
 
@@ -4273,6 +4277,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
+	  increment_refcount (SYMBOL (CAR (car)), NULL);
+
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 	  else
@@ -6636,7 +6642,8 @@ evaluate_defun (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell)
     {
-      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount);
+      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount,
+			     sym);
     }
   else
     increment_refcount (sym, NULL);
@@ -6644,7 +6651,7 @@ evaluate_defun (struct object *list, struct environment *env,
   fun->value_ptr.function->name = sym;
 
   sym->value_ptr.symbol->function_cell = fun;
-  increment_refcount_by (fun, sym->refcount - 1);
+  increment_refcount_by (fun, sym->refcount - 1, sym);
 
   increment_refcount (sym, NULL);
   return sym;
@@ -6687,7 +6694,8 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell)
     {
-      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount);
+      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount,
+			     sym);
     }
   else
     increment_refcount (sym, NULL);
@@ -6695,7 +6703,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
   mac->value_ptr.function->name = sym;
 
   sym->value_ptr.symbol->function_cell = mac;
-  increment_refcount_by (mac, sym->refcount - 1);
+  increment_refcount_by (mac, sym->refcount - 1, sym);
 
   increment_refcount (sym, NULL);
   return sym;
@@ -6743,9 +6751,10 @@ evaluate_setf (struct object *list, struct environment *env,
 	    {
 	      if (s->value_cell)
 		decrement_refcount_by (s->value_cell,
-				       SYMBOL (CAR (list))->refcount);
+				       SYMBOL (CAR (list))->refcount, NULL);
 
-	      increment_refcount_by (val, SYMBOL (CAR (list))->refcount - 1);
+	      increment_refcount_by (val, SYMBOL (CAR (list))->refcount - 1,
+				     NULL);
 	      s->value_cell = val;
 	    }
 	  else
@@ -8256,12 +8265,27 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 
 
 void
-increment_refcount_by (struct object *obj, int count)
+increment_refcount_by (struct object *obj, int count, struct object *parent)
 {
-  int i;
+  struct object_list **antiloop_hash_t = NULL;
 
-  for (i = 0; i < count; i++)
-    increment_refcount (obj, NULL);
+  for (; count; count--)
+    {
+      if (parent)
+	{
+	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
+	  prepend_object_to_list
+	    (parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
+	}
+
+      increment_refcount (obj, antiloop_hash_t);
+
+      if (antiloop_hash_t)
+	{
+	  free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
+	  antiloop_hash_t = NULL;
+	}
+    }
 }
 
 
@@ -8275,9 +8299,8 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
   if (!obj || obj == &nil_object  || obj == &t_object)
     return;
 
-  if (obj->type & (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT | TYPE_STRING
-		   | TYPE_CHARACTER | TYPE_FILENAME))
-      obj->refcount++;
+  if (HAS_LEAF_TYPE (obj))
+    obj->refcount++;
   else
     {
       if (!antiloop_hash_t)
@@ -8391,12 +8414,28 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 
 
 int
-decrement_refcount_by (struct object *obj, int count)
+decrement_refcount_by (struct object *obj, int count, struct object *parent)
 {
-  int i, ret;
+  struct object_list **antiloop_hash_t = NULL;
+  int ret;
 
-  for (i = 0; i < count; i++)
-    ret = decrement_refcount (obj, NULL);
+  for (; count; count--)
+    {
+      if (parent)
+	{
+	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
+	  prepend_object_to_list
+	    (parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
+	}
+
+      ret = decrement_refcount (obj, antiloop_hash_t);
+
+      if (antiloop_hash_t)
+	{
+	  free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
+	  antiloop_hash_t = NULL;
+	}
+    }
 
   return ret;
 }
@@ -8412,8 +8451,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
   if (!obj || obj == &nil_object || obj == &t_object)
     return 0;
 
-  if (obj->type & (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT | TYPE_STRING
-		   | TYPE_CHARACTER | TYPE_FILENAME))
+  if (HAS_LEAF_TYPE (obj))
     obj->refcount--;
   else
     {
