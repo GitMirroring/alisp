@@ -1157,7 +1157,7 @@ main (int argc, char *argv [])
   const char *input_left = NULL, *obj_b, *obj_e;
   size_t input_left_s = 0;
   
-  int c, option_index = 0, load_cl = 1, err;
+  int c, option_index = 0, load_cl = 1;
 
   
   while ((c = getopt_long (argc, argv, "qhv",
@@ -1205,10 +1205,10 @@ main (int argc, char *argv [])
 
 
 #ifdef HAVE_LIBREADLINE
-  err = read_history ("al_history");
+  c = read_history ("al_history");
 
-  if (err && err != ENOENT)
-    printf ("could not read line history from al_history: %s\n", strerror (err));
+  if (c && c != ENOENT)
+    printf ("could not read line history from al_history: %s\n", strerror (c));
 #endif
 
 
@@ -5997,7 +5997,7 @@ struct object *
 builtin_numbers_different (struct object *list, struct environment *env,
 			   struct eval_outcome *outcome)
 {
-  int l = list_length (list), i, j, eq;
+  int l = list_length (list), i, j;
   struct object *first, *second;
 
   if (l == 1 && CAR (list)->type & TYPE_NUMBER)
