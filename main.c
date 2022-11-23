@@ -260,7 +260,8 @@ eval_outcome_type
     CANT_GO_TO_NONEXISTENT_TAG,
     INVALID_ACCESSOR,
     FUNCTION_NOT_FOUND_IN_EVAL,
-    DECLARE_NOT_ALLOWED_HERE
+    DECLARE_NOT_ALLOWED_HERE,
+    CANT_DIVIDE_BY_ZERO
   };
 
 
@@ -727,7 +728,8 @@ enum element find_next_element
 int is_number (const char *token, size_t size, int radix,
 	       enum object_type *numtype, const char **number_end,
 	       const char **token_end);
-struct object *alloc_number (const char *token, size_t size, int radix,
+struct object *alloc_number (enum object_type numtype);
+struct object *create_number (const char *token, size_t size, int radix,
 			     enum object_type numtype);
 struct object *create_integer_from_int (int num);
 
@@ -971,6 +973,10 @@ int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
 				    struct eval_outcome *outcome,
 				    enum number_comparison comp);
+int is_zero (struct object *num);
+struct object *divide_two_numbers (struct object *n1, struct object *n2,
+				   struct environment *env,
+				   struct eval_outcome *outcome);
 
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
@@ -1965,7 +1971,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	  
 	  if (is_number (input, size, 10, &numtype, &num_end, obj_end))
 	    {
-	      ob = alloc_number (input, num_end - input + 1, 10, numtype);
+	      ob = create_number (input, num_end - input + 1, 10, numtype);
 	      out = COMPLETE_OBJECT;
 	    }
 	  else
@@ -2690,7 +2696,32 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 
 
 struct object *
-alloc_number (const char *token, size_t size, int radix, enum object_type numtype)
+alloc_number (enum object_type numtype)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+
+  obj->type = numtype;
+  obj->refcount = 1;
+
+  if (numtype == TYPE_INTEGER)
+    {
+      mpz_init (obj->value_ptr.integer);
+    }
+  else if (numtype == TYPE_RATIO)
+    {
+      mpq_init (obj->value_ptr.ratio);
+    }
+  else if (numtype == TYPE_FLOAT)
+    {
+      mpf_init (obj->value_ptr.floating);
+    }
+
+  return obj;
+}
+
+
+struct object *
+create_number (const char *token, size_t size, int radix, enum object_type numtype)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   char *buf = malloc_and_check (size + 1);
@@ -5763,6 +5794,65 @@ compare_any_numbers (struct object *list, struct environment *env,
 }
 
 
+int
+is_zero (struct object *num)
+{
+  return (num->type == TYPE_INTEGER && !mpz_sgn (num->value_ptr.integer))
+    || (num->type == TYPE_RATIO && !mpq_sgn (num->value_ptr.ratio))
+    || (num->type == TYPE_FLOAT && !mpf_sgn (num->value_ptr.floating));
+}
+
+
+struct object *
+divide_two_numbers (struct object *n1, struct object *n2, struct environment *env,
+		    struct eval_outcome *outcome)
+{
+  enum object_type t = highest_num_type (n1->type, n2->type);
+  struct object *ret, *pn1, *pn2;
+
+  if (is_zero (n2))
+    {
+      outcome->type = CANT_DIVIDE_BY_ZERO;
+      return NULL;
+    }
+
+  if (t == TYPE_INTEGER
+      && mpz_divisible_p (n1->value_ptr.integer, n2->value_ptr.integer))
+    {
+      ret = alloc_number (TYPE_INTEGER);
+      mpz_divexact (ret->value_ptr.integer, n1->value_ptr.integer,
+		    n2->value_ptr.integer);
+    }
+  else if (t == TYPE_INTEGER || t == TYPE_RATIO)
+    {
+      pn1 = promote_number (n1, TYPE_RATIO);
+      pn2 = promote_number (n2, TYPE_RATIO);
+
+      ret = alloc_number (TYPE_RATIO);
+
+      mpq_div (ret->value_ptr.ratio, pn1->value_ptr.ratio, pn2->value_ptr.ratio);
+
+      decrement_refcount (pn1, NULL);
+      decrement_refcount (pn2, NULL);
+    }
+  else
+    {
+      pn1 = promote_number (n1, TYPE_FLOAT);
+      pn2 = promote_number (n2, TYPE_FLOAT);
+
+      ret = alloc_number (TYPE_FLOAT);
+
+      mpf_div (ret->value_ptr.floating, pn1->value_ptr.floating,
+	       pn2->value_ptr.floating);
+
+      decrement_refcount (pn1, NULL);
+      decrement_refcount (pn2, NULL);
+    }
+
+  return ret;
+}
+
+
 enum object_type
 highest_num_type (enum object_type t1, enum object_type t2)
 {
@@ -6006,7 +6096,48 @@ struct object *
 builtin_divide (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
-  return NULL;
+  struct object *ret;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!(CAR (list)->type & TYPE_NUMBER))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (list_length (list) == 1)
+    {
+      ret = alloc_number (TYPE_INTEGER);
+      mpz_set_si (ret->value_ptr.integer, 1);
+
+      return divide_two_numbers (ret, CAR (list), env, outcome);
+    }
+
+  ret = copy_number (CAR (list));
+  list = CDR (list);
+
+  do
+    {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret = divide_two_numbers (ret, CAR (list), env, outcome);
+
+      if (!ret)
+	return NULL;
+
+      list = CDR (list);
+    } while (list != &nil_object);
+
+  return ret;
 }
 
 
@@ -8442,6 +8573,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: DECLARE form only allowed as first in body of "
 	      "certain forms\n");
+    }
+  else if (err->type == CANT_DIVIDE_BY_ZERO)
+    {
+      printf ("eval error: division by zero is now allowed\n");
     }
 }
 
