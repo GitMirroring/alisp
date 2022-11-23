@@ -195,6 +195,7 @@ make_test ("(defmacro f () (f))", "F");
 make_test ("(defmacro f () (f))", "F");
 make_test ("(load \"cl.lisp\")", "T");
 make_test ("(1+ 5)", "6");
+make_test ("(1- .5)", "-0.5e0");
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep 0 'integer)", "T");
 make_test ("(typep 1/2 'ratio)", "T");
@@ -304,6 +305,10 @@ make_test ("(<= 1 0)", "()");
 make_test ("(> 1.1 0)", "T");
 make_test ("(> 1 1)", "()");
 make_test ("(>= 1 1.0)", "T");
+make_test ("(minusp 0)", "()");
+make_test ("(minusp -0.5)", "T");
+make_test ("(plusp 1)", "T");
+make_test ("(plusp -1)", "()");
 
 
 print "\ntotal tests: " . $total_tests . "\n";
