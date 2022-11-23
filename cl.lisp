@@ -22,6 +22,12 @@
 (defun 1- (num)
   (- num 1))
 
+(defun minusp (num)
+  (< num 0))
+
+(defun plusp (num)
+  (> num 0))
+
 
 (defun first (list) (nth 0 list))
 (defun second (list) (nth 1 list))
