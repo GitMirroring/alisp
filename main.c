@@ -5955,6 +5955,12 @@ apply_arithmetic_operation (struct object *list,
 
   do
     {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
       op = promote_number (CAR (list), highest_num_type (ret->type,
 							 CAR (list)->type));
 
