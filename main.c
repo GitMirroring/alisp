@@ -230,6 +230,8 @@ eval_outcome_type
     EVAL_OK,
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
+    KEY_NOT_FOUND_IN_FUNCALL,
+    ODD_NUMBER_OF_KEYWORD_ARGUMENTS,
     DOTTED_LIST_NOT_ALLOWED_HERE,
     COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
     CANT_SPLICE_AFTER_CONSING_DOT,
@@ -241,6 +243,7 @@ eval_outcome_type
     INCORRECT_SYNTAX_IN_FLET,
     INCORRECT_SYNTAX_IN_DEFUN,
     INCORRECT_SYNTAX_IN_DEFMACRO,
+    INVALID_LAMBDA_LIST,
     CANT_REDEFINE_SPECIAL_OPERATOR,
     CANT_REDEFINE_CONSTANT,
     CANT_REBIND_CONSTANT,
@@ -375,20 +378,13 @@ binding
 
 
 enum
-parse_lambda_list_outcome
-  {
-    PARSE_LAMBDA_LIST_OK,
-    PARSE_LAMBDA_LIST_INVALID
-  };
-
-
-enum
 parameter_type
   {
     REQUIRED_PARAM,
     OPTIONAL_PARAM,
     REST_PARAM,
-    KEYWORD_PARAM
+    KEYWORD_PARAM,
+    AUXILIARY_VAR
   };
 
 
@@ -398,10 +394,13 @@ parameter
   enum parameter_type type;
 
   struct object *name;
+  struct object *key;
   struct object *typespec;
 
   struct object *init_form;
   struct object *supplied_p_param;
+
+  int key_passed;
   
   struct parameter *next;
 };
@@ -767,7 +766,9 @@ int is_object_in_hash_table (const struct object *object,
 			     struct object_list **hash_table,
 			     size_t table_size);
 
-struct object *create_function (struct object *lambda_list, struct object *body);
+struct object *create_function (struct object *lambda_list, struct object *body,
+				struct environment *env,
+				struct eval_outcome *outcome);
 struct object *create_package (char *name, size_t name_len);
 
 const char *find_end_of_string
@@ -879,12 +880,15 @@ struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
 struct parameter *parse_required_parameters
 (struct object *obj, struct parameter **last, struct object **next,
- enum parse_lambda_list_outcome *out);
+ struct eval_outcome *outcome);
 struct parameter *parse_optional_parameters
 (struct object *obj, struct parameter **last, struct object **next,
- enum parse_lambda_list_outcome *out);
-struct parameter *parse_lambda_list (struct object *obj,
-				     enum parse_lambda_list_outcome *out);
+ struct eval_outcome *outcome);
+struct parameter *parse_keyword_parameters
+(struct object *obj, struct parameter **last, struct object **next,
+ struct environment *env, struct eval_outcome *outcome);
+struct parameter *parse_lambda_list (struct object *obj, struct environment *env,
+				     struct eval_outcome *outcome);
 
 struct object *evaluate_body
 (struct object *body, int eval_body_twice, struct environment *env,
@@ -898,7 +902,8 @@ int check_type (const struct object *obj, const struct object *typespec,
 int check_type_by_char_vector (const struct object *obj, char *type,
 			       struct environment *env,
 			       struct eval_outcome *outcome);
-int type_starts_with (const struct object *typespec, const char *type);
+int type_starts_with (const struct object *typespec, const char *type,
+		      struct environment *env);
 int is_subtype_by_char_vector (const struct object *first, char *second,
 			       struct environment *env,
 			       struct eval_outcome *outcome);
@@ -1116,8 +1121,9 @@ struct object *builtin_al_print_terms_and_conditions
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
 int symname_equals (const struct symbol_name *sym, const char *s);
 int symname_is_among (const struct symbol_name *sym, ...);
-int symbol_equals (const struct object *sym, const char *str);
-int symbol_is_among (const struct object *sym, ...);
+int symbol_equals (const struct object *sym, const char *str,
+		   struct environment *env);
+int symbol_is_among (const struct object *sym, struct environment *env, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
 
 void print_as_symbol (const char *sym, size_t len);
@@ -3170,14 +3176,15 @@ is_object_in_hash_table (const struct object *object,
 
 
 struct object *
-create_function (struct object *lambda_list, struct object *body)
+create_function (struct object *lambda_list, struct object *body,
+		 struct environment *env, struct eval_outcome *outcome)
 {
-  enum parse_lambda_list_outcome out;
   struct object *fun = alloc_function ();
 
-  fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, &out);
+  fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, env,
+							    outcome);
 
-  if (!fun->value_ptr.function->lambda_list && out == PARSE_LAMBDA_LIST_INVALID)
+  if (outcome->type == INVALID_LAMBDA_LIST)
     {
       free_function_or_macro (fun);
 
@@ -4384,8 +4391,7 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 
 struct parameter *
 parse_required_parameters (struct object *obj, struct parameter **last,
-			   struct object **rest,
-			   enum parse_lambda_list_outcome *out)
+			   struct object **rest, struct eval_outcome *outcome)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -4395,7 +4401,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
   while (obj && obj != &nil_object && (car = CAR (obj))
 	 && car->type == TYPE_SYMBOL_NAME 
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			       "&KEY", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
     {
       increment_refcount (SYMBOL (car), NULL);
 
@@ -4415,8 +4421,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
 struct parameter *
 parse_optional_parameters (struct object *obj, struct parameter **last,
-			   struct object **next,
-			   enum parse_lambda_list_outcome *out)
+			   struct object **next, struct eval_outcome *outcome)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -4440,9 +4445,6 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  else
 	    *last = (*last)->next =
 	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
-
-	  (*last)->init_form = NULL;
-	  (*last)->supplied_p_param = NULL;
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
@@ -4453,9 +4455,6 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  else
 	    *last = (*last)->next =
 	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
-
-	  (*last)->init_form = NULL;
-	  (*last)->supplied_p_param = NULL;
 
 	  if (list_length (car) == 2)
 	    {
@@ -4480,24 +4479,104 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
 
 struct parameter *
-parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
+parse_keyword_parameters (struct object *obj, struct parameter **last,
+			  struct object **next, struct environment *env,
+			  struct eval_outcome *outcome)
+{
+  struct object *car, *caar, *key, *var;
+  struct parameter *first = NULL;
+
+  *last = NULL;
+
+  while (obj && obj != &nil_object && (car = CAR (obj)))
+    {
+      if (car->type == TYPE_SYMBOL_NAME
+	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
+			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+	{
+	  break;
+	}
+      else if (car->type == TYPE_SYMBOL_NAME)
+	{
+	  var = SYMBOL (car);
+	  increment_refcount (var, NULL);
+
+	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
+						var->value_ptr.symbol->name_len,
+						1, &env->keyword_package->
+						value_ptr.package->symlist);
+
+	  if (!first)
+	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
+	  else
+	    *last = (*last)->next =
+	      alloc_parameter (KEYWORD_PARAM, var);
+
+	  (*last)->key = key;
+	}
+      else if (car->type == TYPE_CONS_PAIR)
+	{
+	  caar = CAR (car);
+
+	  if (IS_SYMBOL (caar))
+	    key = var = SYMBOL (caar);
+	  else if (caar->type == TYPE_CONS_PAIR)
+	    {
+	      key = CAR (caar);
+	      var = CAR (CDR (caar));
+	    }
+
+	  increment_refcount (key, NULL);
+	  increment_refcount (var, NULL);
+
+	  if (!first)
+	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
+	  else
+	    *last = (*last)->next =
+	      alloc_parameter (KEYWORD_PARAM, var);
+
+	  (*last)->key = key;
+
+	  if (list_length (car) == 2)
+	    {
+	      increment_refcount (nth (1, car), NULL);
+	      (*last)->init_form = nth (1, car);
+	    }
+
+	  if (list_length (car) == 3)
+	    {
+	      increment_refcount (SYMBOL (nth (2, car)), NULL);
+	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
+	    }
+	}
+
+      obj = CDR (obj);
+    }
+
+  *next = obj;
+
+  return first;
+}
+
+
+struct parameter *parse_lambda_list (struct object *obj, struct environment *env,
+				     struct eval_outcome *outcome)
 {
   struct parameter *first = NULL, *last = NULL;
   struct object *car;
 
   if (obj == &nil_object)
     {
-      *out = PARSE_LAMBDA_LIST_OK;
       return NULL;
     }
 
   if (obj->type != TYPE_CONS_PAIR)
     {
-      *out = PARSE_LAMBDA_LIST_INVALID;
+      outcome->type = INVALID_LAMBDA_LIST;
       return NULL;
     }
 
-  first = parse_required_parameters (obj, &last, &obj, out);
+  first = parse_required_parameters (obj, &last, &obj, outcome);
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && car->type == TYPE_SYMBOL_NAME
@@ -4505,9 +4584,9 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
     {
       if (first)
 	last->next =
-	  parse_optional_parameters (CDR (obj), &last, &obj, out);
+	  parse_optional_parameters (CDR (obj), &last, &obj, outcome);
       else
-	first = parse_optional_parameters (CDR (obj), &last, &obj, out);
+	first = parse_optional_parameters (CDR (obj), &last, &obj, outcome);
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
@@ -4524,9 +4603,20 @@ parse_lambda_list (struct object *obj, enum parse_lambda_list_outcome *out)
       obj = CDR (CDR (obj));
     }
 
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && car->type == TYPE_SYMBOL_NAME
+      && symname_equals (car->value_ptr.symbol_name, "&KEY"))
+    {
+      if (first)
+	last->next =
+	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
+      else
+	first = parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
+    }
+
   if (obj != &nil_object)
     {
-      *out = PARSE_LAMBDA_LIST_INVALID;
+      outcome->type = INVALID_LAMBDA_LIST;
       return NULL;
     }
 
@@ -4578,7 +4668,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	       int eval_body_twice, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  struct parameter *par = func->value_ptr.function->lambda_list;
+  struct parameter *par = func->value_ptr.function->lambda_list, *findk;
   struct binding *bins = NULL;
   struct object *val, *res, *ret, *args;
   int argsnum = 0; /*, rest_found = 0;*/
@@ -4642,7 +4732,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       return NULL;
     }
 
-  if (arglist != &nil_object && (!par || (par && par->type != REST_PARAM)))
+  if (arglist != &nil_object && (!par || (par && par->type != REST_PARAM
+					  && par->type != KEYWORD_PARAM)))
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
@@ -4695,6 +4786,76 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       bins = bind_variable (par->name, arglist, bins);
 
       argsnum++;
+
+      par = par->next;
+    }
+
+  if (par && par->type == KEYWORD_PARAM)
+    {
+      findk = par;
+
+      while (findk && findk->type == KEYWORD_PARAM)
+	{
+	  findk->key_passed = 0;
+
+	  findk = findk->next;
+	}
+
+      while (arglist != &nil_object)
+	{
+	  findk = par;
+
+	  while (findk && findk->type == KEYWORD_PARAM)
+	    {
+	      if (findk->key == SYMBOL (CAR (arglist)))
+		break;
+
+	      findk = findk->next;
+	    }
+
+	  if (!findk || findk->type != KEYWORD_PARAM)
+	    {
+	      outcome->type = KEY_NOT_FOUND_IN_FUNCALL;
+	      return NULL;
+	    }
+
+	  arglist = CDR (arglist);
+
+	  if (arglist == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  bins = bind_variable (findk->name, CAR (arglist), bins);
+	  findk->key_passed = 1;
+	  argsnum++;
+
+	  arglist = CDR (arglist);
+	}
+
+      findk = par;
+
+      while (findk && findk->type == KEYWORD_PARAM)
+	{
+	  if (!findk->key_passed)
+	    {
+	      if (findk->init_form)
+		{
+		  val = evaluate_object (findk->init_form, env, outcome);
+
+		  if (!val)
+		    return NULL;
+		}
+	      else
+		val = &nil_object;
+
+	      bins = bind_variable (findk->name, CAR (arglist), bins);
+	      argsnum++;
+	    }
+
+	  findk = findk->next;
+	}
     }
 
   env->vars = chain_bindings (bins, env->vars);
@@ -4749,16 +4910,17 @@ check_type_by_char_vector (const struct object *obj, char *type,
 
 
 int
-type_starts_with (const struct object *typespec, const char *type)
+type_starts_with (const struct object *typespec, const char *type,
+		  struct environment *env)
 {
   if ((typespec->type == TYPE_SYMBOL || typespec->type == TYPE_SYMBOL_NAME)
-      && symbol_equals (typespec, type))
+      && symbol_equals (typespec, type, env))
     return 1;
 
   if (typespec->type == TYPE_CONS_PAIR
       && (CAR (typespec)->type == TYPE_SYMBOL_NAME
 	  || CAR (typespec)->type == TYPE_SYMBOL)
-      && symbol_equals (CAR (typespec), type))
+      && symbol_equals (CAR (typespec), type, env))
     return 1;
 
   return 0;
@@ -4788,7 +4950,7 @@ is_subtype (const struct object *first, const struct object *second,
     return 1;
 
   if (IS_SYMBOL (second)
-      && type_starts_with (first, SYMBOL (second)->value_ptr.symbol->name))
+      && type_starts_with (first, SYMBOL (second)->value_ptr.symbol->name, env))
     return 1;
 
   if (IS_SYMBOL (first) && IS_SYMBOL (second))
@@ -5878,7 +6040,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 	}
     }
 
-  if (symbol_equals (CAR (list), "STRING"))
+  if (symbol_equals (CAR (list), "STRING", env))
     {
       ret = alloc_string (0);
 
@@ -6753,13 +6915,10 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	  return NULL;
 	}
 
-      fun = create_function (CAR (CDR (form)), CDR (CDR (form)));
+      fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome);
 
       if (!fun)
-	{
-	  outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
-	  return NULL;
-	}
+	return NULL;
 
       fun->type = type;
     }
@@ -7146,13 +7305,10 @@ evaluate_defun (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)));
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
 
   if (!fun)
-    {
-      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
-      return NULL;
-    }
+    return NULL;
 
   if (sym->value_ptr.symbol->function_cell)
     {
@@ -7196,13 +7352,10 @@ evaluate_defmacro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)));
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
 
   if (!mac)
-    {
-      outcome->type = INCORRECT_SYNTAX_IN_DEFMACRO;
-      return NULL;
-    }
+    return NULL;
 
   mac->type = TYPE_MACRO;
 
@@ -7367,13 +7520,10 @@ evaluate_lambda (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (list), CDR (list));
+  fun = create_function (CAR (list), CDR (list), env, outcome);
 
   if (!fun)
-    {
-      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
-      return NULL;
-    }
+    return NULL;
 
   return fun;
 }
@@ -8216,31 +8366,37 @@ symname_is_among (const struct symbol_name *sym, ...)
 
 
 int
-symbol_equals (const struct object *sym, const char *str)
+symbol_equals (const struct object *sym, const char *str,
+	       struct environment *env)
 {
-  const struct object *s;
+  struct symbol *s;
 
   if (sym->type != TYPE_SYMBOL_NAME && sym->type != TYPE_SYMBOL)
     return 0;
 
-  s = SYMBOL (sym);
+  s = SYMBOL (sym)->value_ptr.symbol;
 
-  return eqmem (s->value_ptr.symbol->name, s->value_ptr.symbol->name_len,
-		str, strlen (str));
+  if (*str == ':')
+    {
+      return s->home_package == env->keyword_package
+	&& eqmem (s->name, s->name_len, str+1, strlen (str)-1);
+    }
+
+  return eqmem (s->name, s->name_len, str, strlen (str));
 }
 
 
 int
-symbol_is_among (const struct object *sym, ...)
+symbol_is_among (const struct object *sym, struct environment *env, ...)
 {
   va_list valist;
   char *s;
 
-  va_start (valist, sym);
+  va_start (valist, env);
 
   while ((s = va_arg (valist, char *)))
     {
-      if (symbol_equals (sym, s))
+      if (symbol_equals (sym, s, env))
 	{
 	  va_end (valist);
 	  return 1;
@@ -8668,6 +8824,15 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
       printf ("eval error: not a function form, a macro form or a special "
 	      "form\n");
     }
+  else if (err->type == KEY_NOT_FOUND_IN_FUNCALL)
+    {
+      printf ("eval error: unknown key in keyword part of function call\n");
+    }
+  else if (err->type == ODD_NUMBER_OF_KEYWORD_ARGUMENTS)
+    {
+      printf ("eval error: odd number of arguments in keyword part of function "
+	      "call\n");
+    }
   else if (err->type == DOTTED_LIST_NOT_ALLOWED_HERE)
     {
       printf ("eval error: dotted list not allowed here\n");
@@ -8708,6 +8873,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == INCORRECT_SYNTAX_IN_DEFMACRO)
     {
       printf ("eval error: incorrect syntax in DEFMACRO\n");
+    }
+  else if (err->type == INVALID_LAMBDA_LIST)
+    {
+      printf ("eval error: lambda list is invalid\n");
     }
   else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
     {
