@@ -269,6 +269,9 @@ eval_outcome
 {
   enum eval_outcome_type type;
 
+  int no_value;
+  struct object_list *other_values;
+
   struct object *obj;
 
   struct object *tag_to_find;
@@ -1074,6 +1077,8 @@ struct object *evaluate_if
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_progn
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_values
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defconstant
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defparameter
@@ -1183,6 +1188,7 @@ main (int argc, char *argv [])
   int end_repl = 0;
 
   struct object *result, *obj, *load_form;
+  struct object_list *vals;
   struct environment env = {NULL};
   
   struct eval_outcome eval_out = {EVAL_OK};
@@ -1252,13 +1258,28 @@ main (int argc, char *argv [])
 	{
 	  result = evaluate_object (obj, &env, &eval_out);
 
-	  if (result)
+	  if (!result)
+	    print_eval_error (&eval_out, &env);
+	  else if (eval_out.no_value)
+	    eval_out.no_value = 0;
+	  else
 	    {
 	      print_object (result, &env);
 	      printf ("\n");
+
+	      vals = eval_out.other_values;
+
+	      while (vals)
+		{
+		  print_object (vals->obj, &env);
+		  printf ("\n");
+		  vals = vals->next;
+		}
+
+	      free_object_list (eval_out.other_values);
+
+	      eval_out.other_values = NULL;
 	    }
-	  else
-	    print_eval_error (&eval_out, &env);
 
 	  decrement_refcount (result, NULL);
 	  decrement_refcount (obj, NULL);
@@ -1369,6 +1390,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, 1);
   add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, 1);
   add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, 1);
+  add_builtin_form ("VALUES", env, evaluate_values, TYPE_FUNCTION, 0);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, 0);
   add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, 0);
   add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, 0);
@@ -6996,6 +7018,23 @@ evaluate_progn (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
   return evaluate_body (list, 0, env, outcome);
+}
+
+
+struct object *
+evaluate_values (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  if (list == &nil_object)
+    {
+      outcome->no_value = 1;
+      return &nil_object;
+    }
+
+  outcome->other_values = copy_list_to_obj_list (CDR (list));
+
+  increment_refcount (CAR (list), NULL);
+  return CAR (list);
 }
 
 
