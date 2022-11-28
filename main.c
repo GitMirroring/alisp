@@ -687,9 +687,12 @@ const char *jump_to_end_of_multiline_comment
 struct line_list *append_line_to_list
 (char *line, size_t size, struct line_list *list, int do_copy);
 
-void prepend_object_to_list (struct object *obj, struct object_list **list);
-struct object *pop_object_from_list (struct object_list **list);
-int is_object_in_list (const struct object *obj, const struct object_list *list);
+void prepend_object_to_obj_list (struct object *obj, struct object_list **list);
+struct object_list *copy_list_to_obj_list (struct object *list);
+struct object *pop_object_from_obj_list (struct object_list **list);
+int is_object_in_obj_list (const struct object *obj,
+			   const struct object_list *list);
+void free_object_list (struct object_list *list);
 
 enum read_outcome read_object
 (struct object **obj, int backt_commas_balance, const char *input, size_t size,
@@ -1314,10 +1317,10 @@ add_standard_definitions (struct environment *env)
   nil_symbol.value_cell = &nil_object;
   nil_symbol.home_package = env->current_package;
 
-  prepend_object_to_list (&t_object,
-			  &env->current_package->value_ptr.package->symlist);
-  prepend_object_to_list (&nil_object,
-			  &env->current_package->value_ptr.package->symlist);
+  prepend_object_to_obj_list (&t_object,
+			      &env->current_package->value_ptr.package->symlist);
+  prepend_object_to_obj_list (&nil_object,
+			      &env->current_package->value_ptr.package->symlist);
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, 0);
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, 0);
@@ -1821,7 +1824,7 @@ append_line_to_list (char *line, size_t size, struct line_list *list,
 
 
 void
-prepend_object_to_list (struct object *obj, struct object_list **list)
+prepend_object_to_obj_list (struct object *obj, struct object_list **list)
 {
   struct object_list *l = malloc_and_check (sizeof (*l));
 
@@ -1832,8 +1835,32 @@ prepend_object_to_list (struct object *obj, struct object_list **list)
 }
 
 
+struct object_list *
+copy_list_to_obj_list (struct object *list)
+{
+  struct object_list *ret = NULL, *curr;
+
+  while (list != &nil_object)
+    {
+      if (!ret)
+	ret = curr = malloc_and_check (sizeof (*ret));
+      else
+	curr = curr->next = malloc_and_check (sizeof (*curr));
+
+      increment_refcount (CAR (list), NULL);
+      curr->obj = CAR (list);
+
+      list = CDR (list);
+    }
+
+  curr->next = NULL;
+
+  return ret;
+}
+
+
 struct object *
-pop_object_from_list (struct object_list **list)
+pop_object_from_obj_list (struct object_list **list)
 {
   struct object *ret;
   struct object_list *first;
@@ -1854,7 +1881,7 @@ pop_object_from_list (struct object_list **list)
 
 
 int
-is_object_in_list (const struct object *obj, const struct object_list *list)
+is_object_in_obj_list (const struct object *obj, const struct object_list *list)
 {
   while (list)
     {
@@ -1865,6 +1892,21 @@ is_object_in_list (const struct object *obj, const struct object_list *list)
     }
 
   return 0;
+}
+
+
+void
+free_object_list (struct object_list *list)
+{
+  struct object_list *next;
+
+  while (list)
+    {
+      next = list->next;
+      decrement_refcount (list->obj, NULL);
+      free (list);
+      list = next;
+    }
 }
 
 
@@ -3085,8 +3127,8 @@ int
 is_object_in_hash_table (const struct object *object,
 			 struct object_list **hash_table, size_t table_size)
 {
-  return is_object_in_list (object,
-			    hash_table [hash_object (object, table_size)]);
+  return is_object_in_obj_list (object,
+				hash_table [hash_object (object, table_size)]);
 }
 
 
@@ -3867,7 +3909,7 @@ add_builtin_type (char *name, struct environment *env,
 					    current_package->
 					    value_ptr.package->symlist);
 
-      prepend_object_to_list (par, &sym->value_ptr.symbol->parent_types);
+      prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
 
   va_end (valist);
@@ -3893,8 +3935,8 @@ add_builtin_form (char *name, struct environment *env,
 
   sym->value_ptr.symbol->function_cell = fun;
 
-  prepend_object_to_list (sym,
-			  &env->current_package->value_ptr.package->symlist);
+  prepend_object_to_obj_list (sym,
+			      &env->current_package->value_ptr.package->symlist);
 }
 
 
@@ -8596,7 +8638,7 @@ increment_refcount_by (struct object *obj, int count, struct object *parent)
       if (parent)
 	{
 	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-	  prepend_object_to_list
+	  prepend_object_to_obj_list
 	    (parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
 	}
 
@@ -8637,7 +8679,7 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 
       obj->refcount++;
 
-      prepend_object_to_list
+      prepend_object_to_obj_list
 	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
 
       if (obj->type & TYPE_PREFIX)
@@ -8746,7 +8788,7 @@ decrement_refcount_by (struct object *obj, int count, struct object *parent)
       if (parent)
 	{
 	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-	  prepend_object_to_list
+	  prepend_object_to_obj_list
 	    (parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
 	}
 
@@ -8789,7 +8831,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 
       obj->refcount--;
 
-      prepend_object_to_list
+      prepend_object_to_obj_list
 	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
 
       if (obj->type & TYPE_PREFIX)
