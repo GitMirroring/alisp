@@ -780,8 +780,9 @@ const char *find_end_of_symbol_name
  const char **start_of_package_separator,
  enum package_record_visibility *sym_visibility, size_t *name_length,
  size_t *act_name_length, enum read_outcome *outcome);
-void normalize_symbol_name (char *output, const char *input, size_t size,
-			    enum readtable_case read_case);
+void copy_symname_with_case_conversion (char *output, const char *input,
+					size_t size,
+					enum readtable_case read_case);
 
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_character (char *character, int do_copy);
@@ -2259,13 +2260,13 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   size_t name_l, act_name_l, new_size;
   struct object *ob = *obj;
   enum read_outcome out = NO_OBJECT;
-  const char *start_of_pack_s;
+  const char *start_of_pack_sep;
   enum package_record_visibility visib;
 
 
   *symname_end = find_end_of_symbol_name
     (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
-     &new_size, &start_of_pack_s, &visib, &name_l, &act_name_l, &out);
+     &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, &out);
 
   if (out & READ_ERROR)
     return out;
@@ -2286,20 +2287,23 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   sym = ob->value_ptr.symbol_name;
 
   if (sym->packname_present)
-    normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s,
-			   input, size, read_case);
-  else if (start_of_pack_s)
+    copy_symname_with_case_conversion (sym->actual_symname
+				       + sym->actual_symname_used_s, input, size,
+				       read_case);
+  else if (start_of_pack_sep)
     {
-      normalize_symbol_name (sym->value + sym->used_size, input,
-			     start_of_pack_s - input, read_case);
+      copy_symname_with_case_conversion (sym->value + sym->used_size, input,
+					 start_of_pack_sep - input, read_case);
       sym->packname_present = 1;
-      normalize_symbol_name (sym->actual_symname + sym->actual_symname_used_s,
-			     visib == EXTERNAL_VISIBILITY ?
-			     start_of_pack_s + 1 : start_of_pack_s + 2, size,
-			     read_case);
+      copy_symname_with_case_conversion (sym->actual_symname
+					 + sym->actual_symname_used_s,
+					 visib == EXTERNAL_VISIBILITY ?
+					 start_of_pack_sep + 1
+					 : start_of_pack_sep + 2, size, read_case);
     }
   else
-    normalize_symbol_name (sym->value + sym->used_size, input, size, read_case);
+    copy_symname_with_case_conversion (sym->value + sym->used_size, input, size,
+				       read_case);
 
   sym->used_size += name_l;
   sym->actual_symname_used_s += act_name_l;
@@ -3414,8 +3418,8 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 
 
 void
-normalize_symbol_name (char *output, const char *input, size_t size,
-		       enum readtable_case read_case)
+copy_symname_with_case_conversion (char *output, const char *input, size_t size,
+				   enum readtable_case read_case)
 {
   size_t i;
   int j, single_escape = 0, multiple_escape = 0;
