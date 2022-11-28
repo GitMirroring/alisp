@@ -31,15 +31,13 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <string.h>
-#include <locale.h>
-#include <errno.h>
-#include <assert.h>
 
 #include <getopt.h>
 
 #include <gmp.h>
 
 #ifdef HAVE_LIBREADLINE
+#include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #endif
@@ -1197,8 +1195,6 @@ main (int argc, char *argv [])
 	  exit (0);
 	}
     }
-
-  setlocale (LC_CTYPE, "");
 
   add_standard_definitions (&env);
 
