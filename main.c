@@ -248,6 +248,7 @@ eval_outcome_type
     TOO_MANY_ARGUMENTS,
     WRONG_NUMBER_OF_ARGUMENTS,
     WRONG_TYPE_OF_ARGUMENT,
+    COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
     COULD_NOT_TELL_FILE,
@@ -489,6 +490,8 @@ stream
   enum stream_type type;
 
   enum stream_direction direction;
+
+  FILE *file;
 
   int is_open;
 };
@@ -770,6 +773,7 @@ void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (size_t size);
 void resize_string (struct object *string, size_t size);
+char *copy_to_c_string (struct string *str);
 
 struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
 void resize_symbol_name (struct object *symname, size_t value_s,
@@ -788,6 +792,10 @@ struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_character (char *character, int do_copy);
 struct object *create_filename (struct object *string);
 struct object *create_vector (struct object *list);
+struct object *create_stream (enum stream_type type,
+			      enum stream_direction direction,
+			      struct string *filename,
+			      struct eval_outcome *outcome);
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
@@ -963,6 +971,8 @@ struct object *builtin_last
 struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_open
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1334,6 +1344,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
+  add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
@@ -3259,6 +3270,19 @@ resize_string (struct object *string, size_t size)
 }
 
 
+char *
+copy_to_c_string (struct string *str)
+{
+  char *ret = malloc_and_check (str->used_size + 1);
+
+  memcpy (ret, str->value, str->used_size);
+
+  ret [str->used_size] = 0;
+
+  return ret;
+}
+
+
 struct object *
 alloc_symbol_name (size_t value_s, size_t actual_symname_s)
 {
@@ -3574,6 +3598,42 @@ create_vector (struct object *list)
   obj->type = TYPE_ARRAY;
   obj->refcount = 1;
   obj->value_ptr.array = vec;
+
+  return obj;
+}
+
+
+struct object *
+create_stream (enum stream_type type, enum stream_direction direction,
+	       struct string *filename, struct eval_outcome *outcome)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct stream *str = malloc_and_check (sizeof (*str));
+  char *fn = copy_to_c_string (filename);
+
+  if (direction == INPUT_STREAM)
+    str->file = fopen (fn, "r");
+  else if (direction == OUTPUT_STREAM)
+    str->file = fopen (fn, "w");
+  else if (direction == BIDIRECTIONAL_STREAM)
+    str->file = fopen (fn, "r+");
+
+  free (fn);
+
+  if (!str->file)
+    {
+      free (str);
+      free (obj);
+      outcome->type = COULD_NOT_OPEN_FILE;
+      return NULL;
+    }
+
+  str->type = type;
+  str->direction = direction;
+
+  obj->type = TYPE_STREAM;
+  obj->refcount = 1;
+  obj->value_ptr.stream = str;
 
   return obj;
 }
@@ -5658,6 +5718,61 @@ builtin_load (struct object *list, struct environment *env,
   fclose (f);
 
   return NULL;
+}
+
+
+struct object *
+builtin_open (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
+{
+  enum stream_direction dir = INPUT_STREAM;
+  struct filename *f;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FILENAME)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.filename;
+  list = CDR (list);
+
+  while (list != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":DIRECTION", env))
+	{
+	  if (symbol_equals (CAR (CDR (list)), ":INPUT", env))
+	    dir = INPUT_STREAM;
+	  else if (symbol_equals (CAR (CDR (list)), ":OUTPUT", env))
+	    dir = OUTPUT_STREAM;
+	  else if (symbol_equals (CAR (CDR (list)), ":IO", env))
+	    dir = BIDIRECTIONAL_STREAM;
+	  else if (symbol_equals (CAR (CDR (list)), ":PROBE", env))
+	    ;
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      list = CDR (list);
+    }
+
+  return create_stream (BINARY_STREAM, dir, f->value->value_ptr.string, outcome);
 }
 
 
@@ -8388,6 +8503,8 @@ print_object (const struct object *obj, struct environment *env)
     }
   else if (obj->type == TYPE_ENVIRONMENT)
     printf ("#<ENVIRONMENT %p>", (void *)obj);
+  else if (obj->type == TYPE_STREAM)
+    printf ("#<STREAM %p>", (void *)obj);
   else
     printf ("#<print not implemented>");
 }
@@ -8576,6 +8693,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == WRONG_TYPE_OF_ARGUMENT)
     {
       printf ("type error: wrong type of argument\n");
+    }
+  else if (err->type == COULD_NOT_OPEN_FILE)
+    {
+      printf ("file error: could not open file\n");
     }
   else if (err->type == COULD_NOT_OPEN_FILE_FOR_READING)
     {
