@@ -974,6 +974,8 @@ struct object *builtin_nthcdr
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_array_dimensions
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
@@ -1368,6 +1370,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
+  add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
+		    TYPE_FUNCTION, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
@@ -5720,6 +5724,62 @@ builtin_length (struct object *list, struct environment *env,
 
       return create_integer_from_int (seq->value_ptr.array->alloc_size->size);
     }
+}
+
+
+struct object *
+builtin_array_dimensions (struct object *list, struct environment *env,
+			  struct eval_outcome *outcome)
+{
+  struct object *arr, *ret = NULL, *cons, *num;
+  struct array_size *sz;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  arr = CAR (list);
+
+  if (arr->type == TYPE_STRING)
+    {
+      ret = alloc_empty_cons_pair ();
+
+      num = alloc_number (TYPE_INTEGER);
+
+      mpz_set_ui (num->value_ptr.integer, arr->value_ptr.string->used_size);
+      ret->value_ptr.cons_pair->car = num;
+      ret->value_ptr.cons_pair->cdr = &nil_object;
+    }
+  else if (arr->type == TYPE_ARRAY)
+    {
+      sz = arr->value_ptr.array->alloc_size;
+
+      while (sz)
+	{
+	  if (!ret)
+	    ret = cons = alloc_empty_cons_pair ();
+	  else
+	    cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+	  num = alloc_number (TYPE_INTEGER);
+
+	  mpz_set_ui (num->value_ptr.integer, sz->size);
+	  cons->value_ptr.cons_pair->car = num;
+
+	  sz = sz->next;
+	}
+
+      cons->value_ptr.cons_pair->cdr = &nil_object;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return ret;
 }
 
 
