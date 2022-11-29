@@ -241,6 +241,7 @@ make_test ("(length #(1 2))", "2");
 make_test ("(length '(0 1 2))", "3");
 make_test ("(array-dimensions \"aaa\")", "(3)");
 make_test ("(array-dimensions #(1 2 3 4))", "(4)");
+make_test ("(array-dimension \"aaa\" 0)", "3");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "()");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
