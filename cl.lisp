@@ -112,3 +112,7 @@
 	 (progn ,@(cdr first))
 	 (if ',rest
 	     (cond ,@rest)))))
+
+
+(defun array-dimension (array axis)
+  (nth axis (array-dimensions array)))
