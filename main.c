@@ -871,6 +871,7 @@ struct object *nthcdr (unsigned int ind, struct object *list);
 unsigned int list_length (const struct object *list);
 struct object *last_cons_pair (struct object *list);
 int is_dotted_list (const struct object *list);
+int is_circular_list (struct object *list);
 
 struct object *copy_prefix (const struct object *begin, const struct object *end,
 			    struct object **last_prefix);
@@ -977,6 +978,8 @@ struct object *builtin_nth
 struct object *builtin_nthcdr
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_aref
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_list_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1376,6 +1379,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, 0);
+  add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, 0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, 0);
@@ -4318,6 +4322,29 @@ is_dotted_list (const struct object *list)
 }
 
 
+int
+is_circular_list (struct object *list)
+{
+  struct object_list **hash_t = alloc_empty_hash_table (1024);
+
+  while (list != &nil_object)
+    {
+      if (is_object_in_hash_table (list, hash_t, 1024))
+	{
+	  free_hash_table (hash_t, 1024);
+	  return 1;
+	}
+
+      prepend_object_to_obj_list (list, &hash_t [hash_object (list, 1024)]);
+
+      list = CDR (list);
+    }
+
+  free_hash_table (hash_t, 1024);
+  return 0;
+}
+
+
 struct object *
 copy_prefix (const struct object *begin, const struct object *end,
 	     struct object **last_prefix)
@@ -5825,6 +5852,35 @@ builtin_aref (struct object *list, struct environment *env,
 
   increment_refcount (arr, NULL);
   return arr;
+}
+
+
+struct object *
+builtin_list_length (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (is_dotted_list (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (is_circular_list (CAR (list)))
+    return &nil_object;
+
+  return create_integer_from_int (list_length (CAR (list)));
 }
 
 
