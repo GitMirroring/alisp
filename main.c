@@ -798,6 +798,7 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
+struct object *get_nth_character (int ind, struct object *str);
 struct object *create_filename (struct object *string);
 struct object *create_vector (struct object *list);
 struct object *create_stream (enum stream_type type,
@@ -976,6 +977,8 @@ struct object *builtin_append
 struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nthcdr
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_elt
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_aref
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1378,6 +1381,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
+  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, 0);
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, 0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
@@ -3641,6 +3645,27 @@ create_character_from_utf8 (char *character, size_t size)
 
 
 struct object *
+get_nth_character (int ind, struct object *str)
+{
+  char *ch = str->value_ptr.string->value;
+  size_t s = str->value_ptr.string->used_size, off;
+
+  for (off = 0; ind; ind--)
+    {
+      off = next_utf8_char (ch, s);
+
+      if (!off)
+	return NULL;
+
+      ch += off;
+      s -= off;
+    }
+
+  return create_character_from_utf8 (ch, s);
+}
+
+
+struct object *
 create_filename (struct object *string)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
@@ -5753,14 +5778,97 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_elt (struct object *list, struct environment *env,
+	     struct eval_outcome *outcome)
+{
+  int ind;
+  struct object *ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+  if (ind < 0)
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      ret = get_nth_character (ind, CAR (list));
+
+      if (!ret)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      return ret;
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      if (array_rank (CAR (list)->value_ptr.array) != 1)
+	{
+	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  return NULL;
+	}
+
+      if (ind >= CAR (list)->value_ptr.array->alloc_size->size)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      ret = CAR (list)->value_ptr.array->value [ind];
+
+      increment_refcount (ret, NULL);
+      return ret;
+    }
+  else if (CAR (list)->type == TYPE_CONS_PAIR || CAR (list) == &nil_object)
+    {
+      if (is_dotted_list (CAR (list)) || is_circular_list (CAR (list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (ind >= list_length (CAR (list)))
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      ret = nth (ind, CAR (list));
+
+      increment_refcount (ret, NULL);
+      return ret;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+}
+
+
+struct object *
 builtin_aref (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
-  struct object *arr;
+  struct object *arr, *ret;
   struct array_size *sz;
   int ind;
-  size_t off, s;
-  char *ch;
 
   if (!list_length (list))
     {
@@ -5787,24 +5895,15 @@ builtin_aref (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ch = arr->value_ptr.string->value;
-      s = arr->value_ptr.string->used_size;
+      ret = get_nth_character (ind, arr);
 
-      for (off = 0; ind; ind--)
+      if (!ret)
 	{
-	  off = next_utf8_char (ch, s);
-
-	  if (!off)
-	    {
-	      outcome->type = OUT_OF_BOUND_INDEX;
-	      return NULL;
-	    }
-
-	  ch += off;
-	  s -= off;
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
 	}
 
-      return create_character_from_utf8 (ch, s);
+      return ret;
     }
   else if (arr->type == TYPE_ARRAY)
     {
