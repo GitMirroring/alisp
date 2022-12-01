@@ -116,3 +116,7 @@
 
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
+
+
+(defun char (str ind)
+  (aref str ind))
