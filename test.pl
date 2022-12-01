@@ -235,6 +235,8 @@ make_test ("(nth 1 '(0))", "()");
 make_test ("(nthcdr 1 ())", "()");
 make_test ("(nthcdr 2 '(a b c))", "(C)");
 make_test ("(nthcdr 1 '(0 . 1))", "1");
+make_test ("(aref #(1 2 3) 1)", "2");
+make_test ("(char \"àbcdef\" 2)", "#\\c");
 make_test ("(length ())", "0");
 make_test ("(length \"aaa\")", "3");
 make_test ("(length #(1 2))", "2");
