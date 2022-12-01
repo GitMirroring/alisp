@@ -251,6 +251,8 @@ eval_outcome_type
     TOO_MANY_ARGUMENTS,
     WRONG_NUMBER_OF_ARGUMENTS,
     WRONG_TYPE_OF_ARGUMENT,
+    WRONG_NUMBER_OF_AXIS,
+    OUT_OF_BOUND_INDEX,
     COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
@@ -746,6 +748,7 @@ char *append_zero_byte (char *string, size_t size);
 char *copy_token_to_buffer (const char *input, size_t size);
 
 size_t mbslen (const char *string);
+size_t next_utf8_char (char *str, size_t sz);
 
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
@@ -794,6 +797,7 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_character (char *character, int do_copy);
+struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *create_filename (struct object *string);
 struct object *create_vector (struct object *list);
 struct object *create_stream (enum stream_type type,
@@ -971,6 +975,8 @@ struct object *builtin_append
 struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nthcdr
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_aref
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1369,6 +1375,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
+  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, 0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, 0);
@@ -2933,6 +2940,21 @@ mbslen (const char *string)
 }
 
 
+size_t
+next_utf8_char (char *str, size_t sz)
+{
+  size_t off;
+
+  for (off = 1; off < sz; off++)
+    {
+      if ((str [off] & 0xc0) >> 6 != 2)
+	return off;
+    }
+
+  return 0;
+}
+
+
 void *
 malloc_and_check (size_t size)
 {
@@ -3590,6 +3612,27 @@ create_character (char *character, int do_copy)
     obj->value_ptr.character = character;
 
   return obj;
+}
+
+
+struct object *
+create_character_from_utf8 (char *character, size_t size)
+{
+  size_t sz;
+  char *ch;
+
+  for (sz = 1; sz < size; sz++)
+    {
+      if ((character [sz] & 0xc0) >> 6 != 2)
+	break;
+    }
+
+  ch = malloc_and_check (sz + 1);
+
+  strncpy (ch, character, sz);
+  ch [sz] = 0;
+
+  return create_character (ch, 0);
 }
 
 
@@ -5679,6 +5722,109 @@ builtin_nthcdr (struct object *list, struct environment *env,
   increment_refcount (ret, NULL);
 
   return ret;
+}
+
+
+struct object *
+builtin_aref (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
+{
+  struct object *arr;
+  struct array_size *sz;
+  int ind;
+  size_t off, s;
+  char *ch;
+
+  if (!list_length (list))
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  arr = CAR (list);
+  list = CDR (list);
+
+  if (arr->type == TYPE_STRING)
+    {
+      if (CAR (list)->type != TYPE_INTEGER)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ind = mpz_get_si (CAR (list)->value_ptr.integer);
+
+      if (ind < 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      ch = arr->value_ptr.string->value;
+      s = arr->value_ptr.string->used_size;
+
+      for (off = 0; ind; ind--)
+	{
+	  off = next_utf8_char (ch, s);
+
+	  if (!off)
+	    {
+	      outcome->type = OUT_OF_BOUND_INDEX;
+	      return NULL;
+	    }
+
+	  ch += off;
+	  s -= off;
+	}
+
+      return create_character_from_utf8 (ch, s);
+    }
+  else if (arr->type == TYPE_ARRAY)
+    {
+      sz = arr->value_ptr.array->alloc_size;
+
+      while (sz)
+	{
+	  if (list == &nil_object)
+	    {
+	      outcome->type = WRONG_NUMBER_OF_AXIS;
+	      return NULL;
+	    }
+
+	  if (CAR (list)->type != TYPE_INTEGER)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  ind = mpz_get_si (CAR (list)->value_ptr.integer);
+
+	  if (ind < 0 || ind >= sz->size)
+	    {
+	      outcome->type = OUT_OF_BOUND_INDEX;
+	      return NULL;
+	    }
+
+	  arr = arr->value_ptr.array->value [ind];
+
+	  sz = sz->next;
+	  list = CDR (list);
+	}
+
+      if (list != &nil_object)
+	{
+	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  return NULL;
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (arr, NULL);
+  return arr;
 }
 
 
@@ -8961,6 +9107,14 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == WRONG_TYPE_OF_ARGUMENT)
     {
       printf ("type error: wrong type of argument\n");
+    }
+  else if (err->type == WRONG_NUMBER_OF_AXIS)
+    {
+      printf ("eval error: wrong number of axis\n");
+    }
+  else if (err->type == OUT_OF_BOUND_INDEX)
+    {
+      printf ("eval error: out-of-bound index\n");
     }
   else if (err->type == COULD_NOT_OPEN_FILE)
     {
