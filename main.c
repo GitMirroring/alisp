@@ -265,7 +265,8 @@ eval_outcome_type
     INVALID_ACCESSOR,
     FUNCTION_NOT_FOUND_IN_EVAL,
     DECLARE_NOT_ALLOWED_HERE,
-    CANT_DIVIDE_BY_ZERO
+    CANT_DIVIDE_BY_ZERO,
+    INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT
   };
 
 
@@ -1002,6 +1003,8 @@ struct object *builtin_not
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_concatenate
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_dotimes
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -1395,6 +1398,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, 0);
+  add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, 0);
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
@@ -6423,6 +6427,53 @@ builtin_concatenate (struct object *list, struct environment *env,
 }
 
 
+struct object *
+builtin_dotimes (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *var, *count;
+  int cnt, l, i;
+
+  if (list_length (list) < 1 || CAR (list)->type != TYPE_CONS_PAIR
+      || (l = list_length (CAR (list))) < 2 || l > 3
+      || !IS_SYMBOL (CAR (CAR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  count = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+
+  if (!count)
+    return NULL;
+
+  if (count->type != TYPE_INTEGER)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  cnt = mpz_get_si (count->value_ptr.integer);
+  var = SYMBOL (CAR (CAR (list)));
+
+  for (i = 0; i < cnt; i++)
+    {
+      env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
+
+      evaluate_body (CDR (list), 0, env, outcome);
+
+      env->vars = remove_bindings (env->vars, 1);
+    }
+
+  env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
+
+  if (l == 3)
+    return evaluate_object (nth (2, CAR (list)), env, outcome);
+
+  return &nil_object;
+}
+
+
 int
 compare_two_numbers (struct object *num1, struct object *num2)
 {
@@ -9323,6 +9374,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == CANT_DIVIDE_BY_ZERO)
     {
       printf ("eval error: division by zero is now allowed\n");
+    }
+  else if (err->type == INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT)
+    {
+      printf ("eval error: incorrect syntax in loop construct\n");
     }
 }
 
