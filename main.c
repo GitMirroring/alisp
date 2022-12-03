@@ -1005,6 +1005,8 @@ struct object *builtin_concatenate
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_dotimes
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_dolist
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -1399,6 +1401,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, 0);
   add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, 0);
+  add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, 0);
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
@@ -6431,7 +6434,7 @@ struct object *
 builtin_dotimes (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
-  struct object *var, *count;
+  struct object *var, *count, *ret;
   int cnt, l, i;
 
   if (list_length (list) < 1 || CAR (list)->type != TYPE_CONS_PAIR
@@ -6465,10 +6468,70 @@ builtin_dotimes (struct object *list, struct environment *env,
       env->vars = remove_bindings (env->vars, 1);
     }
 
-  env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
+  if (l == 3)
+    {
+      env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
+
+      ret = evaluate_object (nth (2, CAR (list)), env, outcome);
+
+      env->vars = remove_bindings (env->vars, 1);
+
+      return ret;
+    }
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_dolist (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *var, *cons, *ret;
+  int l;
+
+  if (list_length (list) < 1 || CAR (list)->type != TYPE_CONS_PAIR
+      || (l = list_length (CAR (list))) < 2 || l > 3
+      || !IS_SYMBOL (CAR (CAR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  cons = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+
+  if (!cons)
+    return NULL;
+
+  if (cons->type != TYPE_CONS_PAIR && cons != &nil_object)
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  var = SYMBOL (CAR (CAR (list)));
+
+  while (cons != &nil_object)
+    {
+      env->vars = bind_variable (var, CAR (cons), env->vars);
+
+      evaluate_body (CDR (list), 0, env, outcome);
+
+      env->vars = remove_bindings (env->vars, 1);
+
+      cons = CDR (cons);
+    }
 
   if (l == 3)
-    return evaluate_object (nth (2, CAR (list)), env, outcome);
+    {
+      env->vars = bind_variable (var, &nil_object, env->vars);
+
+      ret = evaluate_object (nth (2, CAR (list)), env, outcome);
+
+      env->vars = remove_bindings (env->vars, 1);
+
+      return ret;
+    }
 
   return &nil_object;
 }
