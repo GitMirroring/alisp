@@ -231,6 +231,7 @@ eval_outcome_type
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
     KEY_NOT_FOUND_IN_FUNCALL,
+    ODD_NUMBER_OF_ARGUMENTS,
     ODD_NUMBER_OF_KEYWORD_ARGUMENTS,
     DOTTED_LIST_NOT_ALLOWED_HERE,
     COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
@@ -1091,6 +1092,8 @@ struct object *get_dynamic_value (struct object *sym, struct environment *env);
 struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions);
 
+struct object *set_value (struct object *sym, struct object *valueform,
+			  struct environment *env, struct eval_outcome *outcome);
 struct object *setf_from_accessor (struct object *acc, struct object *valform,
 				   struct environment *env,
 				   struct eval_outcome *outcome);
@@ -1112,6 +1115,8 @@ struct object *evaluate_defvar
 struct object *evaluate_defun
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defmacro
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_setq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1428,6 +1433,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, 0);
   add_builtin_form ("DEFUN", env, evaluate_defun, TYPE_MACRO, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, 0);
+  add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, 1);
   add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, 1);
   add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, 0);
@@ -7584,6 +7590,73 @@ get_function (struct object *sym, struct environment *env, int only_functions)
 
 
 struct object *
+set_value (struct object *sym, struct object *valueform, struct environment *env,
+	   struct eval_outcome *outcome)
+{
+  struct symbol *s = sym->value_ptr.symbol;
+  struct object *val;
+  struct binding *b;
+
+  if (s->is_const)
+    {
+      outcome->type = CANT_REDEFINE_CONSTANT;
+      return NULL;
+    }
+
+  val = evaluate_object (valueform, env, outcome);
+
+  if (!val)
+    return NULL;
+
+  if (s->is_parameter || s->is_special)
+    {
+      if (!s->value_dyn_bins_num)
+	{
+	  if (s->value_cell)
+	    decrement_refcount_by (s->value_cell,
+				   sym->refcount, NULL);
+
+	  increment_refcount_by (val, sym->refcount - 1, NULL);
+	  s->value_cell = val;
+	}
+      else
+	{
+	  b = find_binding (s, env->vars, DYNAMIC_BINDING);
+
+	  if (b)
+	    {
+	      b->obj = val;
+	    }
+	  else
+	    {
+	      env->vars = add_binding (create_binding (sym, val,
+						       DYNAMIC_BINDING),
+				       env->vars);
+	    }
+	}
+    }
+  else
+    {
+      b = find_binding (s, env->vars, LEXICAL_BINDING);
+
+      if (b)
+	{
+	  b->obj = val;
+	}
+      else
+	{
+	  s->value_dyn_bins_num++;
+	  s->is_special = 1;
+	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING),
+				   env->vars);
+	}
+    }
+
+  return val;
+}
+
+
+struct object *
 setf_from_accessor (struct object *acc, struct object *valform,
 		    struct environment *env, struct eval_outcome *outcome)
 {
@@ -7853,95 +7926,73 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
 
 struct object *
-evaluate_setf (struct object *list, struct environment *env,
+evaluate_setq (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  struct symbol *s;
-  struct binding *b;
-  struct object *val;
+  struct object *ret = &nil_object;
 
-  if (list_length (list) < 2)
+  if (list_length (list) % 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
+      outcome->type = ODD_NUMBER_OF_ARGUMENTS;
 
       return NULL;
     }
 
-  if (nth (0, list)->type == TYPE_SYMBOL_NAME ||
-      nth (0, list)->type == TYPE_SYMBOL)
+  while (list != &nil_object)
     {
-      if (nth (0, list)->type == TYPE_SYMBOL_NAME)
-	s = CAR (list)->value_ptr.symbol_name->sym->value_ptr.symbol;
-      else
-	s = CAR (list)->value_ptr.symbol;
-
-      if (s->is_const)
+      if (!IS_SYMBOL (CAR (list)))
 	{
-	  outcome->type = CANT_REDEFINE_CONSTANT;
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret = set_value (SYMBOL (CAR (list)), CAR (CDR (list)), env, outcome);
+
+      if (!ret)
+	return NULL;
+
+      list = CDR (CDR (list));
+    }
+
+  increment_refcount (ret, NULL);
+  return ret;
+}
+
+
+struct object *
+evaluate_setf (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  struct object *val = &nil_object;
+
+  if (list_length (list) % 2)
+    {
+      outcome->type = ODD_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  while (list != &nil_object)
+    {
+      if (IS_SYMBOL (CAR (list)))
+	{
+	  val = set_value (SYMBOL (CAR (list)), nth (1, list), env, outcome);
+
+	  if (!val)
+	    return NULL;
+	}
+      else if (nth (0, list)->type == TYPE_CONS_PAIR)
+	{
+	  val = setf_from_accessor (nth (0, list), nth (1, list), env, outcome);
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
 	  return NULL;
 	}
 
-      val = evaluate_object (nth (1, list), env, outcome);
-
-      if (!val)
-	return NULL;
-
-      if (s->is_parameter || s->is_special)
-	{
-	  if (!s->value_dyn_bins_num)
-	    {
-	      if (s->value_cell)
-		decrement_refcount_by (s->value_cell,
-				       SYMBOL (CAR (list))->refcount, NULL);
-
-	      increment_refcount_by (val, SYMBOL (CAR (list))->refcount - 1,
-				     NULL);
-	      s->value_cell = val;
-	    }
-	  else
-	    {
-	      b = find_binding (s, env->vars, DYNAMIC_BINDING);
-
-	      if (b)
-		{
-		  b->obj = val;
-		}
-	      else
-		{
-		  env->vars = add_binding (create_binding (SYMBOL (CAR (list)),
-							   val, DYNAMIC_BINDING),
-					   env->vars);
-		}
-	    }
-	}
-      else
-	{
-	  b = find_binding (s, env->vars, LEXICAL_BINDING);
-
-	  if (b)
-	    {
-	      b->obj = val;
-	    }
-	  else
-	    {
-	      s->value_dyn_bins_num++;
-	      s->is_special = 1;
-	      env->vars = add_binding (create_binding (SYMBOL (CAR (list)), val,
-						       DYNAMIC_BINDING),
-				       env->vars);
-	    }
-	}
-    }
-  else if (nth (0, list)->type == TYPE_CONS_PAIR)
-    {
-      val = setf_from_accessor (nth (0, list), nth (1, list), env, outcome);
-    }
-  else
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      list = CDR (CDR (list));
     }
 
   increment_refcount (val, NULL);
@@ -9302,6 +9353,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == KEY_NOT_FOUND_IN_FUNCALL)
     {
       printf ("eval error: unknown key in keyword part of function call\n");
+    }
+  else if (err->type == ODD_NUMBER_OF_ARGUMENTS)
+    {
+      printf ("eval error: odd number of arguments\n");
     }
   else if (err->type == ODD_NUMBER_OF_KEYWORD_ARGUMENTS)
     {
