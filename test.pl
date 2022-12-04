@@ -155,6 +155,8 @@ make_test ("(setf c 4)", "4");
 make_test ("c", "4");
 make_test ("(setf c (+ c 1))", "5");
 make_test ("c", "5");
+make_test ("(setq)", "()");
+make_test ("(setq b 9 c 4 c (+ c 1))", "5");
 make_test ("(let ((b 10)) b)", "10");
 make_test ("(let ((b 1)) (setf b 2) b)", "2");
 make_test ("b", "9");
