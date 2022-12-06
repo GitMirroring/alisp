@@ -28,6 +28,11 @@
 (defun plusp (num)
   (> num 0))
 
+(defun abs (num)
+  (if (>= num 0)
+      num
+      (- num)))
+
 
 (defun first (list) (nth 0 list))
 (defun second (list) (nth 1 list))
