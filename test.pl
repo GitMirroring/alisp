@@ -287,6 +287,9 @@ make_test ("(concatenate 'string)", "\"\"");
 make_test ("(concatenate 'string \"\")", "\"\"");
 make_test ("(concatenate 'string \"aa\" \"bb\")", "\"aabb\"");
 make_test ("(dotimes (tmp 10 tmp))", "10");
+make_test ("(mapcar #'car '((1 a) (2 b) (3 c)))", "(1 2 3)");
+make_test ("(mapcar #'abs '(3 -4 2 -5 -6))", "(3 4 2 5 6)");
+make_test ("(mapcar #'cons '(a b c) '(1 2 3))", "((A . 1) (B . 2) (C . 3))");
 make_test ("(cond (t (+ 1 2)))", "3");
 make_test ("(cond (nil 2) (t 3) (nil 4))", "3");
 
