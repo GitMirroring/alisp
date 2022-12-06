@@ -328,6 +328,9 @@ make_test ("(minusp 0)", "()");
 make_test ("(minusp -0.5)", "T");
 make_test ("(plusp 1)", "T");
 make_test ("(plusp -1)", "()");
+make_test ("(abs 0)", "0");
+make_test ("(abs -0.5)", "0.5e0");
+make_test ("(abs 1/2)", "1/2");
 
 
 print "\ntotal tests: " . $total_tests . "\n";
