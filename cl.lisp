@@ -125,3 +125,46 @@
 
 (defun char (str ind)
   (aref str ind))
+
+
+(defun consp (obj)
+  (typep obj 'cons))
+
+(defun listp (obj)
+  (typep obj 'list))
+
+(defun symbolp (obj)
+  (typep obj 'symbol))
+
+(defun functionp (obj)
+  (typep obj 'function))
+
+(defun packagep (obj)
+  (typep obj 'package))
+
+(defun integerp (obj)
+  (typep obj 'integer))
+
+(defun rationalp (obj)
+  (typep obj 'ratio))
+
+(defun floatp (obj)
+  (typep obj 'float))
+
+(defun characterp (obj)
+  (typep obj 'character))
+
+(defun vectorp (obj)
+  (typep obj 'vector))
+
+(defun arrayp (obj)
+  (typep obj 'array))
+
+(defun sequencep (obj)
+  (typep obj 'sequence))
+
+(defun stringp (obj)
+  (typep obj 'string))
+
+(defun pathnamep (obj)
+  (typep obj 'pathname))
