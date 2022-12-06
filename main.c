@@ -6632,7 +6632,11 @@ builtin_mapcar (struct object *list, struct environment *env,
       val = call_function (CAR (list), args, 0, 0, env, outcome);
 
       if (!val)
-	return NULL;  /* FIXME memory leak */
+	{
+	  free_list_structure (cdrlist);
+	  free_list_structure (args);
+	  return NULL;
+	}
 
       retcons->value_ptr.cons_pair->car = val;
 
@@ -6654,6 +6658,9 @@ builtin_mapcar (struct object *list, struct environment *env,
     }
 
   retcons->value_ptr.cons_pair->cdr = &nil_object;
+
+  free_list_structure (cdrlist);
+  free_list_structure (args);
 
   return ret;
 }
