@@ -6579,7 +6579,7 @@ struct object *
 builtin_mapcar (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
-  int i, j, l = list_length (list), finished = 0;
+  int i, l = list_length (list), finished = 0;
   struct object *cdrlist, *cdrlistcons, *args, *argscons, *ret, *retcons, *val;
 
   if (l < 2)
@@ -6608,14 +6608,13 @@ builtin_mapcar (struct object *list, struct environment *env,
 
   cdrlist = cdrlistcons = alloc_empty_list (l-1);
 
-  for (j = 1; j < l; j++)
+  for (i = 1; i < l; i++)
     {
-      cdrlistcons->value_ptr.cons_pair->car = nth (j, list);
+      cdrlistcons->value_ptr.cons_pair->car = nth (i, list);
       cdrlistcons = CDR (cdrlistcons);
     }
 
   args = alloc_empty_list (l-1);
-  i = 0;
   ret = retcons = alloc_empty_cons_pair ();
 
   while (!finished)
@@ -6623,7 +6622,7 @@ builtin_mapcar (struct object *list, struct environment *env,
       argscons = args;
       cdrlistcons = cdrlist;
 
-      for (j = 1; j < l; j++)
+      for (i = 1; i < l; i++)
 	{
 	  argscons->value_ptr.cons_pair->car = CAR (CAR (cdrlistcons));
 	  argscons = CDR (argscons);
@@ -6639,7 +6638,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 
       cdrlistcons = cdrlist;
 
-      for (j = 1; j < l; j++)
+      for (i = 1; i < l; i++)
 	{
 	  cdrlistcons->value_ptr.cons_pair->car =
 	    CDR (cdrlistcons->value_ptr.cons_pair->car);
