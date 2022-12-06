@@ -51,6 +51,8 @@
 		   (list)->value_ptr.cons_pair->cdr : &nil_object)
 
 
+#define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || (s) == &nil_object)
+
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :	\
@@ -759,6 +761,7 @@ void *calloc_and_check (size_t nmemb, size_t size);
 struct object *alloc_object (void);
 struct object *alloc_prefix (enum element type);
 struct object *alloc_empty_cons_pair (void);
+struct object *alloc_empty_list (size_t sz);
 struct object *alloc_function (void);
 struct object *alloc_sharp_macro_call (void);
 
@@ -875,6 +878,7 @@ unsigned int list_length (const struct object *list);
 struct object *last_cons_pair (struct object *list);
 int is_dotted_list (const struct object *list);
 int is_circular_list (struct object *list);
+int is_proper_list (struct object *list);
 
 struct object *copy_prefix (const struct object *begin, const struct object *end,
 			    struct object **last_prefix);
@@ -1007,6 +1011,8 @@ struct object *builtin_concatenate
 struct object *builtin_dotimes
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_dolist
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_mapcar
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
@@ -1184,6 +1190,8 @@ void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
 void free_function_or_macro (struct object *obj);
+
+void free_list_structure (struct object *list);
 
 void print_welcome_message (void);
 void print_version (void);
@@ -1407,6 +1415,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, 0);
   add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, 0);
   add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, 0);
+  add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, 0);
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
@@ -3089,6 +3098,22 @@ alloc_empty_cons_pair (void)
 
 
 struct object *
+alloc_empty_list (size_t sz)
+{
+  struct object *ret, *cons;
+
+  ret = cons = alloc_empty_cons_pair ();
+
+  for (sz--; sz; sz--)
+    cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
 alloc_function (void)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
@@ -4380,6 +4405,13 @@ is_circular_list (struct object *list)
 
   free_hash_table (hash_t, 1024);
   return 0;
+}
+
+
+int
+is_proper_list (struct object *list)
+{
+  return !is_circular_list (list) && !is_dotted_list (list);
 }
 
 
@@ -6540,6 +6572,91 @@ builtin_dolist (struct object *list, struct environment *env,
     }
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_mapcar (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  int i, j, l = list_length (list), finished = 0;
+  struct object *cdrlist, *cdrlistcons, *args, *argscons, *ret, *retcons, *val;
+
+  if (l < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  for (i = 1; i < l; i++)
+    {
+      if (!IS_LIST (nth (i, list)) || !is_proper_list (nth (i, list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (nth (i, list) == &nil_object)
+	return &nil_object;
+    }
+
+  cdrlist = cdrlistcons = alloc_empty_list (l-1);
+
+  for (j = 1; j < l; j++)
+    {
+      cdrlistcons->value_ptr.cons_pair->car = nth (j, list);
+      cdrlistcons = CDR (cdrlistcons);
+    }
+
+  args = alloc_empty_list (l-1);
+  i = 0;
+  ret = retcons = alloc_empty_cons_pair ();
+
+  while (!finished)
+    {
+      argscons = args;
+      cdrlistcons = cdrlist;
+
+      for (j = 1; j < l; j++)
+	{
+	  argscons->value_ptr.cons_pair->car = CAR (CAR (cdrlistcons));
+	  argscons = CDR (argscons);
+	  cdrlistcons = CDR (cdrlistcons);
+	}
+
+      val = call_function (CAR (list), args, 0, 0, env, outcome);
+
+      if (!val)
+	return NULL;  /* FIXME memory leak */
+
+      retcons->value_ptr.cons_pair->car = val;
+
+      cdrlistcons = cdrlist;
+
+      for (j = 1; j < l; j++)
+	{
+	  cdrlistcons->value_ptr.cons_pair->car =
+	    CDR (cdrlistcons->value_ptr.cons_pair->car);
+
+	  if (CAR (cdrlistcons) == &nil_object)
+	    finished = 1;
+
+	  cdrlistcons = CDR (cdrlistcons);
+	}
+
+      if (!finished)
+	retcons = retcons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+    }
+
+  retcons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
 }
 
 
@@ -9973,6 +10090,17 @@ free_function_or_macro (struct object *obj)
 
   free (obj->value_ptr.function);
   free (obj);
+}
+
+
+void
+free_list_structure (struct object *list)
+{
+  if (list->type == TYPE_CONS_PAIR)
+    {
+      free_list_structure (CDR (list));
+      free_cons_pair (list);
+    }
 }
 
 
