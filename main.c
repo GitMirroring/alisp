@@ -1075,6 +1075,9 @@ struct object *builtin_fboundp (struct object *list, struct environment *env,
 struct object *builtin_symbol_function (struct object *list,
 					struct environment *env,
 					struct eval_outcome *outcome);
+struct object *builtin_special_operator_p (struct object *list,
+					   struct environment *env,
+					   struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
@@ -1456,6 +1459,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION, 0);
   add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
+		    TYPE_FUNCTION, 0);
+  add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
@@ -7356,6 +7361,35 @@ builtin_symbol_function (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_special_operator_p (struct object *list, struct environment *env,
+			    struct eval_outcome *outcome)
+{
+  struct symbol *s;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  s = SYMBOL (CAR (list))->value_ptr.symbol;
+
+  if (s->function_cell && s->function_cell->value_ptr.function->
+      is_special_operator)
+    return &t_object;
+
+  return &nil_object;
 }
 
 
