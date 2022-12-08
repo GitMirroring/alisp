@@ -61,8 +61,8 @@
 
 #define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_RATIO	\
 					   | TYPE_FLOAT | TYPE_STRING	\
-					   | TYPE_CHARACTER | TYPE_FILENAME))
-
+					   | TYPE_CHARACTER | TYPE_FILENAME \
+					   | TYPE_STREAM))
 
 #define TERMINATING_MACRO_CHARS "()';\"`,"
 
@@ -1002,6 +1002,8 @@ struct object *builtin_load
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_open
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_close
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_not
@@ -1412,6 +1414,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
   add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, 0);
+  add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
@@ -3778,6 +3781,7 @@ create_stream (enum stream_type type, enum stream_direction direction,
 
   str->type = type;
   str->direction = direction;
+  str->is_open = 1;
 
   obj->type = TYPE_STREAM;
   obj->refcount = 1;
@@ -6368,6 +6372,37 @@ builtin_open (struct object *list, struct environment *env,
     }
 
   return create_stream (BINARY_STREAM, dir, f->value->value_ptr.string, outcome);
+}
+
+
+struct object *
+builtin_close (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  struct stream *s;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  s = CAR (list)->value_ptr.stream;
+
+  if (!s->is_open)
+    return &nil_object;
+
+  fclose (s->file);
+
+  s->is_open = 0;
+
+  return &t_object;
 }
 
 
