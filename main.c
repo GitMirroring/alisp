@@ -1004,6 +1004,8 @@ struct object *builtin_open
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_close
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_open_stream_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_not
@@ -1415,6 +1417,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
   add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, 0);
   add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, 0);
+  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p, TYPE_FUNCTION,
+		    0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
@@ -6403,6 +6407,29 @@ builtin_close (struct object *list, struct environment *env,
   s->is_open = 0;
 
   return &t_object;
+}
+
+
+struct object *
+builtin_open_stream_p (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->value_ptr.stream->is_open)
+    return &t_object;
+  else
+    return &nil_object;
 }
 
 
