@@ -16,6 +16,14 @@
 ;;;;  along with al.  If not, see <https://www.gnu.org/licenses/>.
 
 
+
+;;; the following useless constants are just ridiculously high because there is no actual limit
+(defconstant LAMBDA-PARAMETERS-LIMIT 4294967296)
+(defconstant CALL-ARGUMENTS-LIMIT 4294967296)
+(defconstant MULTIPLE-VALUES-LIMIT 4294967296)
+
+
+
 (defun 1+ (num)
   (+ num 1))
 
