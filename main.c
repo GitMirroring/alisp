@@ -969,6 +969,8 @@ int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 int type_pathname (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct eval_outcome *outcome);
+int type_stream (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome);
 
 struct object *builtin_car
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1494,6 +1496,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
 		    NULL);
   add_builtin_type ("PATHNAME", env, type_pathname, 1, NULL);
+  add_builtin_type ("STREAM", env, type_stream, 1, NULL);
 }
 
 
@@ -5616,6 +5619,14 @@ type_pathname (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_FILENAME;
+}
+
+
+int
+type_stream (const struct object *obj, const struct object *typespec,
+	     struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_STREAM;
 }
 
 
