@@ -176,3 +176,6 @@
 
 (defun pathnamep (obj)
   (typep obj 'pathname))
+
+(defun streamp (obj)
+  (typep obj 'stream))
