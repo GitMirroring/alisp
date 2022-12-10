@@ -10081,6 +10081,14 @@ free_object (struct object *obj)
     free_float (obj);
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
     free_function_or_macro (obj);
+  else if (obj->type == TYPE_STREAM)
+    {
+      if (obj->value_ptr.stream->is_open)
+	fclose (obj->value_ptr.stream->file);
+
+      free (obj->value_ptr.stream);
+      free (obj);
+    }
 }
 
 
