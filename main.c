@@ -739,10 +739,11 @@ enum element find_next_element
 
 int is_number (const char *token, size_t size, int radix,
 	       enum object_type *numtype, const char **number_end,
-	       const char **token_end);
+	       size_t *exp_marker_pos, const char **token_end);
 struct object *alloc_number (enum object_type numtype);
-struct object *create_number (const char *token, size_t size, int radix,
-			     enum object_type numtype);
+struct object *create_number (const char *token, size_t size,
+			      size_t exp_marker_pos, int radix,
+			      enum object_type numtype);
 struct object *create_integer_from_int (int num);
 
 void print_range (const char *begin, const char *end);
@@ -2017,6 +2018,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
   enum object_type numtype;
   enum read_outcome out = NO_OBJECT;
   const char *num_end;
+  size_t exp_mark_pos;
 
   input = skip_space_block (input, size, &size);
 
@@ -2103,9 +2105,11 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	{
 	  *obj_begin = input;
 	  
-	  if (is_number (input, size, 10, &numtype, &num_end, obj_end))
+	  if (is_number (input, size, 10, &numtype, &num_end, &exp_mark_pos,
+			 obj_end))
 	    {
-	      ob = create_number (input, num_end - input + 1, 10, numtype);
+	      ob = create_number (input, num_end - input + 1, exp_mark_pos, 10,
+				  numtype);
 	      out = COMPLETE_OBJECT;
 	    }
 	  else
@@ -2721,11 +2725,12 @@ find_next_element (const char *input, size_t size, const char **elem_begin)
 
 int
 is_number (const char *token, size_t size, int radix, enum object_type *numtype,
-	   const char **number_end, const char **token_end)
+	   const char **number_end, size_t *exp_marker_pos,
+	   const char **token_end)
 {
   size_t i = 0;
   
-  int found_dec_point = 0, found_exp_marker = 0, exp_marker_pos, found_slash = 0,
+  int found_dec_point = 0, found_exp_marker = 0, found_slash = 0,
     found_dec_digit = 0, found_digit = 0, found_digit_after_slash = 0,
     found_digit_after_exp_marker = 0, found_digit_after_dec_point = 0,
     need_decimal_digit = 0;
@@ -2738,7 +2743,8 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
   int digits_len = radix * 2;
   
   *numtype = TYPE_INTEGER;
- 
+  *exp_marker_pos = 0;
+
   while (i < size)
     {
       if (strchr (decimal_digits, token [i]))
@@ -2761,13 +2767,13 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 	  else
 	    {
 	      found_exp_marker = 1;
-	      exp_marker_pos = i;
+	      *exp_marker_pos = i;
 	      *numtype = TYPE_FLOAT;
 	    }
 	}      
       else if (token [i] == '+' || token [i] == '-')
 	{
-	  if (i > 0 && (!found_exp_marker || (i - exp_marker_pos > 1)))
+	  if (i > 0 && (!found_exp_marker || (i - *exp_marker_pos > 1)))
 	    return 0;
 	}
       else if (token [i] == '/')
@@ -2858,7 +2864,8 @@ alloc_number (enum object_type numtype)
 
 
 struct object *
-create_number (const char *token, size_t size, int radix, enum object_type numtype)
+create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
+	       enum object_type numtype)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   char *buf = malloc_and_check (size + 1);
@@ -2881,6 +2888,9 @@ create_number (const char *token, size_t size, int radix, enum object_type numty
     }
   else if (numtype == TYPE_FLOAT)
     {
+      if (exp_marker_pos > 0)
+	buf [exp_marker_pos] = 'e';
+
       mpf_init (obj->value_ptr.floating);
       mpf_set_str (obj->value_ptr.floating, buf, radix);
     }
