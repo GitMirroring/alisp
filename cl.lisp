@@ -23,6 +23,7 @@
 (defconstant MULTIPLE-VALUES-LIMIT 4294967296)
 
 
+(defconstant PI 3.141592653589793L0)
 
 (defun 1+ (num)
   (+ num 1))
