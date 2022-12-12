@@ -2885,6 +2885,8 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
     {
       mpq_init (obj->value_ptr.ratio);
       mpq_set_str (obj->value_ptr.ratio, buf, radix);
+
+      mpq_canonicalize (obj->value_ptr.ratio);
     }
   else if (numtype == TYPE_FLOAT)
     {
