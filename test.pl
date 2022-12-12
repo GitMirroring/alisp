@@ -210,6 +210,7 @@ make_test ("(1- .5)", "-0.5e0");
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep 0 'integer)", "T");
 make_test ("(typep 1/2 'ratio)", "T");
+make_test ("(typep 3/1 'ratio)", "()");
 make_test ("(typep \"abc\" 'string)", "T");
 make_test ("(typep \"abc\" '(string))", "T");
 make_test ("(typep 0 'string)", "()");
