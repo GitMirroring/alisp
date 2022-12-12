@@ -5572,7 +5572,26 @@ int
 type_ratio (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome)
 {
-  return obj->type == TYPE_RATIO;
+  mpz_t den;
+  mpz_t one;
+  int ret = 0;
+
+  if (obj->type != TYPE_RATIO)
+    return 0;
+
+  mpz_init (den);
+  mpq_get_den (den, obj->value_ptr.ratio);
+
+  mpz_init (one);
+  mpz_set_si (one, 1);
+
+  if (mpz_cmp (den, one) > 0)
+    ret = 1;
+
+  mpz_clear (den);
+  mpz_clear (one);
+
+  return ret;
 }
 
 
