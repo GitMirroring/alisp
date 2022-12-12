@@ -3182,7 +3182,7 @@ struct object_list **
 alloc_empty_hash_table (size_t table_size)
 {
   struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
-  int i;
+  size_t i;
 
   for (i = 0; i < table_size; i++)
     ret [i] = NULL;
@@ -3196,7 +3196,7 @@ clone_hash_table (struct object_list **hash_table, size_t table_size)
 {
   struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
   struct object_list *orig, *cp;
-  int i;
+  size_t i;
 
   for (i = 0; i < table_size; i++)
     {
@@ -3753,7 +3753,7 @@ create_vector (struct object *list)
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct array *vec = malloc_and_check (sizeof (*vec));
   struct array_size *sz = malloc_and_check (sizeof (*sz));
-  int i;
+  size_t i;
 
   sz->size = list_length (list);
   sz->next = NULL;
