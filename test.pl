@@ -347,6 +347,8 @@ make_test ("(plusp -1)", "()");
 make_test ("(abs 0)", "0");
 make_test ("(abs -0.5)", "0.5e0");
 make_test ("(abs 1/2)", "1/2");
+make_test ("(zerop -0)", "T");
+make_test ("(zerop 1/2)", "()");
 
 
 print "\ntotal tests: " . $total_tests . "\n";
