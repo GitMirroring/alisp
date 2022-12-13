@@ -952,6 +952,12 @@ int type_function (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct eval_outcome *outcome);
 int type_package (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct eval_outcome *outcome);
+int type_number (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome);
+int type_real (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome);
+int type_rational (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct eval_outcome *outcome);
 int type_integer (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct eval_outcome *outcome);
 int type_ratio (const struct object *obj, const struct object *typespec,
@@ -1491,8 +1497,11 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("SYMBOL", env, type_symbol, 1, NULL);
   add_builtin_type ("FUNCTION", env, type_function, 1, NULL);
   add_builtin_type ("PACKAGE", env, type_package, 1, NULL);
-  add_builtin_type ("INTEGER", env, type_integer, 1, NULL);
-  add_builtin_type ("RATIO", env, type_ratio, 1, NULL);
+  add_builtin_type ("NUMBER", env, type_number, 1, NULL);
+  add_builtin_type ("REAL", env, type_real, 1, "NUMBER", NULL);
+  add_builtin_type ("RATIONAL", env, type_rational, 1, "REAL", NULL);
+  add_builtin_type ("INTEGER", env, type_integer, 1, "RATIONAL", NULL);
+  add_builtin_type ("RATIO", env, type_ratio, 1, "RATIONAL", NULL);
   add_builtin_type ("FLOAT", env, type_float, 1, NULL);
   add_builtin_type ("SHORT-FLOAT", env, type_short_float, 1, "SINGLE-FLOAT",
 		    NULL);
@@ -5585,6 +5594,32 @@ type_package (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_PACKAGE;
+}
+
+
+int
+type_number (const struct object *obj, const struct object *typespec,
+	     struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO
+    || obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_real (const struct object *obj, const struct object *typespec,
+	   struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO
+    || obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_rational (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO;
 }
 
 
