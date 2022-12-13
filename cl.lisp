@@ -158,7 +158,7 @@
   (typep obj 'integer))
 
 (defun rationalp (obj)
-  (typep obj 'ratio))
+  (typep obj 'rational))
 
 (defun floatp (obj)
   (typep obj 'float))
@@ -183,3 +183,9 @@
 
 (defun streamp (obj)
   (typep obj 'stream))
+
+(defun realp (obj)
+  (typep obj 'real))
+
+(defun numberp (obj)
+  (typep obj 'number))
