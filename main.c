@@ -5117,6 +5117,7 @@ is_subtype (const struct object *first, const struct object *second,
 	    struct environment *env, struct eval_outcome *outcome)
 {
   struct object_list *p;
+  int ret;
 
   if (first == &nil_object || second == &t_object)
     return 1;
@@ -5132,6 +5133,18 @@ is_subtype (const struct object *first, const struct object *second,
       while (p)
 	{
 	  if (p->obj == SYMBOL (second))
+	    return 1;
+
+	  p = p->next;
+	}
+
+      p = SYMBOL (first)->value_ptr.symbol->parent_types;
+
+      while (p)
+	{
+	  ret = is_subtype (p->obj, SYMBOL (second), env, outcome);
+
+	  if (ret)
 	    return 1;
 
 	  p = p->next;
