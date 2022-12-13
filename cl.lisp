@@ -42,6 +42,9 @@
       num
       (- num)))
 
+(defun zerop (num)
+  (= num 0))
+
 
 (defun first (list) (nth 0 list))
 (defun second (list) (nth 1 list))
