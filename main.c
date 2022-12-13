@@ -958,6 +958,14 @@ int type_ratio (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct eval_outcome *outcome);
 int type_float (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct eval_outcome *outcome);
+int type_short_float (const struct object *obj, const struct object *typespec,
+		      struct environment *env, struct eval_outcome *outcome);
+int type_single_float (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct eval_outcome *outcome);
+int type_double_float (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct eval_outcome *outcome);
+int type_long_float (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct eval_outcome *outcome);
 int type_character (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct eval_outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
@@ -1486,6 +1494,13 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("INTEGER", env, type_integer, 1, NULL);
   add_builtin_type ("RATIO", env, type_ratio, 1, NULL);
   add_builtin_type ("FLOAT", env, type_float, 1, NULL);
+  add_builtin_type ("SHORT-FLOAT", env, type_short_float, 1, "SINGLE-FLOAT",
+		    NULL);
+  add_builtin_type ("SINGLE-FLOAT", env, type_single_float, 1, "FLOAT",
+		    "SHORT-FLOAT", "DOUBLE-FLOAT", "LONG-FLOAT", NULL);
+  add_builtin_type ("DOUBLE-FLOAT", env, type_double_float, 1, "SINGLE-FLOAT",
+		    NULL);
+  add_builtin_type ("LONG-FLOAT", env, type_long_float, 1, "SINGLE-FLOAT", NULL);
   add_builtin_type ("CHARACTER", env, type_character, 1, NULL);
   add_builtin_type ("SEQUENCE", env, type_sequence, 1, NULL);
   add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", NULL);
@@ -5611,6 +5626,38 @@ type_ratio (const struct object *obj, const struct object *typespec,
 int
 type_float (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_short_float (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_single_float (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_double_float (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FLOAT;
+}
+
+
+int
+type_long_float (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_FLOAT;
 }
