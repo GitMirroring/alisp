@@ -4641,7 +4641,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
   while (obj && obj != &nil_object && (car = CAR (obj))
 	 && car->type == TYPE_SYMBOL_NAME 
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&KEY", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			       "&BODY", "&KEY", "&AUX", "&ALLOW_OTHER_KEYS",
+			       NULL))
     {
       increment_refcount (SYMBOL (car), NULL);
 
@@ -4672,7 +4673,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
     {
       if (car->type == TYPE_SYMBOL_NAME 
 	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			       "&BODY", "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS",
+			       NULL))
 	{
 	  break;
 	}
@@ -4732,7 +4734,8 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
     {
       if (car->type == TYPE_SYMBOL_NAME
 	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			       "&BODY", "&KEYWORD", "&AUX", "&ALLOW_OTHER_KEYS",
+			       NULL))
 	{
 	  break;
 	}
@@ -4831,7 +4834,7 @@ struct parameter *parse_lambda_list (struct object *obj, struct environment *env
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && car->type == TYPE_SYMBOL_NAME
-      && symname_equals (car->value_ptr.symbol_name, "&REST"))
+      && symname_is_among (car->value_ptr.symbol_name, "&REST", "&BODY", NULL))
     {
       increment_refcount (SYMBOL (CAR (CDR (obj))), NULL);
 
