@@ -91,11 +91,11 @@
 (defun cddddr (list) (nthcdr 4 list))
 
 
-(defmacro when (clause &rest body)
+(defmacro when (clause &body body)
   `(if ,clause (progn ,@body)))
 
 
-(defmacro unless (clause &rest body)
+(defmacro unless (clause &body body)
   `(if (not ,clause) (progn ,@body)))
 
 
@@ -122,7 +122,7 @@
 	   (or ,@(cdr forms)))))
 
 
-(defmacro cond (&rest body)
+(defmacro cond (&body body)
   (let ((first (car body))
 	(rest (cdr body)))
     `(if ,(car first)
