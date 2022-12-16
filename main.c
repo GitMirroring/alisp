@@ -55,6 +55,9 @@
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
+#define IS_NUMBER(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
+		      || (s)->type == TYPE_FLOAT)
+
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :	\
 		   (s)->value_ptr.symbol_name->sym) 
 
@@ -506,6 +509,16 @@ stream
 
 
 enum
+rounding_behavior
+  {
+    FLOOR,
+    CEILING,
+    TRUNCATE,
+    ROUND_TO_NEAREST
+  };
+
+
+enum
 number_comparison
   {
     EQUAL,
@@ -745,6 +758,7 @@ struct object *create_number (const char *token, size_t size,
 			      size_t exp_marker_pos, int radix,
 			      enum object_type numtype);
 struct object *create_integer_from_int (int num);
+struct object *create_floating_from_double (double d);
 
 void print_range (const char *begin, const char *end);
 
@@ -1053,6 +1067,9 @@ struct object *apply_arithmetic_operation
  void (*opq) (mpq_t, const mpq_t, const mpq_t),
  void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
  struct eval_outcome *outcome);
+struct object *perform_division_with_remainder
+(struct object *args, enum rounding_behavior round_behavior,
+ struct eval_outcome *outcome);
 
 struct object *builtin_plus (struct object *list, struct environment *env,
 			     struct eval_outcome *outcome);
@@ -1062,6 +1079,14 @@ struct object *builtin_multiply (struct object *list, struct environment *env,
 				 struct eval_outcome *outcome);
 struct object *builtin_divide (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
+struct object *builtin_floor (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
+struct object *builtin_ceiling (struct object *list, struct environment *env,
+				struct eval_outcome *outcome);
+struct object *builtin_truncate (struct object *list, struct environment *env,
+				 struct eval_outcome *outcome);
+struct object *builtin_round (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
 struct object *builtin_numbers_equal (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
@@ -1447,6 +1472,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
   add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, 0);
+  add_builtin_form ("FLOOR", env, builtin_floor, TYPE_FUNCTION, 0);
+  add_builtin_form ("CEILING", env, builtin_ceiling, TYPE_FUNCTION, 0);
+  add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, 0);
+  add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, 0);
   add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, 0);
   add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, 0);
   add_builtin_form ("<", env, builtin_numbers_less_than, TYPE_FUNCTION, 0);
@@ -2937,6 +2966,21 @@ create_integer_from_int (int num)
 
   mpz_init (obj->value_ptr.integer);
   mpz_set_si (obj->value_ptr.integer, num);
+
+  return obj;
+}
+
+
+struct object *
+create_floating_from_double (double d)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+
+  obj->type = TYPE_FLOAT;
+  obj->refcount = 1;
+
+  mpf_init (obj->value_ptr.floating);
+  mpf_set_d (obj->value_ptr.floating, d);
 
   return obj;
 }
@@ -7139,6 +7183,144 @@ apply_arithmetic_operation (struct object *list,
 
 
 struct object *
+perform_division_with_remainder (struct object *args,
+				 enum rounding_behavior round_behavior,
+				 struct eval_outcome *outcome)
+{
+  int l = list_length (args);
+  enum object_type ret_type, op_type;
+  struct object *div_, *div, *num, *half, *ret, *ret2;
+  mpz_t tmp;
+  mpf_t q, r;
+
+  if (!l)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l > 2)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_NUMBER (CAR (args)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_NUMBER (CAR (CDR (args))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      div_ = CAR (CDR (args));
+    }
+  else
+    div_ = create_integer_from_int (1);
+
+  ret_type = highest_num_type (CAR (args)->type, div_->type);
+
+  if (ret_type == TYPE_INTEGER && round_behavior != ROUND_TO_NEAREST)
+    op_type = TYPE_INTEGER;
+  else
+    op_type = TYPE_FLOAT;
+
+  num = promote_number (CAR (args), op_type);
+  div = promote_number (div_, op_type);
+
+  if (op_type == TYPE_INTEGER)
+    {
+      ret = alloc_number (TYPE_INTEGER);
+      mpz_init (ret->value_ptr.integer);
+
+      ret2 = alloc_number (TYPE_INTEGER);
+      mpz_init (ret2->value_ptr.integer);
+
+      if (round_behavior == FLOOR)
+	mpz_fdiv_qr (ret->value_ptr.integer, ret2->value_ptr.integer,
+		     num->value_ptr.integer, div->value_ptr.integer);
+      else if (round_behavior == CEILING)
+	mpz_cdiv_qr (ret->value_ptr.integer, ret2->value_ptr.integer,
+		     num->value_ptr.integer, div->value_ptr.integer);
+      else if (round_behavior == TRUNCATE)
+	mpz_tdiv_qr (ret->value_ptr.integer, ret2->value_ptr.integer,
+		     num->value_ptr.integer, div->value_ptr.integer);
+    }
+  else
+    {
+      mpf_init (q);
+      mpf_div (q, num->value_ptr.floating, div->value_ptr.floating);
+
+      if (round_behavior == FLOOR)
+	mpf_floor (q, q);
+      else if (round_behavior == CEILING)
+	mpf_ceil (q, q);
+      else if (round_behavior == TRUNCATE)
+	mpf_trunc (q, q);
+      else if (round_behavior == ROUND_TO_NEAREST)
+	{
+	  half = create_floating_from_double (.5);
+
+	  mpf_add (q, q, half->value_ptr.floating);
+
+	  if (mpf_integer_p (q))
+	    {
+	      mpz_init (tmp);
+	      mpz_set_f (tmp, q);
+
+	      if (!mpz_divisible_ui_p (tmp, 2))
+		{
+		  mpf_sub_ui (q, q, 1);
+		}
+
+	      mpz_clear (tmp);
+	    }
+	  else
+	    {
+	      mpf_floor (q, q);
+	    }
+
+	  free_float (half);
+	}
+
+      mpf_init (r);
+      mpf_mul (r, div->value_ptr.floating, q);
+      mpf_sub (r, num->value_ptr.floating, r);
+
+      ret = alloc_number (ret_type);
+      ret2 = alloc_number (ret_type);
+
+      if (ret_type == TYPE_RATIO)
+	{
+	  mpq_set_f (ret->value_ptr.ratio, q);
+	  mpq_set_f (ret2->value_ptr.ratio, r);
+	}
+      else if (ret_type == TYPE_FLOAT)
+	{
+	  mpf_set (ret->value_ptr.floating, q);
+	  mpf_set (ret2->value_ptr.floating, r);
+	}
+
+      mpf_clear (q);
+      mpf_clear (r);
+    }
+
+  decrement_refcount (num, NULL);
+  decrement_refcount (div, NULL);
+
+  prepend_object_to_obj_list (ret2, &outcome->other_values);
+
+  return ret;
+}
+
+
+struct object *
 builtin_plus (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
@@ -7293,6 +7475,38 @@ builtin_divide (struct object *list, struct environment *env,
     } while (list != &nil_object);
 
   return ret;
+}
+
+
+struct object *
+builtin_floor (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, FLOOR, outcome);
+}
+
+
+struct object *
+builtin_ceiling (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, CEILING, outcome);
+}
+
+
+struct object *
+builtin_truncate (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, TRUNCATE, outcome);
+}
+
+
+struct object *
+builtin_round (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, ROUND_TO_NEAREST, outcome);
 }
 
 
