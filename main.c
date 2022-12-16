@@ -10061,7 +10061,7 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     }
   else if (err->type == CANT_DIVIDE_BY_ZERO)
     {
-      printf ("eval error: division by zero is now allowed\n");
+      printf ("eval error: division by zero is not allowed\n");
     }
   else if (err->type == INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT)
     {
