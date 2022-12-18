@@ -43,6 +43,11 @@
 #endif
 
 
+#ifndef HAVE_MEMMEM
+#define memmem al_memmem
+#endif
+
+
 #define CAR(list) ((list) == &nil_object ? &nil_object :\
 		   (list)->value_ptr.cons_pair->car)
 
@@ -679,6 +684,11 @@ line_list
 
 
 void add_standard_definitions (struct environment *env);
+
+#ifndef HAVE_MEMMEM
+void *al_memmem (const void *haystack, size_t haystacklen, const void *needle,
+		 size_t needlelen);
+#endif
 
 char *al_readline (const char prompt []);
 char *read_line_interactively (const char prompt []);
@@ -1552,6 +1562,34 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("PATHNAME", env, type_pathname, 1, NULL);
   add_builtin_type ("STREAM", env, type_stream, 1, NULL);
 }
+
+
+#ifndef HAVE_MEMMEM
+void *
+al_memmem (const void *haystack, size_t haystacklen, const void *needle,
+	   size_t needlelen)
+{
+  size_t i, j;
+  char *hayst = (char *)haystack, *needl = (char *)needle;
+
+  for (i = 0; i < haystacklen; i++)
+    {
+      if (hayst [i] == needl [0])
+	{
+	  for (j = 1; j < needlelen && j + i < haystacklen; j++)
+	    {
+	      if (hayst [i+j] != needl [j])
+		break;
+	    }
+
+	  if (j == needlelen)
+	    return hayst+i;
+	}
+    }
+
+  return NULL;
+}
+#endif
 
 
 char *

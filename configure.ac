@@ -40,7 +40,7 @@ AC_TYPE_SIZE_T
 
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
-AC_CHECK_FUNCS([memchr strchr setlocale strerror])
+AC_CHECK_FUNCS([memchr memmem strchr strerror])
 
 AC_ARG_WITH([readline],
             [AS_HELP_STRING([--with-readline],
