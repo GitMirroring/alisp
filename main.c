@@ -32,8 +32,6 @@
 #include <ctype.h>
 #include <string.h>
 
-#include <getopt.h>
-
 #include <gmp.h>
 
 #ifdef HAVE_LIBREADLINE
@@ -682,6 +680,16 @@ line_list
 };
 
 
+struct
+command_line_options
+{
+  int load_cl;
+};
+
+
+
+void parse_command_line (struct command_line_options *opts, int argc,
+			 char *argv []);
 
 void add_standard_definitions (struct environment *env);
 
@@ -1258,16 +1266,6 @@ void print_help (void);
 
 
 
-const struct option long_options[] =
-  {
-    {"dont-load-cl", no_argument, NULL, 'q'},
-    {"help", no_argument, NULL, 'h'},
-    {"version", no_argument, NULL, 'v'},
-    {0, 0, 0, 0}
-  };
-
-
-
 struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, 1};
 
 struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
@@ -1284,40 +1282,29 @@ main (int argc, char *argv [])
 {
   int end_repl = 0;
 
+#ifdef HAVE_LIBREADLINE
+  int c;
+#endif
+
   struct object *result, *obj, *load_form;
   struct object_list *vals;
   struct environment env = {NULL};
-  
+
   struct eval_outcome eval_out = {EVAL_OK};
 
   const char *input_left = NULL, *obj_b, *obj_e;
   size_t input_left_s = 0;
-  
-  int c, option_index = 0, load_cl = 1;
 
-  
-  while ((c = getopt_long (argc, argv, "qhv",
-			   long_options, &option_index)) != -1)
-    {
-      switch (c)
-	{
-	case 'q':
-	  load_cl = 0;
-	  break;
-	case 'h':
-	  print_help ();
-	  exit (0);
-	case 'v':
-	  print_version ();
-	  exit (0);
-	}
-    }
+  struct command_line_options opts = {1};
+
+
+  parse_command_line (&opts, argc, argv);
 
   add_standard_definitions (&env);
 
   print_welcome_message ();
 
-  if (load_cl)
+  if (opts.load_cl)
     {
       printf ("Loading cl.lisp... ");
 
@@ -1405,6 +1392,70 @@ main (int argc, char *argv [])
     }
   
   return 0;
+}
+
+
+void
+parse_command_line (struct command_line_options *opts, int argc, char *argv [])
+{
+  int i = 0;
+  char *s;
+
+  while (i < argc)
+    {
+      if (!strcmp (argv [i], "--help"))
+	{
+	  print_help ();
+	  exit (0);
+	}
+      else if (!strcmp (argv [i], "--version"))
+	{
+	  print_version ();
+	  exit (0);
+	}
+      else if (!strcmp (argv [i], "--dont-load-cl"))
+	{
+	  opts->load_cl = 0;
+	}
+      else if (argv [i][0] == '-' && argv [i][1] == '-')
+	{
+	  printf ("unrecognized long option %s\n", argv [i]);
+	  puts ("Try 'al --help' for a summary of options");
+	  exit (1);
+	}
+      else if (argv [i][0] == '-')
+	{
+	  s = argv [i] + 1;
+
+	  while (*s)
+	    {
+	      if (*s == 'h')
+		{
+		  print_help ();
+		  exit (0);
+		}
+	      else if (*s == 'v')
+		{
+		  print_version ();
+		  exit (0);
+		}
+	      else if (*s == 'q')
+		{
+		  opts->load_cl = 0;
+		}
+	      else
+		{
+		  printf ("unrecognized short option %c\n", *s);
+		  puts ("Try 'al --help' for a summary of options");
+		  exit (1);
+		}
+
+	      s++;
+	    }
+	}
+
+      i++;
+    }
 }
 
 
