@@ -428,6 +428,9 @@ function
   int min_args;
   int max_args;
 
+  struct binding *lex_vars;
+  struct binding *lex_funcs;
+
   int is_special_operator;
   struct object *(*builtin_form)
     (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -807,6 +810,10 @@ int is_object_in_hash_table (const struct object *object,
 			     struct object_list **hash_table,
 			     size_t table_size);
 
+void clone_lexical_environment (struct binding **lex_vars,
+				struct binding **lex_funcs, struct binding *vars,
+				struct binding *funcs);
+
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
 				struct eval_outcome *outcome);
@@ -860,7 +867,8 @@ void unintern_symbol (struct object *sym);
 struct binding *create_binding (struct object *sym, struct object *obj,
 				enum binding_type type, int inc_refcs);
 struct binding *add_binding (struct binding *bin, struct binding *env);
-struct binding *chain_bindings (struct binding *bin, struct binding *env);
+struct binding *chain_bindings (struct binding *bin, struct binding *env,
+				int *num);
 struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *env,
 			      enum binding_type type);
@@ -3431,14 +3439,55 @@ is_object_in_hash_table (const struct object *object,
 }
 
 
+void
+clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs,
+			   struct binding *vars, struct binding *funcs)
+{
+  struct binding *bin;
+
+  *lex_vars = NULL;
+  *lex_funcs = NULL;
+
+  while (vars)
+    {
+      if (vars->type == LEXICAL_BINDING)
+	{
+	  if (!*lex_vars)
+	    *lex_vars = bin = create_binding (vars->sym, vars->obj,
+					      LEXICAL_BINDING, 1);
+	  else
+	    bin = bin->next = create_binding (vars->sym, vars->obj,
+					      LEXICAL_BINDING, 1);
+	}
+
+      vars = vars->next;
+    }
+
+  while (funcs)
+    {
+      if (funcs->type == LEXICAL_BINDING)
+	{
+	  if (!*lex_funcs)
+	    *lex_funcs = bin = create_binding (funcs->sym, funcs->obj,
+					       LEXICAL_BINDING, 1);
+	  else
+	    bin = bin->next = create_binding (funcs->sym, funcs->obj,
+					      LEXICAL_BINDING, 1);
+	}
+
+      funcs = funcs->next;
+    }
+}
+
+
 struct object *
 create_function (struct object *lambda_list, struct object *body,
 		 struct environment *env, struct eval_outcome *outcome)
 {
   struct object *fun = alloc_function ();
+  struct function *f = fun->value_ptr.function;
 
-  fun->value_ptr.function->lambda_list = parse_lambda_list (lambda_list, env,
-							    outcome);
+  f->lambda_list = parse_lambda_list (lambda_list, env, outcome);
 
   if (outcome->type == INVALID_LAMBDA_LIST)
     {
@@ -3447,8 +3496,10 @@ create_function (struct object *lambda_list, struct object *body,
       return NULL;
     }
 
+  clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars, env->funcs);
+
   increment_refcount (body, NULL);
-  fun->value_ptr.function->body = body;
+  f->body = body;
 
   return fun;
 }
@@ -4130,21 +4181,28 @@ add_binding (struct binding *bin, struct binding *env)
 
 
 struct binding *
-chain_bindings (struct binding *bin, struct binding *env)
+chain_bindings (struct binding *bin, struct binding *env, int *num)
 {
   struct binding *last = bin, *b = bin;
-  
+
+  if (num)
+    *num = 0;
+
   if (!bin)
     return env;
-  
+
   while (b)
     {
       last = b;
+
+      if (num)
+	(*num)++;
+
       b = b->next;
     }
 
   last->next = env;
-  
+
   return bin;
 }
 
@@ -5005,9 +5063,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	       struct eval_outcome *outcome)
 {
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
-  struct binding *bins = NULL;
+  struct binding *bins = NULL, *b;
   struct object *val, *res, *ret, *args;
-  int argsnum = 0; /*, rest_found = 0;*/
+  int argsnum = 0, closnum; /*, rest_found = 0;*/
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -5029,6 +5087,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       return ret;
     }
 
+  env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
+			      &closnum);
 
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -5194,12 +5254,23 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	}
     }
 
-  env->vars = chain_bindings (bins, env->vars);
+  env->vars = chain_bindings (bins, env->vars, NULL);
 
   res = evaluate_body (func->value_ptr.function->body, eval_body_twice, env,
 		       outcome);
 
   env->vars = remove_bindings (env->vars, argsnum);
+
+  for (; closnum; closnum--)
+    {
+      if (closnum == 1)
+	b = env->vars;
+
+      env->vars = env->vars->next;
+
+      if (closnum == 1)
+	b->next = NULL;
+    }
 
   /*if (rest_found)
     decrement_refcount (arglist, NULL);*/
@@ -7990,7 +8061,7 @@ evaluate_let (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->vars = chain_bindings (bins, env->vars);
+  env->vars = chain_bindings (bins, env->vars, NULL);
 
   res = evaluate_progn (body, env, outcome);
 
@@ -8111,7 +8182,7 @@ evaluate_flet (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->funcs = chain_bindings (bins, env->funcs);
+  env->funcs = chain_bindings (bins, env->funcs, NULL);
 
   res = evaluate_progn (body, env, outcome);
 
@@ -8193,7 +8264,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->funcs = chain_bindings (bins, env->funcs);
+  env->funcs = chain_bindings (bins, env->funcs, NULL);
 
   res = evaluate_progn (body, env, outcome);
 
