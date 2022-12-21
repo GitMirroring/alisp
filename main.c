@@ -858,7 +858,7 @@ struct object *intern_symbol_name (struct object *symname,
 void unintern_symbol (struct object *sym);
 
 struct binding *create_binding (struct object *sym, struct object *obj,
-				enum binding_type type);
+				enum binding_type type, int inc_refcs);
 struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *chain_bindings (struct binding *bin, struct binding *env);
 struct binding *remove_bindings (struct binding *env, int num);
@@ -1467,28 +1467,28 @@ add_standard_definitions (struct environment *env)
   env->keyword_package = create_package ("KEYWORD",
 					 strlen ("KEYWORD"));
   env->packages = create_binding (env->keyword_package->value_ptr.package->name,
-				  env->keyword_package, DYNAMIC_BINDING);
+				  env->keyword_package, DYNAMIC_BINDING, 1);
 
   env->current_package = create_package ("COMMON-LISP",
 					 strlen ("COMMON-LISP"));
   env->packages = add_binding (create_binding
 			       (env->current_package->value_ptr.package->name,
-				env->current_package, DYNAMIC_BINDING),
+				env->current_package, DYNAMIC_BINDING, 1),
 			       env->packages);
   env->packages = add_binding (create_binding
 			       (create_symbol ("CL", strlen ("CL"), 1),
-				env->current_package, DYNAMIC_BINDING),
+				env->current_package, DYNAMIC_BINDING, 1),
 			       env->packages);
 
   cluser_package = create_package ("COMMON-LISP-USER",
 				   strlen ("COMMON-LISP-USER"));
   env->packages = add_binding (create_binding
 			       (cluser_package->value_ptr.package->name,
-				cluser_package, DYNAMIC_BINDING),
+				cluser_package, DYNAMIC_BINDING, 1),
 			       env->packages);
   env->packages = add_binding (create_binding
 			       (create_symbol ("CL-USER", strlen ("CL-USER"), 1),
-				cluser_package, DYNAMIC_BINDING),
+				cluser_package, DYNAMIC_BINDING, 1),
 			       env->packages);
 
   t_symbol.value_cell = &t_object;
@@ -4100,7 +4100,8 @@ unintern_symbol (struct object *sym)
 
 
 struct binding *
-create_binding (struct object *sym, struct object *obj, enum binding_type type)
+create_binding (struct object *sym, struct object *obj, enum binding_type type,
+		int inc_refcs)
 {
   struct binding *bin = malloc_and_check (sizeof (*bin));
 
@@ -4109,8 +4110,11 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type)
   bin->obj = obj;
   bin->next = NULL;
 
-  increment_refcount (sym, NULL);
-  increment_refcount (obj, NULL);
+  if (inc_refcs)
+    {
+      increment_refcount (sym, NULL);
+      increment_refcount (obj, NULL);
+    }
 
   return bin;
 }
@@ -4192,11 +4196,11 @@ bind_variable (struct object *sym, struct object *val, struct binding *bins)
     {
       sym->value_ptr.symbol->value_dyn_bins_num++;
 
-      return add_binding (create_binding (sym, val, DYNAMIC_BINDING),
+      return add_binding (create_binding (sym, val, DYNAMIC_BINDING, 1),
 			  bins);
     }
   else
-    return add_binding (create_binding (sym, val, LEXICAL_BINDING), bins);
+    return add_binding (create_binding (sym, val, LEXICAL_BINDING, 1), bins);
 }
 
 
@@ -7948,10 +7952,10 @@ create_binding_from_let_form (struct object *form, struct environment *env,
     {
       sym->value_ptr.symbol->value_dyn_bins_num++;
 
-      return create_binding (sym, val, DYNAMIC_BINDING);
+      return create_binding (sym, val, DYNAMIC_BINDING, 1);
     }
   else
-    return create_binding (sym, val, LEXICAL_BINDING);
+    return create_binding (sym, val, LEXICAL_BINDING, 1);
 }
 
 
@@ -8071,7 +8075,7 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
       return NULL;
     }
 
-  return create_binding (sym, fun, LEXICAL_BINDING);
+  return create_binding (sym, fun, LEXICAL_BINDING, 1);
 }
 
 
@@ -8292,7 +8296,7 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
 	  else
 	    {
 	      env->vars = add_binding (create_binding (sym, val,
-						       DYNAMIC_BINDING),
+						       DYNAMIC_BINDING, 1),
 				       env->vars);
 	    }
 	}
@@ -8309,7 +8313,8 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
 	{
 	  s->value_dyn_bins_num++;
 	  s->is_special = 1;
-	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING),
+	  increment_refcount (sym, NULL);
+	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING, 0),
 				   env->vars);
 	}
     }
