@@ -9937,7 +9937,7 @@ print_object (const struct object *obj, struct environment *env)
   else if (obj->type == TYPE_RATIO)
     mpq_out_str (NULL, 10, obj->value_ptr.ratio);
   else if (obj->type == TYPE_FLOAT)
-    mpf_out_str (NULL, 10, 0, obj->value_ptr.floating);
+    gmp_printf ("%.Ff", obj->value_ptr.floating);
   else if (obj->type == TYPE_STRING)
     print_string (obj->value_ptr.string);
   else if (obj->type == TYPE_CHARACTER)
