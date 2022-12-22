@@ -687,6 +687,8 @@ struct
 command_line_options
 {
   int load_cl;
+
+  char *load_before_repl, *load_and_exit;
 };
 
 
@@ -850,6 +852,9 @@ struct object *create_stream (enum stream_type type,
 			      enum stream_direction direction,
 			      struct string *filename,
 			      struct eval_outcome *outcome);
+
+struct object *load_file (const char *filename, struct environment *env,
+			  struct eval_outcome *outcome);
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
@@ -1294,13 +1299,13 @@ main (int argc, char *argv [])
   int c;
 #endif
 
-  struct object *result, *obj, *load_form;
+  struct object *result, *obj;
   struct object_list *vals;
   struct environment env = {NULL};
 
   struct eval_outcome eval_out = {EVAL_OK};
 
-  const char *input_left = NULL, *obj_b, *obj_e;
+  const char *input_left = NULL;
   size_t input_left_s = 0;
 
   struct command_line_options opts = {1};
@@ -1310,28 +1315,51 @@ main (int argc, char *argv [])
 
   add_standard_definitions (&env);
 
-  print_welcome_message ();
+  if (!opts.load_and_exit)
+    print_welcome_message ();
 
   if (opts.load_cl)
     {
-      printf ("Loading cl.lisp... ");
+      if (!opts.load_and_exit)
+	printf ("Loading cl.lisp... ");
 
-      read_object (&load_form, 0, "(load \"cl.lisp\")",
-		   strlen ("(load \"cl.lisp\")"), &env, NULL, &obj_b, &obj_e,
-		   NULL);
+      result = load_file ("cl.lisp", &env, &eval_out);
 
-      load_form = evaluate_object (load_form, &env, &eval_out);
-
-      if (load_form)
-	print_object (load_form, &env);
-      else
+      if (result && !opts.load_and_exit)
+	print_object (result, &env);
+      else if (!opts.load_and_exit)
 	print_eval_error (&eval_out, &env);
 
       eval_out.type = EVAL_OK;
 
-      printf ("\n");
+      if (!opts.load_and_exit)
+	printf ("\n");
     }
 
+  if (opts.load_before_repl)
+    {
+      if (!opts.load_and_exit)
+	printf ("Loading %s...\n", opts.load_and_exit);
+
+      result = load_file (opts.load_before_repl, &env, &eval_out);
+
+      if (result && !opts.load_and_exit)
+	print_object (result, &env);
+      else if (!opts.load_and_exit)
+	print_eval_error (&eval_out, &env);
+
+      eval_out.type = EVAL_OK;
+
+      if (!opts.load_and_exit)
+	printf ("\n");
+    }
+
+  if (opts.load_and_exit)
+    {
+      result = load_file (opts.load_and_exit, &env, &eval_out);
+
+      exit (0);
+    }
 
 #ifdef HAVE_LIBREADLINE
   c = read_history ("al_history");
@@ -1406,12 +1434,29 @@ main (int argc, char *argv [])
 void
 parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 {
-  int i = 0;
+  int i = 1, options_finished = 0, found_file_to_load_and_exit = 0,
+    file_to_load_before_repl_expected = 0;
   char *s;
 
   while (i < argc)
     {
-      if (!strcmp (argv [i], "--help"))
+      if (options_finished && found_file_to_load_and_exit)
+	{
+	  puts ("at most one file to be load and exit can be provided\n"
+		"Try 'al --help' for a summary of options");
+	  exit (1);
+	}
+      else if (options_finished)
+	{
+	  opts->load_and_exit = argv [i];
+	  found_file_to_load_and_exit = 1;
+	}
+      else if (file_to_load_before_repl_expected)
+	{
+	  opts->load_before_repl = argv [i];
+	  file_to_load_before_repl_expected = 0;
+	}
+      else if (!strcmp (argv [i], "--help"))
 	{
 	  print_help ();
 	  exit (0);
@@ -1425,9 +1470,13 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 	{
 	  opts->load_cl = 0;
 	}
+      else if (!strcmp (argv [i], "--"))
+	{
+	  options_finished = 1;
+	}
       else if (argv [i][0] == '-' && argv [i][1] == '-')
 	{
-	  printf ("unrecognized long option %s\n", argv [i]);
+	  printf ("unrecognized long option '%s'\n", argv [i]);
 	  puts ("Try 'al --help' for a summary of options");
 	  exit (1);
 	}
@@ -1447,13 +1496,25 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 		  print_version ();
 		  exit (0);
 		}
-	      else if (*s == 'q')
+
+	      if (file_to_load_before_repl_expected)
+		{
+		  puts ("option 'l' requires an argument\n"
+			"Try 'al --help' for a summary of options");
+		  exit (1);
+		}
+
+	      if (*s == 'q')
 		{
 		  opts->load_cl = 0;
 		}
+	      else if (*s == 'l')
+		{
+		  file_to_load_before_repl_expected = 1;
+		}
 	      else
 		{
-		  printf ("unrecognized short option %c\n", *s);
+		  printf ("unrecognized short option '%c'\n", *s);
 		  puts ("Try 'al --help' for a summary of options");
 		  exit (1);
 		}
@@ -1461,8 +1522,27 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 	      s++;
 	    }
 	}
+      else
+	{
+	  if (found_file_to_load_and_exit)
+	    {
+	      puts ("at most one file to be load and exit can be provided\n"
+		    "Try 'al --help' for a summary of options");
+	      exit (1);
+	    }
+
+	  opts->load_and_exit = argv [i];
+	  found_file_to_load_and_exit = 1;
+	}
 
       i++;
+    }
+
+  if (file_to_load_before_repl_expected)
+    {
+      puts ("option 'l' requires an argument\n"
+	    "Try 'al --help' for a summary of options");
+      exit (1);
     }
 }
 
@@ -4019,6 +4099,109 @@ create_stream (enum stream_type type, enum stream_direction direction,
 
 
 struct object *
+load_file (const char *filename, struct environment *env,
+	   struct eval_outcome *outcome)
+{
+  FILE *f;
+  long l;
+  char *buf;
+  enum read_outcome out;
+  struct read_outcome_args args = {0};
+  const char *in, *obj_b, *obj_e;
+  size_t sz;
+  struct object *obj = NULL, *res;
+
+
+  f = fopen (filename, "r");
+
+  if (!f)
+    {
+      outcome->type = COULD_NOT_OPEN_FILE_FOR_READING;
+      return NULL;
+    }
+
+  if (fseek (f, 0l, SEEK_END))
+    {
+      outcome->type = COULD_NOT_SEEK_FILE;
+      return NULL;
+    }
+
+  if ((l = ftell (f)) == -1)
+    {
+      outcome->type = COULD_NOT_TELL_FILE;
+      return NULL;
+    }
+
+  if (fseek (f, 0l, SEEK_SET))
+    {
+      outcome->type = COULD_NOT_SEEK_FILE;
+      return NULL;
+    }
+
+  buf = malloc_and_check (l);
+
+  if (!fread (buf, l, 1, f))
+    {
+      outcome->type = ERROR_READING_FILE;
+      return NULL;
+    }
+
+  out = read_object (&obj, 0, buf, l, env, outcome, &obj_b, &obj_e,
+		     &args);
+  sz = l - (obj_e + 1 - buf);
+  in = obj_e + 1;
+
+  while (1)
+    {
+      if (args.multiline_comment_depth)
+	{
+	  free (buf);
+	  fclose (f);
+
+	  return &nil_object;
+	}
+      else if (out == COMPLETE_OBJECT)
+	{
+	  res = evaluate_object (obj, env, outcome);
+
+	  if (res)
+	    {
+	      out = read_object (&obj, 0, in, sz, env, outcome, &obj_b, &obj_e,
+				 &args);
+	      sz = sz - (obj_e + 1 - in);
+	      in = obj_e + 1;
+	    }
+	  else
+	    {
+	      print_eval_error (outcome, env);
+
+	      free (buf);
+	      fclose (f);
+
+	      return &nil_object;
+	    }
+	}
+      else if (out == NO_OBJECT)
+	{
+	  free (buf);
+	  fclose (f);
+
+	  return &t_object;
+	}
+      else if (out & READ_ERROR || out & INCOMPLETE_OBJECT)
+	{
+	  print_read_error (out, buf, l, obj_b, obj_e, &args);
+
+	  free (buf);
+	  fclose (f);
+
+	  return &nil_object;
+	}
+    }
+}
+
+
+struct object *
 find_package (const char *name, size_t len, struct environment *env)
 {
   struct binding *bind = env->packages;
@@ -6550,22 +6733,17 @@ struct object *
 builtin_load (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
-  FILE *f;
-  long l;
-  char *buf;
-  int end_loop = 0;
-  enum read_outcome out;
-  struct read_outcome_args args = {0};
-  const char *in, *obj_b, *obj_e;
-  size_t sz;
-  struct object *obj = NULL, *res;
+  int l = list_length (list);
+  char *fn;
+  struct object *ret;
 
-  if (!list_length (list))
+  if (!l)
     {
       outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
-  if (list_length (list) > 1)
+
+  if (l > 1)
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
@@ -6577,97 +6755,13 @@ builtin_load (struct object *list, struct environment *env,
       return NULL;
     }
 
-  f = fopen (CAR (list)->value_ptr.string->value, "r");
+  fn = copy_to_c_string (CAR (list)->value_ptr.string);
 
-  if (!f)
-    {
-      outcome->type = COULD_NOT_OPEN_FILE_FOR_READING;
-      return NULL;
-    }
+  ret = load_file (fn, env, outcome);
 
-  if (fseek (f, 0l, SEEK_END))
-    {
-      outcome->type = COULD_NOT_SEEK_FILE;
-      return NULL;
-    }
+  free (fn);
 
-  if ((l = ftell (f)) == -1)
-    {
-      outcome->type = COULD_NOT_TELL_FILE;
-      return NULL;
-    }
-
-  if (fseek (f, 0l, SEEK_SET))
-    {
-      outcome->type = COULD_NOT_SEEK_FILE;
-      return NULL;
-    }
-
-  buf = malloc_and_check (l);
-
-  if (!fread (buf, l, 1, f))
-    {
-      outcome->type = ERROR_READING_FILE;
-      return NULL;
-    }
-
-  out = read_object (&obj, 0, buf, l, env, outcome, &obj_b, &obj_e,
-		     &args);
-  sz = l - (obj_e + 1 - buf);
-  in = obj_e + 1;
-
-  while (!end_loop)
-    {
-      if (args.multiline_comment_depth)
-	{
-	  free (buf);
-	  fclose (f);
-
-	  return &nil_object;
-	}
-      else if (out == COMPLETE_OBJECT)
-	{
-	  res = evaluate_object (obj, env, outcome);
-
-	  if (res)
-	    {
-	      out = read_object (&obj, 0, in, sz, env, outcome, &obj_b, &obj_e,
-				 &args);
-	      sz = sz - (obj_e + 1 - in);
-	      in = obj_e + 1;
-	    }
-	  else
-	    {
-	      print_eval_error (outcome, env);
-
-	      free (buf);
-	      fclose (f);
-
-	      return &nil_object;
-	    }
-	}
-      else if (out == NO_OBJECT)
-	{
-	  free (buf);
-	  fclose (f);
-
-	  return &t_object;
-	}
-      else if (out & READ_ERROR || out & INCOMPLETE_OBJECT)
-	{
-	  print_read_error (out, buf, l, obj_b, obj_e, &args);
-
-	  free (buf);
-	  fclose (f);
-
-	  return &nil_object;
-	}
-    }
-
-  free (buf);
-  fclose (f);
-
-  return NULL;
+  return ret;
 }
 
 
@@ -10759,7 +10853,9 @@ print_version (void)
 void
 print_help (void)
 {
-  puts ("Usage: al [OPTIONS]...\n\n"
+  puts ("Usage: al [OPTIONS] [FILE]\n\n"
+	"  If a FILE is provided, load it and then exit\n\n"
+	"  -l FILE              load FILE and then start a REPL\n"
 	"  -q, --dont-load-cl   don't load cl.lisp at startup\n"
 	"  -h, --help           display this help and exit\n"
 	"  -v, --version        display version information and exit");
