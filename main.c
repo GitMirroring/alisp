@@ -5263,8 +5263,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   for (; closnum; closnum--)
     {
-      if (closnum == 1)
-	b = env->vars;
+      b = env->vars;
 
       env->vars = env->vars->next;
 
