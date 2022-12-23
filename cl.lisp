@@ -189,3 +189,7 @@
 
 (defun numberp (obj)
   (typep obj 'number))
+
+
+(defun fdefinition (fname)
+  (symbol-function fname))
