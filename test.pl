@@ -246,6 +246,8 @@ make_test ("(fboundp 'g3)", "T");
 make_test ("(symbol-function 'fun)", "#<FUNCTION FUN>");
 make_test ("(symbol-function 'defparameter)", "#<MACRO BUILTIN DEFPARAMETER>");
 make_test ("(symbol-function 'if)", "#<SPECIAL OPERATOR IF>");
+make_test ("(fdefinition 'fun)", "#<FUNCTION FUN>");
+make_test ("(fdefinition 'car)", "#<FUNCTION BUILTIN CAR>");
 make_test ("(special-operator-p 'if)", "T");
 make_test ("(special-operator-p 'car)", "()");
 make_test ("(special-operator-p 'aaa)", "()");
