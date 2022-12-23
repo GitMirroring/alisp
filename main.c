@@ -1222,6 +1222,8 @@ struct object *evaluate_function
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_lambda
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_defstruct
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_apply
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_declare
@@ -8996,6 +8998,14 @@ evaluate_lambda (struct object *list, struct environment *env,
     return NULL;
 
   return fun;
+}
+
+
+struct object *
+evaluate_defstruct (struct object *list, struct environment *env,
+		    struct eval_outcome *outcome)
+{
+  return &nil_object;
 }
 
 
