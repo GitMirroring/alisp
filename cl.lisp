@@ -131,12 +131,14 @@
 	     (cond ,@rest)))))
 
 
+
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
 
 
 (defun char (str ind)
   (aref str ind))
+
 
 
 (defun consp (obj)
@@ -193,3 +195,9 @@
 
 (defun fdefinition (fname)
   (symbol-function fname))
+
+
+
+(defun mapc (fun &rest lists)
+  (apply #'mapcar (cons fun lists))
+  (car lists))
