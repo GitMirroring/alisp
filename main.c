@@ -338,6 +338,11 @@ symbol
   struct object *typespec;
   struct object_list *parent_types;
 
+  struct object *(*builtin_accessor) (struct object *list,
+				      struct object *newvalform,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
+
   int is_const;
   int is_parameter;
   int is_special;
@@ -896,6 +901,9 @@ void add_builtin_form (char *name, struct environment *env,
 		       struct object *(*builtin_form)
 		       (struct object *list, struct environment *env,
 			struct eval_outcome *outcome), enum object_type type,
+		       struct object *(*builtin_accessor)
+		       (struct object *list, struct object *newvalform,
+			struct environment *env, struct eval_outcome *outcome),
 		       int is_special_operator);
 
 struct object *define_constant
@@ -1081,6 +1089,13 @@ struct object *builtin_dolist
 struct object *builtin_mapcar
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
+struct object *accessor_car (struct object *list, struct object *newvalform,
+			     struct environment *env,
+			     struct eval_outcome *outcome);
+struct object *accessor_cdr (struct object *list, struct object *newvalform,
+			     struct environment *env,
+			     struct eval_outcome *outcome);
+
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
 				    struct eval_outcome *outcome,
@@ -1180,9 +1195,6 @@ struct object *get_function (struct object *sym, struct environment *env,
 
 struct object *set_value (struct object *sym, struct object *valueform,
 			  struct environment *env, struct eval_outcome *outcome);
-struct object *setf_from_accessor (struct object *acc, struct object *valform,
-				   struct environment *env,
-				   struct eval_outcome *outcome);
 
 struct object *evaluate_quote
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1279,12 +1291,12 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
 
 struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
 
 struct object t_object = {1, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
@@ -1590,85 +1602,94 @@ add_standard_definitions (struct environment *env)
   prepend_object_to_obj_list (&nil_object,
 			      &env->current_package->value_ptr.package->symlist);
 
-  add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, 0);
-  add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, 0);
-  add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, 0);
-  add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, 0);
-  add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, 0);
-  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, 0);
-  add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, 0);
-  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, 0);
-  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, 0);
-  add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, 0);
-  add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, 0);
+  add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
+  add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
+  add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
-		    TYPE_FUNCTION, 0);
-  add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, 0);
-  add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, 0);
-  add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, 0);
-  add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, 0);
-  add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, 0);
-  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p, TYPE_FUNCTION,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, NULL,
 		    0);
-  add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, 0);
-  add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, 0);
-  add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, 0);
-  add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, 0);
-  add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, 0);
-  add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, 0);
-  add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, 0);
-  add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, 0);
-  add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, 0);
-  add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, 0);
-  add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, 0);
-  add_builtin_form ("FLOOR", env, builtin_floor, TYPE_FUNCTION, 0);
-  add_builtin_form ("CEILING", env, builtin_ceiling, TYPE_FUNCTION, 0);
-  add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, 0);
-  add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, 0);
-  add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, 0);
-  add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, 0);
-  add_builtin_form ("<", env, builtin_numbers_less_than, TYPE_FUNCTION, 0);
-  add_builtin_form ("<=", env, builtin_numbers_less_than_or_equal, TYPE_FUNCTION,
+  add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FLOOR", env, builtin_floor, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CEILING", env, builtin_ceiling, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, NULL,
 		    0);
-  add_builtin_form (">", env, builtin_numbers_more_than, TYPE_FUNCTION, 0);
+  add_builtin_form ("<", env, builtin_numbers_less_than, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("<=", env, builtin_numbers_less_than_or_equal,TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form (">", env, builtin_numbers_more_than, TYPE_FUNCTION, NULL, 0);
   add_builtin_form (">=", env, builtin_numbers_more_than_or_equal, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("FLET", env, evaluate_flet, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("LABELS", env, evaluate_labels, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("VALUES", env, evaluate_values, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
 		    0);
-  add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, 1);
-  add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, 1);
-  add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, 1);
-  add_builtin_form ("FLET", env, evaluate_flet, TYPE_MACRO, 1);
-  add_builtin_form ("LABELS", env, evaluate_labels, TYPE_MACRO, 1);
-  add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, 1);
-  add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, 1);
-  add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, 1);
-  add_builtin_form ("VALUES", env, evaluate_values, TYPE_FUNCTION, 0);
-  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, 0);
-  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, 0);
-  add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, 0);
-  add_builtin_form ("DEFUN", env, evaluate_defun, TYPE_MACRO, 0);
-  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, 0);
-  add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, 1);
-  add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, 0);
-  add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, 1);
-  add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, 0);
-  add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, 0);
-  add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, 0);
-  add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, 1);
-  add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, 1);
-  add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, 0);
-  add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, 0);
-  add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, 0);
-  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION, 0);
-  add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, 0);
+  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
+		    0);
+  add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFUN", env, evaluate_defun, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
-		    TYPE_FUNCTION, 0);
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
-		    TYPE_FUNCTION, 0);
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
-		    TYPE_FUNCTION, 0);
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
-		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, 0);
+		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
+		    0);
 
   add_builtin_type ("T", env, type_t, 1, NULL);
   add_builtin_type ("NIL", env, type_nil, 1, NULL);
@@ -3941,6 +3962,7 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->builtin_type = NULL;
   sym->typespec = NULL;
   sym->parent_types = NULL;
+  sym->builtin_accessor = NULL;
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
@@ -4558,6 +4580,9 @@ add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form)
 		  (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome), enum object_type type,
+		  struct object *(*builtin_accessor)
+		  (struct object *list, struct object *newvalform,
+		   struct environment *env, struct eval_outcome *outcome),
 		  int is_special_operator)
 {
   struct object *sym = create_symbol (name, strlen (name), 1);
@@ -4571,6 +4596,7 @@ add_builtin_form (char *name, struct environment *env,
   f->builtin_form = builtin_form;
 
   sym->value_ptr.symbol->function_cell = fun;
+  sym->value_ptr.symbol->builtin_accessor = builtin_accessor;
 
   prepend_object_to_obj_list (sym,
 			      &env->current_package->value_ptr.package->symlist);
@@ -7174,6 +7200,92 @@ builtin_mapcar (struct object *list, struct environment *env,
 }
 
 
+struct object *
+accessor_car (struct object *list, struct object *newvalform,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  struct object *obj, *val;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_SYMBOL (CAR (CDR (list)))
+      && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
+    {
+      outcome->type = CANT_REDEFINE_CONSTANT;
+      return NULL;
+    }
+
+  obj = evaluate_object (CAR (CDR (list)), env, outcome);
+
+  if (!obj)
+    return NULL;
+
+  if (obj->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  val = evaluate_object (newvalform, env, outcome);
+
+  if (!val)
+    return NULL;
+
+  decrement_refcount (obj->value_ptr.cons_pair->car, NULL);
+
+  obj->value_ptr.cons_pair->car = val;
+
+  return val;
+}
+
+
+struct object *
+accessor_cdr (struct object *list, struct object *newvalform,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  struct object *obj, *val;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_SYMBOL (CAR (CDR (list)))
+      && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
+    {
+      outcome->type = CANT_REDEFINE_CONSTANT;
+      return NULL;
+    }
+
+  obj = evaluate_object (CAR (CDR (list)), env, outcome);
+
+  if (!obj)
+    return NULL;
+
+  if (obj->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  val = evaluate_object (newvalform, env, outcome);
+
+  if (!val)
+    return NULL;
+
+  decrement_refcount (obj->value_ptr.cons_pair->car, NULL);
+
+  obj->value_ptr.cons_pair->cdr = val;
+
+  return val;
+}
+
+
 int
 compare_two_numbers (struct object *num1, struct object *num2)
 {
@@ -8488,16 +8600,6 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
 
 
 struct object *
-setf_from_accessor (struct object *acc, struct object *valform,
-		    struct environment *env, struct eval_outcome *outcome)
-{
-  outcome->type = INVALID_ACCESSOR;
-
-  return NULL;
-}
-
-
-struct object *
 evaluate_quote (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
@@ -8812,9 +8914,20 @@ evaluate_setf (struct object *list, struct environment *env,
 	  if (!val)
 	    return NULL;
 	}
-      else if (nth (0, list)->type == TYPE_CONS_PAIR)
+      else if (CAR (list)->type == TYPE_CONS_PAIR)
 	{
-	  val = setf_from_accessor (nth (0, list), nth (1, list), env, outcome);
+	  if (!IS_SYMBOL (CAR (CAR (list)))
+	      || !SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor)
+	    {
+	      outcome->type = INVALID_ACCESSOR;
+	      return NULL;
+	    }
+
+	  val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
+	    (CAR (list), CAR (CDR (list)), env, outcome);
+
+	  if (!val)
+	    return NULL;
 	}
       else
 	{
