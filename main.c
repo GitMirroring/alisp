@@ -5621,8 +5621,7 @@ evaluate_object (struct object *obj, struct environment *env,
     {
       sym = SYMBOL (obj);
 
-      if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter
-	  || sym->value_ptr.symbol->is_special)
+      if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter)
 	{
 	  ret = get_dynamic_value (sym, env);
 
@@ -5641,6 +5640,13 @@ evaluate_object (struct object *obj, struct environment *env,
 
 	  if (bind)
 	    {
+	      increment_refcount (bind->obj, NULL);
+	      return bind->obj;
+	    }
+	  else if (sym->value_ptr.symbol->value_dyn_bins_num)
+	    {
+	      bind = find_binding (sym->value_ptr.symbol, env->vars,
+				   DYNAMIC_BINDING);
 	      increment_refcount (bind->obj, NULL);
 	      return bind->obj;
 	    }
