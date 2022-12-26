@@ -142,7 +142,10 @@ struct
 environment
 {
   struct binding *vars;
+  int var_lex_bin_num;
+
   struct binding *funcs;
+  int func_lex_bin_num;
 
   struct binding *packages;
 
@@ -379,8 +382,8 @@ symbol_name
 enum
 binding_type
   {
-    LEXICAL_BINDING = 1,
-    DYNAMIC_BINDING = 2
+    LEXICAL_BINDING,
+    DYNAMIC_BINDING
   };
 
 
@@ -880,8 +883,8 @@ struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *chain_bindings (struct binding *bin, struct binding *env,
 				int *num);
 struct binding *remove_bindings (struct binding *env, int num);
-struct binding *find_binding (struct symbol *sym, struct binding *env,
-			      enum binding_type type);
+struct binding *find_binding (struct symbol *sym, struct binding *bins,
+			      enum binding_type type, int bin_num);
 
 struct binding *bind_variable (struct object *sym, struct object *val,
 			       struct binding *bins);
@@ -4440,14 +4443,18 @@ remove_bindings (struct binding *env, int num)
 
 
 struct binding *
-find_binding (struct symbol *sym, struct binding *env, enum binding_type type)
+find_binding (struct symbol *sym, struct binding *bins,
+	      enum binding_type type, int bin_num)
 {
-  while (env)
+  while (bins && bin_num)
     {
-      if (env->sym->value_ptr.symbol == sym && env->type & type)
-	return env;
+      if (bins->sym->value_ptr.symbol == sym && bins->type == type)
+	return bins;
 
-      env = env->next;
+      bins = bins->next;
+
+      if (bin_num)
+	bin_num--;
     }
 
   return NULL;
@@ -5276,7 +5283,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
   struct binding *bins = NULL, *b;
   struct object *val, *res, *ret, *args;
-  int argsnum = 0, closnum; /*, rest_found = 0;*/
+  int argsnum = 0, closnum, lex_bin_num = 0; /*, rest_found = 0;*/
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -5300,6 +5307,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
 			      &closnum);
+  lex_bin_num += closnum, env->var_lex_bin_num += closnum;
 
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -5321,11 +5329,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       argsnum++;
 
+      if (bins->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++, lex_bin_num++;
+
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
 	  bins = bind_variable (par->supplied_p_param, &t_object, bins);
 
 	  argsnum++;
+
+	  if (bins->type == LEXICAL_BINDING)
+	    env->var_lex_bin_num++, lex_bin_num++;
 	}
 
       par = par->next;
@@ -5358,12 +5372,18 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  bins = bind_variable (par->name, val, bins);
 
 	  argsnum++;
+
+	  if (bins->type == LEXICAL_BINDING)
+	    env->var_lex_bin_num++, lex_bin_num++;
 	}
       else
 	{
 	  bins = bind_variable (par->name, &nil_object, bins);
 
 	  argsnum++;
+
+	  if (bins->type == LEXICAL_BINDING)
+	    env->var_lex_bin_num++, lex_bin_num++;
 	}
 
       if (par->supplied_p_param)
@@ -5371,6 +5391,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  bins = bind_variable (par->supplied_p_param, &nil_object, bins);
 
 	  argsnum++;
+
+	  if (bins->type == LEXICAL_BINDING)
+	    env->var_lex_bin_num++, lex_bin_num++;
 	}
 
       par = par->next;
@@ -5393,6 +5416,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       bins = bind_variable (par->name, arglist, bins);
 
       argsnum++;
+
+      if (bins->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++, lex_bin_num++;
 
       par = par->next;
     }
@@ -5438,6 +5464,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  findk->key_passed = 1;
 	  argsnum++;
 
+	  if (bins->type == LEXICAL_BINDING)
+	    env->var_lex_bin_num++, lex_bin_num++;
+
 	  arglist = CDR (arglist);
 	}
 
@@ -5459,6 +5488,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	      bins = bind_variable (findk->name, CAR (arglist), bins);
 	      argsnum++;
+
+	      if (bins->type == LEXICAL_BINDING)
+		env->var_lex_bin_num++, lex_bin_num++;
 	    }
 
 	  findk = findk->next;
@@ -5481,6 +5513,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (closnum == 1)
 	b->next = NULL;
     }
+
+  env->var_lex_bin_num -= lex_bin_num;
 
   /*if (rest_found)
     decrement_refcount (arglist, NULL);*/
@@ -5636,7 +5670,8 @@ evaluate_object (struct object *obj, struct environment *env,
 	}
       else
 	{
-	  bind = find_binding (sym->value_ptr.symbol, env->vars, LEXICAL_BINDING);
+	  bind = find_binding (sym->value_ptr.symbol, env->vars,
+			       LEXICAL_BINDING, env->var_lex_bin_num);
 
 	  if (bind)
 	    {
@@ -5646,7 +5681,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	  else if (sym->value_ptr.symbol->value_dyn_bins_num)
 	    {
 	      bind = find_binding (sym->value_ptr.symbol, env->vars,
-				   DYNAMIC_BINDING);
+				   DYNAMIC_BINDING, -1);
 	      increment_refcount (bind->obj, NULL);
 	      return bind->obj;
 	    }
@@ -5904,14 +5939,16 @@ evaluate_list (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_dyn_bins_num)
     {
-      bind = find_binding (sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING);
+      bind = find_binding (sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING,
+			   -1);
 
       fun = bind->obj;
     }
   else if ((fun = sym->value_ptr.symbol->function_cell));
   else
     {
-      bind = find_binding (sym->value_ptr.symbol, env->funcs, LEXICAL_BINDING);
+      bind = find_binding (sym->value_ptr.symbol, env->funcs, LEXICAL_BINDING,
+			   env->func_lex_bin_num);
 
       if (bind)
 	fun = bind->obj;
@@ -7043,18 +7080,30 @@ builtin_dotimes (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
 
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++;
+
       evaluate_body (CDR (list), 0, env, outcome);
 
       env->vars = remove_bindings (env->vars, 1);
+
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num--;
     }
 
   if (l == 3)
     {
       env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
 
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++;
+
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
 
       env->vars = remove_bindings (env->vars, 1);
+
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num--;
 
       return ret;
     }
@@ -7095,9 +7144,15 @@ builtin_dolist (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, CAR (cons), env->vars);
 
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++;
+
       evaluate_body (CDR (list), 0, env, outcome);
 
       env->vars = remove_bindings (env->vars, 1);
+
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num--;
 
       cons = CDR (cons);
     }
@@ -7106,9 +7161,15 @@ builtin_dolist (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, &nil_object, env->vars);
 
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++;
+
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
 
       env->vars = remove_bindings (env->vars, 1);
+
+      if (env->vars->type == LEXICAL_BINDING)
+	env->var_lex_bin_num--;
 
       return ret;
     }
@@ -8248,7 +8309,7 @@ evaluate_let (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int binding_num = 0;
+  int bin_num = 0, lex_bin_num = 0;
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -8269,7 +8330,10 @@ evaluate_let (struct object *list, struct environment *env,
 	return NULL;
 
       bins = add_binding (bin, bins);
-      binding_num++;
+      bin_num++;
+
+      if (bin->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++, lex_bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -8278,7 +8342,9 @@ evaluate_let (struct object *list, struct environment *env,
 
   res = evaluate_progn (body, env, outcome);
 
-  env->vars = remove_bindings (env->vars, binding_num);
+  env->vars = remove_bindings (env->vars, bin_num);
+
+  env->var_lex_bin_num -= lex_bin_num;
 
   return res;
 }
@@ -8289,7 +8355,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int binding_num = 0;
+  int bin_num = 0, lex_bin_num = 0;
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -8310,14 +8376,19 @@ evaluate_let_star (struct object *list, struct environment *env,
 	return NULL;
 
       env->vars = add_binding (bin, env->vars);
-      binding_num++;
+      bin_num++;
+
+      if (bin->type == LEXICAL_BINDING)
+	env->var_lex_bin_num++, lex_bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
 
   res = evaluate_progn (body, env, outcome);
 
-  env->vars = remove_bindings (env->vars, binding_num);
+  env->vars = remove_bindings (env->vars, bin_num);
+
+  env->var_lex_bin_num -= lex_bin_num;
 
   return res;
 }
@@ -8368,7 +8439,7 @@ evaluate_flet (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int binding_num = 0;
+  int bin_num = 0, lex_bin_num = 0;
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -8390,7 +8461,10 @@ evaluate_flet (struct object *list, struct environment *env,
 	return NULL;
 
       bins = add_binding (bin, bins);
-      binding_num++;
+      bin_num++;
+
+      if (bin->type == LEXICAL_BINDING)
+	env->func_lex_bin_num++, lex_bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -8399,7 +8473,9 @@ evaluate_flet (struct object *list, struct environment *env,
 
   res = evaluate_progn (body, env, outcome);
 
-  env->funcs = remove_bindings (env->funcs, binding_num);
+  env->funcs = remove_bindings (env->funcs, bin_num);
+
+  env->func_lex_bin_num -= lex_bin_num;
 
   return res;
 }
@@ -8410,7 +8486,7 @@ evaluate_labels (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int binding_num = 0;
+  int bin_num = 0, lex_bin_num = 0;
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -8432,14 +8508,19 @@ evaluate_labels (struct object *list, struct environment *env,
 	return NULL;
 
       env->funcs = add_binding (bin, env->funcs);
-      binding_num++;
+      bin_num++;
+
+      if (bin->type == LEXICAL_BINDING)
+	env->func_lex_bin_num++, lex_bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
 
   res = evaluate_progn (body, env, outcome);
 
-  env->funcs = remove_bindings (env->funcs, binding_num);
+  env->funcs = remove_bindings (env->funcs, bin_num);
+
+  env->func_lex_bin_num -= lex_bin_num;
 
   return res;
 }
@@ -8450,7 +8531,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int binding_num = 0;
+  int bin_num = 0, lex_bin_num = 0;
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -8472,7 +8553,10 @@ evaluate_macrolet (struct object *list, struct environment *env,
 	return NULL;
 
       bins = add_binding (bin, bins);
-      binding_num++;
+      bin_num++;
+
+      if (bin->type == LEXICAL_BINDING)
+	env->func_lex_bin_num++, lex_bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -8481,7 +8565,9 @@ evaluate_macrolet (struct object *list, struct environment *env,
 
   res = evaluate_progn (body, env, outcome);
 
-  env->funcs = remove_bindings (env->funcs, binding_num);
+  env->funcs = remove_bindings (env->funcs, bin_num);
+
+  env->func_lex_bin_num -= lex_bin_num;
 
   return res;
 }
@@ -8503,7 +8589,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
       return s->value_cell;
     }
 
-  b = find_binding (s, env->vars, DYNAMIC_BINDING);
+  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
 
   if (b)
     {
@@ -8521,7 +8607,7 @@ get_function (struct object *sym, struct environment *env, int only_functions)
 {
   struct object *f;
   struct binding *bind = find_binding (SYMBOL (sym)->value_ptr.symbol, env->funcs,
-				       DYNAMIC_BINDING);
+				       DYNAMIC_BINDING, -1);
 
   if (!bind && !SYMBOL (sym)->value_ptr.symbol->function_cell)
     return NULL;
@@ -8571,7 +8657,7 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
 	}
       else
 	{
-	  b = find_binding (s, env->vars, DYNAMIC_BINDING);
+	  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
 
 	  if (b)
 	    {
@@ -8587,7 +8673,7 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
     }
   else
     {
-      b = find_binding (s, env->vars, LEXICAL_BINDING);
+      b = find_binding (s, env->vars, LEXICAL_BINDING, env->var_lex_bin_num);
 
       if (b)
 	{
