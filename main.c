@@ -5283,7 +5283,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
   struct binding *bins = NULL, *b;
   struct object *val, *res, *ret, *args;
-  int argsnum = 0, closnum, lex_bin_num = 0; /*, rest_found = 0;*/
+  int argsnum = 0, closnum, prev_lex_bin_num; /*, rest_found = 0;*/
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -5305,9 +5305,11 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       return ret;
     }
 
+  prev_lex_bin_num = env->var_lex_bin_num, env->var_lex_bin_num = 0;
+
   env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
 			      &closnum);
-  lex_bin_num += closnum, env->var_lex_bin_num += closnum;
+  env->var_lex_bin_num += closnum;
 
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -5317,7 +5319,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  val = evaluate_object (CAR (arglist), env, outcome);
 
 	  if (!val)
-	    return NULL;
+	    {
+	      res = NULL;
+	      goto clean_lex_env;
+	    }
 	}
       else
 	{
@@ -5330,7 +5335,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       argsnum++;
 
       if (bins->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++, lex_bin_num++;
+	env->var_lex_bin_num++;
 
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
@@ -5339,7 +5344,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++, lex_bin_num++;
+	    env->var_lex_bin_num++;
 	}
 
       par = par->next;
@@ -5350,14 +5355,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   if (par && par->type == REQUIRED_PARAM)
     {
       outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      res = NULL;
+      goto clean_lex_env;
     }
 
   if (arglist != &nil_object && (!par || (par && par->type != REST_PARAM
 					  && par->type != KEYWORD_PARAM)))
     {
       outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      res = NULL;
+      goto clean_lex_env;
     }
 
   while (par && par->type == OPTIONAL_PARAM)
@@ -5367,14 +5374,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  val = evaluate_object (par->init_form, env, outcome);
 
 	  if (!val)
-	    return NULL;
+	    {
+	      res = NULL;
+	      goto clean_lex_env;
+	    }
 
 	  bins = bind_variable (par->name, val, bins);
 
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++, lex_bin_num++;
+	    env->var_lex_bin_num++;
 	}
       else
 	{
@@ -5383,7 +5393,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++, lex_bin_num++;
+	    env->var_lex_bin_num++;
 	}
 
       if (par->supplied_p_param)
@@ -5393,7 +5403,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++, lex_bin_num++;
+	    env->var_lex_bin_num++;
 	}
 
       par = par->next;
@@ -5408,7 +5418,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  arglist = evaluate_through_list (arglist, env, outcome);
 
 	  if (!arglist)
-	    return NULL;
+	    {
+	      res = NULL;
+	      goto clean_lex_env;
+	    }
 	}
       else
 	increment_refcount (arglist, NULL);
@@ -5418,7 +5431,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       argsnum++;
 
       if (bins->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++, lex_bin_num++;
+	env->var_lex_bin_num++;
 
       par = par->next;
     }
@@ -5449,7 +5462,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  if (!findk || findk->type != KEYWORD_PARAM)
 	    {
 	      outcome->type = KEY_NOT_FOUND_IN_FUNCALL;
-	      return NULL;
+	      res = NULL;
+	      goto clean_lex_env;
 	    }
 
 	  arglist = CDR (arglist);
@@ -5457,7 +5471,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  if (arglist == &nil_object)
 	    {
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
-	      return NULL;
+	      res = NULL;
+	      goto clean_lex_env;
 	    }
 
 	  bins = bind_variable (findk->name, CAR (arglist), bins);
@@ -5465,7 +5480,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++, lex_bin_num++;
+	    env->var_lex_bin_num++;
 
 	  arglist = CDR (arglist);
 	}
@@ -5481,7 +5496,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		  val = evaluate_object (findk->init_form, env, outcome);
 
 		  if (!val)
-		    return NULL;
+		    {
+		      res = NULL;
+		      goto clean_lex_env;
+		    }
 		}
 	      else
 		val = &nil_object;
@@ -5490,7 +5508,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	      argsnum++;
 
 	      if (bins->type == LEXICAL_BINDING)
-		env->var_lex_bin_num++, lex_bin_num++;
+		env->var_lex_bin_num++;
 	    }
 
 	  findk = findk->next;
@@ -5502,6 +5520,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   res = evaluate_body (func->value_ptr.function->body, eval_body_twice, env,
 		       outcome);
 
+ clean_lex_env:
   env->vars = remove_bindings (env->vars, argsnum);
 
   for (; closnum; closnum--)
@@ -5514,7 +5533,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	b->next = NULL;
     }
 
-  env->var_lex_bin_num -= lex_bin_num;
+  env->var_lex_bin_num = prev_lex_bin_num;
 
   /*if (rest_found)
     decrement_refcount (arglist, NULL);*/
