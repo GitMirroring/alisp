@@ -1136,6 +1136,8 @@ struct object *builtin_truncate (struct object *list, struct environment *env,
 				 struct eval_outcome *outcome);
 struct object *builtin_round (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *builtin_sqrt (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
 struct object *builtin_numbers_equal (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
@@ -1644,6 +1646,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CEILING", env, builtin_ceiling, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SQRT", env, builtin_sqrt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, NULL,
 		    0);
@@ -7976,6 +7979,38 @@ builtin_round (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   return perform_division_with_remainder (list, ROUND_TO_NEAREST, outcome);
+}
+
+
+struct object *
+builtin_sqrt (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
+{
+  struct object *num, *ret;
+  mpf_t rt;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_NUMBER (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+    }
+
+  num = promote_number (CAR (list), TYPE_FLOAT);
+
+  mpf_init (rt);
+  mpf_sqrt (rt, num->value_ptr.floating);
+
+  ret = alloc_number (TYPE_FLOAT);
+  mpf_set (ret->value_ptr.floating, rt);
+
+  decrement_refcount (num, NULL);
+
+  return ret;
 }
 
 
