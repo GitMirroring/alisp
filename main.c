@@ -822,7 +822,7 @@ int is_object_in_hash_table (const struct object *object,
 
 void clone_lexical_environment (struct binding **lex_vars,
 				struct binding **lex_funcs, struct binding *vars,
-				struct binding *funcs);
+				int var_num, struct binding *funcs, int func_num);
 
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
@@ -3547,14 +3547,15 @@ is_object_in_hash_table (const struct object *object,
 
 void
 clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs,
-			   struct binding *vars, struct binding *funcs)
+			   struct binding *vars, int var_num,
+			   struct binding *funcs, int func_num)
 {
   struct binding *bin;
 
   *lex_vars = NULL;
   *lex_funcs = NULL;
 
-  while (vars)
+  while (vars && var_num)
     {
       if (vars->type == LEXICAL_BINDING)
 	{
@@ -3567,9 +3568,12 @@ clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs
 	}
 
       vars = vars->next;
+
+      if (var_num > 0)
+	var_num--;
     }
 
-  while (funcs)
+  while (funcs && func_num)
     {
       if (funcs->type == LEXICAL_BINDING)
 	{
@@ -3582,6 +3586,9 @@ clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs
 	}
 
       funcs = funcs->next;
+
+      if (func_num > 0)
+	func_num--;
     }
 }
 
@@ -3602,7 +3609,9 @@ create_function (struct object *lambda_list, struct object *body,
       return NULL;
     }
 
-  clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars, env->funcs);
+  clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
+			     env->var_lex_bin_num, env->funcs,
+			     env->func_lex_bin_num);
 
   increment_refcount (body, NULL);
   f->body = body;
