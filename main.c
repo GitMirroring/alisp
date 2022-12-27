@@ -2194,7 +2194,7 @@ prepend_object_to_obj_list (struct object *obj, struct object_list **list)
 struct object_list *
 copy_list_to_obj_list (struct object *list)
 {
-  struct object_list *ret = NULL, *curr;
+  struct object_list *ret = NULL, *curr = NULL;
 
   while (list != &nil_object)
     {
@@ -2209,7 +2209,8 @@ copy_list_to_obj_list (struct object *list)
       list = CDR (list);
     }
 
-  curr->next = NULL;
+  if (curr)
+    curr->next = NULL;
 
   return ret;
 }
