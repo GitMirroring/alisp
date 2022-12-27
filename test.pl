@@ -351,6 +351,7 @@ make_test ("(round .5)", "0\n0.5");
 make_test ("(round -1.5)", "-2\n0.5");
 make_test ("(sqrt 9)", "3");
 make_test ("(sqrt 9.0)", "3");
+make_test ("(isqrt 10)", "3");
 make_test ("(= 1)", "T");
 make_test ("(= 1 1)", "T");
 make_test ("(= 1 2)", "()");
