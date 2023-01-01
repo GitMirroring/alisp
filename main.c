@@ -1428,22 +1428,6 @@ main (int argc, char *argv [])
 						     &input_left,
 						     &input_left_s);
 	}
-
-      if (obj)
-	{
-	  result = evaluate_object (obj, &env, &eval_out);
-
-	  if (result)
-	    {
-	      print_object (result, &env);
-	      printf ("\n");
-	    }
-	  else
-	    print_eval_error (&eval_out, &env);
-
-	  decrement_refcount (result, NULL);
-	  decrement_refcount (obj, NULL);
-	}
     }
   
   return 0;
