@@ -70,6 +70,16 @@
 					   | TYPE_CHARACTER | TYPE_FILENAME \
 					   | TYPE_STREAM))
 
+
+#define CLEAR_MULTIPLE_OR_NO_VALUES(out)	\
+  do						\
+    {						\
+      (out).no_value = 0;			\
+      free_object_list ((out).other_values);	\
+      (out).other_values = NULL;		\
+    } while (0)
+
+
 #define TERMINATING_MACRO_CHARS "()';\"`,"
 
 
@@ -2815,7 +2825,7 @@ struct object *
 call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 		  struct eval_outcome *e_outcome, enum read_outcome *r_outcome)
 {
-  struct object *obj = macro_call->obj, *fun;
+  struct object *obj = macro_call->obj, *fun, *ret;
   struct symbol_name *s;
 
   if (macro_call->dispatch_ch == '\'')
@@ -2876,7 +2886,10 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == '.')
     {
-      return evaluate_object (obj, env, e_outcome);
+      ret = evaluate_object (obj, env, e_outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*e_outcome);
+
+      return ret;
     }
   else if (macro_call->dispatch_ch == 'p' || macro_call->dispatch_ch == 'P')
     {
@@ -4187,6 +4200,7 @@ load_file (const char *filename, struct environment *env,
       else if (out == COMPLETE_OBJECT)
 	{
 	  res = evaluate_object (obj, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (res)
 	    {
@@ -4616,6 +4630,7 @@ define_constant (struct object *sym, struct object *form,
   struct object *val;
 
   val = evaluate_object (form, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!val)
     return NULL;
@@ -4654,6 +4669,7 @@ define_parameter (struct object *sym, struct object *form,
 {
   struct object *s;
   struct object *val = evaluate_object (form, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!val)
     return NULL;
@@ -5242,6 +5258,7 @@ evaluate_body (struct object *body, int eval_body_twice, struct environment *env
   do
     {
       res = evaluate_object (CAR (body), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!res)
 	return NULL;
@@ -5251,6 +5268,7 @@ evaluate_body (struct object *body, int eval_body_twice, struct environment *env
       if (eval_body_twice)
 	{
 	  res2 = evaluate_object (res, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  decrement_refcount (res, NULL);
 
@@ -5314,6 +5332,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (eval_args)
 	{
 	  val = evaluate_object (CAR (arglist), env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!val)
 	    {
@@ -5369,6 +5388,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (par->init_form)
 	{
 	  val = evaluate_object (par->init_form, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!val)
 	    {
@@ -5491,6 +5511,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	      if (findk->init_form)
 		{
 		  val = evaluate_object (findk->init_form, env, outcome);
+		  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 		  if (!val)
 		    {
@@ -5734,7 +5755,9 @@ apply_backquote (struct object *form, struct object *reading_cons,
 
   if (!backts_commas_balance)
     {
-      return evaluate_object (form, env, outcome);
+      ret = evaluate_object (form, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+      return ret;
     }
   else if (form->type == TYPE_BACKQUOTE)
     {
@@ -5775,6 +5798,7 @@ apply_backquote (struct object *form, struct object *reading_cons,
 
 	      ret = evaluate_object (form->value_ptr.next->value_ptr.next, env,
 				     outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	      if (!ret)
 		return NULL;
@@ -5829,7 +5853,11 @@ apply_backquote (struct object *form, struct object *reading_cons,
 	      return CAR (ret);
 	    }
 	  else
-	    return evaluate_object (form->value_ptr.next, env, outcome);
+	    {
+	      ret = evaluate_object (form->value_ptr.next, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+	      return ret;
+	    }
 	}
       else
 	{
@@ -5990,6 +6018,7 @@ evaluate_through_list (struct object *list, struct environment *env,
   while (list != &nil_object)
     {
       obj = evaluate_object (CAR (list), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!obj)
 	return NULL;
@@ -7079,6 +7108,7 @@ builtin_dotimes (struct object *list, struct environment *env,
     }
 
   count = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!count)
     return NULL;
@@ -7115,6 +7145,7 @@ builtin_dotimes (struct object *list, struct environment *env,
 	env->var_lex_bin_num++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -7144,6 +7175,7 @@ builtin_dolist (struct object *list, struct environment *env,
     }
 
   cons = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!cons)
     return NULL;
@@ -7181,6 +7213,7 @@ builtin_dolist (struct object *list, struct environment *env,
 	env->var_lex_bin_num++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -7305,6 +7338,7 @@ accessor_car (struct object *list, struct object *newvalform,
     }
 
   obj = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!obj)
     return NULL;
@@ -7316,6 +7350,7 @@ accessor_car (struct object *list, struct object *newvalform,
     }
 
   val = evaluate_object (newvalform, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!val)
     return NULL;
@@ -7348,6 +7383,7 @@ accessor_cdr (struct object *list, struct object *newvalform,
     }
 
   obj = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!obj)
     return NULL;
@@ -7359,6 +7395,7 @@ accessor_cdr (struct object *list, struct object *newvalform,
     }
 
   val = evaluate_object (newvalform, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!val)
     return NULL;
@@ -8325,6 +8362,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 	}
 
       val = evaluate_object (CAR (CDR (form)), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!val)
 	return NULL;
@@ -8688,6 +8726,7 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
     }
 
   val = evaluate_object (valueform, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!val)
     return NULL;
@@ -8760,7 +8799,7 @@ struct object *
 evaluate_if (struct object *list, struct environment *env,
 	     struct eval_outcome *outcome)
 {
-  struct object *if_clause;
+  struct object *if_clause, *ret;
 
   if (!list)
     {
@@ -8769,6 +8808,7 @@ evaluate_if (struct object *list, struct environment *env,
     }
 
   if_clause = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!if_clause)
     return NULL;
@@ -8781,7 +8821,9 @@ evaluate_if (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      return evaluate_object (CAR (CDR (list)), env, outcome);
+      ret = evaluate_object (CAR (CDR (list)), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+      return ret;
     }
   else
     {
@@ -8790,7 +8832,11 @@ evaluate_if (struct object *list, struct environment *env,
 	  return &nil_object;
 	}
       else
-	return evaluate_object (nth (2, list), env, outcome);
+	{
+	  ret = evaluate_object (nth (2, list), env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+	  return ret;
+	}
     }
 }
 
@@ -9234,6 +9280,7 @@ execute_body_of_tagbody (struct object *body, struct environment *env,
       if (car->type == TYPE_CONS_PAIR)
 	{
 	  ret = evaluate_object (car, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!ret)
 	    {
