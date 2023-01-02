@@ -866,10 +866,14 @@ struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *get_nth_character (int ind, struct object *str);
 struct object *create_filename (struct object *string);
 struct object *create_vector (struct object *list);
+
 struct object *create_stream (enum stream_type type,
 			      enum stream_direction direction,
 			      struct string *filename,
 			      struct eval_outcome *outcome);
+struct object *create_stream_from_open_file (enum stream_type type,
+					     enum stream_direction direction,
+					     FILE *file);
 
 struct object *load_file (const char *filename, struct environment *env,
 			  struct eval_outcome *outcome);
@@ -931,6 +935,9 @@ struct object *define_parameter
 struct object *define_parameter_by_name
 (char *name, size_t size, struct object *form, struct environment *env,
  struct eval_outcome *outcome);
+
+struct object *define_variable (char *name, struct object *value,
+				struct environment *env);
 
 struct object *skip_prefix
 (struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
@@ -1723,6 +1730,14 @@ add_standard_definitions (struct environment *env)
 		    NULL);
   add_builtin_type ("PATHNAME", env, type_pathname, 1, NULL);
   add_builtin_type ("STREAM", env, type_stream, 1, NULL);
+
+
+  define_variable ("*STANDARD-INPUT*",
+		   create_stream_from_open_file (CHARACTER_STREAM, INPUT_STREAM,
+						 stdin), env);
+  define_variable ("*STANDARD-OUTPUT*",
+		   create_stream_from_open_file (CHARACTER_STREAM, INPUT_STREAM,
+						 stdout), env);
 }
 
 
@@ -4136,6 +4151,26 @@ create_stream (enum stream_type type, enum stream_direction direction,
 
 
 struct object *
+create_stream_from_open_file (enum stream_type type,
+			      enum stream_direction direction, FILE *file)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct stream *str = malloc_and_check (sizeof (*str));
+
+  str->type = type;
+  str->direction = direction;
+  str->is_open = 1;
+  str->file = file;
+
+  obj->type = TYPE_STREAM;
+  obj->refcount = 1;
+  obj->value_ptr.stream = str;
+
+  return obj;
+}
+
+
+struct object *
 load_file (const char *filename, struct environment *env,
 	   struct eval_outcome *outcome)
 {
@@ -4695,6 +4730,20 @@ define_parameter_by_name (char *name, size_t size, struct object *form,
 				    value_ptr.package->symlist);
 
   return define_parameter (sym, form, env, outcome);
+}
+
+
+struct object *
+define_variable (char *name, struct object *value, struct environment *env)
+{
+  struct object *sym =
+    intern_symbol_from_char_vector (name, strlen (name), 1, &env->
+				    current_package->value_ptr.package->symlist);
+
+  sym->value_ptr.symbol->is_parameter = 1;
+  sym->value_ptr.symbol->value_cell = value;
+
+  return value;
 }
 
 
