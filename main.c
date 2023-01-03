@@ -1092,6 +1092,8 @@ struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write_string
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_write_char
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_fresh_line
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
@@ -1637,6 +1639,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("WRITE-CHAR", env, builtin_write_char, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("FRESH-LINE", env, builtin_fresh_line, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, NULL, 0);
@@ -6929,6 +6933,38 @@ builtin_write_string (struct object *list, struct environment *env,
 
   for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
     putchar (CAR (list)->value_ptr.string->value [i]);
+
+  increment_refcount (CAR (list), NULL);
+  return CAR (list);
+}
+
+
+struct object *
+builtin_write_char (struct object *list, struct environment *env,
+		    struct eval_outcome *outcome)
+{
+  struct object *std_out;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  printf ("%s", CAR (list)->value_ptr.character);
+
+  std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+
+  if (!strcmp (CAR (list)->value_ptr.character, "\n"))
+    std_out->value_ptr.stream->dirty_line = 0;
+  else
+    std_out->value_ptr.stream->dirty_line = 1;
 
   increment_refcount (CAR (list), NULL);
   return CAR (list);
