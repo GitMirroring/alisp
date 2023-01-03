@@ -10468,9 +10468,9 @@ print_function_or_macro (const struct object *obj, struct environment *env)
 void
 print_object (const struct object *obj, struct environment *env)
 {
-  if (obj == &nil_object)
-    printf ("()");
-  else if (obj->type == TYPE_QUOTE)
+  struct object *std_out;
+
+  if (obj->type == TYPE_QUOTE)
     {
       printf ("'");
       print_object (obj->value_ptr.next, env);
@@ -10495,40 +10495,48 @@ print_object (const struct object *obj, struct environment *env)
       printf (".");
       print_object (obj->value_ptr.next, env);
     }
-  else if (obj->type == TYPE_INTEGER)
-    mpz_out_str (NULL, 10, obj->value_ptr.integer);
-  else if (obj->type == TYPE_RATIO)
-    mpq_out_str (NULL, 10, obj->value_ptr.ratio);
-  else if (obj->type == TYPE_FLOAT)
-    gmp_printf ("%.Ff", obj->value_ptr.floating);
-  else if (obj->type == TYPE_STRING)
-    print_string (obj->value_ptr.string);
-  else if (obj->type == TYPE_CHARACTER)
-    print_character (obj->value_ptr.character);
-  else if (obj->type == TYPE_FILENAME)
-    print_filename (obj->value_ptr.filename);
-  else if (obj->type == TYPE_SYMBOL_NAME)
-    print_symbol_name (obj->value_ptr.symbol_name, env);
-  else if (obj->type == TYPE_SYMBOL)
-    print_symbol (obj->value_ptr.symbol, env);
-  else if (obj->type == TYPE_CONS_PAIR)
-    print_list (obj->value_ptr.cons_pair, env);
-  else if (obj->type == TYPE_ARRAY)
-    print_array (obj->value_ptr.array, env);
-  else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
-    print_function_or_macro (obj, env);
-  else if (obj->type == TYPE_PACKAGE)
-    {
-      printf ("#<PACKAGE \"");
-      print_symbol (obj->value_ptr.package->name->value_ptr.symbol, env);
-      printf ("\">");
-    }
-  else if (obj->type == TYPE_ENVIRONMENT)
-    printf ("#<ENVIRONMENT %p>", (void *)obj);
-  else if (obj->type == TYPE_STREAM)
-    printf ("#<STREAM %p>", (void *)obj);
   else
-    printf ("#<print not implemented>");
+    {
+      std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+      std_out->value_ptr.stream->dirty_line = 1;
+
+      if (obj == &nil_object)
+	printf ("()");
+      else if (obj->type == TYPE_INTEGER)
+	mpz_out_str (NULL, 10, obj->value_ptr.integer);
+      else if (obj->type == TYPE_RATIO)
+	mpq_out_str (NULL, 10, obj->value_ptr.ratio);
+      else if (obj->type == TYPE_FLOAT)
+	gmp_printf ("%.Ff", obj->value_ptr.floating);
+      else if (obj->type == TYPE_STRING)
+	print_string (obj->value_ptr.string);
+      else if (obj->type == TYPE_CHARACTER)
+	print_character (obj->value_ptr.character);
+      else if (obj->type == TYPE_FILENAME)
+	print_filename (obj->value_ptr.filename);
+      else if (obj->type == TYPE_SYMBOL_NAME)
+	print_symbol_name (obj->value_ptr.symbol_name, env);
+      else if (obj->type == TYPE_SYMBOL)
+	print_symbol (obj->value_ptr.symbol, env);
+      else if (obj->type == TYPE_CONS_PAIR)
+	print_list (obj->value_ptr.cons_pair, env);
+      else if (obj->type == TYPE_ARRAY)
+	print_array (obj->value_ptr.array, env);
+      else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+	print_function_or_macro (obj, env);
+      else if (obj->type == TYPE_PACKAGE)
+	{
+	  printf ("#<PACKAGE \"");
+	  print_symbol (obj->value_ptr.package->name->value_ptr.symbol, env);
+	  printf ("\">");
+	}
+      else if (obj->type == TYPE_ENVIRONMENT)
+	printf ("#<ENVIRONMENT %p>", (void *)obj);
+      else if (obj->type == TYPE_STREAM)
+	printf ("#<STREAM %p>", (void *)obj);
+      else
+	printf ("#<print not implemented>");
+    }
 }
 
 
