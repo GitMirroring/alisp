@@ -529,6 +529,8 @@ stream
   FILE *file;
 
   int is_open;
+
+  int dirty_line;
 };
 
 
@@ -1090,6 +1092,8 @@ struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write_string
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_fresh_line
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_open
@@ -1213,6 +1217,7 @@ struct object *evaluate_macrolet
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
+struct object *inspect_variable (const char *var, struct environment *env);
 
 struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions);
@@ -1273,6 +1278,8 @@ int symbol_equals (const struct object *sym, const char *str,
 		   struct environment *env);
 int symbol_is_among (const struct object *sym, struct environment *env, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
+
+struct object *fresh_line (struct stream *str);
 
 void print_as_symbol (const char *sym, size_t len);
 void print_symbol_name (const struct symbol_name *sym, struct environment *env);
@@ -1630,6 +1637,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("FRESH-LINE", env, builtin_fresh_line, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, NULL, 0);
@@ -4145,6 +4154,7 @@ create_stream (enum stream_type type, enum stream_direction direction,
   str->type = type;
   str->direction = direction;
   str->is_open = 1;
+  str->dirty_line = 0;
 
   obj->type = TYPE_STREAM;
   obj->refcount = 1;
@@ -4164,6 +4174,7 @@ create_stream_from_open_file (enum stream_type type,
   str->type = type;
   str->direction = direction;
   str->is_open = 1;
+  str->dirty_line = 0;
   str->file = file;
 
   obj->type = TYPE_STREAM;
@@ -6925,6 +6936,24 @@ builtin_write_string (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_fresh_line (struct object *list, struct environment *env,
+		    struct eval_outcome *outcome)
+{
+  struct object *std_out;
+
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+
+  return fresh_line (std_out->value_ptr.stream);
+}
+
+
+struct object *
 builtin_load (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
@@ -8768,6 +8797,43 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 
 struct object *
+inspect_variable (const char *var, struct environment *env)
+{
+  size_t l = strlen (var);
+  struct object_list *cur = env->current_package->value_ptr.package->symlist;
+  struct symbol *sym;
+  struct binding *b;
+
+  while (cur)
+    {
+      if (eqmem (cur->obj->value_ptr.symbol->name,
+		 cur->obj->value_ptr.symbol->name_len, var, l))
+	{
+	  sym = cur->obj->value_ptr.symbol;
+
+	  if (sym->is_const || !sym->value_dyn_bins_num)
+	    {
+	      return sym->value_cell;
+	    }
+
+	  b = find_binding (sym, env->vars, DYNAMIC_BINDING, -1);
+
+	  if (b)
+	    {
+	      return b->obj;
+	    }
+
+	  return NULL;
+	}
+
+      cur = cur->next;
+    }
+
+  return NULL;
+}
+
+
+struct object *
 get_function (struct object *sym, struct environment *env, int only_functions)
 {
   struct object *f;
@@ -10167,6 +10233,21 @@ equal_strings (const struct string *s1, const struct string *s2)
       return 0;
 
   return 1;
+}
+
+
+struct object *
+fresh_line (struct stream *str)
+{
+  if (str->dirty_line)
+    {
+      fprintf (str->file, "\n");
+      str->dirty_line = 0;
+
+      return &t_object;
+    }
+
+  return &nil_object;
 }
 
 
