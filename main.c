@@ -1088,6 +1088,8 @@ struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_write_string
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_load
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_open
@@ -1626,6 +1628,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, NULL, 0);
@@ -6888,6 +6892,32 @@ builtin_write (struct object *list, struct environment *env,
 
   print_object (CAR (list), env);
   printf ("\n");
+
+  increment_refcount (CAR (list), NULL);
+  return CAR (list);
+}
+
+
+struct object *
+builtin_write_string (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  size_t i;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
+    putchar (CAR (list)->value_ptr.string->value [i]);
 
   increment_refcount (CAR (list), NULL);
   return CAR (list);
