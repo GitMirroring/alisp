@@ -204,3 +204,9 @@
 (defun mapc (fun &rest lists)
   (apply #'mapcar (cons fun lists))
   (car lists))
+
+
+
+(defun terpri ()
+  (write-char #\newline)
+  nil)
