@@ -210,3 +210,9 @@
 (defun terpri ()
   (write-char #\newline)
   nil)
+
+
+(defun write-line (string)
+  (write-string string)
+  (terpri)
+  string)
