@@ -292,7 +292,7 @@ make_test ("(tagbody\n" .
 	   "  (go jmp)\n" .
 	   "  (write \"2\")\n" .
 	   "  jmp\n" .
-	   "  (write \"3\"))", "\"1\"\n\"3\"\n()");
+	   "  (write \"3\"))", "\"1\"\"3\"\n()");
 make_test ("(tagbody 1 (go 3) 2 3 (go 4) 4 (write \"\"))", "\"\"\n()");
 make_test ("(tagbody 1 2 (tagbody 3 (go 4)) 4 (write \"\"))", "\"\"\n()");
 make_test ("(cddr '(0 1 2))", "(2)");
