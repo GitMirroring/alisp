@@ -6926,6 +6926,7 @@ builtin_write_string (struct object *list, struct environment *env,
 		      struct eval_outcome *outcome)
 {
   size_t i;
+  struct object *std_out;
 
   if (list_length (list) != 1)
     {
@@ -6941,6 +6942,13 @@ builtin_write_string (struct object *list, struct environment *env,
 
   for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
     putchar (CAR (list)->value_ptr.string->value [i]);
+
+  std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+
+  if (CAR (list)->value_ptr.string->value [i-1] == '\n')
+    std_out->value_ptr.stream->dirty_line = 0;
+  else
+    std_out->value_ptr.stream->dirty_line = 1;
 
   increment_refcount (CAR (list), NULL);
   return CAR (list);
