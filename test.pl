@@ -291,6 +291,7 @@ make_test ("(write-char #\\a)", "a\n#\\a");
 make_test ("(write-char #\\newline)", "\n#\\Newline");
 make_test ("(fresh-line)", "()");
 make_test ("(terpri)", "\n()");
+make_test ("(write-line \"aaa\")", "aaa\n\"aaa\"");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
