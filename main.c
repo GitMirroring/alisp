@@ -1346,7 +1346,7 @@ main (int argc, char *argv [])
   int c;
 #endif
 
-  struct object *result, *obj;
+  struct object *result, *obj, *std_out;
   struct object_list *vals;
   struct environment env = {NULL};
 
@@ -1380,7 +1380,11 @@ main (int argc, char *argv [])
       eval_out.type = EVAL_OK;
 
       if (!opts.load_and_exit)
-	printf ("\n");
+	{
+	  printf ("\n");
+	  std_out = inspect_variable ("*STANDARD-OUTPUT*", &env);
+	  std_out->value_ptr.stream->dirty_line = 0;
+	}
     }
 
   if (opts.load_before_repl)
@@ -1420,7 +1424,7 @@ main (int argc, char *argv [])
     {
       obj = read_object_interactively (&env, &eval_out, &input_left,
 				       &input_left_s);
-      
+
       while (obj && input_left && input_left_s > 0)
 	{
 	  result = evaluate_object (obj, &env, &eval_out);
@@ -1431,8 +1435,12 @@ main (int argc, char *argv [])
 	    eval_out.no_value = 0;
 	  else
 	    {
+	      std_out = inspect_variable ("*STANDARD-OUTPUT*", &env);
+	      fresh_line (std_out->value_ptr.stream);
+
 	      print_object (result, &env);
 	      printf ("\n");
+	      std_out->value_ptr.stream->dirty_line = 0;
 
 	      vals = eval_out.other_values;
 
@@ -1440,6 +1448,7 @@ main (int argc, char *argv [])
 		{
 		  print_object (vals->obj, &env);
 		  printf ("\n");
+		  std_out->value_ptr.stream->dirty_line = 0;
 		  vals = vals->next;
 		}
 
@@ -1457,7 +1466,7 @@ main (int argc, char *argv [])
 						     &input_left_s);
 	}
     }
-  
+
   return 0;
 }
 
