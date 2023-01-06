@@ -201,6 +201,11 @@
 
 
 
+(defun complement (func)
+  (lambda (&rest args) (not (apply func args))))
+
+
+
 (defun mapc (fun &rest lists)
   (apply #'mapcar (cons fun lists))
   (car lists))
