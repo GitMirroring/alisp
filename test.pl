@@ -180,6 +180,8 @@ make_test ("(apply #'+ '(1 2))", "3");
 make_test ("(apply #'car '(1 2) ())", "1");
 make_test ("(apply 'car '(1 2) ())", "1");
 make_test ("(apply (lambda (x) (car x)) '(1 2) ())", "1");
+make_test ("(funcall #'+ 1 2 3)", "6");
+make_test ("(funcall 'car '(1 2 3))", "1");
 make_test ("(f)", "()");
 make_test ("(defun f () \"\")", "F");
 make_test ("(f)", "\"\"");
