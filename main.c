@@ -1257,6 +1257,8 @@ struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_apply
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_funcall
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_declare
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
@@ -1705,6 +1707,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
   add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FUNCALL", env, evaluate_funcall, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
@@ -9450,6 +9453,36 @@ evaluate_apply (struct object *list, struct environment *env,
     }
 
   return call_function (fun, args, 0, 0, env, outcome);
+}
+
+
+struct object *
+evaluate_funcall (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  struct object *fun;
+
+  if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      fun = CAR (list);
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      fun = get_function (SYMBOL (CAR (list)), env, 1);
+
+      if (!fun)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return call_function (fun, CDR (list), 0, 0, env, outcome);
 }
 
 
