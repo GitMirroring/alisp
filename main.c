@@ -846,6 +846,7 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (size_t size);
+struct object *create_string_from_c_string (const char *str);
 void resize_string (struct object *string, size_t size);
 char *copy_to_c_string (struct string *str);
 
@@ -1202,6 +1203,12 @@ struct object *builtin_symbol_function (struct object *list,
 struct object *builtin_special_operator_p (struct object *list,
 					   struct environment *env,
 					   struct eval_outcome *outcome);
+struct object *builtin_lisp_implementation_type (struct object *list,
+						 struct environment *env,
+						 struct eval_outcome *outcome);
+struct object *builtin_lisp_implementation_version (struct object *list,
+						    struct environment *env,
+						    struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
@@ -1724,6 +1731,10 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
+		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
+		    builtin_lisp_implementation_version, TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    TYPE_FUNCTION, NULL, 0);
@@ -3753,6 +3764,21 @@ alloc_string (size_t size)
   obj->value_ptr.string->used_size = 0;
 
   return obj;
+}
+
+
+struct object *
+create_string_from_c_string (const char *str)
+{
+  size_t i, l = strlen (str);
+  struct object *ret = alloc_string (l);
+
+  for (i = 0; i < l; i++)
+    ret->value_ptr.string->value [i] = str [i];
+
+  ret->value_ptr.string->used_size = l;
+
+  return ret;
 }
 
 
@@ -8503,6 +8529,37 @@ builtin_special_operator_p (struct object *list, struct environment *env,
     return &t_object;
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_lisp_implementation_type (struct object *list, struct environment *env,
+				  struct eval_outcome *outcome)
+{
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+
+      return NULL;
+    }
+
+  return create_string_from_c_string ("alisp");
+}
+
+
+struct object *
+builtin_lisp_implementation_version (struct object *list,
+				     struct environment *env,
+				     struct eval_outcome *outcome)
+{
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+
+      return NULL;
+    }
+
+  return create_string_from_c_string (PACKAGE_VERSION);
 }
 
 
