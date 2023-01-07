@@ -1079,6 +1079,8 @@ struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nthcdr
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_nth_value
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_elt
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_aref
@@ -1648,6 +1650,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
   add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
@@ -6594,6 +6597,63 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
   increment_refcount (ret, NULL);
 
+  return ret;
+}
+
+
+struct object *
+builtin_nth_value (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  int ind;
+  struct object *res, *ret;
+  struct object_list *l;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ind = mpz_get_si (CAR (list)->value_ptr.integer);
+
+  if (ind < 0)
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  res = evaluate_object (CAR (CDR (list)), env, outcome);
+
+  if (!res)
+    return NULL;
+
+  if (!ind)
+    {
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+      return res;
+    }
+
+  decrement_refcount (res, NULL);
+
+  for (l = outcome->other_values, ind--; l && ind; ind--)
+    l = l->next;
+
+  if (!l)
+    {
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+      return &nil_object;
+    }
+
+  ret = l->obj;
+  increment_refcount (ret, NULL);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
   return ret;
 }
 
