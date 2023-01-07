@@ -5410,7 +5410,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
   struct binding *bins = NULL, *b;
   struct object *val, *res, *ret, *args;
-  int argsnum = 0, closnum, prev_lex_bin_num; /*, rest_found = 0;*/
+  int argsnum = 0, closnum, prev_lex_bin_num, new_lex_bin_num = 0; /*, rest_found = 0;*/
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -5431,12 +5431,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       return ret;
     }
-
-  prev_lex_bin_num = env->var_lex_bin_num, env->var_lex_bin_num = 0;
-
-  env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
-			      &closnum);
-  env->var_lex_bin_num += closnum;
 
   while (arglist != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -5463,7 +5457,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       argsnum++;
 
       if (bins->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++;
+	new_lex_bin_num++;
 
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
@@ -5472,7 +5466,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++;
+	    new_lex_bin_num++;
 	}
 
       par = par->next;
@@ -5513,7 +5507,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++;
+	    new_lex_bin_num++;
 	}
       else
 	{
@@ -5522,7 +5516,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++;
+	    new_lex_bin_num++;
 	}
 
       if (par->supplied_p_param)
@@ -5532,7 +5526,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++;
+	    new_lex_bin_num++;
 	}
 
       par = par->next;
@@ -5560,7 +5554,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       argsnum++;
 
       if (bins->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++;
+	new_lex_bin_num++;
 
       par = par->next;
     }
@@ -5609,7 +5603,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  argsnum++;
 
 	  if (bins->type == LEXICAL_BINDING)
-	    env->var_lex_bin_num++;
+	    new_lex_bin_num++;
 
 	  arglist = CDR (arglist);
 	}
@@ -5638,21 +5632,26 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	      argsnum++;
 
 	      if (bins->type == LEXICAL_BINDING)
-		env->var_lex_bin_num++;
+		new_lex_bin_num++;
 	    }
 
 	  findk = findk->next;
 	}
     }
 
+  prev_lex_bin_num = env->var_lex_bin_num;
+
   env->vars = chain_bindings (bins, env->vars, NULL);
+  env->var_lex_bin_num = new_lex_bin_num;
+
+  env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
+			      &closnum);
+  env->var_lex_bin_num += closnum;
 
   res = evaluate_body (func->value_ptr.function->body, eval_body_twice, env,
 		       outcome);
 
  clean_lex_env:
-  env->vars = remove_bindings (env->vars, argsnum);
-
   for (; closnum; closnum--)
     {
       b = env->vars;
@@ -5662,6 +5661,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (closnum == 1)
 	b->next = NULL;
     }
+
+  env->vars = remove_bindings (env->vars, argsnum);
 
   env->var_lex_bin_num = prev_lex_bin_num;
 
