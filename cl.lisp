@@ -45,6 +45,18 @@
 (defun zerop (num)
   (= num 0))
 
+(defun mod (num div)
+  (nth-value 1 (floor num div)))
+
+(defun rem (num div)
+  (nth-value 1 (truncate num div)))
+
+(defun evenp (num)
+  (= 0 (mod num 2)))
+
+(defun oddp (num)
+  (= 1 (mod num 2)))
+
 (defun isqrt (num)
   (values (floor (sqrt num))))
 
