@@ -396,6 +396,15 @@ make_test ("(abs -0.5)", "0.5");
 make_test ("(abs 1/2)", "1/2");
 make_test ("(zerop -0)", "T");
 make_test ("(zerop 1/2)", "()");
+make_test ("(mod 2.5 1)", "0.5");
+make_test ("(mod -2.5 1)", "0.5");
+make_test ("(rem 2.5 1)", "0.5");
+make_test ("(rem -2.5 1)", "-0.5");
+make_test ("(evenp 0)", "T");
+make_test ("(evenp 1)", "()");
+make_test ("(oddp 0)", "()");
+make_test ("(oddp -1)", "T");
+
 
 
 print "\ntotal tests: " . $total_tests . "\n";
