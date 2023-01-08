@@ -5410,7 +5410,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
   struct binding *bins = NULL, *b;
   struct object *val, *res, *ret, *args;
-  int argsnum = 0, closnum, prev_lex_bin_num, new_lex_bin_num = 0; /*, rest_found = 0;*/
+  int argsnum = 0, closnum = 0, prev_lex_bin_num = env->var_lex_bin_num,
+    new_lex_bin_num = 0; /*, rest_found = 0;*/
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -5639,9 +5640,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	}
     }
 
-  prev_lex_bin_num = env->var_lex_bin_num;
-
   env->vars = chain_bindings (bins, env->vars, NULL);
+  bins = NULL;
   env->var_lex_bin_num = new_lex_bin_num;
 
   env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
@@ -5662,7 +5662,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	b->next = NULL;
     }
 
-  env->vars = remove_bindings (env->vars, argsnum);
+  if (!bins)
+    env->vars = remove_bindings (env->vars, argsnum);
+  else
+    remove_bindings (bins, argsnum);
 
   env->var_lex_bin_num = prev_lex_bin_num;
 
