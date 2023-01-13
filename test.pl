@@ -304,6 +304,7 @@ make_test ("(write-line \"aaa\")", "aaa\n\"aaa\"");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
+make_test ("(when nil \"\" \"\" \"\")", "()");
 make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
@@ -313,6 +314,8 @@ make_test ("(tagbody\n" .
 	   "  (write \"3\"))", "\"1\"\"3\"\n()");
 make_test ("(tagbody 1 (go 3) 2 3 (go 4) 4 (write \"\"))", "\"\"\n()");
 make_test ("(tagbody 1 2 (tagbody 3 (go 4)) 4 (write \"\"))", "\"\"\n()");
+make_test ("(block test (write 1) (write 2) (return-from test 10) (write 3))", "12\n10");
+make_test ("(block test (write 1) (block test2 (write 2) (return-from test 10) (write 3)))", "12\n10");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
