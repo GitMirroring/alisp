@@ -7461,7 +7461,7 @@ builtin_dotimes (struct object *list, struct environment *env,
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
 
-      evaluate_body (CDR (list), 0, env, outcome);
+      evaluate_body (CDR (list), 1, env, outcome);
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -7527,7 +7527,7 @@ builtin_dolist (struct object *list, struct environment *env,
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
 
-      evaluate_body (CDR (list), 0, env, outcome);
+      evaluate_body (CDR (list), 1, env, outcome);
 
       env->vars = remove_bindings (env->vars, 1);
 
