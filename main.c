@@ -289,8 +289,6 @@ eval_outcome
   struct object *return_value;
 
   struct object *tag_to_jump_to;
-
-  struct object *next_forms;
 };
 
 
@@ -5431,7 +5429,7 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 
       if (!res)
 	{
-	  if (!outcome->tag_to_jump_to && !outcome->next_forms)
+	  if (!outcome->tag_to_jump_to)
 	    return NULL;
 	  else if (outcome->tag_to_jump_to)
 	    {
@@ -5446,11 +5444,6 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 
 	      outcome->tag_to_jump_to = NULL;
 	      body = t->dest;
-	    }
-	  else if (outcome->next_forms)
-	    {
-	      body = outcome->next_forms;
-	      outcome->next_forms = NULL;
 	    }
 	}
       else
