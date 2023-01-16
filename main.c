@@ -5425,7 +5425,6 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 	decrement_refcount (res, NULL);
 
       res = evaluate_object (CAR (body), env, outcome);
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!res)
 	{
@@ -5447,7 +5446,12 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 	    }
 	}
       else
-	body = CDR (body);
+	{
+	  if (CDR (body) != &nil_object)
+	    CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  body = CDR (body);
+	}
 
     } while (body != &nil_object);
 
