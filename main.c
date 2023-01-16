@@ -149,7 +149,7 @@ environment
 
   struct binding *structs;
 
-  struct object *go_sym, *return_from_sym;
+  struct object *std_out_sym;
 };
 
 
@@ -1219,10 +1219,12 @@ struct object *evaluate_macrolet
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
-struct object *inspect_variable (const char *var, struct environment *env);
-
 struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions);
+
+struct object *inspect_variable_from_c_string (const char *var,
+					       struct environment *env);
+struct object *inspect_variable (struct object *sym, struct environment *env);
 
 struct object *set_value (struct object *sym, struct object *valueform,
 			  struct environment *env, struct eval_outcome *outcome);
@@ -1386,7 +1388,7 @@ main (int argc, char *argv [])
       if (!opts.load_and_exit)
 	{
 	  printf ("\n");
-	  std_out = inspect_variable ("*STANDARD-OUTPUT*", &env);
+	  std_out = inspect_variable (env.std_out_sym, &env);
 	  std_out->value_ptr.stream->dirty_line = 0;
 	}
     }
@@ -1439,7 +1441,7 @@ main (int argc, char *argv [])
 	    eval_out.no_value = 0;
 	  else
 	    {
-	      std_out = inspect_variable ("*STANDARD-OUTPUT*", &env);
+	      std_out = inspect_variable (env.std_out_sym, &env);
 	      fresh_line (std_out->value_ptr.stream);
 
 	      print_object (result, &env);
@@ -1713,15 +1715,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("FUNCALL", env, evaluate_funcall, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
-
-  env->go_sym = add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
-
+  add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
-
-  env->return_from_sym = add_builtin_form ("RETURN-FROM", env,
-					   evaluate_return_from, TYPE_MACRO,
-					   NULL, 1);
-
+  add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
+		    1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
 		    0);
@@ -1777,12 +1774,12 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("STREAM", env, type_stream, 1, NULL);
 
 
-  define_variable ("*STANDARD-INPUT*",
-		   create_stream_from_open_file (CHARACTER_STREAM, INPUT_STREAM,
-						 stdin), env);
-  define_variable ("*STANDARD-OUTPUT*",
-		   create_stream_from_open_file (CHARACTER_STREAM, INPUT_STREAM,
-						 stdout), env);
+  define_variable ("*STANDARD-INPUT*", create_stream_from_open_file
+		   (CHARACTER_STREAM, INPUT_STREAM, stdin), env);
+  env->std_out_sym = define_variable
+    ("*STANDARD-OUTPUT*", create_stream_from_open_file (CHARACTER_STREAM,
+							INPUT_STREAM,
+							stdout), env);
 }
 
 
@@ -4828,7 +4825,7 @@ define_variable (char *name, struct object *value, struct environment *env)
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
 
-  return value;
+  return sym;
 }
 
 
@@ -7112,7 +7109,7 @@ builtin_write_string (struct object *list, struct environment *env,
   for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
     putchar (CAR (list)->value_ptr.string->value [i]);
 
-  std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+  std_out = inspect_variable (env->std_out_sym, env);
 
   if (CAR (list)->value_ptr.string->value [i-1] == '\n')
     std_out->value_ptr.stream->dirty_line = 0;
@@ -7144,7 +7141,7 @@ builtin_write_char (struct object *list, struct environment *env,
 
   printf ("%s", CAR (list)->value_ptr.character);
 
-  std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+  std_out = inspect_variable (env->std_out_sym, env);
 
   if (!strcmp (CAR (list)->value_ptr.character, "\n"))
     std_out->value_ptr.stream->dirty_line = 0;
@@ -7168,7 +7165,7 @@ builtin_fresh_line (struct object *list, struct environment *env,
       return NULL;
     }
 
-  std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+  std_out = inspect_variable (env->std_out_sym, env);
 
   return fresh_line (std_out->value_ptr.stream);
 }
@@ -9049,43 +9046,6 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 
 struct object *
-inspect_variable (const char *var, struct environment *env)
-{
-  size_t l = strlen (var);
-  struct object_list *cur = env->current_package->value_ptr.package->symlist;
-  struct symbol *sym;
-  struct binding *b;
-
-  while (cur)
-    {
-      if (eqmem (cur->obj->value_ptr.symbol->name,
-		 cur->obj->value_ptr.symbol->name_len, var, l))
-	{
-	  sym = cur->obj->value_ptr.symbol;
-
-	  if (sym->is_const || !sym->value_dyn_bins_num)
-	    {
-	      return sym->value_cell;
-	    }
-
-	  b = find_binding (sym, env->vars, DYNAMIC_BINDING, -1);
-
-	  if (b)
-	    {
-	      return b->obj;
-	    }
-
-	  return NULL;
-	}
-
-      cur = cur->next;
-    }
-
-  return NULL;
-}
-
-
-struct object *
 get_function (struct object *sym, struct environment *env, int only_functions)
 {
   struct object *f;
@@ -9105,6 +9065,49 @@ get_function (struct object *sym, struct environment *env, int only_functions)
 
   increment_refcount (f, NULL);
   return f;
+}
+
+
+struct object *
+inspect_variable_from_c_string (const char *var, struct environment *env)
+{
+  size_t l = strlen (var);
+  struct object_list *cur = env->current_package->value_ptr.package->symlist;
+
+  while (cur)
+    {
+      if (eqmem (cur->obj->value_ptr.symbol->name,
+		 cur->obj->value_ptr.symbol->name_len, var, l))
+	{
+	  return inspect_variable (cur->obj, env);
+	}
+
+      cur = cur->next;
+    }
+
+  return NULL;
+}
+
+
+struct object *
+inspect_variable (struct object *sym, struct environment *env)
+{
+  struct symbol *s = sym->value_ptr.symbol;
+  struct binding *b;
+
+  if (s->is_const || !s->value_dyn_bins_num)
+    {
+      return s->value_cell;
+    }
+
+  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
+
+  if (b)
+    {
+      return b->obj;
+    }
+
+  return NULL;
 }
 
 
@@ -10743,7 +10746,7 @@ print_object (const struct object *obj, struct environment *env)
     }
   else
     {
-      std_out = inspect_variable ("*STANDARD-OUTPUT*", env);
+      std_out = inspect_variable (env->std_out_sym, env);
       std_out->value_ptr.stream->dirty_line = 1;
 
       if (obj == &nil_object)
