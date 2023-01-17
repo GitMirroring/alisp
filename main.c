@@ -264,9 +264,9 @@ eval_outcome_type
     COULD_NOT_TELL_FILE,
     ERROR_READING_FILE,
     UNKNOWN_TYPE,
-    CANT_GO_OUTSIDE_TAGBODY,
     INVALID_GO_TAG,
-    CANT_GO_TO_NONEXISTENT_TAG,
+    TAG_NOT_FOUND,
+    BLOCK_NOT_FOUND,
     INVALID_ACCESSOR,
     FUNCTION_NOT_FOUND_IN_EVAL,
     DECLARE_NOT_ALLOWED_HERE,
@@ -1440,6 +1440,17 @@ main (int argc, char *argv [])
       while (obj && input_left && input_left_s > 0)
 	{
 	  result = evaluate_object (obj, &env, &eval_out);
+
+	  if (!result && eval_out.tag_to_jump_to)
+	    {
+	      eval_out.type = TAG_NOT_FOUND;
+	      eval_out.tag_to_jump_to = NULL;
+	    }
+	  else if (!result && eval_out.block_to_leave)
+	    {
+	      eval_out.type = BLOCK_NOT_FOUND;
+	      eval_out.block_to_leave = NULL;
+	    }
 
 	  if (!result)
 	    print_eval_error (&eval_out, &env);
@@ -11142,17 +11153,17 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: type not known\n");
     }
-  else if (err->type == CANT_GO_OUTSIDE_TAGBODY)
-    {
-      printf ("eval error: can't perform GO outside of a TAGBODY\n");
-    }
   else if (err->type == INVALID_GO_TAG)
     {
       printf ("eval error: not a valid go tag\n");
     }
-  else if (err->type == CANT_GO_TO_NONEXISTENT_TAG)
+  else if (err->type == TAG_NOT_FOUND)
     {
-      printf ("eval error: can't GO to a tag that doesn't exist\n");
+      printf ("eval error: tag not found\n");
+    }
+  else if (err->type == BLOCK_NOT_FOUND)
+    {
+      printf ("eval error: block not found\n");
     }
   else if (err->type == INVALID_ACCESSOR)
     {
