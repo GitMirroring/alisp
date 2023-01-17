@@ -349,6 +349,11 @@ make_test ("(mapcar #'abs '(3 -4 2 -5 -6))", "(3 4 2 5 6)");
 make_test ("(mapcar #'cons '(a b c) '(1 2 3))", "((A . 1) (B . 2) (C . 3))");
 make_test ("(cond (t (+ 1 2)))", "3");
 make_test ("(cond (nil 2) (t 3) (nil 4))", "3");
+make_test ("(every #'evenp '(0 2 4))", "T");
+make_test ("(every #'< '(0 1 2) '(1 1))", "()");
+make_test ("(some #'< '(0 1 2) '(1 1))", "T");
+make_test ("(notany #'oddp '(1 3 4))", "()");
+make_test ("(notevery #'oddp '(1 3 4))", "T");
 
 
 # arithmetic tests
