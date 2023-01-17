@@ -1175,6 +1175,10 @@ struct object *builtin_numbers_more_than (struct object *list,
 struct object *builtin_numbers_more_than_or_equal (struct object *list,
 						   struct environment *env,
 						   struct eval_outcome *outcome);
+struct object *builtin_min (struct object *list, struct environment *env,
+			    struct eval_outcome *outcome);
+struct object *builtin_max (struct object *list, struct environment *env,
+			    struct eval_outcome *outcome);
 
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
@@ -1690,6 +1694,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form (">", env, builtin_numbers_more_than, TYPE_FUNCTION, NULL, 0);
   add_builtin_form (">=", env, builtin_numbers_more_than_or_equal, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("MIN", env, builtin_min, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAX", env, builtin_max, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, NULL, 1);
@@ -8446,6 +8452,86 @@ builtin_numbers_more_than_or_equal (struct object *list, struct environment *env
 				    struct eval_outcome *outcome)
 {
   return compare_any_numbers (list, env, outcome, MORE_THAN_OR_EQUAL);
+}
+
+
+struct object *
+builtin_min (struct object *list, struct environment *env,
+	     struct eval_outcome *outcome)
+{
+  int i, l = list_length (list);
+  struct object *cur, *ret = CAR (list);
+
+  if (!l)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  cur = list;
+
+  if (!IS_NUMBER (CAR (cur)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  for (i = 1; i < l; i++)
+    {
+      cur = CDR (cur);
+
+      if (!IS_NUMBER (CAR (cur)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (compare_two_numbers (CAR (cur), ret) < 0)
+	ret = CAR (cur);
+    }
+
+  increment_refcount (ret, NULL);
+  return ret;
+}
+
+
+struct object *
+builtin_max (struct object *list, struct environment *env,
+	     struct eval_outcome *outcome)
+{
+  int i, l = list_length (list);
+  struct object *cur, *ret = CAR (list);
+
+  if (!l)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  cur = list;
+
+  if (!IS_NUMBER (CAR (cur)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  for (i = 1; i < l; i++)
+    {
+      cur = CDR (cur);
+
+      if (!IS_NUMBER (CAR (cur)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (compare_two_numbers (CAR (cur), ret) > 0)
+	ret = CAR (cur);
+    }
+
+  increment_refcount (ret, NULL);
+  return ret;
 }
 
 
