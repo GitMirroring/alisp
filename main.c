@@ -11022,6 +11022,10 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
 void
 print_eval_error (struct eval_outcome *err, struct environment *env)
 {
+  struct object *std_out = inspect_variable (env->std_out_sym, env);
+
+  fresh_line (std_out->value_ptr.stream);
+
   if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
@@ -11186,6 +11190,8 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: incorrect syntax in loop construct\n");
     }
+
+  std_out->value_ptr.stream->dirty_line = 0;
 }
 
 
