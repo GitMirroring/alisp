@@ -1082,6 +1082,8 @@ struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_eval
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_write_string
@@ -1656,6 +1658,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
 		    NULL, 0);
@@ -7072,6 +7075,31 @@ builtin_last (struct object *list, struct environment *env,
   ret = nthcdr (list_length (CAR (list)) - n, CAR (list));
 
   increment_refcount (ret, NULL);
+  return ret;
+}
+
+
+struct object *
+builtin_eval (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
+{
+  int lex_vars = env->var_lex_bin_num;
+  int lex_funcs = env->func_lex_bin_num;
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  env->var_lex_bin_num = env->func_lex_bin_num = 0;
+
+  ret = evaluate_object (CAR (list), env, outcome);
+
+  env->var_lex_bin_num = lex_vars;
+  env->func_lex_bin_num = lex_funcs;
+
   return ret;
 }
 
