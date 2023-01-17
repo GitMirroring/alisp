@@ -294,6 +294,9 @@ make_test ("(array-dimension \"aaa\" 0)", "3");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "()");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
+make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
+make_test ("(setq var 10)", "10");
+make_test ("(let ((var 12)) (eval 'var))", "10");
 make_test ("(write \"\")", "\"\"\n\"\"");
 make_test ("(write-string \"aaa\\n\")", "aaan\n\"aaan\"");
 make_test ("(write-string \"\n" .
