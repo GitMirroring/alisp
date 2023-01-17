@@ -146,6 +146,28 @@
 	     (cond ,@rest)))))
 
 
+(defun every (pred &rest sequences)
+  (block every
+    (let ((n (apply 'min (mapcar #'length sequences))))
+      (dotimes (i n)
+	(let ((args (mapcar (lambda (s) (elt s i)) sequences)))
+	  (if (not (apply pred args))
+	      (return-from every nil)))))
+    t))
+
+
+(defun some (pred &rest sequences)
+  (not (apply 'every (complement pred) sequences)))
+
+
+(defun notany (pred &rest sequences)
+  (not (apply 'some pred sequences)))
+
+
+(defun notevery (pred &rest sequences)
+  (not (apply 'every pred sequences)))
+
+
 
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
