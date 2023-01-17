@@ -7489,12 +7489,15 @@ builtin_dotimes (struct object *list, struct environment *env,
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
 
-      evaluate_body (CDR (list), 1, env, outcome);
-
-      env->vars = remove_bindings (env->vars, 1);
+      ret = evaluate_body (CDR (list), 1, env, outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num--;
+
+      env->vars = remove_bindings (env->vars, 1);
+
+      if (!ret)
+	return NULL;
     }
 
   if (l == 3)
@@ -7507,10 +7510,10 @@ builtin_dotimes (struct object *list, struct environment *env,
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      env->vars = remove_bindings (env->vars, 1);
-
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num--;
+
+      env->vars = remove_bindings (env->vars, 1);
 
       return ret;
     }
@@ -7555,14 +7558,17 @@ builtin_dolist (struct object *list, struct environment *env,
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
 
-      evaluate_body (CDR (list), 1, env, outcome);
-
-      env->vars = remove_bindings (env->vars, 1);
+      ret = evaluate_body (CDR (list), 1, env, outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num--;
 
+      env->vars = remove_bindings (env->vars, 1);
+
       cons = CDR (cons);
+
+      if (!ret)
+	return NULL;
     }
 
   if (l == 3)
@@ -7575,10 +7581,10 @@ builtin_dolist (struct object *list, struct environment *env,
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      env->vars = remove_bindings (env->vars, 1);
-
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num--;
+
+      env->vars = remove_bindings (env->vars, 1);
 
       return ret;
     }
