@@ -969,8 +969,8 @@ struct parameter *parse_lambda_list (struct object *obj, struct environment *env
 				     struct eval_outcome *outcome);
 
 struct object *evaluate_body
-(struct object *body, int is_tagbody, struct environment *env,
- struct eval_outcome *outcome);
+(struct object *body, int is_tagbody, struct object *block_name,
+ struct environment *env, struct eval_outcome *outcome);
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int eval_body_twice,
  struct environment *env, struct eval_outcome *outcome);
@@ -5401,8 +5401,8 @@ struct parameter *parse_lambda_list (struct object *obj, struct environment *env
 
 
 struct object *
-evaluate_body (struct object *body, int is_tagbody, struct environment *env,
-	       struct eval_outcome *outcome)
+evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
+	       struct environment *env, struct eval_outcome *outcome)
 {
   struct object *res = NULL, *cons = body, *car, *dest, *destfind;
   struct go_tag *tags = NULL, *t;
@@ -5436,6 +5436,9 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 	}
     }
 
+  if (block_name)
+    env->blocks = add_block (block_name, NULL, env->blocks);
+
   do
     {
       if (res)
@@ -5445,21 +5448,28 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 
       if (!res)
 	{
-	  if (!outcome->tag_to_jump_to)
-	    return NULL;
+	  if (!outcome->tag_to_jump_to && !outcome->block_to_leave)
+	      goto cleanup_and_leave;
 	  else if (outcome->tag_to_jump_to)
 	    {
 	      t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
 
 	      if (!t)
-		{
-		  env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
-		  env->reachable_go_tag_frame_num--;
-		  return NULL;
-		}
+		goto cleanup_and_leave;
 
 	      outcome->tag_to_jump_to = NULL;
 	      body = t->dest;
+	    }
+	  else if (outcome->block_to_leave)
+	    {
+	      if (block_name && outcome->block_to_leave == env->blocks->name)
+		{
+		  outcome->block_to_leave = NULL;
+
+		  res = outcome->return_value;
+		}
+
+	      goto cleanup_and_leave;
 	    }
 	}
       else
@@ -5471,6 +5481,16 @@ evaluate_body (struct object *body, int is_tagbody, struct environment *env,
 	}
 
     } while (body != &nil_object);
+
+ cleanup_and_leave:
+  if (tags)
+    {
+      env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
+      env->reachable_go_tag_frame_num--;
+    }
+
+  if (block_name)
+    env->blocks = remove_block (env->blocks);
 
   return res;
 }
@@ -7500,7 +7520,7 @@ builtin_dotimes (struct object *list, struct environment *env,
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
 
-      ret = evaluate_body (CDR (list), 1, env, outcome);
+      ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num--;
@@ -7569,7 +7589,7 @@ builtin_dolist (struct object *list, struct environment *env,
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
 
-      ret = evaluate_body (CDR (list), 1, env, outcome);
+      ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num--;
@@ -8914,7 +8934,7 @@ evaluate_let (struct object *list, struct environment *env,
 
   env->vars = chain_bindings (bins, env->vars, NULL);
 
-  res = evaluate_body (body, 0, env, outcome);
+  res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->vars = remove_bindings (env->vars, bin_num);
 
@@ -8958,7 +8978,7 @@ evaluate_let_star (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_body (body, 0, env, outcome);
+  res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->vars = remove_bindings (env->vars, bin_num);
 
@@ -9045,7 +9065,7 @@ evaluate_flet (struct object *list, struct environment *env,
 
   env->funcs = chain_bindings (bins, env->funcs, NULL);
 
-  res = evaluate_body (body, 0, env, outcome);
+  res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
@@ -9090,7 +9110,7 @@ evaluate_labels (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_body (body, 0, env, outcome);
+  res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
@@ -9137,7 +9157,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
 
   env->funcs = chain_bindings (bins, env->funcs, NULL);
 
-  res = evaluate_body (body, 0, env, outcome);
+  res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
@@ -9376,7 +9396,7 @@ struct object *
 evaluate_progn (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
-  return evaluate_body (list, 0, env, outcome);
+  return evaluate_body (list, 0, NULL, env, outcome);
 }
 
 
@@ -9831,7 +9851,7 @@ struct object *
 evaluate_tagbody (struct object *list, struct environment *env,
 		  struct eval_outcome *outcome)
 {
-  struct object *ret = evaluate_body (list, 1, env, outcome);
+  struct object *ret = evaluate_body (list, 1, NULL, env, outcome);
 
   if (!ret)
     return NULL;
@@ -9868,8 +9888,6 @@ struct object *
 evaluate_block (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
-  struct object *ret;
-
   if (!list_length (list))
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -9882,22 +9900,7 @@ evaluate_block (struct object *list, struct environment *env,
       return NULL;
     }
 
-  env->blocks = add_block (SYMBOL (CAR (list)), CDR (list), env->blocks);
-
-  ret = evaluate_body (CDR (list), 0, env, outcome);
-
-  if (!ret && outcome->block_to_leave == env->blocks->name)
-    {
-      outcome->block_to_leave = NULL;
-
-      env->blocks = remove_block (env->blocks);
-
-      return outcome->return_value;
-    }
-
-  env->blocks = remove_block (env->blocks);
-
-  return ret;
+  return evaluate_body (CDR (list), 0, SYMBOL (CAR (list)), env, outcome);
 }
 
 
