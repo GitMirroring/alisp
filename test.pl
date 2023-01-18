@@ -322,6 +322,8 @@ make_test ("(tagbody 1 2 (tagbody 3 (go 4)) 4 (write \"\"))", "\"\"\n()");
 make_test ("(block test (write 1) (write 2) (return-from test 10) (write 3))", "12\n10");
 make_test ("(block test (write 1) (block test2 (write 2) (return-from test 10) (write 3)))", "12\n10");
 make_test ("(block test (write 1) (block test2 (write 2) (return-from test (values 10 11)) (write 3)))", "12\n10\n11");
+make_test ("(defun test () (write 1) (write 2) (return-from test 10) (write 3))", "TEST");
+make_test ("(test)", "12\n10");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
