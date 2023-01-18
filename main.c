@@ -5742,7 +5742,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 			      &closnum);
   env->var_lex_bin_num += closnum;
 
-  ret = evaluate_body (func->value_ptr.function->body, 0, NULL, env, outcome);
+  ret = evaluate_body (func->value_ptr.function->body, 0,
+		       func->value_ptr.function->name, env, outcome);
 
   if (ret && eval_body_twice)
     {
