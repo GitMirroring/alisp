@@ -320,6 +320,8 @@ make_test ("(terpri)", "\n()");
 make_test ("(write-line \"aaa\")", "aaa\n\"aaa\"");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
+make_test ("(endp '(1 . 2))", "()");
+make_test ("(endp ())", "T");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
 make_test ("(when nil \"\" \"\" \"\")", "()");
 make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
