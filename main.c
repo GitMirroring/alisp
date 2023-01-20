@@ -61,6 +61,8 @@
 #define IS_NUMBER(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
 		      || (s)->type == TYPE_FLOAT)
 
+#define IS_RATIONAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO)
+
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :	\
 		   (s)->value_ptr.symbol_name->sym) 
 
@@ -1104,6 +1106,8 @@ struct object *builtin_open_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_eql
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_not
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_concatenate
@@ -1689,6 +1693,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EQL", env, builtin_eql, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, NULL,
@@ -7435,18 +7440,62 @@ builtin_eq (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (nth (0, list)->type == TYPE_SYMBOL_NAME)
-    arg1 = SYMBOL (nth (0, list));
+  if (IS_SYMBOL (CAR (list)))
+    arg1 = SYMBOL (CAR (list));
   else
-    arg1 = nth (0, list);
+    arg1 = CAR (list);
 
-  if (nth (1, list)->type == TYPE_SYMBOL_NAME)
-    arg2 = SYMBOL (nth (1, list));
+  if (IS_SYMBOL (CAR (CDR (list))))
+    arg2 = SYMBOL (CAR (CDR (list)));
   else
-    arg2 = nth (1, list);
+    arg2 = CAR (CDR (list));
 
   if (arg1 == arg2)
     return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_eql (struct object *list, struct environment *env,
+	     struct eval_outcome *outcome)
+{
+  struct object *arg1, *arg2;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_SYMBOL (CAR (list)))
+    arg1 = SYMBOL (CAR (list));
+  else
+    arg1 = CAR (list);
+
+  if (IS_SYMBOL (CAR (CDR (list))))
+    arg2 = SYMBOL (CAR (CDR (list)));
+  else
+    arg2 = CAR (CDR (list));
+
+  if (arg1 == arg2)
+    return &t_object;
+
+  if ((IS_RATIONAL (arg1) && IS_RATIONAL (arg2))
+      || (arg1->type == TYPE_FLOAT && arg2->type == TYPE_FLOAT))
+    {
+      if (!compare_two_numbers (arg1, arg2))
+	return &t_object;
+      else
+	return &nil_object;
+    }
+
+  if (arg1->type == TYPE_CHARACTER && arg2->type == TYPE_CHARACTER)
+    {
+      if (!strcmp (arg1->value_ptr.character, arg2->value_ptr.character))
+	return &t_object;
+    }
 
   return &nil_object;
 }
