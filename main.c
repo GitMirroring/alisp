@@ -9397,7 +9397,6 @@ evaluate_if (struct object *list, struct environment *env,
 	}
 
       ret = evaluate_object (CAR (CDR (list)), env, outcome);
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
       return ret;
     }
   else
@@ -9409,7 +9408,6 @@ evaluate_if (struct object *list, struct environment *env,
       else
 	{
 	  ret = evaluate_object (nth (2, list), env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 	  return ret;
 	}
     }
