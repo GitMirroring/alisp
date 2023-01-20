@@ -23,6 +23,9 @@
 (defconstant MULTIPLE-VALUES-LIMIT 4294967296)
 
 
+(defun identity (x) x)
+
+
 (defconstant PI 3.141592653589793L0)
 
 (defun 1+ (num)
