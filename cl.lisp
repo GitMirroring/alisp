@@ -146,6 +146,10 @@
 	     (cond ,@rest)))))
 
 
+(defmacro return (&optional val)
+  `(return-from nil (values-list (multiple-value-list ,val))))
+
+
 (defun every (pred &rest sequences)
   (block every
     (let ((n (apply 'min (mapcar #'length sequences))))
