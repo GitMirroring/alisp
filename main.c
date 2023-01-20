@@ -1243,6 +1243,8 @@ struct object *evaluate_progn
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_values
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_values_list
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defconstant
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defparameter
@@ -1719,6 +1721,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, NULL, 1);
   add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, NULL, 1);
   add_builtin_form ("VALUES", env, evaluate_values, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("VALUES-LIST", env, evaluate_values_list, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
@@ -9415,6 +9419,26 @@ evaluate_values (struct object *list, struct environment *env,
 
   increment_refcount (CAR (list), NULL);
   return CAR (list);
+}
+
+
+struct object *
+evaluate_values_list (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return evaluate_values (CAR (list), env, outcome);
 }
 
 
