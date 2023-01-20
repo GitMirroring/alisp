@@ -5477,44 +5477,49 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 
   do
     {
-      if (res)
-	decrement_refcount (res, NULL);
+      decrement_refcount (res, NULL);
 
-      res = evaluate_object (CAR (body), env, outcome);
-
-      if (!res)
+      if (!is_tagbody
+	  || (CAR (body)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (body))))
 	{
-	  if (!outcome->tag_to_jump_to && !outcome->block_to_leave)
-	      goto cleanup_and_leave;
-	  else if (outcome->tag_to_jump_to)
-	    {
-	      t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
+	  res = evaluate_object (CAR (body), env, outcome);
 
-	      if (!t)
+	  if (!res)
+	    {
+	      if (!outcome->tag_to_jump_to && !outcome->block_to_leave)
 		goto cleanup_and_leave;
-
-	      outcome->tag_to_jump_to = NULL;
-	      body = t->dest;
-	    }
-	  else if (outcome->block_to_leave)
-	    {
-	      if (block_name && outcome->block_to_leave == env->blocks->name)
+	      else if (outcome->tag_to_jump_to)
 		{
-		  outcome->block_to_leave = NULL;
+		  t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
 
-		  res = outcome->return_value;
+		  if (!t)
+		    goto cleanup_and_leave;
+
+		  outcome->tag_to_jump_to = NULL;
+		  body = t->dest;
 		}
+	      else if (outcome->block_to_leave)
+		{
+		  if (block_name && outcome->block_to_leave == env->blocks->name)
+		    {
+		      outcome->block_to_leave = NULL;
 
-	      goto cleanup_and_leave;
+		      res = outcome->return_value;
+		    }
+
+		  goto cleanup_and_leave;
+		}
+	    }
+	  else
+	    {
+	      if (CDR (body) != &nil_object)
+		CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      body = CDR (body);
 	    }
 	}
       else
-	{
-	  if (CDR (body) != &nil_object)
-	    CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  body = CDR (body);
-	}
+	body = CDR (body);
 
     } while (body != &nil_object);
 
