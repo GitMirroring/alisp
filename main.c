@@ -743,6 +743,7 @@ struct object *pop_object_from_obj_list (struct object_list **list);
 int is_object_in_obj_list (const struct object *obj,
 			   const struct object_list *list);
 void free_object_list (struct object_list *list);
+void free_object_list_structure (struct object_list *list);
 
 enum read_outcome read_object
 (struct object **obj, int backt_commas_balance, const char *input, size_t size,
@@ -1245,6 +1246,8 @@ struct object *evaluate_values
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_values_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_multiple_value_list
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defconstant
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_defparameter
@@ -1723,6 +1726,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("VALUES", env, evaluate_values, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("VALUES-LIST", env, evaluate_values_list, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("MULTIPLE-VALUE-LIST", env, evaluate_multiple_value_list,
+		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
@@ -2336,6 +2341,20 @@ free_object_list (struct object_list *list)
     {
       next = list->next;
       decrement_refcount (list->obj, NULL);
+      free (list);
+      list = next;
+    }
+}
+
+
+void
+free_object_list_structure (struct object_list *list)
+{
+  struct object_list *next;
+
+  while (list)
+    {
+      next = list->next;
       free (list);
       list = next;
     }
@@ -9439,6 +9458,51 @@ evaluate_values_list (struct object *list, struct environment *env,
     }
 
   return evaluate_values (CAR (list), env, outcome);
+}
+
+
+struct object *
+evaluate_multiple_value_list (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome)
+{
+  struct object *res, *ret, *cons;
+  struct object_list *vals;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  res = evaluate_object (CAR (list), env, outcome);
+
+  if (outcome->no_value)
+    {
+      outcome->no_value = 0;
+      return &nil_object;
+    }
+
+  ret = cons = alloc_empty_cons_pair ();
+  ret->value_ptr.cons_pair->car = res;
+
+  vals = outcome->other_values;
+
+  while (vals)
+    {
+      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      cons->value_ptr.cons_pair->car = vals->obj;
+
+      vals = vals->next;
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  free_object_list_structure (outcome->other_values);
+
+  outcome->other_values = NULL;
+
+  return ret;
 }
 
 
