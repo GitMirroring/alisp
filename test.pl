@@ -223,6 +223,7 @@ make_test ("(inc)", "3");
 make_test ("(defmacro f () (f))", "F");
 make_test ("(defmacro f () (f))", "F");
 make_test ("(load \"cl.lisp\")", "T");
+make_test ("(identity \"hi\")", "\"hi\"");
 make_test ("(1+ 5)", "6");
 make_test ("(1- .5)", "-0.5");
 make_test ("(typep '(1 . 2) 'cons)", "T");
