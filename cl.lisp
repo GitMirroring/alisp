@@ -109,6 +109,9 @@
 (defun cddddr (list) (nthcdr 4 list))
 
 
+(defun endp (l) (null l))
+
+
 (defmacro when (clause &body body)
   `(if ,clause (progn ,@body)))
 
