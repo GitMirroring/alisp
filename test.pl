@@ -130,6 +130,7 @@ make_test ("t", "T");
 make_test ("(progn)", "()");
 make_test ("(progn 1 2 3)", "3");
 make_test ("(values (+ 1 0) 2 3)", "1\n2\n3");
+make_test ("(values-list '(1 2 3))", "1\n2\n3");
 make_test ("(if nil 1)", "()");
 make_test ("(common-lisp:if '(1) 2)", "2");
 make_test ("(cl:eq 1 1)", "()");
