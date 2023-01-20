@@ -890,6 +890,7 @@ struct binding *find_binding (struct symbol *sym, struct binding *bins,
 struct binding *bind_variable (struct object *sym, struct object *val,
 			       struct binding *bins);
 
+struct go_tag *collect_go_tags (struct object *body);
 struct go_tag_frame *add_go_tag_frame (struct go_tag_frame *stack);
 struct go_tag *add_go_tag (struct object *tagname, struct object *tagdest,
 			   struct go_tag *tags);
@@ -4624,6 +4625,35 @@ bind_variable (struct object *sym, struct object *val, struct binding *bins)
 }
 
 
+struct go_tag *
+collect_go_tags (struct object *body)
+{
+  struct object *car, *destfind, *dest;
+  struct go_tag *ret = NULL;
+
+  while (body != &nil_object)
+    {
+      car = CAR (body);
+
+      if (IS_SYMBOL (car) || car->type == TYPE_INTEGER)
+	{
+	  destfind = CDR (body);
+
+	  while (destfind != &nil_object && (dest = CAR (destfind))
+		 && (dest->type == TYPE_SYMBOL_NAME
+		     || dest->type == TYPE_INTEGER))
+	    destfind = CDR (destfind);
+
+	  ret = add_go_tag (car, destfind, ret);
+	}
+
+      body = CDR (body);
+    }
+
+  return ret;
+}
+
+
 struct go_tag_frame *
 add_go_tag_frame (struct go_tag_frame *stack)
 {
@@ -5427,29 +5457,12 @@ struct object *
 evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 	       struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *res = NULL, *cons = body, *car, *dest, *destfind;
+  struct object *res = &nil_object;
   struct go_tag *tags = NULL, *t;
 
   if (is_tagbody)
     {
-      while (cons != &nil_object)
-	{
-	  car = CAR (cons);
-
-	  if (IS_SYMBOL (car) || car->type == TYPE_INTEGER)
-	    {
-	      destfind = CDR (cons);
-
-	      while (destfind != &nil_object && (dest = CAR (destfind))
-		     && (dest->type == TYPE_SYMBOL_NAME
-			 || dest->type == TYPE_INTEGER))
-		destfind = CDR (destfind);
-
-	      tags = add_go_tag (car, destfind, tags);
-	    }
-
-	  cons = CDR (cons);
-	}
+      tags = collect_go_tags (body);
 
       if (tags)
 	{
