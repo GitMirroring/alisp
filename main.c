@@ -797,6 +797,7 @@ char *copy_token_to_buffer (const char *input, size_t size);
 
 size_t mbslen (const char *string);
 size_t next_utf8_char (char *str, size_t sz);
+size_t string_utf8_length (const struct object *str);
 
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
@@ -3387,6 +3388,22 @@ next_utf8_char (char *str, size_t sz)
     }
 
   return 0;
+}
+
+
+size_t
+string_utf8_length (const struct object *str)
+{
+  size_t sz = 0, i;
+  struct string *s = str->value_ptr.string;
+
+  for (i = 0; i < s->used_size; i++)
+    {
+      if ((s->value [i] & 0xc0) >> 6 != 2)
+	sz++;
+    }
+
+  return sz;
 }
 
 
@@ -7040,7 +7057,7 @@ builtin_length (struct object *list, struct environment *env,
 
   if (seq->type == TYPE_STRING)
     {
-      return create_integer_from_int (seq->value_ptr.string->used_size);
+      return create_integer_from_int (string_utf8_length (seq));
     }
   else if (seq->type == TYPE_CONS_PAIR || seq == &nil_object)
     {
