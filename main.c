@@ -851,11 +851,12 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 					enum readtable_case read_case);
 
 struct object *create_symbol (char *name, size_t size, int do_copy);
+struct object *create_filename (struct object *string);
+struct object *create_vector (struct object *list);
+
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *get_nth_character (int ind, struct object *str);
-struct object *create_filename (struct object *string);
-struct object *create_vector (struct object *list);
 
 struct object *create_stream (enum stream_type type,
 			      enum stream_direction direction,
@@ -4132,6 +4133,49 @@ create_symbol (char *name, size_t size, int do_copy)
 
 
 struct object *
+create_filename (struct object *string)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct filename *fn = malloc_and_check (sizeof (*fn));
+
+  obj->type = TYPE_FILENAME;
+  obj->refcount = 1;
+
+  fn->value = string;
+
+  obj->value_ptr.filename = fn;
+
+  return obj;
+}
+
+
+struct object *
+create_vector (struct object *list)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct array *vec = malloc_and_check (sizeof (*vec));
+  struct array_size *sz = malloc_and_check (sizeof (*sz));
+  size_t i;
+
+  sz->size = list_length (list);
+  sz->next = NULL;
+
+  vec->alloc_size = sz;
+  vec->fill_pointer = -1;
+  vec->value = malloc_and_check (sizeof (*vec->value) * sz->size);
+
+  for (i = 0; i < sz->size; i++)
+    vec->value [i] = nth (i, list);
+
+  obj->type = TYPE_ARRAY;
+  obj->refcount = 1;
+  obj->value_ptr.array = vec;
+
+  return obj;
+}
+
+
+struct object *
 create_character (char *character, int do_copy)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
@@ -4190,49 +4234,6 @@ get_nth_character (int ind, struct object *str)
     }
 
   return create_character_from_utf8 (ch, s);
-}
-
-
-struct object *
-create_filename (struct object *string)
-{
-  struct object *obj = malloc_and_check (sizeof (*obj));
-  struct filename *fn = malloc_and_check (sizeof (*fn));
-
-  obj->type = TYPE_FILENAME;
-  obj->refcount = 1;
-
-  fn->value = string;
-
-  obj->value_ptr.filename = fn;
-
-  return obj;
-}
-
-
-struct object *
-create_vector (struct object *list)
-{
-  struct object *obj = malloc_and_check (sizeof (*obj));
-  struct array *vec = malloc_and_check (sizeof (*vec));
-  struct array_size *sz = malloc_and_check (sizeof (*sz));
-  size_t i;
-
-  sz->size = list_length (list);
-  sz->next = NULL;
-
-  vec->alloc_size = sz;
-  vec->fill_pointer = -1;
-  vec->value = malloc_and_check (sizeof (*vec->value) * sz->size);
-
-  for (i = 0; i < sz->size; i++)
-    vec->value [i] = nth (i, list);
-
-  obj->type = TYPE_ARRAY;
-  obj->refcount = 1;
-  obj->value_ptr.array = vec;
-
-  return obj;
 }
 
 
