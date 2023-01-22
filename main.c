@@ -56,6 +56,16 @@
 
 #define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || (s) == &nil_object)
 
+#define IS_VECTOR(s) ((s)->type == TYPE_STRING				\
+		      || ((s)->type == TYPE_ARRAY			\
+			  && (s)->value_ptr.array->alloc_size		\
+			  && !(s)->value_ptr.array->alloc_size->next))
+
+#define HAS_FILL_POINTER(s) (((s)->type == TYPE_STRING			\
+			      && (s)->value_ptr.string->has_fill_pointer) \
+			     || ((s)->type == TYPE_ARRAY		\
+				 && (s)->value_ptr.array->has_fill_pointer))
+
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
 #define IS_NUMBER(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
@@ -1089,6 +1099,8 @@ struct object *builtin_list_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_fill_pointer
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
@@ -1683,6 +1695,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FILL-POINTER", env, builtin_fill_pointer, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
@@ -7125,6 +7139,29 @@ builtin_length (struct object *list, struct environment *env,
 
       return create_integer_from_int (seq->value_ptr.array->alloc_size->size);
     }
+}
+
+
+struct object *
+builtin_fill_pointer (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_VECTOR (CAR (list)) || !HAS_FILL_POINTER (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    return create_integer_from_int (CAR (list)->value_ptr.string->fill_pointer);
+  else
+    return create_integer_from_int (CAR (list)->value_ptr.array->fill_pointer);
 }
 
 
