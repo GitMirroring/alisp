@@ -95,6 +95,9 @@ string
   char *value;
   size_t alloc_size;
   size_t used_size;
+
+  int has_fill_pointer;
+  size_t fill_pointer;
 };
 
 
@@ -473,7 +476,8 @@ array
 {
   struct array_size *alloc_size;
 
-  int fill_pointer;
+  int has_fill_pointer;
+  size_t fill_pointer;
 
   struct object **value;
 };
@@ -3829,6 +3833,7 @@ alloc_string (size_t size)
   obj->value_ptr.string->value = malloc_and_check (sizeof (char) * size);
   obj->value_ptr.string->alloc_size = sizeof (char) * size;
   obj->value_ptr.string->used_size = 0;
+  obj->value_ptr.string->has_fill_pointer = 0;
 
   return obj;
 }
@@ -4162,7 +4167,7 @@ create_vector (struct object *list)
   sz->next = NULL;
 
   vec->alloc_size = sz;
-  vec->fill_pointer = -1;
+  vec->has_fill_pointer = 0;
   vec->value = malloc_and_check (sizeof (*vec->value) * sz->size);
 
   for (i = 0; i < sz->size; i++)
@@ -6870,7 +6875,7 @@ struct object *
 builtin_elt (struct object *list, struct environment *env,
 	     struct eval_outcome *outcome)
 {
-  int ind;
+  size_t ind;
   struct object *ret;
 
   if (list_length (list) != 2)
@@ -6885,13 +6890,13 @@ builtin_elt (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
-
-  if (ind < 0)
+  if (mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0)
     {
       outcome->type = OUT_OF_BOUND_INDEX;
       return NULL;
     }
+
+  ind = mpz_get_ui (CAR (CDR (list))->value_ptr.integer);
 
   if (CAR (list)->type == TYPE_STRING)
     {
@@ -6957,7 +6962,7 @@ builtin_aref (struct object *list, struct environment *env,
 {
   struct object *arr, *ret;
   struct array_size *sz;
-  int ind;
+  size_t ind;
 
   if (!list_length (list))
     {
@@ -6976,13 +6981,13 @@ builtin_aref (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ind = mpz_get_si (CAR (list)->value_ptr.integer);
-
-      if (ind < 0)
+      if (mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
+
+      ind = mpz_get_ui (CAR (list)->value_ptr.integer);
 
       ret = get_nth_character (ind, arr);
 
@@ -7012,9 +7017,15 @@ builtin_aref (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  ind = mpz_get_si (CAR (list)->value_ptr.integer);
+	  if (mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
+	    {
+	      outcome->type = OUT_OF_BOUND_INDEX;
+	      return NULL;
+	    }
 
-	  if (ind < 0 || ind >= sz->size)
+	  ind = mpz_get_ui (CAR (list)->value_ptr.integer);
+
+	  if (ind >= sz->size)
 	    {
 	      outcome->type = OUT_OF_BOUND_INDEX;
 	      return NULL;
@@ -7109,7 +7120,7 @@ builtin_length (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (seq->value_ptr.array->fill_pointer >= 0)
+      if (seq->value_ptr.array->has_fill_pointer)
 	return create_integer_from_int (seq->value_ptr.array->fill_pointer);
 
       return create_integer_from_int (seq->value_ptr.array->alloc_size->size);
@@ -11002,7 +11013,7 @@ print_array (const struct array *array, struct environment *env)
     {
       printf ("#(");
 
-      for (i = 0; i < (array->fill_pointer > 0 ? array->fill_pointer :
+      for (i = 0; i < (array->has_fill_pointer ? array->fill_pointer :
 		       array->alloc_size->size); i++)
 	{
 	  if (i)
