@@ -1127,6 +1127,12 @@ struct object *builtin_input_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_output_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_upper_case_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_lower_case_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_both_case_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eql
@@ -1721,6 +1727,12 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("OUTPUT-STREAM-P", env, builtin_output_stream_p,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("BOTH-CASE-P", env, builtin_both_case_p, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EQL", env, builtin_eql, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, NULL, 0);
@@ -7582,6 +7594,93 @@ builtin_output_stream_p (struct object *list, struct environment *env,
     return &t_object;
   else
     return &nil_object;
+}
+
+
+struct object *
+builtin_upper_case_p (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    return &nil_object;
+  else if (isupper ((unsigned char) *ch))
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_lower_case_p (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    return &nil_object;
+  else if (islower ((unsigned char) *ch))
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_both_case_p (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    return &nil_object;
+  else if (isupper ((unsigned char) *ch) || islower ((unsigned char) *ch))
+    return &t_object;
+
+  return &nil_object;
 }
 
 
