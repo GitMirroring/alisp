@@ -1123,6 +1123,10 @@ struct object *builtin_close
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_open_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_input_stream_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_output_stream_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eq
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eql
@@ -1711,7 +1715,11 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p,
+  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("INPUT-STREAM-P", env, builtin_input_stream_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("OUTPUT-STREAM-P", env, builtin_output_stream_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EQL", env, builtin_eql, TYPE_FUNCTION, NULL, 0);
@@ -1834,7 +1842,7 @@ add_standard_definitions (struct environment *env)
 		   (CHARACTER_STREAM, INPUT_STREAM, stdin), env);
   env->std_out_sym = define_variable
     ("*STANDARD-OUTPUT*", create_stream_from_open_file (CHARACTER_STREAM,
-							INPUT_STREAM,
+							OUTPUT_STREAM,
 							stdout), env);
 }
 
@@ -7525,6 +7533,52 @@ builtin_open_stream_p (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->value_ptr.stream->is_open)
+    return &t_object;
+  else
+    return &nil_object;
+}
+
+
+struct object *
+builtin_input_stream_p (struct object *list, struct environment *env,
+			struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->value_ptr.stream->direction == INPUT_STREAM)
+    return &t_object;
+  else
+    return &nil_object;
+}
+
+
+struct object *
+builtin_output_stream_p (struct object *list, struct environment *env,
+			 struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->value_ptr.stream->direction == OUTPUT_STREAM)
     return &t_object;
   else
     return &nil_object;
