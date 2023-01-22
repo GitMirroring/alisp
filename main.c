@@ -68,7 +68,7 @@
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
-#define IS_NUMBER(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
+#define IS_REAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
 		      || (s)->type == TYPE_FLOAT)
 
 #define IS_RATIONAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO)
@@ -8290,7 +8290,7 @@ perform_division_with_remainder (struct object *args,
       return NULL;
     }
 
-  if (!IS_NUMBER (CAR (args)))
+  if (!IS_REAL (CAR (args)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -8298,7 +8298,7 @@ perform_division_with_remainder (struct object *args,
 
   if (l == 2)
     {
-      if (!IS_NUMBER (CAR (CDR (args))))
+      if (!IS_REAL (CAR (CDR (args))))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -8608,7 +8608,7 @@ builtin_sqrt (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_NUMBER (CAR (list)))
+  if (!IS_REAL (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
     }
@@ -8729,7 +8729,7 @@ builtin_min (struct object *list, struct environment *env,
 
   cur = list;
 
-  if (!IS_NUMBER (CAR (cur)))
+  if (!IS_REAL (CAR (cur)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -8739,7 +8739,7 @@ builtin_min (struct object *list, struct environment *env,
     {
       cur = CDR (cur);
 
-      if (!IS_NUMBER (CAR (cur)))
+      if (!IS_REAL (CAR (cur)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -8769,7 +8769,7 @@ builtin_max (struct object *list, struct environment *env,
 
   cur = list;
 
-  if (!IS_NUMBER (CAR (cur)))
+  if (!IS_REAL (CAR (cur)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -8779,7 +8779,7 @@ builtin_max (struct object *list, struct environment *env,
     {
       cur = CDR (cur);
 
-      if (!IS_NUMBER (CAR (cur)))
+      if (!IS_REAL (CAR (cur)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
