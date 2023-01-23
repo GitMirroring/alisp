@@ -847,6 +847,7 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (size_t size);
+struct object *create_string_from_char_vector (const char *str, size_t size);
 struct object *create_string_from_c_string (const char *str);
 void resize_string (struct object *string, size_t size);
 char *copy_to_c_string (struct string *str);
@@ -1232,6 +1233,8 @@ struct object *builtin_fboundp (struct object *list, struct environment *env,
 struct object *builtin_symbol_function (struct object *list,
 					struct environment *env,
 					struct eval_outcome *outcome);
+struct object *builtin_symbol_name (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome);
 struct object *builtin_special_operator_p (struct object *list,
 					   struct environment *env,
 					   struct eval_outcome *outcome);
@@ -1804,6 +1807,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
@@ -3874,17 +3879,24 @@ alloc_string (size_t size)
 
 
 struct object *
-create_string_from_c_string (const char *str)
+create_string_from_char_vector (const char *str, size_t size)
 {
-  size_t i, l = strlen (str);
-  struct object *ret = alloc_string (l);
+  size_t i;
+  struct object *ret = alloc_string (size);
 
-  for (i = 0; i < l; i++)
+  for (i = 0; i < size; i++)
     ret->value_ptr.string->value [i] = str [i];
 
-  ret->value_ptr.string->used_size = l;
+  ret->value_ptr.string->used_size = size;
 
   return ret;
+}
+
+
+struct object *
+create_string_from_c_string (const char *str)
+{
+  return create_string_from_char_vector (str, strlen (str));
 }
 
 
@@ -9124,6 +9136,31 @@ builtin_symbol_function (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_symbol_name (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  struct symbol *s;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  s = SYMBOL (CAR (list))->value_ptr.symbol;
+
+  return create_string_from_char_vector (s->name, s->name_len);
 }
 
 
