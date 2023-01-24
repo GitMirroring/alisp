@@ -46,15 +46,15 @@
 #endif
 
 
-#define CAR(list) ((list) == &nil_object ? &nil_object :\
+#define CAR(list) (SYMBOL (list) == &nil_object ? &nil_object :	\
 		   (list)->value_ptr.cons_pair->car)
 
-#define CDR(list) ((list) == &nil_object ? &nil_object :		\
+#define CDR(list) (SYMBOL (list) == &nil_object ? &nil_object :		\
 		   (list)->value_ptr.cons_pair->cdr ?			\
 		   (list)->value_ptr.cons_pair->cdr : &nil_object)
 
 
-#define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || (s) == &nil_object)
+#define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || SYMBOL (s) == &nil_object)
 
 #define IS_VECTOR(s) ((s)->type == TYPE_STRING				\
 		      || ((s)->type == TYPE_ARRAY			\
@@ -69,12 +69,14 @@
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
 #define IS_REAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
-		      || (s)->type == TYPE_FLOAT)
+		    || (s)->type == TYPE_FLOAT)
 
 #define IS_RATIONAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO)
 
-#define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :	\
-		   (s)->value_ptr.symbol_name->sym) 
+#define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :			\
+		   (s)->type == TYPE_SYMBOL_NAME ?			\
+		   (s)->value_ptr.symbol_name->sym :			\
+		   NULL)
 
 
 #define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_RATIO	\
@@ -2331,7 +2333,7 @@ copy_list_to_obj_list (struct object *list)
 {
   struct object_list *ret = NULL, *curr = NULL;
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       if (!ret)
 	ret = curr = malloc_and_check (sizeof (*ret));
@@ -4709,7 +4711,7 @@ collect_go_tags (struct object *body)
   struct object *car, *destfind, *dest;
   struct go_tag *ret = NULL;
 
-  while (body != &nil_object)
+  while (SYMBOL (body) != &nil_object)
     {
       car = CAR (body);
 
@@ -4717,7 +4719,7 @@ collect_go_tags (struct object *body)
 	{
 	  destfind = CDR (body);
 
-	  while (destfind != &nil_object && (dest = CAR (destfind))
+	  while (SYMBOL (destfind) != &nil_object && (dest = CAR (destfind))
 		 && (dest->type == TYPE_SYMBOL_NAME
 		     || dest->type == TYPE_INTEGER))
 	    destfind = CDR (destfind);
@@ -5120,7 +5122,7 @@ last_cons_pair (struct object *list)
 {
   struct object *prev = &nil_object;
 
-  while (list && list != &nil_object)
+  while (list && SYMBOL (list) != &nil_object)
     {
       prev = list;
       list = CDR (list);
@@ -5138,7 +5140,7 @@ is_dotted_list (const struct object *list)
       list = list->value_ptr.cons_pair->cdr;
     }
 
-  if (list && list != &nil_object)
+  if (list && SYMBOL (list) != &nil_object)
     return 1;
 
   return 0;
@@ -5161,7 +5163,7 @@ is_dotted_or_circular_list (struct object *list, int *is_circular)
 {
   struct object_list **hash_t;
 
-  if (list == &nil_object)
+  if (SYMBOL (list) == &nil_object)
     {
       *is_circular = 0;
       return 0;
@@ -5169,7 +5171,7 @@ is_dotted_or_circular_list (struct object *list, int *is_circular)
 
   hash_t = alloc_empty_hash_table (1024);
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       if (list->type != TYPE_CONS_PAIR)
 	{
@@ -5285,7 +5287,7 @@ copy_list_structure (struct object *list, const struct object *prefix,
       i++;
     }
 
-  if (list != &nil_object && cell_num < 0)
+  if (SYMBOL (list) != &nil_object && cell_num < 0)
     increment_refcount (list, NULL);
 
   if (cell_num < 0)
@@ -5338,7 +5340,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && obj != &nil_object && (car = CAR (obj))
+  while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj))
 	 && car->type == TYPE_SYMBOL_NAME 
 	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
 			       "&BODY", "&KEY", "&AUX", "&ALLOW_OTHER_KEYS",
@@ -5369,7 +5371,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && obj != &nil_object && (car = CAR (obj)))
+  while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
     {
       if (car->type == TYPE_SYMBOL_NAME 
 	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
@@ -5430,7 +5432,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && obj != &nil_object && (car = CAR (obj)))
+  while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
     {
       if (car->type == TYPE_SYMBOL_NAME
 	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
@@ -5502,13 +5504,14 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 }
 
 
-struct parameter *parse_lambda_list (struct object *obj, struct environment *env,
-				     struct eval_outcome *outcome)
+struct parameter *
+parse_lambda_list (struct object *obj, struct environment *env,
+		   struct eval_outcome *outcome)
 {
   struct parameter *first = NULL, *last = NULL;
   struct object *car;
 
-  if (obj == &nil_object)
+  if (SYMBOL (obj) == &nil_object)
     {
       return NULL;
     }
@@ -5557,7 +5560,7 @@ struct parameter *parse_lambda_list (struct object *obj, struct environment *env
 	first = parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
     }
 
-  if (obj != &nil_object)
+  if (SYMBOL (obj) != &nil_object)
     {
       outcome->type = INVALID_LAMBDA_LIST;
       return NULL;
@@ -5626,7 +5629,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 	    }
 	  else
 	    {
-	      if (CDR (body) != &nil_object)
+	      if (SYMBOL (CDR (body)) != &nil_object)
 		CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	      body = CDR (body);
@@ -5635,7 +5638,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
       else
 	body = CDR (body);
 
-    } while (body != &nil_object);
+    } while (SYMBOL (body) != &nil_object);
 
  cleanup_and_leave:
   if (tags)
@@ -5682,7 +5685,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       return ret;
     }
 
-  while (arglist != &nil_object && par
+  while (SYMBOL (arglist) != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
       if (eval_args)
@@ -5731,8 +5734,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       goto clean_lex_env;
     }
 
-  if (arglist != &nil_object && (!par || (par && par->type != REST_PARAM
-					  && par->type != KEYWORD_PARAM)))
+  if (SYMBOL (arglist) != &nil_object
+      && (!par || (par && par->type != REST_PARAM && par->type != KEYWORD_PARAM)))
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       ret = NULL;
@@ -5820,7 +5823,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  findk = findk->next;
 	}
 
-      while (arglist != &nil_object)
+      while (SYMBOL (arglist) != &nil_object)
 	{
 	  findk = par;
 
@@ -5841,7 +5844,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  arglist = CDR (arglist);
 
-	  if (arglist == &nil_object)
+	  if (SYMBOL (arglist) == &nil_object)
 	    {
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 	      ret = NULL;
@@ -6009,7 +6012,7 @@ is_subtype (const struct object *first, const struct object *second,
   struct object_list *p;
   int ret;
 
-  if (first == &nil_object || second == &t_object)
+  if (SYMBOL (first) == &nil_object || SYMBOL (second) == &t_object)
     return 1;
 
   if (IS_SYMBOL (second)
@@ -6177,7 +6180,7 @@ apply_backquote (struct object *form, struct object *reading_cons,
 	      if (!ret)
 		return NULL;
 
-	      if (ret == &nil_object)
+	      if (SYMBOL (ret) == &nil_object)
 		{
 		  *expanded_into_empty_list = 1;
 
@@ -6291,14 +6294,15 @@ apply_backquote (struct object *form, struct object *reading_cons,
 	    }
 	}
 
-      if (reading_cons != &nil_object && writing_first_cons && exp_to_empty_list)
+      if (SYMBOL (reading_cons) != &nil_object && writing_first_cons
+	  && exp_to_empty_list)
 	{
 	  outcome->type = NOTHING_EXPANDED_BEFORE_CONSING_DOT;
 
 	  return NULL;
 	}
 
-      if (reading_cons != &nil_object)
+      if (SYMBOL (reading_cons) != &nil_object)
 	{
 	  ret = apply_backquote (reading_cons, reading_cons,
 				 first_or_prev_written_cons,
@@ -6389,7 +6393,7 @@ evaluate_through_list (struct object *list, struct environment *env,
 {
   struct object *args = NULL, *cons, *last_cons, *obj;
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       obj = evaluate_object (CAR (list), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
@@ -6436,7 +6440,7 @@ type_nil (const struct object *obj, const struct object *typespec,
 int type_null (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome)
 {
-  return obj == &nil_object;
+  return SYMBOL (obj) == &nil_object;
 }
 
 
@@ -6452,7 +6456,7 @@ int
 type_list (const struct object *obj, const struct object *typespec,
 	   struct environment *env, struct eval_outcome *outcome)
 {
-  return obj->type == TYPE_CONS_PAIR || obj == &nil_object;
+  return obj->type == TYPE_CONS_PAIR || SYMBOL (obj) == &nil_object;
 }
 
 
@@ -6468,7 +6472,7 @@ int
 type_boolean (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct eval_outcome *outcome)
 {
-  return obj == &nil_object || obj == &t_object;
+  return SYMBOL (obj) == &nil_object || SYMBOL (obj) == &t_object;
 }
 
 
@@ -6619,7 +6623,7 @@ type_sequence (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING
-    || obj->type == TYPE_CONS_PAIR || obj == &nil_object;
+    || obj->type == TYPE_CONS_PAIR || SYMBOL (obj) == &nil_object;
 }
 
 
@@ -6662,7 +6666,7 @@ builtin_car (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list) == &nil_object)
+  if (SYMBOL (CAR (list)) == &nil_object)
     return &nil_object;
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
@@ -6692,7 +6696,7 @@ builtin_cdr (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list) == &nil_object)
+  if (SYMBOL (CAR (list)) == &nil_object)
     return &nil_object;
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
@@ -6742,7 +6746,7 @@ builtin_list (struct object *list, struct environment *env,
 {
   struct object *l = NULL, *cons, *last_cons;
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       cons = alloc_empty_cons_pair ();
 
@@ -6776,7 +6780,7 @@ builtin_append (struct object *list, struct environment *env,
     {
       obj = nth (i, list);
 
-      if (obj->type != TYPE_CONS_PAIR && obj != &nil_object)
+      if (obj->type != TYPE_CONS_PAIR && SYMBOL (obj) != &nil_object)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -6821,7 +6825,7 @@ builtin_nth (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && CAR (CDR (list)) != &nil_object))
+	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -6849,7 +6853,7 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && CAR (CDR (list)) != &nil_object))
+	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -6978,7 +6982,8 @@ builtin_elt (struct object *list, struct environment *env,
       increment_refcount (ret, NULL);
       return ret;
     }
-  else if (CAR (list)->type == TYPE_CONS_PAIR || CAR (list) == &nil_object)
+  else if (CAR (list)->type == TYPE_CONS_PAIR
+	   || SYMBOL (CAR (list)) == &nil_object)
     {
       if (is_dotted_list (CAR (list)) || is_circular_list (CAR (list)))
 	{
@@ -7054,7 +7059,7 @@ builtin_aref (struct object *list, struct environment *env,
 
       while (sz)
 	{
-	  if (list == &nil_object)
+	  if (SYMBOL (list) == &nil_object)
 	    {
 	      outcome->type = WRONG_NUMBER_OF_AXIS;
 	      return NULL;
@@ -7086,7 +7091,7 @@ builtin_aref (struct object *list, struct environment *env,
 	  list = CDR (list);
 	}
 
-      if (list != &nil_object)
+      if (SYMBOL (list) != &nil_object)
 	{
 	  outcome->type = WRONG_NUMBER_OF_AXIS;
 	  return NULL;
@@ -7113,7 +7118,7 @@ builtin_list_length (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+  if (CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -7147,7 +7152,7 @@ builtin_length (struct object *list, struct environment *env,
   seq = CAR (list);
 
   if (seq->type != TYPE_STRING && seq->type != TYPE_CONS_PAIR
-      && seq->type != TYPE_ARRAY && seq != &nil_object)
+      && seq->type != TYPE_ARRAY && SYMBOL (seq) != &nil_object)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -7157,7 +7162,7 @@ builtin_length (struct object *list, struct environment *env,
     {
       return create_integer_from_int (string_utf8_length (seq));
     }
-  else if (seq->type == TYPE_CONS_PAIR || seq == &nil_object)
+  else if (seq->type == TYPE_CONS_PAIR || SYMBOL (seq) == &nil_object)
     {
       return create_integer_from_int (list_length (seq));
     }
@@ -7270,7 +7275,7 @@ builtin_last (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if ((CAR (list)->type != TYPE_CONS_PAIR && CAR (list) != &nil_object)
+  if ((CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
       || (length == 2 && CAR (CDR (list))->type != TYPE_INTEGER))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -7479,7 +7484,7 @@ builtin_open (struct object *list, struct environment *env,
   f = CAR (list)->value_ptr.filename;
   list = CDR (list);
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       if (symbol_equals (CAR (list), ":DIRECTION", env))
 	{
@@ -7782,7 +7787,7 @@ builtin_not (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list) == &nil_object)
+  if (SYMBOL (CAR (list)) == &nil_object)
     return &t_object;
 
   return &nil_object;
@@ -7936,7 +7941,7 @@ builtin_dolist (struct object *list, struct environment *env,
   if (!cons)
     return NULL;
 
-  if (cons->type != TYPE_CONS_PAIR && cons != &nil_object)
+  if (cons->type != TYPE_CONS_PAIR && SYMBOL (cons) != &nil_object)
     {
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       return NULL;
@@ -7944,7 +7949,7 @@ builtin_dolist (struct object *list, struct environment *env,
 
   var = SYMBOL (CAR (CAR (list)));
 
-  while (cons != &nil_object)
+  while (SYMBOL (cons) != &nil_object)
     {
       env->vars = bind_variable (var, CAR (cons), env->vars);
 
@@ -8013,7 +8018,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (nth (i, list) == &nil_object)
+      if (SYMBOL (nth (i, list)) == &nil_object)
 	return &nil_object;
     }
 
@@ -8058,7 +8063,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	  cdrlistcons->value_ptr.cons_pair->car =
 	    CDR (cdrlistcons->value_ptr.cons_pair->car);
 
-	  if (CAR (cdrlistcons) == &nil_object)
+	  if (SYMBOL (CAR (cdrlistcons)) == &nil_object)
 	    finished = 1;
 
 	  cdrlistcons = CDR (cdrlistcons);
@@ -8429,7 +8434,7 @@ apply_arithmetic_operation (struct object *list,
 
       list = CDR (list);
 
-    } while (list != &nil_object);
+    } while (SYMBOL (list) != &nil_object);
 
   return ret;
 }
@@ -8725,7 +8730,7 @@ builtin_divide (struct object *list, struct environment *env,
 	return NULL;
 
       list = CDR (list);
-    } while (list != &nil_object);
+    } while (SYMBOL (list) != &nil_object);
 
   return ret;
 }
@@ -9339,7 +9344,7 @@ evaluate_let (struct object *list, struct environment *env,
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
-			      && CAR (list) != &nil_object))
+			      && SYMBOL (CAR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_LET;
       return NULL;
@@ -9348,7 +9353,7 @@ evaluate_let (struct object *list, struct environment *env,
   bind_forms = CAR (list);
   body = CDR (list);
 
-  while (bind_forms != &nil_object)
+  while (SYMBOL (bind_forms) != &nil_object)
     {
       bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
 
@@ -9385,7 +9390,7 @@ evaluate_let_star (struct object *list, struct environment *env,
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
-			      && CAR (list) != &nil_object))
+			      && SYMBOL (CAR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_LET;
       return NULL;
@@ -9394,7 +9399,7 @@ evaluate_let_star (struct object *list, struct environment *env,
   bind_forms = CAR (list);
   body = CDR (list);
 
-  while (bind_forms != &nil_object)
+  while (SYMBOL (bind_forms) != &nil_object)
     {
       bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
 
@@ -9469,7 +9474,7 @@ evaluate_flet (struct object *list, struct environment *env,
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
-			      && CAR (list) != &nil_object))
+			      && SYMBOL (CAR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_FLET;
       return NULL;
@@ -9478,7 +9483,7 @@ evaluate_flet (struct object *list, struct environment *env,
   bind_forms = CAR (list);
   body = CDR (list);
 
-  while (bind_forms != &nil_object)
+  while (SYMBOL (bind_forms) != &nil_object)
     {
       bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
 					   TYPE_FUNCTION);
@@ -9516,7 +9521,7 @@ evaluate_labels (struct object *list, struct environment *env,
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
-			      && CAR (list) != &nil_object))
+			      && SYMBOL (CAR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_FLET;
       return NULL;
@@ -9525,7 +9530,7 @@ evaluate_labels (struct object *list, struct environment *env,
   bind_forms = CAR (list);
   body = CDR (list);
 
-  while (bind_forms != &nil_object)
+  while (SYMBOL (bind_forms) != &nil_object)
     {
       bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
 					   TYPE_FUNCTION);
@@ -9561,7 +9566,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
-			      && CAR (list) != &nil_object))
+			      && SYMBOL (CAR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_FLET;
       return NULL;
@@ -9570,7 +9575,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
   bind_forms = CAR (list);
   body = CDR (list);
 
-  while (bind_forms != &nil_object)
+  while (SYMBOL (bind_forms) != &nil_object)
     {
       bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
 					   TYPE_MACRO);
@@ -9796,9 +9801,9 @@ evaluate_if (struct object *list, struct environment *env,
   if (!if_clause)
     return NULL;
 
-  if (if_clause != &nil_object)
+  if (SYMBOL (if_clause) != &nil_object)
     {
-      if (CDR (list) == &nil_object)
+      if (SYMBOL (CDR (list)) == &nil_object)
 	{
 	  outcome->type = MALFORMED_IF;
 	  return NULL;
@@ -9834,7 +9839,7 @@ struct object *
 evaluate_values (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
-  if (list == &nil_object)
+  if (SYMBOL (list) == &nil_object)
     {
       outcome->no_value = 1;
       return &nil_object;
@@ -10004,7 +10009,7 @@ evaluate_defun (struct object *list, struct environment *env,
 
   if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && CAR (CDR (list)) != &nil_object))
+	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
@@ -10051,7 +10056,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && CAR (CDR (list)) != &nil_object))
+	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFMACRO;
       return NULL;
@@ -10105,7 +10110,7 @@ evaluate_setq (struct object *list, struct environment *env,
       return NULL;
     }
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       if (!IS_SYMBOL (CAR (list)))
 	{
@@ -10139,7 +10144,7 @@ evaluate_setf (struct object *list, struct environment *env,
       return NULL;
     }
 
-  while (list != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
       if (IS_SYMBOL (CAR (list)))
 	{
@@ -10218,7 +10223,7 @@ evaluate_lambda (struct object *list, struct environment *env,
   struct object *fun;
 
   if (list_length (list) < 1 || (CAR (list)->type != TYPE_CONS_PAIR
-				 && CAR (list) != &nil_object))
+				 && SYMBOL (CAR (list)) != &nil_object))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
@@ -10283,7 +10288,7 @@ evaluate_apply (struct object *list, struct environment *env,
   length--;
   last = nth (length - 1, list);
 
-  if (last->type != TYPE_CONS_PAIR && last != &nil_object)
+  if (last->type != TYPE_CONS_PAIR && SYMBOL (last) != &nil_object)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
@@ -11258,7 +11263,7 @@ print_list (const struct cons_pair *list, struct environment *env)
 
   cdr = list->cdr;
   
-  while (cdr && cdr != &nil_object)
+  while (cdr && SYMBOL (cdr) != &nil_object)
     {
       if (cdr->type == TYPE_CONS_PAIR)
 	{
@@ -11378,7 +11383,7 @@ print_object (const struct object *obj, struct environment *env)
       std_out = inspect_variable (env->std_out_sym, env);
       std_out->value_ptr.stream->dirty_line = 1;
 
-      if (obj == &nil_object)
+      if (SYMBOL (obj) == &nil_object)
 	printf ("()");
       else if (obj->type == TYPE_INTEGER)
 	mpz_out_str (NULL, 10, obj->value_ptr.integer);
@@ -11754,7 +11759,7 @@ increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 	increment_refcount (obj->value_ptr.next, antiloop_hash_t);
       else if (obj->type == TYPE_CONS_PAIR)
 	{
-	  if (obj->value_ptr.cons_pair->cdr == &nil_object)
+	  if (SYMBOL (CDR (obj)) == &nil_object)
 	    increment_refcount (obj->value_ptr.cons_pair->car,
 				antiloop_hash_t);
 	  else
@@ -11928,7 +11933,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 	}
       else if (obj->type == TYPE_CONS_PAIR)
 	{
-	  if (obj->value_ptr.cons_pair->cdr == &nil_object)
+	  if (SYMBOL (CDR (obj)) == &nil_object)
 	    decrement_refcount (obj->value_ptr.cons_pair->car, antiloop_hash_t);
 	  else
 	    {
