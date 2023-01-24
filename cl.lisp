@@ -178,6 +178,25 @@
   (not (apply 'every pred sequences)))
 
 
+(defun member (obj list)
+  (let ((subl list))
+    (dotimes (i (length list))
+      (if (eql obj (car subl))
+	  (return-from member subl))
+      (setq subl (cdr subl)))))
+
+
+(defun member-if (pred list)
+  (let ((subl list))
+    (dotimes (i (length list))
+      (if (funcall pred (car subl))
+	  (return-from member-if subl))
+      (setq subl (cdr subl)))))
+
+
+(defun member-if-not (pred list)
+  (member-if (complement pred) list))
+
 
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
