@@ -198,6 +198,26 @@
   (member-if (complement pred) list))
 
 
+(defun count (obj seq)
+  (let ((ret 0))
+    (dotimes (i (length seq))
+      (if (eql (elt seq i) obj)
+	  (setq ret (+ 1 ret))))
+    ret))
+
+
+(defun count-if (pred seq)
+  (let ((ret 0))
+    (dotimes (i (length seq))
+      (if (funcall pred (elt seq i))
+	  (setq ret (+ 1 ret))))
+    ret))
+
+
+(defun count-if-not (pred seq)
+  (count-if (complement pred) seq))
+
+
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
 
