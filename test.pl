@@ -388,6 +388,11 @@ make_test ("(every #'< '(0 1 2) '(1 1))", "()");
 make_test ("(some #'< '(0 1 2) '(1 1))", "T");
 make_test ("(notany #'oddp '(1 3 4))", "()");
 make_test ("(notevery #'oddp '(1 3 4))", "T");
+make_test ("(member 3 '(1 2 3 4))", "(3 4)");
+make_test ("(member 5 '(1 2 3))",  "()");
+make_test ("(member-if #'evenp '(1 2 3 4))", "(2 3 4)");
+make_test ("(member-if #'listp '(nil))", "(())");
+make_test ("(member-if-not #'evenp '(0 2 4))", "()");
 
 
 # arithmetic tests
