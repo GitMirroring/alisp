@@ -393,6 +393,10 @@ make_test ("(member 5 '(1 2 3))",  "()");
 make_test ("(member-if #'evenp '(1 2 3 4))", "(2 3 4)");
 make_test ("(member-if #'listp '(nil))", "(())");
 make_test ("(member-if-not #'evenp '(0 2 4))", "()");
+make_test ("(count #\\a \"abcabc\")", "2");
+make_test ("(count 2 '(1 2 3))", "1");
+make_test ("(count-if #'upper-case-p \"aAbBcCdD\")", "4");
+make_test ("(count-if-not #'evenp #(0 1 2))", "1");
 
 
 # arithmetic tests
