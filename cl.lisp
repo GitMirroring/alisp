@@ -218,6 +218,26 @@
   (count-if (complement pred) seq))
 
 
+(defun remove (obj seq)
+  (remove-if (lambda (ob) (eql ob obj)) seq))
+
+
+(defun remove-if-not (pred seq)
+  (remove-if (complement pred) seq))
+
+
+(defun delete (obj seq)
+  (remove-if (lambda (ob) (eql ob obj)) seq))
+
+
+(defun delete-if (pred seq)
+  (remove-if pred seq))
+
+
+(defun delete-if-not (pred seq)
+  (remove-if (complement pred) seq))
+
+
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
 
