@@ -8046,6 +8046,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	}
 
       val = call_function (CAR (list), args, 0, 0, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!val)
 	{
