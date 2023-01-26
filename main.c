@@ -53,6 +53,11 @@
 		   (list)->value_ptr.cons_pair->cdr ?			\
 		   (list)->value_ptr.cons_pair->cdr : &nil_object)
 
+#define IS_SEQUENCE(s) (SYMBOL (s) == &nil_object || (s)->type == TYPE_CONS_PAIR \
+			|| (s)->type == TYPE_STRING			\
+			|| ((s)->type == TYPE_ARRAY			\
+			    && (s)->value_ptr.array->alloc_size		\
+			    && !(s)->value_ptr.array->alloc_size->next))
 
 #define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || SYMBOL (s) == &nil_object)
 
@@ -869,7 +874,10 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
+
+struct object *alloc_vector (size_t size);
 struct object *create_vector (struct object *list);
+void resize_vector (struct object *vector, size_t size);
 
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
@@ -1149,6 +1157,8 @@ struct object *builtin_dotimes
 struct object *builtin_dolist
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_mapcar
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_remove_if
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *accessor_car (struct object *list, struct object *newvalform,
@@ -1749,6 +1759,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("REMOVE-IF", env, builtin_remove_if, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, NULL, 0);
@@ -4207,6 +4218,28 @@ create_filename (struct object *string)
 
 
 struct object *
+alloc_vector (size_t size)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct array *vec = malloc_and_check (sizeof (*vec));
+  struct array_size *sz = malloc_and_check (sizeof (*sz));
+
+  sz->size = size;
+  sz->next = NULL;
+
+  vec->alloc_size = sz;
+  vec->has_fill_pointer = 0;
+  vec->value = malloc_and_check (sizeof (*vec->value) * size);
+
+  obj->type = TYPE_ARRAY;
+  obj->refcount = 1;
+  obj->value_ptr.array = vec;
+
+  return obj;
+}
+
+
+struct object *
 create_vector (struct object *list)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
@@ -4229,6 +4262,17 @@ create_vector (struct object *list)
   obj->value_ptr.array = vec;
 
   return obj;
+}
+
+
+void
+resize_vector (struct object *vector, size_t size)
+{
+  vector->value_ptr.array->value =
+    realloc_and_check (vector->value_ptr.array->value,
+		       size * sizeof (struct object *));
+
+  vector->value_ptr.array->alloc_size->size = size;
 }
 
 
@@ -8079,6 +8123,140 @@ builtin_mapcar (struct object *list, struct environment *env,
   free_list_structure (cdrlist);
   free_list_structure (args);
 
+  return ret;
+}
+
+
+struct object *
+builtin_remove_if (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  struct object *fun, *seq, *ret, *cons, *arg, *res;
+  size_t sz, off, i, j;
+  char *s, *out;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION || !IS_SEQUENCE (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  fun = CAR (list);
+  seq = CAR (CDR (list));
+
+  if (SYMBOL (seq) == &nil_object)
+    return &nil_object;
+
+  arg = alloc_empty_cons_pair ();
+  arg->value_ptr.cons_pair->cdr = &nil_object;
+
+  if (seq->type == TYPE_CONS_PAIR)
+    {
+      ret = &nil_object;
+
+      while (SYMBOL (seq) != &nil_object)
+	{
+	  arg->value_ptr.cons_pair->car = CAR (seq);
+
+	  res = call_function (fun, arg, 1, 0, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!res)
+	    return NULL;
+
+	  if (SYMBOL (res) == &nil_object)
+	    {
+	      if (SYMBOL (ret) == &nil_object)
+		ret = cons = alloc_empty_cons_pair ();
+	      else
+		cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+	      cons->value_ptr.cons_pair->car = CAR (seq);
+	      increment_refcount (CAR (seq), NULL);
+	    }
+
+	  decrement_refcount (res, NULL);
+
+	  seq = CDR (seq);
+	}
+
+      cons->value_ptr.cons_pair->cdr = &nil_object;
+    }
+  else if (seq->type == TYPE_STRING)
+    {
+      sz = seq->value_ptr.string->used_size;
+
+      ret = alloc_string (sz);
+
+      out = ret->value_ptr.string->value;
+
+      s = seq->value_ptr.string->value;
+      off = 0;
+
+      do
+	{
+	  s += off;
+	  sz -= off;
+
+	  arg->value_ptr.cons_pair->car = create_character_from_utf8 (s, sz);
+
+	  res = call_function (fun, arg, 1, 0, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!res)
+	    return NULL;
+
+	  if (SYMBOL (res) == &nil_object)
+	    {
+	      strcpy (out, CAR (arg)->value_ptr.character);
+
+	      out += strlen (CAR (arg)->value_ptr.character);
+
+	      ret->value_ptr.string->used_size +=
+		strlen (CAR (arg)->value_ptr.character);
+	    }
+	  else
+	    decrement_refcount (CAR (arg), NULL);
+
+	  decrement_refcount (res, NULL);
+
+	} while ((off = next_utf8_char (s, sz)));
+    }
+  else if (seq->type == TYPE_ARRAY)
+    {
+      ret = alloc_vector (seq->value_ptr.array->alloc_size->size);
+
+      j = 0;
+
+      for (i = 0; i < seq->value_ptr.array->alloc_size->size; i++)
+	{
+	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
+	  increment_refcount (CAR (arg), NULL);
+
+	  res = call_function (fun, arg, 1, 0, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!res)
+	    return NULL;
+
+	  if (SYMBOL (res) == &nil_object)
+	    ret->value_ptr.array->value [j++] = CAR (arg);
+	  else
+	    decrement_refcount (CAR (arg), NULL);
+
+	  decrement_refcount (res, NULL);
+	}
+
+      resize_vector (ret, j);
+    }
+
+  free_cons_pair (arg);
   return ret;
 }
 
