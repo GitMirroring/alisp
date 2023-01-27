@@ -190,7 +190,6 @@ read_outcome
 
     COMPLETE_OBJECT = 1,
 
-    OPENING_PARENTHESIS = 1 << 2,
     CLOSING_PARENTHESIS = 1 << 3,
     CLOSING_PARENTHESIS_AFTER_PREFIX = 1 << 4,
 
@@ -206,9 +205,6 @@ read_outcome
     WRONG_OBJECT_TYPE_TO_SHARP_MACRO = 1 << 13,
     UNKNOWN_CHARACTER_NAME = 1 << 14,
     FUNCTION_NOT_FOUND_IN_READ = 1 << 15,
-
-    UNFINISHED_SINGLELINE_COMMENT = 1 << 16,
-    UNFINISHED_MULTILINE_COMMENT = 1 << 17,
 
     COMMA_WITHOUT_BACKQUOTE = 1 << 18,
     TOO_MANY_COMMAS = 1 << 19,
@@ -2025,6 +2021,9 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     {
       out = read_list (&ob, backts_commas_balance, input, size, env, outcome,
 		       obj_end, args);
+
+      if (out == INCOMPLETE_EMPTY_LIST)
+	out = INCOMPLETE_NONEMPTY_LIST;
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -2052,7 +2051,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
 	  if (out & READ_ERROR)
 	    {
-	      print_read_error (out, input, size, *obj_begin, *obj_end, NULL);
+	      return out;
 	    }
 
 	  if (!ob)
@@ -2096,11 +2095,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 				    outcome, &begin, &end,
 				    &args);
 
-  while (read_out & (INCOMPLETE_NONEMPTY_LIST | INCOMPLETE_STRING |
-		     INCOMPLETE_SYMBOL_NAME | JUST_PREFIX
-		     | INCOMPLETE_SHARP_MACRO_CALL |
-		     UNFINISHED_MULTILINE_COMMENT | INCOMPLETE_EMPTY_LIST)
-	 || read_out & READ_ERROR
+  while (read_out & INCOMPLETE_OBJECT || read_out & READ_ERROR
 	 || args.multiline_comment_depth)
     {
       if (read_out & READ_ERROR)
@@ -2143,7 +2138,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
   read_out = read_object (&obj, 0, input, input_size, env, outcome, &begin,
 			  &end, &args);
   
-  if (read_out == COMPLETE_OBJECT  && !args.multiline_comment_depth)
+  if (read_out == COMPLETE_OBJECT && !args.multiline_comment_depth)
     {
       *input_left = end + 1;
       *input_left_size = (input + input_size) - end - 1;
@@ -2451,8 +2446,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
     {
       if (*input == ';')
 	{
-	  if (!(input = jump_to_end_of_line (input, size, &size)))
-	    return UNFINISHED_SINGLELINE_COMMENT;
+	  input = jump_to_end_of_line (input, size, &size);
 	}
       else if (*input == '#' && size > 1 && *(input+1) == '|')
 	{
@@ -2510,7 +2504,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 	      if (out & READ_ERROR)
 		{
-		  print_read_error (out, input, size, *obj_begin, *obj_end, NULL);
+		  return out;
 		}
 
 	      if (!ob)
@@ -2573,9 +2567,6 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
   enum read_outcome out;
 
 
-  if (!size)
-    return INCOMPLETE_EMPTY_LIST;
-
   while (ob && ob->type == TYPE_CONS_PAIR)
     {
       if (ob->value_ptr.cons_pair->filling_car
@@ -2588,11 +2579,10 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       size, env, outcome, &obj_beg,
 				       &obj_end, args);
 
-	  if (out == COMPLETE_OBJECT || out == CLOSING_PARENTHESIS)
+	  if (out == COMPLETE_OBJECT)
 	    ob->value_ptr.cons_pair->filling_car =
 	      ob->value_ptr.cons_pair->filling_cdr = 0;
-	  else if (out == NO_OBJECT || out & INCOMPLETE_OBJECT
-		   || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
+	  else if (out & INCOMPLETE_OBJECT || out & READ_ERROR)
 	    return out;
 
 	  obj_end++;
@@ -2607,20 +2597,21 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       size, env, outcome, &obj_beg,
 				       &obj_end, args);
 
-	  if (out != INCOMPLETE_EMPTY_LIST)
+	  if (out == COMPLETE_OBJECT)
 	    ob->value_ptr.cons_pair->empty_list_in_car =
 	      ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
 
-	  if (out & INCOMPLETE_OBJECT)
+	  if (out & INCOMPLETE_OBJECT && out != INCOMPLETE_EMPTY_LIST)
 	    {
 	      ob->value_ptr.cons_pair->empty_list_in_car
 		? (ob->value_ptr.cons_pair->filling_car = 1)
 		: (ob->value_ptr.cons_pair->filling_cdr = 1);
-	      return out;
+
+	      ob->value_ptr.cons_pair->empty_list_in_car =
+		ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
 	    }
 
-	  if (out == NO_OBJECT || out == INCOMPLETE_EMPTY_LIST
-	      || out == UNFINISHED_MULTILINE_COMMENT || out & READ_ERROR)
+	  if (out & INCOMPLETE_OBJECT || out & READ_ERROR)
 	    return out;
 
 	  obj_end++;
@@ -2907,10 +2898,20 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
   if (*obj)
     {
-      return read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
-				    (*obj)->value_ptr.sharp_macro_call->
-				    is_empty_list, input, size, env, e_outcome,
-				    &obj_b, macro_end, args);
+      out = read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
+				   (*obj)->value_ptr.sharp_macro_call->
+				   is_empty_list, input, size, env, e_outcome,
+				   &obj_b, macro_end, args);
+
+      if (out == INCOMPLETE_EMPTY_LIST)
+	(*obj)->value_ptr.sharp_macro_call->is_empty_list = 1;
+      else
+	(*obj)->value_ptr.sharp_macro_call->is_empty_list = 0;
+
+      if (out & INCOMPLETE_OBJECT)
+	return INCOMPLETE_SHARP_MACRO_CALL;
+
+      return out;
     }
 
   *obj = alloc_sharp_macro_call ();
@@ -2972,7 +2973,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       if (out & INCOMPLETE_OBJECT)
 	return INCOMPLETE_SHARP_MACRO_CALL;
 
-      return COMPLETE_OBJECT;
+      return out;
     }
 
   call->obj = NULL;
