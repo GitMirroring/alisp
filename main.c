@@ -1090,6 +1090,8 @@ struct object *builtin_cons
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_list
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_list_star
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_append
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nth
@@ -1709,6 +1711,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
   add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LIST*", env, builtin_list_star, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
@@ -6805,6 +6808,49 @@ builtin_list (struct object *list, struct environment *env,
 
       list = CDR (list);
     }
+
+  return l;
+}
+
+
+struct object *
+builtin_list_star (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  struct object *l = NULL, *cons, *last_cons;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (SYMBOL (CDR (list)) == &nil_object)
+    {
+      increment_refcount (CAR (list), NULL);
+      return CAR (list);
+    }
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      cons = alloc_empty_cons_pair ();
+
+      increment_refcount (CAR (list), NULL);
+      cons->value_ptr.cons_pair->car = CAR (list);
+
+      if (!l)
+	l = last_cons = cons;
+      else
+	last_cons = last_cons->value_ptr.cons_pair->cdr = cons;
+
+      list = CDR (list);
+
+      if (CDR (list) == &nil_object)
+	break;
+    }
+
+  increment_refcount (CAR (list), NULL);
+  cons->value_ptr.cons_pair->cdr = CAR (list);
 
   return l;
 }
