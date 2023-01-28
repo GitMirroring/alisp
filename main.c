@@ -1086,6 +1086,10 @@ struct object *builtin_car
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_cdr
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_rplaca
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_rplacd
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_cons
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_list
@@ -1709,6 +1713,8 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
+  add_builtin_form ("RPLACA", env, builtin_rplaca, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("RPLACD", env, builtin_rplacd, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST*", env, builtin_list_star, TYPE_FUNCTION, NULL, 0);
@@ -6756,6 +6762,58 @@ builtin_cdr (struct object *list, struct environment *env,
   increment_refcount (CDR (CAR (list)), NULL);
 
   return CDR (CAR (list));
+}
+
+
+struct object *
+builtin_rplaca (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  decrement_refcount_by (CAR (CAR (list)), CAR (list)->refcount, CAR (list));
+
+  CAR (list)->value_ptr.cons_pair->car = CAR (CDR (list));
+  increment_refcount_by (CAR (CAR (list)), CAR (list)->refcount, CAR (list));
+
+  increment_refcount (CAR (list), NULL);
+  return CAR (list);
+}
+
+
+struct object *
+builtin_rplacd (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  decrement_refcount_by (CDR (CAR (list)), CAR (list)->refcount, CAR (list));
+
+  CAR (list)->value_ptr.cons_pair->cdr = CAR (CDR (list));
+  increment_refcount_by (CDR (CAR (list)), CAR (list)->refcount, CAR (list));
+
+  increment_refcount (CAR (list), NULL);
+  return CAR (list);
 }
 
 
