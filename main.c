@@ -8345,9 +8345,10 @@ accessor_car (struct object *list, struct object *newvalform,
   if (!val)
     return NULL;
 
-  decrement_refcount (obj->value_ptr.cons_pair->car, NULL);
+  decrement_refcount_by (obj->value_ptr.cons_pair->car, obj->refcount, obj);
 
   obj->value_ptr.cons_pair->car = val;
+  increment_refcount_by (obj->value_ptr.cons_pair->car, obj->refcount, obj);
 
   return val;
 }
@@ -8390,9 +8391,10 @@ accessor_cdr (struct object *list, struct object *newvalform,
   if (!val)
     return NULL;
 
-  decrement_refcount (obj->value_ptr.cons_pair->car, NULL);
+  decrement_refcount_by (obj->value_ptr.cons_pair->cdr, obj->refcount, obj);
 
   obj->value_ptr.cons_pair->cdr = val;
+  increment_refcount_by (obj->value_ptr.cons_pair->cdr, obj->refcount, obj);
 
   return val;
 }
