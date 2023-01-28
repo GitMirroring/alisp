@@ -189,7 +189,7 @@ make_test ("(setf c (+ c 1))", "5");
 make_test ("c", "5");
 make_test ("(setq)", "()");
 make_test ("(setq b 9 c 4 c (+ c 1))", "5");
-make_test ("(setf tt '(a b d))", "(A B D)");
+make_test ("(setf tt (list 'a 'b 'd))", "(A B D)");
 make_test ("(setf (car tt) 'f)", "F");
 make_test ("tt", "(F B D)");
 make_test ("(setf (cdr tt) 'g)", "G");
