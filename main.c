@@ -7212,7 +7212,7 @@ builtin_elt (struct object *list, struct environment *env,
   else if (CAR (list)->type == TYPE_CONS_PAIR
 	   || SYMBOL (CAR (list)) == &nil_object)
     {
-      if (is_dotted_list (CAR (list)) || is_circular_list (CAR (list)))
+      if (!is_proper_list (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
