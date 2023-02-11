@@ -157,13 +157,12 @@
 
 
 (defun every (pred &rest sequences)
-  (block every
-    (let ((n (apply 'min (mapcar #'length sequences))))
-      (dotimes (i n)
-	(let ((args (mapcar (lambda (s) (elt s i)) sequences)))
-	  (if (not (apply pred args))
-	      (return-from every nil)))))
-    t))
+  (let ((n (apply 'min (mapcar #'length sequences))))
+    (dotimes (i n)
+      (let ((args (mapcar (lambda (s) (elt s i)) sequences)))
+	(if (not (apply pred args))
+	    (return-from every nil)))))
+  t)
 
 
 (defun some (pred &rest sequences)
