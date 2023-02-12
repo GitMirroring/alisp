@@ -4958,19 +4958,25 @@ define_constant (struct object *sym, struct object *form,
   if (!val)
     return NULL;
 
-  if (SYMBOL (sym)->value_ptr.symbol->is_const)
+  sym = SYMBOL (sym);
+
+  if (sym->value_ptr.symbol->is_const)
     {
       outcome->type = CANT_REDEFINE_CONSTANT;
       return NULL;
     }
 
-  SYMBOL (sym)->value_ptr.symbol->is_const = 1;
-  SYMBOL (sym)->value_ptr.symbol->value_cell = val;
+  sym->value_ptr.symbol->value_cell = val;
 
-  increment_refcount (SYMBOL (sym), NULL);
-  increment_refcount (SYMBOL (sym), NULL);
+  if (!sym->value_ptr.symbol->is_const && !sym->value_ptr.symbol->is_parameter)
+    {
+      increment_refcount (sym, NULL);
+      sym->value_ptr.symbol->is_const = 1;
+    }
 
-  return SYMBOL (sym);
+  increment_refcount (sym, NULL);
+
+  return sym;
 }
 
 
@@ -4998,8 +5004,12 @@ define_parameter (struct object *sym, struct object *form,
     return NULL;
   
   s = SYMBOL (sym);
-  
-  s->value_ptr.symbol->is_parameter = 1;
+
+  if (!s->value_ptr.symbol->is_parameter)
+    {
+      increment_refcount (s, NULL);
+      s->value_ptr.symbol->is_parameter = 1;
+    }
 
   increment_refcount_by (val, s->refcount - 1, NULL);
   s->value_ptr.symbol->value_cell = val;
@@ -10345,12 +10355,14 @@ evaluate_defvar (struct object *list, struct environment *env,
 
   if (l == 1)
     {
-      s->value_ptr.symbol->is_parameter = 1;
+      if (!s->value_ptr.symbol->is_parameter)
+	{
+	  increment_refcount (s, NULL);
+	  s->value_ptr.symbol->is_parameter = 1;
+	}
     }
   else if (l == 2)
     {
-      s->value_ptr.symbol->is_parameter = 1;
-      
       if (!s->value_ptr.symbol->value_cell)
 	return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
     }
