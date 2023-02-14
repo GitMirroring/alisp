@@ -103,6 +103,13 @@
 
 
 
+#define increment_refcount(obj) offset_refcount_by ((obj), 1, NULL)
+
+#define decrement_refcount(obj) offset_refcount_by ((obj), -1, NULL)
+
+
+
+
 /* not a C string. not null-terminated and explicit size. null bytes are
    allowed inside */
 
@@ -1369,10 +1376,8 @@ void print_read_error (enum read_outcome err, const char *input, size_t size,
 void print_eval_error (struct eval_outcome *err, struct environment *env);
 
 void increment_refcount_by (struct object *obj, int count, struct object *parent);
-void increment_refcount (struct object *obj,
-			 struct object_list **antiloop_hash_t);
 int decrement_refcount_by (struct object *obj, int count, struct object *parent);
-int decrement_refcount (struct object *obj,
+int offset_refcount_by (struct object *obj, int delta,
 			struct object_list **antiloop_hash_t);
 
 void free_object (struct object *obj);
@@ -1537,8 +1542,8 @@ main (int argc, char *argv [])
 	      eval_out.other_values = NULL;
 	    }
 
-	  decrement_refcount (result, NULL);
-	  decrement_refcount (obj, NULL);
+	  decrement_refcount (result);
+	  decrement_refcount (obj);
 
 	  obj = read_object_interactively_continued (input_left, input_left_s,
 						     &env, &eval_out,
@@ -2354,7 +2359,7 @@ copy_list_to_obj_list (struct object *list)
       else
 	curr = curr->next = malloc_and_check (sizeof (*curr));
 
-      increment_refcount (CAR (list), NULL);
+      increment_refcount (CAR (list));
       curr->obj = CAR (list);
 
       list = CDR (list);
@@ -2411,7 +2416,7 @@ free_object_list (struct object_list *list)
   while (list)
     {
       next = list->next;
-      decrement_refcount (list->obj, NULL);
+      decrement_refcount (list->obj);
       free (list);
       list = next;
     }
@@ -3807,7 +3812,7 @@ create_function (struct object *lambda_list, struct object *body,
 			     env->var_lex_bin_num, env->funcs,
 			     env->func_lex_bin_num);
 
-  increment_refcount (body, NULL);
+  increment_refcount (body);
   f->body = body;
 
   return fun;
@@ -4556,7 +4561,7 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
       if (eqmem (cur->obj->value_ptr.symbol->name,
 		 cur->obj->value_ptr.symbol->name_len, name, len))
 	{
-	  increment_refcount (cur->obj, NULL);
+	  increment_refcount (cur->obj);
 	  return cur->obj;
 	}
 
@@ -4637,7 +4642,7 @@ unintern_symbol (struct object *sym)
 
   free (entry);
 
-  /*decrement_refcount (s->value_ptr.symbol->home_package, NULL);*/
+  /*decrement_refcount (s->value_ptr.symbol->home_package);*/
   s->value_ptr.symbol->home_package = NULL;
 }
 
@@ -4655,8 +4660,8 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type,
 
   if (inc_refcs)
     {
-      increment_refcount (sym, NULL);
-      increment_refcount (obj, NULL);
+      increment_refcount (sym);
+      increment_refcount (obj);
     }
 
   return bin;
@@ -4712,8 +4717,8 @@ remove_bindings (struct binding *env, int num)
   if (env->type == DYNAMIC_BINDING)
     env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
-  decrement_refcount (env->sym, NULL);
-  decrement_refcount (env->obj, NULL);
+  decrement_refcount (env->sym);
+  decrement_refcount (env->obj);
 
   free (env);
 
@@ -4901,7 +4906,7 @@ add_builtin_type (char *name, struct environment *env,
   sym->value_ptr.symbol->is_standard_type = is_standard;
   sym->value_ptr.symbol->builtin_type = builtin_type;
 
-  increment_refcount (sym, NULL);
+  increment_refcount (sym);
 
   while ((s = va_arg (valist, char *)))
     {
@@ -4970,11 +4975,11 @@ define_constant (struct object *sym, struct object *form,
 
   if (!sym->value_ptr.symbol->is_const && !sym->value_ptr.symbol->is_parameter)
     {
-      increment_refcount (sym, NULL);
+      increment_refcount (sym);
       sym->value_ptr.symbol->is_const = 1;
     }
 
-  increment_refcount (sym, NULL);
+  increment_refcount (sym);
 
   return sym;
 }
@@ -5007,14 +5012,14 @@ define_parameter (struct object *sym, struct object *form,
 
   if (!s->value_ptr.symbol->is_parameter)
     {
-      increment_refcount (s, NULL);
+      increment_refcount (s);
       s->value_ptr.symbol->is_parameter = 1;
     }
 
   increment_refcount_by (val, s->refcount - 1, NULL);
   s->value_ptr.symbol->value_cell = val;
 
-  increment_refcount (s, NULL);
+  increment_refcount (s);
   return s;
 }
 
@@ -5336,7 +5341,7 @@ copy_list_structure (struct object *list, const struct object *prefix,
 
   out = cons = alloc_empty_cons_pair ();
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   out->value_ptr.cons_pair->car = CAR (list);
 
   list = CDR (list);
@@ -5345,7 +5350,7 @@ copy_list_structure (struct object *list, const struct object *prefix,
     {
       cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
-      increment_refcount (CAR (list), NULL);
+      increment_refcount (CAR (list));
 
       if (prefix)
 	{
@@ -5361,7 +5366,7 @@ copy_list_structure (struct object *list, const struct object *prefix,
     }
 
   if (SYMBOL (list) != &nil_object && cell_num < 0)
-    increment_refcount (list, NULL);
+    increment_refcount (list);
 
   if (cell_num < 0)
     cons->value_ptr.cons_pair->cdr = list;
@@ -5419,7 +5424,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 			       "&BODY", "&KEY", "&AUX", "&ALLOW_OTHER_KEYS",
 			       NULL))
     {
-      increment_refcount (SYMBOL (car), NULL);
+      increment_refcount (SYMBOL (car));
 
       if (!first)
 	*last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
@@ -5455,7 +5460,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	}
       else if (car->type == TYPE_SYMBOL_NAME)
 	{
-	  increment_refcount (SYMBOL (car), NULL);
+	  increment_refcount (SYMBOL (car));
 
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
@@ -5465,7 +5470,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
-	  increment_refcount (SYMBOL (CAR (car)), NULL);
+	  increment_refcount (SYMBOL (CAR (car)));
 
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
@@ -5475,13 +5480,13 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
 	  if (list_length (car) == 2)
 	    {
-	      increment_refcount (nth (1, car), NULL);
+	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
 	    }
 
 	  if (list_length (car) == 3)
 	    {
-	      increment_refcount (SYMBOL (nth (2, car)), NULL);
+	      increment_refcount (SYMBOL (nth (2, car)));
 	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
 	    }
 	}
@@ -5517,7 +5522,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
       else if (car->type == TYPE_SYMBOL_NAME)
 	{
 	  var = SYMBOL (car);
-	  increment_refcount (var, NULL);
+	  increment_refcount (var);
 
 	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
 						var->value_ptr.symbol->name_len,
@@ -5544,8 +5549,8 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	      var = CAR (CDR (caar));
 	    }
 
-	  increment_refcount (key, NULL);
-	  increment_refcount (var, NULL);
+	  increment_refcount (key);
+	  increment_refcount (var);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -5557,13 +5562,13 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  if (list_length (car) == 2)
 	    {
-	      increment_refcount (nth (1, car), NULL);
+	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
 	    }
 
 	  if (list_length (car) == 3)
 	    {
-	      increment_refcount (SYMBOL (nth (2, car)), NULL);
+	      increment_refcount (SYMBOL (nth (2, car)));
 	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
 	    }
 	}
@@ -5612,7 +5617,7 @@ parse_lambda_list (struct object *obj, struct environment *env,
       && car->type == TYPE_SYMBOL_NAME
       && symname_is_among (car->value_ptr.symbol_name, "&REST", "&BODY", NULL))
     {
-      increment_refcount (SYMBOL (CAR (CDR (obj))), NULL);
+      increment_refcount (SYMBOL (CAR (CDR (obj))));
 
       if (first)
 	last->next = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
@@ -5667,7 +5672,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 
   do
     {
-      decrement_refcount (res, NULL);
+      decrement_refcount (res);
 
       if (!is_tagbody
 	  || (CAR (body)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (body))))
@@ -5753,7 +5758,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       ret = func->value_ptr.function->builtin_form (args, env, outcome);
 
       if (eval_args)
-	decrement_refcount (args, NULL);
+	decrement_refcount (args);
 
       return ret;
     }
@@ -5774,7 +5779,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	}
       else
 	{
-	  increment_refcount (CAR (arglist), NULL);
+	  increment_refcount (CAR (arglist));
 	  val = CAR (arglist);
 	}
 
@@ -5858,7 +5863,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       else
 	{
 	  args = arglist;
-	  increment_refcount (args, NULL);
+	  increment_refcount (args);
 	}
     }
 
@@ -5914,8 +5919,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  if (rest_found)
 	    {
-	      increment_refcount (findk->name, NULL);
-	      increment_refcount (CAR (args), NULL);
+	      increment_refcount (findk->name);
+	      increment_refcount (CAR (args));
 	    }
 
 	  bins = bind_variable (findk->name, CAR (args), bins);
@@ -5968,7 +5973,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       ret2 = evaluate_object (ret, env, outcome);
 
-      decrement_refcount (ret, NULL);
+      decrement_refcount (ret);
 
       ret = ret2;
     }
@@ -6115,7 +6120,7 @@ evaluate_object (struct object *obj, struct environment *env,
 
   if (obj->type == TYPE_QUOTE)
     {
-      increment_refcount (obj->value_ptr.next, NULL);
+      increment_refcount (obj->value_ptr.next);
       return obj->value_ptr.next;
     }
   else if (obj->type == TYPE_BACKQUOTE)
@@ -6147,14 +6152,14 @@ evaluate_object (struct object *obj, struct environment *env,
 
 	  if (bind)
 	    {
-	      increment_refcount (bind->obj, NULL);
+	      increment_refcount (bind->obj);
 	      return bind->obj;
 	    }
 	  else if (sym->value_ptr.symbol->value_dyn_bins_num)
 	    {
 	      bind = find_binding (sym->value_ptr.symbol, env->vars,
 				   DYNAMIC_BINDING, -1);
-	      increment_refcount (bind->obj, NULL);
+	      increment_refcount (bind->obj);
 	      return bind->obj;
 	    }
 	  else
@@ -6171,7 +6176,7 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else
     {
-      increment_refcount (obj, NULL);
+      increment_refcount (obj);
       return obj;
     }
 }
@@ -6457,7 +6462,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
       return retform;
     }
 
-  increment_refcount (form, NULL);
+  increment_refcount (form);
   return form;
 }
 
@@ -6802,7 +6807,7 @@ builtin_car (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (CAR (CAR (list)), NULL);
+  increment_refcount (CAR (CAR (list)));
 
   return CAR (CAR (list));
 }
@@ -6832,7 +6837,7 @@ builtin_cdr (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (CDR (CAR (list)), NULL);
+  increment_refcount (CDR (CAR (list)));
 
   return CDR (CAR (list));
 }
@@ -6859,7 +6864,7 @@ builtin_rplaca (struct object *list, struct environment *env,
   CAR (list)->value_ptr.cons_pair->car = CAR (CDR (list));
   increment_refcount_by (CAR (CAR (list)), CAR (list)->refcount, CAR (list));
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -6885,7 +6890,7 @@ builtin_rplacd (struct object *list, struct environment *env,
   CAR (list)->value_ptr.cons_pair->cdr = CAR (CDR (list));
   increment_refcount_by (CDR (CAR (list)), CAR (list)->refcount, CAR (list));
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -6909,10 +6914,10 @@ builtin_cons (struct object *list, struct environment *env,
 
   cons = alloc_empty_cons_pair ();
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   cons->value_ptr.cons_pair->car = CAR (list);
 
-  increment_refcount (CAR (CDR (list)), NULL);
+  increment_refcount (CAR (CDR (list)));
   cons->value_ptr.cons_pair->cdr = CAR (CDR (list));
 
   return cons;
@@ -6929,7 +6934,7 @@ builtin_list (struct object *list, struct environment *env,
     {
       cons = alloc_empty_cons_pair ();
 
-      increment_refcount (CAR (list), NULL);
+      increment_refcount (CAR (list));
       cons->value_ptr.cons_pair->car = CAR (list);
 
       if (!l)
@@ -6958,7 +6963,7 @@ builtin_list_star (struct object *list, struct environment *env,
 
   if (SYMBOL (CDR (list)) == &nil_object)
     {
-      increment_refcount (CAR (list), NULL);
+      increment_refcount (CAR (list));
       return CAR (list);
     }
 
@@ -6966,7 +6971,7 @@ builtin_list_star (struct object *list, struct environment *env,
     {
       cons = alloc_empty_cons_pair ();
 
-      increment_refcount (CAR (list), NULL);
+      increment_refcount (CAR (list));
       cons->value_ptr.cons_pair->car = CAR (list);
 
       if (!l)
@@ -6980,7 +6985,7 @@ builtin_list_star (struct object *list, struct environment *env,
 	break;
     }
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   cons->value_ptr.cons_pair->cdr = CAR (list);
 
   return l;
@@ -7027,7 +7032,7 @@ builtin_append (struct object *list, struct environment *env,
   else
     ret = obj;
 
-  increment_refcount (obj, NULL);
+  increment_refcount (obj);
 
   return ret;
 }
@@ -7055,7 +7060,7 @@ builtin_nth (struct object *list, struct environment *env,
 
   ret = nth (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
 
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
 
   return ret;
 }
@@ -7083,7 +7088,7 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
   ret = nthcdr (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
 
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
 
   return ret;
 }
@@ -7128,7 +7133,7 @@ builtin_nth_value (struct object *list, struct environment *env,
       return res;
     }
 
-  decrement_refcount (res, NULL);
+  decrement_refcount (res);
 
   for (l = outcome->other_values, ind--; l && ind; ind--)
     l = l->next;
@@ -7140,7 +7145,7 @@ builtin_nth_value (struct object *list, struct environment *env,
     }
 
   ret = l->obj;
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
   return ret;
 }
@@ -7201,7 +7206,7 @@ builtin_elt (struct object *list, struct environment *env,
 
       ret = CAR (list)->value_ptr.array->value [ind];
 
-      increment_refcount (ret, NULL);
+      increment_refcount (ret);
       return ret;
     }
   else if (CAR (list)->type == TYPE_CONS_PAIR
@@ -7221,7 +7226,7 @@ builtin_elt (struct object *list, struct environment *env,
 
       ret = nth (ind, CAR (list));
 
-      increment_refcount (ret, NULL);
+      increment_refcount (ret);
       return ret;
     }
   else
@@ -7325,7 +7330,7 @@ builtin_aref (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (arr, NULL);
+  increment_refcount (arr);
   return arr;
 }
 
@@ -7517,7 +7522,7 @@ builtin_last (struct object *list, struct environment *env,
 
   ret = nthcdr (list_length (CAR (list)) - n, CAR (list));
 
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
   return ret;
 }
 
@@ -7559,7 +7564,7 @@ builtin_write (struct object *list, struct environment *env,
 
   print_object (CAR (list), env);
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -7593,7 +7598,7 @@ builtin_write_string (struct object *list, struct environment *env,
   else
     std_out->value_ptr.stream->dirty_line = 1;
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -7625,7 +7630,7 @@ builtin_write_char (struct object *list, struct environment *env,
   else
     std_out->value_ptr.stream->dirty_line = 1;
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -8356,10 +8361,10 @@ builtin_remove_if (struct object *list, struct environment *env,
 		cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
 	      cons->value_ptr.cons_pair->car = CAR (seq);
-	      increment_refcount (CAR (seq), NULL);
+	      increment_refcount (CAR (seq));
 	    }
 
-	  decrement_refcount (res, NULL);
+	  decrement_refcount (res);
 
 	  seq = CDR (seq);
 	}
@@ -8400,9 +8405,9 @@ builtin_remove_if (struct object *list, struct environment *env,
 		strlen (CAR (arg)->value_ptr.character);
 	    }
 	  else
-	    decrement_refcount (CAR (arg), NULL);
+	    decrement_refcount (CAR (arg));
 
-	  decrement_refcount (res, NULL);
+	  decrement_refcount (res);
 
 	} while ((off = next_utf8_char (s, sz)));
     }
@@ -8415,7 +8420,7 @@ builtin_remove_if (struct object *list, struct environment *env,
       for (i = 0; i < seq->value_ptr.array->alloc_size->size; i++)
 	{
 	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
-	  increment_refcount (CAR (arg), NULL);
+	  increment_refcount (CAR (arg));
 
 	  res = call_function (fun, arg, 1, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
@@ -8426,9 +8431,9 @@ builtin_remove_if (struct object *list, struct environment *env,
 	  if (SYMBOL (res) == &nil_object)
 	    ret->value_ptr.array->value [j++] = CAR (arg);
 	  else
-	    decrement_refcount (CAR (arg), NULL);
+	    decrement_refcount (CAR (arg));
 
-	  decrement_refcount (res, NULL);
+	  decrement_refcount (res);
 	}
 
       resize_vector (ret, j);
@@ -8546,8 +8551,8 @@ compare_two_numbers (struct object *num1, struct object *num2)
   else
     eq = mpf_cmp (first_p->value_ptr.floating, second_p->value_ptr.floating);
 
-  decrement_refcount (first_p, NULL);
-  decrement_refcount (second_p, NULL);
+  decrement_refcount (first_p);
+  decrement_refcount (second_p);
 
   return eq;
 }
@@ -8642,8 +8647,8 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
 
       mpq_div (ret->value_ptr.ratio, pn1->value_ptr.ratio, pn2->value_ptr.ratio);
 
-      decrement_refcount (pn1, NULL);
-      decrement_refcount (pn2, NULL);
+      decrement_refcount (pn1);
+      decrement_refcount (pn2);
     }
   else
     {
@@ -8655,8 +8660,8 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
       mpf_div (ret->value_ptr.floating, pn1->value_ptr.floating,
 	       pn2->value_ptr.floating);
 
-      decrement_refcount (pn1, NULL);
-      decrement_refcount (pn2, NULL);
+      decrement_refcount (pn1);
+      decrement_refcount (pn2);
     }
 
   return ret;
@@ -8711,7 +8716,7 @@ promote_number (struct object *num, enum object_type type)
 
   if (num->type == type)
     {
-      increment_refcount (num, NULL);
+      increment_refcount (num);
       return num;
     }
 
@@ -8789,7 +8794,7 @@ apply_arithmetic_operation (struct object *list,
 	       op->value_ptr.floating);
 	}
 
-      decrement_refcount (op, NULL);
+      decrement_refcount (op);
 
       list = CDR (list);
 
@@ -8928,8 +8933,8 @@ perform_division_with_remainder (struct object *args,
       mpf_clear (r);
     }
 
-  decrement_refcount (num, NULL);
-  decrement_refcount (div, NULL);
+  decrement_refcount (num);
+  decrement_refcount (div);
 
   prepend_object_to_obj_list (ret2, &outcome->other_values);
 
@@ -9153,7 +9158,7 @@ builtin_sqrt (struct object *list, struct environment *env,
   ret = alloc_number (TYPE_FLOAT);
   mpf_set (ret->value_ptr.floating, rt);
 
-  decrement_refcount (num, NULL);
+  decrement_refcount (num);
 
   return ret;
 }
@@ -9281,7 +9286,7 @@ builtin_min (struct object *list, struct environment *env,
 	ret = CAR (cur);
     }
 
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
   return ret;
 }
 
@@ -9321,7 +9326,7 @@ builtin_max (struct object *list, struct environment *env,
 	ret = CAR (cur);
     }
 
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
   return ret;
 }
 
@@ -9577,7 +9582,7 @@ builtin_string (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      increment_refcount (CAR (list), NULL);
+      increment_refcount (CAR (list));
       return CAR (list);
     }
   else if (IS_SYMBOL (CAR (list)))
@@ -9974,7 +9979,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
   if (s->is_const || !s->value_dyn_bins_num)
     {
-      increment_refcount (s->value_cell, NULL);
+      increment_refcount (s->value_cell);
 
       return s->value_cell;
     }
@@ -9983,7 +9988,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
   if (b)
     {
-      increment_refcount (b->obj, NULL);
+      increment_refcount (b->obj);
 
       return b->obj;
     }
@@ -10010,7 +10015,7 @@ get_function (struct object *sym, struct environment *env, int only_functions)
   if (f->type != TYPE_FUNCTION && only_functions)
     return NULL;
 
-  increment_refcount (f, NULL);
+  increment_refcount (f);
   return f;
 }
 
@@ -10117,7 +10122,7 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
 	{
 	  s->value_dyn_bins_num++;
 	  s->is_special = 1;
-	  increment_refcount (sym, NULL);
+	  increment_refcount (sym);
 	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING, 0),
 				   env->vars);
 	}
@@ -10137,7 +10142,7 @@ evaluate_quote (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -10206,7 +10211,7 @@ evaluate_values (struct object *list, struct environment *env,
 
   outcome->other_values = copy_list_to_obj_list (CDR (list));
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -10342,7 +10347,7 @@ evaluate_defvar (struct object *list, struct environment *env,
     {
       if (!s->value_ptr.symbol->is_parameter)
 	{
-	  increment_refcount (s, NULL);
+	  increment_refcount (s);
 	  s->value_ptr.symbol->is_parameter = 1;
 	}
     }
@@ -10357,7 +10362,7 @@ evaluate_defvar (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (CAR (list), NULL);
+  increment_refcount (CAR (list));
   return CAR (list);
 }
 
@@ -10397,14 +10402,14 @@ evaluate_defun (struct object *list, struct environment *env,
 			     sym);
     }
   else
-    increment_refcount (sym, NULL);
+    increment_refcount (sym);
 
   fun->value_ptr.function->name = sym;
 
   sym->value_ptr.symbol->function_cell = fun;
   increment_refcount_by (fun, sym->refcount - 1, sym);
 
-  increment_refcount (sym, NULL);
+  increment_refcount (sym);
   return sym;
 }
 
@@ -10446,14 +10451,14 @@ evaluate_defmacro (struct object *list, struct environment *env,
 			     sym);
     }
   else
-    increment_refcount (sym, NULL);
+    increment_refcount (sym);
 
   mac->value_ptr.function->name = sym;
 
   sym->value_ptr.symbol->function_cell = mac;
   increment_refcount_by (mac, sym->refcount - 1, sym);
 
-  increment_refcount (sym, NULL);
+  increment_refcount (sym);
   return sym;
 }
 
@@ -10487,7 +10492,7 @@ evaluate_setq (struct object *list, struct environment *env,
       list = CDR (CDR (list));
     }
 
-  increment_refcount (ret, NULL);
+  increment_refcount (ret);
   return ret;
 }
 
@@ -10539,7 +10544,7 @@ evaluate_setf (struct object *list, struct environment *env,
       list = CDR (CDR (list));
     }
 
-  increment_refcount (val, NULL);
+  increment_refcount (val);
   return val;
 }
 
@@ -10717,7 +10722,7 @@ evaluate_tagbody (struct object *list, struct environment *env,
   if (!ret)
     return NULL;
 
-  decrement_refcount (ret, NULL);
+  decrement_refcount (ret);
 
   return &nil_object;
 }
@@ -12067,147 +12072,17 @@ increment_refcount_by (struct object *obj, int count, struct object *parent)
 {
   struct object_list **antiloop_hash_t = NULL;
 
-  for (; count; count--)
+  if (parent)
     {
-      if (parent)
-	{
-	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-	  prepend_object_to_obj_list
-	    (parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
-	}
-
-      increment_refcount (obj, antiloop_hash_t);
-
-      if (antiloop_hash_t)
-	{
-	  free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
-	  antiloop_hash_t = NULL;
-	}
-    }
-}
-
-
-void
-increment_refcount (struct object *obj, struct object_list **antiloop_hash_t)
-{
-  int allocated_now = 0;
-  struct object_list **hash_t_clone = NULL;
-  struct parameter *par;
-
-  if (!obj || obj == &nil_object  || obj == &t_object)
-    return;
-
-  if (HAS_LEAF_TYPE (obj))
-    obj->refcount++;
-  else
-    {
-      if (!antiloop_hash_t)
-	{
-	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-	  allocated_now = 1;
-	}
-
-      if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_t,
-						     ANTILOOP_HASH_T_SIZE))
-	return;
-
-      obj->refcount++;
-
+      antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
       prepend_object_to_obj_list
-	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
-
-      if (obj->type & TYPE_PREFIX)
-	increment_refcount (obj->value_ptr.next, antiloop_hash_t);
-      else if (obj->type == TYPE_CONS_PAIR)
-	{
-	  if (SYMBOL (CDR (obj)) == &nil_object)
-	    increment_refcount (obj->value_ptr.cons_pair->car,
-				antiloop_hash_t);
-	  else
-	    {
-	      hash_t_clone = clone_hash_table (antiloop_hash_t,
-					       ANTILOOP_HASH_T_SIZE);
-	      increment_refcount (obj->value_ptr.cons_pair->car,
-				  antiloop_hash_t);
-	      increment_refcount (obj->value_ptr.cons_pair->cdr,
-				  hash_t_clone);
-	    }
-	}
-      else if (obj->type == TYPE_SYMBOL_NAME)
-	increment_refcount (obj->value_ptr.symbol_name->sym, antiloop_hash_t);
-      else if (obj->type == TYPE_SYMBOL)
-	{
-	  if (obj->value_ptr.symbol->value_cell
-	      && obj->value_ptr.symbol->function_cell)
-	    {
-	      hash_t_clone = clone_hash_table (antiloop_hash_t,
-					       ANTILOOP_HASH_T_SIZE);
-	      increment_refcount (obj->value_ptr.symbol->value_cell,
-				  antiloop_hash_t);
-	      increment_refcount (obj->value_ptr.symbol->function_cell,
-				  hash_t_clone);
-	    }
-	  else
-	    {
-	      increment_refcount (obj->value_ptr.symbol->value_cell,
-				  antiloop_hash_t);
-	      increment_refcount (obj->value_ptr.symbol->function_cell,
-				  antiloop_hash_t);
-	    }
-	}
-      else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
-	{
-	  if (!obj->value_ptr.function->lambda_list)
-	    increment_refcount (obj->value_ptr.function->body, antiloop_hash_t);
-	  else
-	    {
-	      hash_t_clone = clone_hash_table (antiloop_hash_t,
-					       ANTILOOP_HASH_T_SIZE);
-
-	      increment_refcount (obj->value_ptr.function->body, hash_t_clone);
-
-	      par = obj->value_ptr.function->lambda_list;
-
-	      while (par)
-		{
-		  free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
-
-		  hash_t_clone = clone_hash_table (antiloop_hash_t,
-						   ANTILOOP_HASH_T_SIZE);
-
-		  increment_refcount (par->name, hash_t_clone);
-
-		  if (par->init_form)
-		    {
-		      free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
-
-		      hash_t_clone = clone_hash_table (antiloop_hash_t,
-						       ANTILOOP_HASH_T_SIZE);
-
-		      increment_refcount (par->init_form, hash_t_clone);
-		    }
-
-		  if (par->supplied_p_param)
-		    {
-		      free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
-
-		      hash_t_clone = clone_hash_table (antiloop_hash_t,
-						       ANTILOOP_HASH_T_SIZE);
-
-		      increment_refcount (par->supplied_p_param, hash_t_clone);
-		    }
-
-		  par = par->next;
-		}
-	    }
-	}
-
-      if (allocated_now)
-	free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
-
-      if (hash_t_clone)
-	free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
+	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
     }
+
+  offset_refcount_by (obj, count, antiloop_hash_t);
+
+  if (antiloop_hash_t)
+    free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
 }
 
 
@@ -12217,30 +12092,25 @@ decrement_refcount_by (struct object *obj, int count, struct object *parent)
   struct object_list **antiloop_hash_t = NULL;
   int ret;
 
-  for (; count; count--)
+  if (parent)
     {
-      if (parent)
-	{
-	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-	  prepend_object_to_obj_list
-	    (parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
-	}
-
-      ret = decrement_refcount (obj, antiloop_hash_t);
-
-      if (antiloop_hash_t)
-	{
-	  free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
-	  antiloop_hash_t = NULL;
-	}
+      antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
+      prepend_object_to_obj_list
+	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
     }
+
+  ret = offset_refcount_by (obj, -count, antiloop_hash_t);
+
+  if (antiloop_hash_t)
+    free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
 
   return ret;
 }
 
 
 int
-decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
+offset_refcount_by (struct object *obj, int delta,
+		    struct object_list **antiloop_hash_t)
 {
   int allocated_now = 0;
   struct object_list **hash_t_clone = NULL;
@@ -12250,7 +12120,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
     return 0;
 
   if (HAS_LEAF_TYPE (obj))
-    obj->refcount--;
+    obj->refcount += delta;
   else
     {
       if (!antiloop_hash_t)
@@ -12263,15 +12133,16 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 						     ANTILOOP_HASH_T_SIZE))
 	return 0;
 
-      obj->refcount--;
+      obj->refcount += delta;
 
       prepend_object_to_obj_list
 	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
 
       if (obj->type & TYPE_PREFIX)
-	decrement_refcount (obj->value_ptr.next, antiloop_hash_t);
+	offset_refcount_by (obj->value_ptr.next, delta, antiloop_hash_t);
       else if (obj->type == TYPE_SYMBOL_NAME)
-	decrement_refcount (obj->value_ptr.symbol_name->sym, antiloop_hash_t);
+	offset_refcount_by (obj->value_ptr.symbol_name->sym, delta,
+			    antiloop_hash_t);
       else if (obj->type == TYPE_SYMBOL)
 	{
 	  if (obj->value_ptr.symbol->value_cell
@@ -12279,43 +12150,45 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 	    {
 	      hash_t_clone = clone_hash_table (antiloop_hash_t,
 					       ANTILOOP_HASH_T_SIZE);
-	      decrement_refcount (obj->value_ptr.symbol->value_cell,
+	      offset_refcount_by (obj->value_ptr.symbol->value_cell, delta,
 				  antiloop_hash_t);
-	      decrement_refcount (obj->value_ptr.symbol->function_cell,
+	      offset_refcount_by (obj->value_ptr.symbol->function_cell, delta,
 				  hash_t_clone);
 	    }
 	  else
 	    {
-	      decrement_refcount (obj->value_ptr.symbol->value_cell,
+	      offset_refcount_by (obj->value_ptr.symbol->value_cell, delta,
 				  antiloop_hash_t);
-	      decrement_refcount (obj->value_ptr.symbol->function_cell,
+	      offset_refcount_by (obj->value_ptr.symbol->function_cell, delta,
 				  antiloop_hash_t);
 	    }
 	}
       else if (obj->type == TYPE_CONS_PAIR)
 	{
 	  if (SYMBOL (CDR (obj)) == &nil_object)
-	    decrement_refcount (obj->value_ptr.cons_pair->car, antiloop_hash_t);
+	    offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
+				antiloop_hash_t);
 	  else
 	    {
 	      hash_t_clone = clone_hash_table (antiloop_hash_t,
 					       ANTILOOP_HASH_T_SIZE);
-	      decrement_refcount (obj->value_ptr.cons_pair->car,
+	      offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
 				  antiloop_hash_t);
-	      decrement_refcount (obj->value_ptr.cons_pair->cdr,
+	      offset_refcount_by (obj->value_ptr.cons_pair->cdr, delta,
 				  hash_t_clone);
 	    }
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
 	  if (!obj->value_ptr.function->lambda_list)
-	    decrement_refcount (obj->value_ptr.function->body, antiloop_hash_t);
+	    offset_refcount_by (obj->value_ptr.function->body, delta,
+				antiloop_hash_t);
 	  else
 	    {
 	      hash_t_clone = clone_hash_table (antiloop_hash_t,
 					       ANTILOOP_HASH_T_SIZE);
 
-	      decrement_refcount (obj->value_ptr.function->body,
+	      offset_refcount_by (obj->value_ptr.function->body, delta,
 				  hash_t_clone);
 
 	      par = obj->value_ptr.function->lambda_list;
@@ -12327,7 +12200,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 		  hash_t_clone = clone_hash_table (antiloop_hash_t,
 						   ANTILOOP_HASH_T_SIZE);
 
-		  decrement_refcount (par->name, hash_t_clone);
+		  offset_refcount_by (par->name, delta, hash_t_clone);
 
 		  if (par->init_form)
 		    {
@@ -12336,7 +12209,7 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 		      hash_t_clone = clone_hash_table (antiloop_hash_t,
 						       ANTILOOP_HASH_T_SIZE);
 
-		      decrement_refcount (par->init_form, hash_t_clone);
+		      offset_refcount_by (par->init_form, delta, hash_t_clone);
 		    }
 
 		  if (par->supplied_p_param)
@@ -12346,7 +12219,8 @@ decrement_refcount (struct object *obj, struct object_list **antiloop_hash_t)
 		      hash_t_clone = clone_hash_table (antiloop_hash_t,
 						       ANTILOOP_HASH_T_SIZE);
 
-		      decrement_refcount (par->supplied_p_param, hash_t_clone);
+		      offset_refcount_by (par->supplied_p_param, delta,
+					  hash_t_clone);
 		    }
 
 		  par = par->next;
