@@ -3489,7 +3489,7 @@ malloc_and_check (size_t size)
 
   if (size && !mem)
     {
-      fprintf (stderr, "could not allocate %lu bytes. Aborting...\n", size);
+      fprintf (stderr, "could not allocate %lu bytes. Exiting...\n", size);
       exit (1);
     }
 
@@ -3504,7 +3504,7 @@ realloc_and_check (void *ptr, size_t size)
 
   if (size && !mem)
     {
-      fprintf (stderr, "could not allocate %lu bytes. Aborting...\n", size);
+      fprintf (stderr, "could not allocate %lu bytes. Exiting...\n", size);
       exit (1);
     }
 
@@ -3519,7 +3519,7 @@ calloc_and_check (size_t nmemb, size_t size)
 
   if (size && !mem)
     {
-      fprintf (stderr, "could not allocate %lu bytes. Aborting...\n", size);
+      fprintf (stderr, "could not allocate %lu bytes. Exiting...\n", size);
       exit (1);
     }
 
