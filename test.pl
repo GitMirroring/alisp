@@ -41,6 +41,13 @@ my $pid = open2 (my $al_out, my $al_in, './al -q');
 
 for ((1..5))
 {
+    if (eof ($al_out))
+    {
+	print "EOF reached from al, it probably crashed\n";
+
+	exit;
+    }
+
     <$al_out>;
 }
 
@@ -545,7 +552,7 @@ sub make_test
 
 	if (not defined ($out) and eof ($al_out))
 	{
-	    print "\n\nEOF reached, probably al crashed\n";
+	    print "\n\nEOF reached from al, it probably crashed\n";
 
 	    exit;
 	}
