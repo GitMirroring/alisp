@@ -59,4 +59,24 @@ manifest only a fraction of the times.
 
 
 
+__Debugging__
+
+The file al_gdb_debug.py defines a gdb command called al_print_object.
+You can use it after importing the file in gdb with the 'source'
+command.
+
+If obj is a pointer to struct object, the command works like this
+
+  (gdb) al_print_object obj
+  ` (   + #<INTEGER>    , @ (LIST #<INTEGER> #<INTEGER>))
+  1  1(1)       1(1) 1(1) 1  1(1)       1(1)       1(1)
+
+The object gets printed nicely and below each component you see its
+refcount.  The refcount of a cons cell is printed as N(N) where the
+first number is the refcount of the cell and second is that of the
+car.
+
+
+
+
 You can reach me at andrea.monaco@autistici.org.
