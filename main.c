@@ -8946,19 +8946,9 @@ struct object *
 builtin_plus (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
-  struct object *ret;
-
   if (!list_length (list))
     {
-      ret = malloc_and_check (sizeof (*ret));
-
-      ret->type = TYPE_INTEGER;
-      ret->refcount = 1;
-
-      mpz_init (ret->value_ptr.integer);
-      mpz_set_si (ret->value_ptr.integer, 0);
-
-      return ret;
+      return create_integer_from_int (0);
     }
   else if (list_length (list) == 1)
     {
@@ -9022,19 +9012,9 @@ struct object *
 builtin_multiply (struct object *list, struct environment *env,
 		  struct eval_outcome *outcome)
 {
-  struct object *ret;
-
   if (!list_length (list))
     {
-      ret = malloc_and_check (sizeof (*ret));
-
-      ret->type = TYPE_INTEGER;
-      ret->refcount = 1;
-
-      mpz_init (ret->value_ptr.integer);
-      mpz_set_si (ret->value_ptr.integer, 1);
-
-      return ret;
+      return create_integer_from_int (1);
     }
   else if (list_length (list) == 1)
     {
