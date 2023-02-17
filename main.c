@@ -333,6 +333,9 @@ package_record_visibility
   };
 
 
+#define SYMTABLE_SIZE 2048
+
+
 struct
 package
 {
@@ -340,7 +343,7 @@ package
 
   struct object_list *nicks;
 
-  struct object_list *symlist;
+  struct object_list **symtable;
 
   struct object_list *uses;
 };
@@ -839,6 +842,9 @@ struct object_list **clone_hash_table (struct object_list **hash_table,
 				       size_t table_size);
 void free_hash_table (struct object_list **hash_table, size_t table_size);
 int hash_object (const struct object *object, size_t table_size);
+int hash_char_vector (const char *str, size_t sz, size_t table_size);
+int hash_symbol_name (const struct object *symname, size_t table_size);
+int hash_symbol (const struct object *sym, size_t table_size);
 int is_object_in_hash_table (const struct object *object,
 			     struct object_list **hash_table,
 			     size_t table_size);
@@ -900,12 +906,12 @@ struct object *load_file (const char *filename, struct environment *env,
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
 struct object_list *find_package_entry (struct object *symbol,
-					struct object_list *symlist,
+					struct object_list **symtable,
 					struct object_list **prev);
 
 struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int do_copy,
-					       struct object_list **symlist);
+					       struct object *package);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env);
 void unintern_symbol (struct object *sym);
@@ -1711,9 +1717,13 @@ add_standard_definitions (struct environment *env)
   nil_symbol.home_package = env->current_package;
 
   prepend_object_to_obj_list (&t_object,
-			      &env->current_package->value_ptr.package->symlist);
+			      &env->current_package->value_ptr.package->
+			      symtable [hash_char_vector ("T", 1,
+							  SYMTABLE_SIZE)]);
   prepend_object_to_obj_list (&nil_object,
-			      &env->current_package->value_ptr.package->symlist);
+			      &env->current_package->value_ptr.package->
+			      symtable [hash_char_vector ("NIL", 3,
+							  SYMTABLE_SIZE)]);
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
@@ -3736,6 +3746,43 @@ hash_object (const struct object *object, size_t table_size)
 
 
 int
+hash_char_vector (const char *str, size_t sz, size_t table_size)
+{
+  size_t i, tot = 0;
+
+  for (i = 0; i < sz && i < 5; i++)
+    {
+      tot += str [i];
+    }
+
+  return tot % table_size;
+}
+
+
+int
+hash_symbol_name (const struct object *symname, size_t table_size)
+{
+  struct symbol_name *s = symname->value_ptr.symbol_name;
+
+  if (s->packname_present)
+    {
+      return hash_char_vector (s->actual_symname, s->actual_symname_used_s,
+			       table_size);
+    }
+
+  return hash_char_vector (s->value, s->used_size, table_size);
+}
+
+
+int
+hash_symbol (const struct object *sym, size_t table_size)
+{
+  return hash_char_vector (sym->value_ptr.symbol->name,
+			   sym->value_ptr.symbol->name_len, table_size);
+}
+
+
+int
 is_object_in_hash_table (const struct object *object,
 			 struct object_list **hash_table, size_t table_size)
 {
@@ -3827,6 +3874,7 @@ create_package (char *name, size_t name_len)
   struct object *s = create_symbol (name, name_len, 0);
 
   pack->name = s;
+  pack->symtable = alloc_empty_hash_table (SYMTABLE_SIZE);
 
   obj->type = TYPE_PACKAGE;
   obj->refcount = 1;
@@ -4534,27 +4582,31 @@ find_package (const char *name, size_t len, struct environment *env)
 
 
 struct object_list *
-find_package_entry (struct object *symbol, struct object_list *symlist,
+find_package_entry (struct object *symbol, struct object_list **symtable,
 		    struct object_list **prev)
 {
+  struct object_list *l = symtable [hash_symbol (symbol, SYMTABLE_SIZE)];
+
   *prev = NULL;
 
-  while (symlist && symlist->obj != symbol)
+  while (l && l->obj != symbol)
     {
-      *prev = symlist;
-      symlist = symlist->next;
+      *prev = l;
+      l = l->next;
     }
 
-  return symlist;
+  return l;
 }
 
 
 struct object *
 intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
-				struct object_list **symlist)
+				struct object *package)
 {
   struct object *sym;
-  struct object_list *cur = *symlist, *new_sym;
+  int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
+  struct object_list *cell = package->value_ptr.package->symtable [ind],
+    *cur = cell, *new_sym;
 
   while (cur)
     {
@@ -4569,12 +4621,13 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
     }
 
   sym = create_symbol (name, len, do_copy);
+  sym->value_ptr.symbol->home_package = package;
 
   new_sym = malloc_and_check (sizeof (*new_sym));
   new_sym->obj = sym;
-  new_sym->next = *symlist;
+  new_sym->next = cell;
 
-  *symlist = new_sym;
+  package->value_ptr.package->symtable [ind] = new_sym;
 
   return sym;  
 }
@@ -4592,9 +4645,7 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
-						   &env->keyword_package->
-						   value_ptr.package->symlist);
-	  s->sym->value_ptr.symbol->home_package = env->keyword_package;
+						   env->keyword_package);
 
 	  s->sym->value_ptr.symbol->is_const = 1;
 	  s->sym->value_ptr.symbol->value_cell = s->sym;
@@ -4610,17 +4661,13 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
-						   &pack->
-						   value_ptr.package->symlist);
-	  s->sym->value_ptr.symbol->home_package = pack;
+						   pack);
 	  return s->sym;
 	}
     }
 
   pack = env->current_package;
-  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1,
-					   &pack->value_ptr.package->symlist);
-  s->sym->value_ptr.symbol->home_package = pack;
+  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1, pack);
 
   return s->sym;
 }
@@ -4633,12 +4680,13 @@ unintern_symbol (struct object *sym)
   struct object *p = s->value_ptr.symbol->home_package;
   struct object_list *prev, *entry;
 
-  entry = find_package_entry (s, p->value_ptr.package->symlist, &prev);
+  entry = find_package_entry (s, p->value_ptr.package->symtable, &prev);
 
   if (prev)
     prev->next = entry->next;
   else
-    p->value_ptr.package->symlist = entry->next;
+    p->value_ptr.package->symtable [hash_symbol (sym, SYMTABLE_SIZE)] =
+      entry->next;
 
   free (entry);
 
@@ -4896,8 +4944,8 @@ add_builtin_type (char *name, struct environment *env,
   va_list valist;
   char *s;
   struct object *sym =
-    intern_symbol_from_char_vector (name, strlen (name), 1, &env->
-				    current_package->value_ptr.package->symlist);
+    intern_symbol_from_char_vector (name, strlen (name), 1,
+				    env->current_package);
   struct object *par;
 
   va_start (valist, is_standard);
@@ -4910,9 +4958,8 @@ add_builtin_type (char *name, struct environment *env,
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_from_char_vector (s, strlen (s), 1, &env->
-					    current_package->
-					    value_ptr.package->symlist);
+      par = intern_symbol_from_char_vector (s, strlen (s), 1,
+					    env->current_package);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -4931,7 +4978,8 @@ add_builtin_form (char *name, struct environment *env,
 		   struct environment *env, struct eval_outcome *outcome),
 		  int is_special_operator)
 {
-  struct object *sym = create_symbol (name, strlen (name), 1);
+  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
+						       env->current_package);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
@@ -4943,9 +4991,6 @@ add_builtin_form (char *name, struct environment *env,
 
   sym->value_ptr.symbol->function_cell = fun;
   sym->value_ptr.symbol->builtin_accessor = builtin_accessor;
-
-  prepend_object_to_obj_list (sym,
-			      &env->current_package->value_ptr.package->symlist);
 
   return sym;
 }
@@ -4990,8 +5035,7 @@ define_constant_by_name (char *name, size_t size, struct object *form,
 			 struct environment *env, struct eval_outcome *outcome)
 {
   struct object *sym =
-    intern_symbol_from_char_vector (name, size, 1, &env->current_package->
-				    value_ptr.package->symlist);
+    intern_symbol_from_char_vector (name, size, 1, env->current_package);
 
   return define_constant (sym, form, env, outcome);
 }
@@ -5029,8 +5073,7 @@ define_parameter_by_name (char *name, size_t size, struct object *form,
 			  struct environment *env, struct eval_outcome *outcome)
 {
   struct object *sym =
-    intern_symbol_from_char_vector (name, size, 1, &env->current_package->
-				    value_ptr.package->symlist);
+    intern_symbol_from_char_vector (name, size, 1, env->current_package);
 
   return define_parameter (sym, form, env, outcome);
 }
@@ -5040,8 +5083,8 @@ struct object *
 define_variable (char *name, struct object *value, struct environment *env)
 {
   struct object *sym =
-    intern_symbol_from_char_vector (name, strlen (name), 1, &env->
-				    current_package->value_ptr.package->symlist);
+    intern_symbol_from_char_vector (name, strlen (name), 1,
+				    env->current_package);
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -5526,8 +5569,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
 						var->value_ptr.symbol->name_len,
-						1, &env->keyword_package->
-						value_ptr.package->symlist);
+						1, env->keyword_package);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -6031,8 +6073,7 @@ check_type_by_char_vector (const struct object *obj, char *type,
 {
   return check_type (obj,
 		     intern_symbol_from_char_vector (type, strlen (type), 1,
-						     &env->current_package->
-						     value_ptr.package->symlist),
+						     env->current_package),
 		     env, outcome);
 }
 
@@ -6062,8 +6103,7 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 {
   return is_subtype (first,
 		     intern_symbol_from_char_vector (second, strlen (second), 1,
-						     &env->current_package->
-						     value_ptr.package->symlist),
+						     env->current_package),
 		     env, outcome);
 }
 
@@ -10004,7 +10044,8 @@ struct object *
 inspect_variable_from_c_string (const char *var, struct environment *env)
 {
   size_t l = strlen (var);
-  struct object_list *cur = env->current_package->value_ptr.package->symlist;
+  struct object_list *cur = env->current_package->value_ptr.package->symtable
+    [hash_char_vector (var, strlen (var), SYMTABLE_SIZE)];
 
   while (cur)
     {
