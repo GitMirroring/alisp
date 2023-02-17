@@ -103,9 +103,9 @@
 
 
 
-#define increment_refcount(obj) offset_refcount_by ((obj), 1, NULL)
+#define increment_refcount(obj) offset_refcount_by ((obj), 1, NULL, 0)
 
-#define decrement_refcount(obj) offset_refcount_by ((obj), -1, NULL)
+#define decrement_refcount(obj) offset_refcount_by ((obj), -1, NULL, 0)
 
 
 
@@ -1378,7 +1378,7 @@ void print_eval_error (struct eval_outcome *err, struct environment *env);
 void increment_refcount_by (struct object *obj, int count, struct object *parent);
 int decrement_refcount_by (struct object *obj, int count, struct object *parent);
 int offset_refcount_by (struct object *obj, int delta,
-			struct object_list **antiloop_hash_t);
+			struct object_list **antiloop_hash_t, int clone_hash_t);
 
 void free_object (struct object *obj);
 void free_string (struct object *obj);
@@ -12059,7 +12059,7 @@ increment_refcount_by (struct object *obj, int count, struct object *parent)
 	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
     }
 
-  offset_refcount_by (obj, count, antiloop_hash_t);
+  offset_refcount_by (obj, count, antiloop_hash_t, 0);
 
   if (antiloop_hash_t)
     free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
@@ -12079,7 +12079,7 @@ decrement_refcount_by (struct object *obj, int count, struct object *parent)
 	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
     }
 
-  ret = offset_refcount_by (obj, -count, antiloop_hash_t);
+  ret = offset_refcount_by (obj, -count, antiloop_hash_t, 0);
 
   if (antiloop_hash_t)
     free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
@@ -12090,10 +12090,9 @@ decrement_refcount_by (struct object *obj, int count, struct object *parent)
 
 int
 offset_refcount_by (struct object *obj, int delta,
-		    struct object_list **antiloop_hash_t)
+		    struct object_list **antiloop_hash_t, int clone_hash_t)
 {
   int allocated_now = 0;
-  struct object_list **hash_t_clone = NULL;
   struct parameter *par;
 
   if (!obj || obj == &nil_object || obj == &t_object)
@@ -12115,104 +12114,77 @@ offset_refcount_by (struct object *obj, int delta,
 
       obj->refcount += delta;
 
+      if (!allocated_now && clone_hash_t)
+	{
+	  antiloop_hash_t = clone_hash_table (antiloop_hash_t,
+					      ANTILOOP_HASH_T_SIZE);
+	  allocated_now = 1;
+	}
+
       prepend_object_to_obj_list
 	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
 
       if (obj->type & TYPE_PREFIX)
-	offset_refcount_by (obj->value_ptr.next, delta, antiloop_hash_t);
+	offset_refcount_by (obj->value_ptr.next, delta, antiloop_hash_t, 0);
       else if (obj->type == TYPE_SYMBOL_NAME)
 	offset_refcount_by (obj->value_ptr.symbol_name->sym, delta,
-			    antiloop_hash_t);
+			    antiloop_hash_t, 0);
       else if (obj->type == TYPE_SYMBOL)
 	{
 	  if (obj->value_ptr.symbol->value_cell
 	      && obj->value_ptr.symbol->function_cell)
 	    {
-	      hash_t_clone = clone_hash_table (antiloop_hash_t,
-					       ANTILOOP_HASH_T_SIZE);
 	      offset_refcount_by (obj->value_ptr.symbol->value_cell, delta,
-				  antiloop_hash_t);
+				  antiloop_hash_t, 1);
 	      offset_refcount_by (obj->value_ptr.symbol->function_cell, delta,
-				  hash_t_clone);
+				  antiloop_hash_t, 0);
 	    }
 	  else
 	    {
 	      offset_refcount_by (obj->value_ptr.symbol->value_cell, delta,
-				  antiloop_hash_t);
+				  antiloop_hash_t, 1);
 	      offset_refcount_by (obj->value_ptr.symbol->function_cell, delta,
-				  antiloop_hash_t);
+				  antiloop_hash_t, 0);
 	    }
 	}
       else if (obj->type == TYPE_CONS_PAIR)
 	{
-	  if (SYMBOL (CDR (obj)) == &nil_object)
-	    offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
-				antiloop_hash_t);
-	  else
-	    {
-	      hash_t_clone = clone_hash_table (antiloop_hash_t,
-					       ANTILOOP_HASH_T_SIZE);
-	      offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
-				  antiloop_hash_t);
-	      offset_refcount_by (obj->value_ptr.cons_pair->cdr, delta,
-				  hash_t_clone);
-	    }
+	  offset_refcount_by (obj->value_ptr.cons_pair->cdr, delta,
+			      antiloop_hash_t, 1);
+	  offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
+			      antiloop_hash_t, 0);
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
-	  if (!obj->value_ptr.function->lambda_list)
-	    offset_refcount_by (obj->value_ptr.function->body, delta,
-				antiloop_hash_t);
-	  else
+	  offset_refcount_by (obj->value_ptr.function->body, delta,
+			      antiloop_hash_t, 1);
+
+	  par = obj->value_ptr.function->lambda_list;
+
+	  while (par)
 	    {
-	      hash_t_clone = clone_hash_table (antiloop_hash_t,
-					       ANTILOOP_HASH_T_SIZE);
+	      offset_refcount_by (par->name, delta, antiloop_hash_t, 1);
 
-	      offset_refcount_by (obj->value_ptr.function->body, delta,
-				  hash_t_clone);
-
-	      par = obj->value_ptr.function->lambda_list;
-
-	      while (par)
+	      if (par->init_form)
 		{
-		  free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
-
-		  hash_t_clone = clone_hash_table (antiloop_hash_t,
-						   ANTILOOP_HASH_T_SIZE);
-
-		  offset_refcount_by (par->name, delta, hash_t_clone);
-
-		  if (par->init_form)
-		    {
-		      free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
-
-		      hash_t_clone = clone_hash_table (antiloop_hash_t,
-						       ANTILOOP_HASH_T_SIZE);
-
-		      offset_refcount_by (par->init_form, delta, hash_t_clone);
-		    }
-
-		  if (par->supplied_p_param)
-		    {
-		      free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
-
-		      hash_t_clone = clone_hash_table (antiloop_hash_t,
-						       ANTILOOP_HASH_T_SIZE);
-
-		      offset_refcount_by (par->supplied_p_param, delta,
-					  hash_t_clone);
-		    }
-
-		  par = par->next;
+		  offset_refcount_by (par->init_form, delta, antiloop_hash_t, 1);
 		}
+
+	      if (par->supplied_p_param)
+		{
+		  offset_refcount_by (par->supplied_p_param, delta,
+				      antiloop_hash_t, 1);
+		}
+
+	      par = par->next;
 	    }
+
+	  offset_refcount_by (obj->value_ptr.function->name, delta,
+			      antiloop_hash_t, 0);
 	}
 
       if (allocated_now)
 	free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
-
-      if (hash_t_clone)
-	free_hash_table (hash_t_clone, ANTILOOP_HASH_T_SIZE);
     }
 
   if (!obj->refcount)
