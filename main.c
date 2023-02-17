@@ -10265,6 +10265,12 @@ struct object *
 evaluate_defconstant (struct object *list, struct environment *env,
 		      struct eval_outcome *outcome)
 {
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
   return define_constant (CAR (list)->value_ptr.symbol_name->sym,
 			  CAR (CDR (list)), env, outcome);
 }
@@ -10309,12 +10315,18 @@ evaluate_defvar (struct object *list, struct environment *env,
   struct object *s = CAR (list);
   unsigned int l = list_length (list);
 
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
   if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
-  
+
   s = SYMBOL (s);
 
   if (s->value_ptr.symbol->is_const)
@@ -10335,11 +10347,6 @@ evaluate_defvar (struct object *list, struct environment *env,
     {
       if (!s->value_ptr.symbol->value_cell)
 	return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
-    }
-  else
-    {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
     }
 
   increment_refcount (CAR (list));
