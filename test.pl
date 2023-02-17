@@ -226,6 +226,7 @@ make_test ("(funcall 'car '(1 2 3))", "1");
 make_test ("(f)", "()");
 make_test ("(defun f () \"\")", "F");
 make_test ("(f)", "\"\"");
+make_test ("(defun aaa () aaa aaa)", "AAA");
 make_test ("(defun f (x) \"\")", "F");
 make_test ("(f 0)", "\"\"");
 make_test ("(defun f () (values 1 2))", "F");
