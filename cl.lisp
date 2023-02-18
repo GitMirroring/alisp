@@ -244,6 +244,10 @@
   (nth axis (array-dimensions array)))
 
 
+(defun array-total-size (array)
+  (apply #'* (array-dimensions array)))
+
+
 (defun char (str ind)
   (aref str ind))
 
