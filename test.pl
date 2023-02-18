@@ -446,6 +446,7 @@ make_test ("(count-if-not #'evenp #(0 1 2))", "1");
 # arithmetic tests
 
 make_test ("(+)", "0");
+make_test ("(+ 1)", "1");
 make_test ("(+ 1 2 3)", "6");
 make_test ("(+ 1/2 2 3 1000)", "2011/2");
 make_test ("(+ a b)", "17");
@@ -453,6 +454,7 @@ make_test ("(+ .1 .1 .1)", "0.3");
 make_test ("(- 3.5)", "-3.5");
 make_test ("(- 3 4.5)", "-1.5");
 make_test ("(*)", "1");
+make_test ("(* 1)", "1");
 make_test ("(* 3 5)", "15");
 make_test ("(/ 12 4)", "3");
 make_test ("(/ 13 4)", "13/4");
