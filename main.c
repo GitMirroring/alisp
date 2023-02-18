@@ -994,6 +994,7 @@ struct object *copy_list_structure (struct object *list,
 				    struct object **last_cell);
 
 int array_rank (const struct array *array);
+size_t array_total_size (const struct array *array);
 
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
@@ -5435,6 +5436,23 @@ array_rank (const struct array *array)
     }
 
   return rank;
+}
+
+
+size_t
+array_total_size (const struct array *array)
+{
+  size_t ret = 1;
+  struct array_size *s = array->alloc_size;
+
+  while (s)
+    {
+      ret *= s->size;
+
+      s = s->next;
+    }
+
+  return ret;
 }
 
 
@@ -12144,6 +12162,7 @@ offset_refcount_by (struct object *obj, int delta,
 {
   int allocated_now = 0;
   struct parameter *par;
+  size_t i, sz;
 
   if (!obj || obj == &nil_object || obj == &t_object)
     return 0;
@@ -12203,6 +12222,20 @@ offset_refcount_by (struct object *obj, int delta,
 			      antiloop_hash_t, 1);
 	  offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
 			      antiloop_hash_t, 0);
+	}
+      else if (obj->type == TYPE_ARRAY)
+	{
+	  sz = array_total_size (obj->value_ptr.array);
+
+	  for (i = 0; sz && i < sz-1; i++)
+	    {
+	      offset_refcount_by (obj->value_ptr.array->value [i], delta,
+				  antiloop_hash_t, 1);
+	    }
+
+	  if (sz)
+	    offset_refcount_by (obj->value_ptr.array->value [sz-1], delta,
+				antiloop_hash_t, 0);
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
@@ -12359,22 +12392,9 @@ free_array_size (struct array_size *size)
 void
 free_array (struct object *obj)
 {
-  int r = array_rank (obj->value_ptr.array);
-  size_t sz;
-
-  if (r == 1)
-    {
-      sz = obj->value_ptr.array->alloc_size->size;
-
-      free_array_size (obj->value_ptr.array->alloc_size);
-
-      for (; sz; sz--)
-	free_object (obj->value_ptr.array->value [sz - 1]);
-
-      free (obj->value_ptr.array->value);
-      free (obj->value_ptr.array);
-      free (obj);
-    }
+  free_array_size (obj->value_ptr.array->alloc_size);
+  free (obj->value_ptr.array);
+  free (obj);
 }
 
 
