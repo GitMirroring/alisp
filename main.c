@@ -1175,6 +1175,8 @@ struct object *builtin_mapcar
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_remove_if
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_reverse
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *accessor_car (struct object *list, struct object *newvalform,
 			     struct environment *env,
@@ -1780,6 +1782,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REMOVE-IF", env, builtin_remove_if, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("REVERSE", env, builtin_reverse, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, NULL, 0);
@@ -8498,6 +8501,78 @@ builtin_remove_if (struct object *list, struct environment *env,
     }
 
   free_cons_pair (arg);
+  return ret;
+}
+
+
+struct object *
+builtin_reverse (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *seq, *ret, *cons;
+  size_t sz, i;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SEQUENCE (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  seq = CAR (list);
+
+  if (SYMBOL (seq) == &nil_object)
+    return &nil_object;
+
+  if (seq->type == TYPE_CONS_PAIR)
+    {
+      ret = &nil_object;
+
+      while (SYMBOL (seq) != &nil_object)
+	{
+	  cons = alloc_empty_cons_pair ();
+
+	  increment_refcount (CAR (seq));
+	  cons->value_ptr.cons_pair->car = CAR (seq);
+
+	  cons->value_ptr.cons_pair->cdr = ret;
+
+	  ret = cons;
+	  seq = CDR (seq);
+	}
+    }
+  else if (seq->type == TYPE_STRING)
+    {
+      sz = seq->value_ptr.string->used_size;
+
+      ret = alloc_string (sz);
+      ret->value_ptr.string->used_size = sz;
+
+      for (i = sz; i > 0; i--)
+	{
+	  ret->value_ptr.string->value [sz-i] =
+	    seq->value_ptr.string->value [i-1];
+	}
+    }
+  else if (seq->type == TYPE_ARRAY)
+    {
+      sz = seq->value_ptr.array->alloc_size->size;
+
+      ret = alloc_vector (sz);
+
+      for (i = 0; i < sz; i++)
+	{
+	  increment_refcount (seq->value_ptr.array->value [i]);
+
+	  ret->value_ptr.array->value [i] = seq->value_ptr.array->value [sz-i-1];
+	}
+    }
+
   return ret;
 }
 
