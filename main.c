@@ -8998,6 +8998,7 @@ builtin_plus (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
+      increment_refcount (CAR (list));
       return CAR (list);
     }
 
@@ -9064,6 +9065,7 @@ builtin_multiply (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
+      increment_refcount (CAR (list));
       return CAR (list);
     }
 
