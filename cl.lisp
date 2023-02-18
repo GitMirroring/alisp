@@ -240,6 +240,10 @@
   (remove-if (complement pred) seq))
 
 
+(defun nreverse (seq)
+  (reverse seq))
+
+
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
 
