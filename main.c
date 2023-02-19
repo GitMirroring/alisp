@@ -1269,6 +1269,8 @@ struct object *builtin_special_operator_p (struct object *list,
 					   struct eval_outcome *outcome);
 struct object *builtin_string (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
+struct object *builtin_string_eq (struct object *list, struct environment *env,
+				  struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -1850,6 +1852,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -9722,6 +9725,32 @@ builtin_string (struct object *list, struct environment *env,
 
       return NULL;
     }
+}
+
+
+struct object *
+builtin_string_eq (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING || CAR (CDR (list))->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  if (equal_strings (CAR (list)->value_ptr.string,
+		     CAR (CDR (list))->value_ptr.string))
+    return &t_object;
+
+  return &nil_object;
 }
 
 
