@@ -329,6 +329,8 @@ make_test ("(special-operator-p 'aaa)", "()");
 make_test ("(string \"ccc\")", "\"ccc\"");
 make_test ("(string 'ddd)", "\"DDD\"");
 make_test ("(string #\\F)", "\"F\"");
+make_test ("(string= \"aaa\" \"aaa\")", "T");
+make_test ("(string= \"aaa\" \"aab\")", "()");
 make_test ("(car '(1 2))", "1");
 make_test ("(cdr '(1 2))", "(2)");
 make_test ("(car ())", "()");
