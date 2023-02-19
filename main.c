@@ -4810,11 +4810,15 @@ bind_variable (struct object *sym, struct object *val, struct binding *bins)
     {
       sym->value_ptr.symbol->value_dyn_bins_num++;
 
-      return add_binding (create_binding (sym, val, DYNAMIC_BINDING, 1),
+      increment_refcount (sym);
+      return add_binding (create_binding (sym, val, DYNAMIC_BINDING, 0),
 			  bins);
     }
   else
-    return add_binding (create_binding (sym, val, LEXICAL_BINDING, 1), bins);
+    {
+      increment_refcount (sym);
+      return add_binding (create_binding (sym, val, LEXICAL_BINDING, 0), bins);
+    }
 }
 
 
@@ -5983,11 +5987,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	      goto clean_lex_env;
 	    }
 
-	  if (rest_found)
-	    {
-	      increment_refcount (findk->name);
-	      increment_refcount (CAR (args));
-	    }
+	  increment_refcount (CAR (args));
 
 	  bins = bind_variable (findk->name, CAR (args), bins);
 	  findk->key_passed = 1;
@@ -6023,6 +6023,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  findk = findk->next;
 	}
     }
+
+  if (!rest_found)
+    decrement_refcount (args);
 
   env->vars = chain_bindings (bins, env->vars, NULL);
   bins = NULL;
@@ -8165,10 +8168,12 @@ builtin_dotimes (struct object *list, struct environment *env,
   if (count->type != TYPE_INTEGER)
     {
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      decrement_refcount (count);
       return NULL;
     }
 
   cnt = mpz_get_si (count->value_ptr.integer);
+  decrement_refcount (count);
   var = SYMBOL (CAR (CAR (list)));
 
   for (i = 0; i < cnt; i++)
@@ -8187,6 +8192,8 @@ builtin_dotimes (struct object *list, struct environment *env,
 
       if (!ret)
 	return NULL;
+
+      decrement_refcount (ret);
     }
 
   if (l == 3)
@@ -8215,7 +8222,7 @@ struct object *
 builtin_dolist (struct object *list, struct environment *env,
 		struct eval_outcome *outcome)
 {
-  struct object *var, *cons, *ret;
+  struct object *var, *lst, *cons, *ret;
   int l;
 
   if (list_length (list) < 1 || CAR (list)->type != TYPE_CONS_PAIR
@@ -8226,19 +8233,21 @@ builtin_dolist (struct object *list, struct environment *env,
       return NULL;
     }
 
-  cons = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+  lst = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-  if (!cons)
+  if (!lst)
     return NULL;
 
-  if (cons->type != TYPE_CONS_PAIR && SYMBOL (cons) != &nil_object)
+  if (lst->type != TYPE_CONS_PAIR && SYMBOL (lst) != &nil_object)
     {
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      decrement_refcount (lst);
       return NULL;
     }
 
   var = SYMBOL (CAR (CAR (list)));
+  cons = lst;
 
   while (SYMBOL (cons) != &nil_object)
     {
@@ -8258,6 +8267,8 @@ builtin_dolist (struct object *list, struct environment *env,
 
       if (!ret)
 	return NULL;
+
+      decrement_refcount (ret);
     }
 
   if (l == 3)
@@ -8275,9 +8286,12 @@ builtin_dolist (struct object *list, struct environment *env,
 
       env->vars = remove_bindings (env->vars, 1);
 
+      decrement_refcount (lst);
+
       return ret;
     }
 
+  decrement_refcount (lst);
   return &nil_object;
 }
 
