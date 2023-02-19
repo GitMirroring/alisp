@@ -256,6 +256,10 @@
   (aref str ind))
 
 
+(defun string/= (str1 str2)
+  (not (string= str1 str2)))
+
+
 
 (defun consp (obj)
   (typep obj 'cons))
