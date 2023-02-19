@@ -12230,7 +12230,7 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 }
 
 
-#define ANTILOOP_HASH_T_SIZE 1024
+#define ANTILOOP_HASH_T_SIZE 64
 
 
 void
