@@ -1271,6 +1271,8 @@ struct object *builtin_string (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
 struct object *builtin_string_eq (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome);
+struct object *builtin_char_eq (struct object *list, struct environment *env,
+				struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -1853,6 +1855,7 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -9765,6 +9768,47 @@ builtin_string_eq (struct object *list, struct environment *env,
     return &t_object;
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_char_eq (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *ch;
+
+  if (!l)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  ch = CAR (list);
+
+  if (ch->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (CAR (list)->type != TYPE_CHARACTER)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (strcmp (ch->value_ptr.character, CAR (list)->value_ptr.character))
+	return &nil_object;
+
+      list = CDR (list);
+    }
+
+  return &t_object;
 }
 
 
