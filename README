@@ -11,23 +11,26 @@ al is a lisp implementation.  Right now it is just an interpreter, but
 I will add some compilation later.  I aim for Common Lisp conformance,
 but I'm not religious about it.
 
-It's written in C89 and compiles with the -ansi option, but uses some
-GNU extensions.
+It's written in C89 and compiles with the -ansi option.
 
 Currently it depends on GNU Readline (optionally) and on GNU Multiple
 Precision Arithmetic Library.  It uses autotools for building.
 
 
-To build, start with
+If you have a cloned git repository and the last commit is not a
+versioned release, you can execute set-version-from-git.sh to set a
+meaningful alisp version in the relevant line of configure.ac.
 
-  $ autoreconf -fi
+To build from git, start with
 
-and run the usual
+  $ autoreconf -i
+
+(which is not needed in released tarballs) and then run the usual
 
   $ ./configure
 
-(configure only admits --with[out]-readline as options, to build with
-line editing or not), then
+configure only admits --with[out]-readline as options, to build with
+line editing or not; then
 
   $ make
 
@@ -36,7 +39,7 @@ plus optionally
   # make install
 
 
-Many standard definitions are in a lisp file named cl.lisp.  By
+A lisp file named cl.lisp contains many standard definitions.  By
 default, this file gets loaded at startup from the current directory,
 unless you pass -q or --dont-load-cl.  To load the file manually, run
 
