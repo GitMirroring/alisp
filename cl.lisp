@@ -260,6 +260,20 @@
   (not (string= str1 str2)))
 
 
+(defun digit-char (weight &optional (radix 10))
+  (if (or (>= weight radix))
+      ()
+      (aref "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ" weight)))
+
+
+(defun digit-char-p (char &optional (radix 10))
+  (let ((str "00112233445566778899aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ"))
+    (dotimes (i (* 2 radix))
+      (if (char= char (aref str i))
+	  (return-from digit-char-p (values (floor i 2)))))
+    nil))
+
+
 
 (defun consp (obj)
   (typep obj 'cons))
