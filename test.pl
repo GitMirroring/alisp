@@ -411,6 +411,7 @@ make_test ("(cadddr '(0 1 2 3 4))", "3");
 make_test ("(caar '((4) 1 2 3))", "4");
 make_test ("(incf c)", "6");
 make_test ("(incf c 3)", "9");
+make_test ("(let ((i 0)) (incf i))", "1");
 make_test ("(decf c)", "8");
 make_test ("(decf c c)", "0");
 make_test ("(and)", "T");
