@@ -1014,7 +1014,7 @@ struct object *evaluate_body
 (struct object *body, int is_tagbody, struct object *block_name,
  struct environment *env, struct eval_outcome *outcome);
 struct object *call_function
-(struct object *func, struct object *arglist, int eval_args, int eval_body_twice,
+(struct object *func, struct object *arglist, int eval_args, int is_macro,
  struct environment *env, struct eval_outcome *outcome);
 
 int check_type (const struct object *obj, const struct object *typespec,
@@ -5807,7 +5807,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 
 struct object *
 call_function (struct object *func, struct object *arglist, int eval_args,
-	       int eval_body_twice, struct environment *env,
+	       int is_macro, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
@@ -6032,7 +6032,11 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   env->vars = chain_bindings (bins, env->vars, NULL);
   bins = NULL;
-  env->var_lex_bin_num = argsnum;
+
+  if (is_macro)
+    env->var_lex_bin_num += argsnum;
+  else
+    env->var_lex_bin_num = argsnum;
 
   env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
 			      &closnum);
@@ -6041,7 +6045,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   ret = evaluate_body (func->value_ptr.function->body, 0,
 		       func->value_ptr.function->name, env, outcome);
 
-  if (ret && eval_body_twice)
+  if (ret && is_macro)
     {
       ret2 = evaluate_object (ret, env, outcome);
 
