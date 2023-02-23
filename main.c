@@ -6027,7 +6027,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	}
     }
 
-  if (!rest_found)
+  if (args && !rest_found)
     decrement_refcount (args);
 
   env->vars = chain_bindings (bins, env->vars, NULL);
