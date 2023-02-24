@@ -892,6 +892,7 @@ void resize_vector (struct object *vector, size_t size);
 
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
+struct object *create_character_from_char (char ch);
 struct object *get_nth_character (int ind, struct object *str);
 
 struct object *create_stream (enum stream_type type,
@@ -1275,6 +1276,11 @@ struct object *builtin_string_eq (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome);
 struct object *builtin_char_eq (struct object *list, struct environment *env,
 				struct eval_outcome *outcome);
+struct object *builtin_char_upcase (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome);
+struct object *builtin_char_downcase (struct object *list,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -1858,6 +1864,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CHAR-UPCASE", env, builtin_char_upcase, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("CHAR-DOWNCASE", env, builtin_char_downcase, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -4230,17 +4240,18 @@ copy_symname_with_case_conversion (char *output, const char *input, size_t size,
 	    switch (read_case)
 	      {
 	      case CASE_UPCASE:
-		output [j++] = toupper (input [i]);
+		output [j++] = toupper ((unsigned char)input [i]);
 		break;
 	      case CASE_DOWNCASE:
-		output [j++] = tolower (input [i]);
+		output [j++] = tolower ((unsigned char)input [i]);
 		break;
 	      case CASE_PRESERVE:
 		output [j++] = input [i];
 		break;
 	      case CASE_INVERT:
-		output [j++] = isupper (input [i]) ? tolower (input [i])
-		  : toupper (input [i]);
+		output [j++] = isupper ((unsigned char)input [i])
+		  ? tolower ((unsigned char)input [i])
+		  : toupper ((unsigned char)input [i]);
 		break;
 	      }
 	}
@@ -4403,6 +4414,18 @@ create_character_from_utf8 (char *character, size_t size)
   ch [sz] = 0;
 
   return create_character (ch, 0);
+}
+
+
+struct object *
+create_character_from_char (char ch)
+{
+  char *s = malloc_and_check (2);
+
+  s [0] = ch;
+  s [1] = 0;
+
+  return create_character (s, 0);
 }
 
 
@@ -9834,6 +9857,66 @@ builtin_char_eq (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_char_upcase (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  return create_character_from_char (toupper ((unsigned char)*ch));
+}
+
+
+struct object *
+builtin_char_downcase (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  return create_character_from_char (tolower ((unsigned char)*ch));
+}
+
+
+struct object *
 builtin_lisp_implementation_type (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome)
 {
@@ -11740,7 +11823,8 @@ print_as_symbol (const char *sym, size_t len)
 
   for (i = 0; i < len && !do_need_escape; i++)
     {
-      if (strchr (need_escape, sym [i]) || !sym [i] || islower (sym [i]))
+      if (strchr (need_escape, sym [i]) || !sym [i]
+	  || islower ((unsigned char)sym [i]))
 	do_need_escape = 1;
     }
 
