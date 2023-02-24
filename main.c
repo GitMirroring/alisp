@@ -789,7 +789,7 @@ enum read_outcome read_string
 
 enum read_outcome read_symbol_name
 (struct object **obj, const char *input, size_t size, const char **symname_end,
- enum readtable_case read_case);
+ enum readtable_case read_case, int escape_first_char);
 
 enum read_outcome read_prefix
 (struct object **obj, const char *input, size_t size, int *backt_commas_balance,
@@ -822,8 +822,9 @@ char *append_newline (char *string);
 char *append_zero_byte (char *string, size_t size);
 char *copy_token_to_buffer (const char *input, size_t size);
 
-size_t mbslen (const char *string);
+size_t utf8len (const char *string);
 size_t next_utf8_char (char *str, size_t sz);
+size_t char_vector_utf8_length (const char *str, size_t sz);
 size_t string_utf8_length (const struct object *str);
 
 void *malloc_and_check (size_t size);
@@ -876,10 +877,11 @@ const char *find_end_of_symbol_name
 (const char *input, size_t size, int found_package_sep, size_t *new_size,
  const char **start_of_package_separator,
  enum package_record_visibility *sym_visibility, size_t *name_length,
- size_t *act_name_length, enum read_outcome *outcome);
+ size_t *act_name_length, enum read_outcome *outcome, int escape_first_char);
 void copy_symname_with_case_conversion (char *output, const char *input,
 					size_t size,
-					enum readtable_case read_case);
+					enum readtable_case read_case,
+					int escape_first_char);
 
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
@@ -2064,7 +2066,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_SYMBOL_NAME)
     {
-      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE);
+      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, 0);
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 	{
@@ -2563,7 +2565,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    }
 	  else
 	    {
-	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE);
+	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, 0);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 		{
@@ -2799,7 +2801,8 @@ read_string (struct object **obj, const char *input, size_t size,
 
 enum read_outcome
 read_symbol_name (struct object **obj, const char *input, size_t size,
-		  const char **symname_end, enum readtable_case read_case)
+		  const char **symname_end, enum readtable_case read_case,
+		  int escape_first_char)
 {
   struct symbol_name *sym;
   size_t name_l, act_name_l, new_size;
@@ -2811,7 +2814,8 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 
   *symname_end = find_end_of_symbol_name
     (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
-     &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, &out);
+     &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, &out,
+     escape_first_char);
 
   if (out & READ_ERROR)
     return out;
@@ -2834,21 +2838,23 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   if (sym->packname_present)
     copy_symname_with_case_conversion (sym->actual_symname
 				       + sym->actual_symname_used_s, input, size,
-				       read_case);
+				       read_case, escape_first_char);
   else if (start_of_pack_sep)
     {
       copy_symname_with_case_conversion (sym->value + sym->used_size, input,
-					 start_of_pack_sep - input, read_case);
+					 start_of_pack_sep - input, read_case,
+					 escape_first_char);
       sym->packname_present = 1;
       copy_symname_with_case_conversion (sym->actual_symname
 					 + sym->actual_symname_used_s,
 					 visib == EXTERNAL_VISIBILITY ?
 					 start_of_pack_sep + 1
-					 : start_of_pack_sep + 2, size, read_case);
+					 : start_of_pack_sep + 2, size,
+					 read_case, 0);
     }
   else
     copy_symname_with_case_conversion (sym->value + sym->used_size, input, size,
-				       read_case);
+				       read_case, escape_first_char);
 
   sym->used_size += name_l;
   sym->actual_symname_used_s += act_name_l;
@@ -2923,7 +2929,6 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   size_t i = 0;
   const char *obj_b;
   struct sharp_macro_call *call;
-  char *buf;
   enum read_outcome out;
 
   if (!size)
@@ -2931,15 +2936,21 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
   if (*obj)
     {
-      out = read_object_continued (&(*obj)->value_ptr.sharp_macro_call->obj, 0,
-				   (*obj)->value_ptr.sharp_macro_call->
-				   is_empty_list, input, size, env, e_outcome,
-				   &obj_b, macro_end, args);
+      call = (*obj)->value_ptr.sharp_macro_call;
+
+      out = read_object_continued (&call->obj, 0, call->is_empty_list, input,
+				   size, env, e_outcome, &obj_b, macro_end, args);
 
       if (out == INCOMPLETE_EMPTY_LIST)
-	(*obj)->value_ptr.sharp_macro_call->is_empty_list = 1;
+	call->is_empty_list = 1;
       else
-	(*obj)->value_ptr.sharp_macro_call->is_empty_list = 0;
+	call->is_empty_list = 0;
+
+      if (call->dispatch_ch == '\\'
+	  && call->obj->value_ptr.symbol_name->packname_present)
+	{
+	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	}
 
       if (out & INCOMPLETE_OBJECT)
 	return INCOMPLETE_SHARP_MACRO_CALL;
@@ -2981,18 +2992,19 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
   if (call->dispatch_ch == '\\')
     {
-      buf = copy_token_to_buffer (input+i+1, size-i-1);
+      call->obj = NULL;
+      out = read_symbol_name (&call->obj, input+i+1, size-i-1, macro_end,
+			      CASE_UPCASE, 1);
 
-      if (mbslen (buf) == 1)
+      if (call->obj->value_ptr.symbol_name->packname_present)
 	{
-	  call->obj = create_character (buf, 0);
-
-	  *macro_end = input+i + strlen (buf);
-
-	  return COMPLETE_OBJECT;
+	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 	}
 
-      free (buf);
+      if (out & INCOMPLETE_OBJECT)
+	return INCOMPLETE_SHARP_MACRO_CALL;
+
+      return out;
     }
   else if (call->dispatch_ch == '(')
     {
@@ -3019,7 +3031,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   if (out & INCOMPLETE_OBJECT)
     return INCOMPLETE_SHARP_MACRO_CALL;
 
-  return COMPLETE_OBJECT;
+  return out;
 }
 
 
@@ -3048,10 +3060,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == '\\')
     {
-      if (obj->type == TYPE_CHARACTER)
-	return obj;
-
-      if (obj->type != TYPE_SYMBOL_NAME)
+      if (obj->type != TYPE_SYMBOL_NAME
+	  || obj->value_ptr.symbol_name->packname_present)
 	{
 	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 
@@ -3060,24 +3070,22 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 
       s = obj->value_ptr.symbol_name;
 
-      if (s->packname_present)
+      if (char_vector_utf8_length (s->value, s->used_size) == 1)
 	{
-	  *r_outcome = UNKNOWN_CHARACTER_NAME;
-
-	  return NULL;
+	  return create_character_from_utf8 (s->value, s->used_size);
 	}
 
-      if (eqmem (s->value, s->used_size, "NEWLINE", strlen ("NEWLINE")))
+      if (eqmem (s->value, s->used_size, "nEWLINE", strlen ("nEWLINE")))
 	return create_character ("\n", 1);
-      else if (eqmem (s->value, s->used_size, "SPACE", strlen ("SPACE")))
+      else if (eqmem (s->value, s->used_size, "sPACE", strlen ("sPACE")))
 	return create_character (" ", 1);
-      else if (eqmem (s->value, s->used_size, "TAB", strlen ("TAB")))
+      else if (eqmem (s->value, s->used_size, "tAB", strlen ("tAB")))
 	return create_character ("\t", 1);
-      else if (eqmem (s->value, s->used_size, "BACKSPACE", strlen ("BACKSPACE")))
+      else if (eqmem (s->value, s->used_size, "bACKSPACE", strlen ("bACKSPACE")))
 	return create_character ("\b", 1);
-      else if (eqmem (s->value, s->used_size, "PAGE", strlen ("PAGE")))
+      else if (eqmem (s->value, s->used_size, "pAGE", strlen ("pAGE")))
 	return create_character ("\f", 1);
-      else if (eqmem (s->value, s->used_size, "RETURN", strlen ("RETURN")))
+      else if (eqmem (s->value, s->used_size, "rETURN", strlen ("rETURN")))
 	return create_character ("\r", 1);
       else
 	{
@@ -3457,7 +3465,7 @@ copy_token_to_buffer (const char *input, size_t size)
 
 
 size_t
-mbslen (const char *string)
+utf8len (const char *string)
 {
   size_t s = 0;
 
@@ -3487,18 +3495,25 @@ next_utf8_char (char *str, size_t sz)
 
 
 size_t
-string_utf8_length (const struct object *str)
+char_vector_utf8_length (const char *str, size_t sz)
 {
-  size_t sz = 0, i;
-  struct string *s = str->value_ptr.string;
+  size_t len = 0, i;
 
-  for (i = 0; i < s->used_size; i++)
+  for (i = 0; i < sz; i++)
     {
-      if ((s->value [i] & 0xc0) >> 6 != 2)
-	sz++;
+      if ((str [i] & 0xc0) >> 6 != 2)
+	len++;
     }
 
-  return sz;
+  return len;
+}
+
+
+size_t
+string_utf8_length (const struct object *str)
+{
+  return char_vector_utf8_length (str->value_ptr.string->value,
+				  str->value_ptr.string->used_size);
 }
 
 
@@ -4070,10 +4085,11 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 			 const char **start_of_package_separator,
 			 enum package_record_visibility *sym_visibility,
 			 size_t *name_length, size_t *act_name_length,
-			 enum read_outcome *outcome)
+			 enum read_outcome *outcome, int escape_first_char)
 {
   size_t i = 0;
-  int single_escape = 0, multiple_escape = 0, just_dots = 1, colons = 0;
+  int single_escape = escape_first_char, multiple_escape = 0, just_dots = 1,
+    colons = 0;
   size_t **length;
 
   *start_of_package_separator = NULL;
@@ -4174,10 +4190,11 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 
 void
 copy_symname_with_case_conversion (char *output, const char *input, size_t size,
-				   enum readtable_case read_case)
+				   enum readtable_case read_case,
+				   int escape_first_char)
 {
   size_t i;
-  int j, single_escape = 0, multiple_escape = 0;
+  int j, single_escape = escape_first_char, multiple_escape = 0;
   
   for (i = 0, j = 0; i < size; i++)
     {
