@@ -58,6 +58,7 @@ for ((1..5))
 make_test ("`'`\"\"", "'`\"\"");
 make_test ("'(((\n" .
 	   ")))", "((()))");
+make_test ("'(\"\"`\"\")", "(\"\" `\"\")");
 make_test ("'(\n" .
 	   "(\n" .
 	   ";\n" .
@@ -87,6 +88,7 @@ make_test ("'(1 . (\n" .
 make_test ("'( \"\" #||# )", "(\"\")");
 make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'\\\n ", "|\n|");
+make_test ("'a\\\n ", "|A\n|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 
 
