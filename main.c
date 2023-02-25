@@ -10012,7 +10012,7 @@ evaluate_let (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int bin_num = 0, lex_bin_num = 0;
+  int bin_num = 0;
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -10035,19 +10035,18 @@ evaluate_let (struct object *list, struct environment *env,
       bins = add_binding (bin, bins);
       bin_num++;
 
-      if (bin->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++, lex_bin_num++;
-
       bind_forms = CDR (bind_forms);
     }
 
   env->vars = chain_bindings (bins, env->vars, NULL);
 
+  env->var_lex_bin_num += bin_num;
+
   res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->vars = remove_bindings (env->vars, bin_num);
 
-  env->var_lex_bin_num -= lex_bin_num;
+  env->var_lex_bin_num -= bin_num;
 
   return res;
 }
@@ -10058,7 +10057,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int bin_num = 0, lex_bin_num = 0;
+  int bin_num = 0;
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -10079,10 +10078,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 	return NULL;
 
       env->vars = add_binding (bin, env->vars);
-      bin_num++;
-
-      if (bin->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++, lex_bin_num++;
+      env->var_lex_bin_num++, bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -10091,7 +10087,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 
   env->vars = remove_bindings (env->vars, bin_num);
 
-  env->var_lex_bin_num -= lex_bin_num;
+  env->var_lex_bin_num -= bin_num;
 
   return res;
 }
@@ -10143,7 +10139,7 @@ evaluate_flet (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int bin_num = 0, lex_bin_num = 0;
+  int bin_num = 0;
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -10167,19 +10163,18 @@ evaluate_flet (struct object *list, struct environment *env,
       bins = add_binding (bin, bins);
       bin_num++;
 
-      if (bin->type == LEXICAL_BINDING)
-	env->func_lex_bin_num++, lex_bin_num++;
-
       bind_forms = CDR (bind_forms);
     }
 
   env->funcs = chain_bindings (bins, env->funcs, NULL);
 
+  env->func_lex_bin_num += bin_num;
+
   res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
-  env->func_lex_bin_num -= lex_bin_num;
+  env->func_lex_bin_num -= bin_num;
 
   return res;
 }
@@ -10190,7 +10185,7 @@ evaluate_labels (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int bin_num = 0, lex_bin_num = 0;
+  int bin_num = 0;
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -10212,10 +10207,7 @@ evaluate_labels (struct object *list, struct environment *env,
 	return NULL;
 
       env->funcs = add_binding (bin, env->funcs);
-      bin_num++;
-
-      if (bin->type == LEXICAL_BINDING)
-	env->func_lex_bin_num++, lex_bin_num++;
+      env->func_lex_bin_num++, bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -10224,7 +10216,7 @@ evaluate_labels (struct object *list, struct environment *env,
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
-  env->func_lex_bin_num -= lex_bin_num;
+  env->func_lex_bin_num -= bin_num;
 
   return res;
 }
@@ -10235,7 +10227,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
   struct object *res, *bind_forms, *body;
-  int bin_num = 0, lex_bin_num = 0;
+  int bin_num = 0;
   struct binding *bins = NULL, *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -10259,19 +10251,18 @@ evaluate_macrolet (struct object *list, struct environment *env,
       bins = add_binding (bin, bins);
       bin_num++;
 
-      if (bin->type == LEXICAL_BINDING)
-	env->func_lex_bin_num++, lex_bin_num++;
-
       bind_forms = CDR (bind_forms);
     }
 
   env->funcs = chain_bindings (bins, env->funcs, NULL);
 
+  env->func_lex_bin_num += bin_num;
+
   res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
-  env->func_lex_bin_num -= lex_bin_num;
+  env->func_lex_bin_num -= bin_num;
 
   return res;
 }
