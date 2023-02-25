@@ -260,6 +260,10 @@
   (not (string= str1 str2)))
 
 
+(defun char-equal (&rest chars)
+  (apply #'char= (mapcar #'char-upcase chars)))
+
+
 (defun digit-char (weight &optional (radix 10))
   (if (or (>= weight radix))
       ()
