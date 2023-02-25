@@ -417,6 +417,12 @@ make_test ("(prin1 \"aaa\")", "\"aaa\"\n\"aaa\"");
 make_test ("(princ '|Aa,a|)", "Aa,a\n|Aa,a|");
 make_test ("(princ #\\a)", "a\n#\\a");
 make_test ("(princ \"aaa\")", "aaa\n\"aaa\"");
+make_test ("(format t \"aaa\")", "aaa\n()");
+make_test ("(format t \"aaa~~\")", "aaa~\n()");
+make_test ("(format t \"aaa~%~%\")", "aaa\n\n()");
+make_test ("(format t \"aa~&~&bb\")", "aa\nbb\n()");
+make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))",
+	   "the number is 10 and the list is (1 2 3)\n()");
 make_test ("(second '(0))", "()");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(endp '(1 . 2))", "()");
