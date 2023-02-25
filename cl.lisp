@@ -356,3 +356,14 @@
   (write-string string)
   (terpri)
   string)
+
+
+(defun prin1 (obj)
+  (let ((*print-escape* t))
+    (write obj)))
+
+
+(defun princ (obj)
+  (let ((*print-escape* nil)
+	(*print-readably* nil))
+    (write obj)))
