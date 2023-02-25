@@ -856,7 +856,7 @@ void clone_lexical_environment (struct binding **lex_vars,
 
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
-				struct eval_outcome *outcome);
+				struct eval_outcome *outcome, int is_macro);
 struct object *create_package (char *name, size_t name_len);
 
 const char *find_end_of_string
@@ -3876,7 +3876,8 @@ clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs
 
 struct object *
 create_function (struct object *lambda_list, struct object *body,
-		 struct environment *env, struct eval_outcome *outcome)
+		 struct environment *env, struct eval_outcome *outcome,
+		 int is_macro)
 {
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
@@ -3890,9 +3891,10 @@ create_function (struct object *lambda_list, struct object *body,
       return NULL;
     }
 
-  clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
-			     env->var_lex_bin_num, env->funcs,
-			     env->func_lex_bin_num);
+  if (!is_macro)
+    clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
+			       env->var_lex_bin_num, env->funcs,
+			       env->func_lex_bin_num);
 
   increment_refcount (body);
   f->body = body;
@@ -10118,7 +10120,8 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	  return NULL;
 	}
 
-      fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome);
+      fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome,
+			     type == TYPE_MACRO);
 
       if (!fun)
 	return NULL;
@@ -10705,7 +10708,7 @@ evaluate_defun (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 0);
 
   if (!fun)
     return NULL;
@@ -10752,7 +10755,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome);
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1);
 
   if (!mac)
     return NULL;
@@ -10909,7 +10912,7 @@ evaluate_lambda (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (list), CDR (list), env, outcome);
+  fun = create_function (CAR (list), CDR (list), env, outcome, 0);
 
   if (!fun)
     return NULL;
