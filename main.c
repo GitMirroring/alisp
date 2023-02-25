@@ -178,7 +178,7 @@ environment
 
   struct binding *structs;
 
-  struct object *std_out_sym;
+  struct object *std_out_sym, *print_escape_sym, *print_readably_sym;
 };
 
 
@@ -1380,12 +1380,14 @@ int equal_strings (const struct string *s1, const struct string *s2);
 
 struct object *fresh_line (struct stream *str);
 
-void print_as_symbol (const char *sym, size_t len);
+int is_printer_escaping_enabled (struct environment *env);
+
+void print_as_symbol (const char *sym, size_t len, int print_escapes);
 void print_symbol_name (const struct symbol_name *sym, struct environment *env);
 void print_symbol (const struct symbol *sym, struct environment *env);
-void print_string (const struct string *str);
-void print_character (const char *character);
-void print_filename (const struct filename *fn);
+void print_string (const struct string *str, struct environment *env);
+void print_character (const char *character, struct environment *env);
+void print_filename (const struct filename *fn, struct environment *env);
 void print_list (const struct cons_pair *list, struct environment *env);
 void print_array (const struct array *array, struct environment *env);
 void print_function_or_macro (const struct object *obj, struct environment *env);
@@ -1918,6 +1920,10 @@ add_standard_definitions (struct environment *env)
     ("*STANDARD-OUTPUT*", create_stream_from_open_file (CHARACTER_STREAM,
 							OUTPUT_STREAM,
 							stdout), env);
+
+  env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
+  env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
+					     env);
 }
 
 
@@ -11811,14 +11817,24 @@ fresh_line (struct stream *str)
 }
 
 
+int
+is_printer_escaping_enabled (struct environment *env)
+{
+  struct object *p_escape = inspect_variable (env->print_escape_sym, env),
+    *p_readably = inspect_variable (env->print_readably_sym, env);
+
+  return SYMBOL (p_escape) != &nil_object || SYMBOL (p_readably) != &nil_object;
+}
+
+
 void
-print_as_symbol (const char *sym, size_t len)
+print_as_symbol (const char *sym, size_t len, int print_escapes)
 {
   size_t i;
   char need_escape [] = "().,;'#\"\n\\";
   int do_need_escape = 0;
 
-  for (i = 0; i < len && !do_need_escape; i++)
+  for (i = 0; print_escapes && i < len && !do_need_escape; i++)
     {
       if (strchr (need_escape, sym [i]) || !sym [i]
 	  || islower ((unsigned char)sym [i]))
@@ -11830,7 +11846,7 @@ print_as_symbol (const char *sym, size_t len)
 
   for (i = 0; i < len; i++)
     {
-      if (sym [i] == '|' || sym [i] == '\\')
+      if (print_escapes && (sym [i] == '|' || sym [i] == '\\'))
 	putchar ('\\');
 
       putchar (sym [i]);
@@ -11844,12 +11860,14 @@ print_as_symbol (const char *sym, size_t len)
 void
 print_symbol_name (const struct symbol_name *sym, struct environment *env)
 {
+  int pesc = is_printer_escaping_enabled (env);
+
   if (sym->sym->value_ptr.symbol->home_package)
     print_symbol (sym->sym->value_ptr.symbol, env);
   else
     {
-      printf ("#:");
-      print_as_symbol (sym->value, sym->used_size);
+      if (pesc) printf ("#:");
+      print_as_symbol (sym->value, sym->used_size, 1);
     }
 }
 
@@ -11857,37 +11875,51 @@ print_symbol_name (const struct symbol_name *sym, struct environment *env)
 void
 print_symbol (const struct symbol *sym, struct environment *env)
 {
+  int pesc = is_printer_escaping_enabled (env);
+
   if (!sym->home_package)
-    printf ("#:");
+    {
+      if (pesc)
+	printf ("#:");
+    }
   else if (sym->home_package == env->keyword_package)
     printf (":");
 
-  print_as_symbol (sym->name, sym->name_len);
+  print_as_symbol (sym->name, sym->name_len, pesc);
 }
 
 
 void
-print_string (const struct string *str)
+print_string (const struct string *str, struct environment *env)
 {
   size_t i;
-  
-  putchar ('"');
+  int pesc = is_printer_escaping_enabled (env);
+
+  if (pesc)
+    putchar ('"');
 
   for (i = 0; i < str->used_size; i++)
     {
-      if (str->value [i] == '"' || str->value [i] == '\\')
+      if (pesc && (str->value [i] == '"' || str->value [i] == '\\'))
 	putchar ('\\');
-      
+
       putchar (str->value [i]);
     }
 
-  putchar ('"');  
+  if (pesc)
+    putchar ('"');
 }
 
 
 void
-print_character (const char *character)
+print_character (const char *character, struct environment *env)
 {
+  if (!is_printer_escaping_enabled (env))
+    {
+      printf ("%s", character);
+      return;
+    }
+
   printf ("#\\");
 
   if (strlen (character) == 1)
@@ -11923,10 +11955,10 @@ print_character (const char *character)
 
 
 void
-print_filename (const struct filename *fn)
+print_filename (const struct filename *fn, struct environment *env)
 {
   printf ("#P");
-  print_string (fn->value->value_ptr.string);
+  print_string (fn->value->value_ptr.string, env);
 }
 
 
@@ -12070,11 +12102,11 @@ print_object (const struct object *obj, struct environment *env)
       else if (obj->type == TYPE_FLOAT)
 	gmp_printf ("%.Ff", obj->value_ptr.floating);
       else if (obj->type == TYPE_STRING)
-	print_string (obj->value_ptr.string);
+	print_string (obj->value_ptr.string, env);
       else if (obj->type == TYPE_CHARACTER)
-	print_character (obj->value_ptr.character);
+	print_character (obj->value_ptr.character, env);
       else if (obj->type == TYPE_FILENAME)
-	print_filename (obj->value_ptr.filename);
+	print_filename (obj->value_ptr.filename, env);
       else if (obj->type == TYPE_SYMBOL_NAME)
 	print_symbol_name (obj->value_ptr.symbol_name, env);
       else if (obj->type == TYPE_SYMBOL)
