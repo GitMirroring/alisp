@@ -3665,6 +3665,9 @@ alloc_function (void)
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
 
+  fun->lex_vars = NULL;
+  fun->lex_funcs = NULL;
+
   fun->is_special_operator = 0;
   fun->builtin_form = NULL;
   fun->body = NULL;
