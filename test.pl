@@ -288,6 +288,8 @@ make_test ("(identity \"hi\")", "\"hi\"");
 make_test ("(1+ 5)", "6");
 make_test ("(1- .5)", "-0.5");
 make_test ("(typep '(1 . 2) 'cons)", "T");
+make_test ("(typep () 'atom)", "T");
+make_test ("(typep (cons 1 2) 'atom)", "()");
 make_test ("(typep 0 'number)", "T");
 make_test ("(typep 0.1 'real)", "T");
 make_test ("(typep 0 'rational)", "T");
