@@ -1255,6 +1255,9 @@ struct object *builtin_max (struct object *list, struct environment *env,
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 
+struct object *builtin_make_string (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome);
+
 struct object *builtin_make_symbol (struct object *list, struct environment *env,
 				    struct eval_outcome *outcome);
 struct object *builtin_boundp (struct object *list, struct environment *env,
@@ -1853,6 +1856,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
 		    1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-STRING", env, builtin_make_string, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
@@ -3571,7 +3576,7 @@ calloc_and_check (size_t nmemb, size_t size)
 {
   void *mem = calloc (nmemb, size);
 
-  if (size && !mem)
+  if (nmemb && size && !mem)
     {
       fprintf (stderr, "could not allocate %lu bytes. Exiting...\n", size);
       exit (1);
@@ -9545,8 +9550,7 @@ builtin_typep (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = check_type
-    (nth (0, list), nth (1, list), env, outcome);
+  ret = check_type (nth (0, list), nth (1, list), env, outcome);
 
   if (ret == -1)
     return NULL;
@@ -9554,6 +9558,48 @@ builtin_typep (struct object *list, struct environment *env,
     return &t_object;
   else
     return &nil_object;
+}
+
+
+struct object *
+builtin_make_string (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  int sz;
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  sz = mpz_get_si (CAR (list)->value_ptr.integer);
+
+  if (sz < 0)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+      return NULL;
+    }
+
+  ret = alloc_object ();
+
+  ret->type = TYPE_STRING;
+  ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
+  ret->value_ptr.string->value = calloc_and_check (sz, 1);
+  ret->value_ptr.string->alloc_size = ret->value_ptr.string->used_size = sz;
+  ret->value_ptr.string->has_fill_pointer = 0;
+
+  return ret;
 }
 
 
