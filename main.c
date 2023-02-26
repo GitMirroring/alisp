@@ -1053,8 +1053,10 @@ int type_null (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);
 int type_cons (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);
-int type_list (const struct object *obj, const struct object *typespec,
+int type_atom (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);  
+int type_list (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct eval_outcome *outcome);
 int type_symbol (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
 int type_boolean (const struct object *obj, const struct object *typespec,
@@ -1904,6 +1906,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("SEQUENCE", env, type_sequence, 1, NULL);
   add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", NULL);
   add_builtin_type ("CONS", env, type_cons, 1, "LIST", "SEQUENCE", NULL);
+  add_builtin_type ("ATOM", env, type_atom, 1, NULL);
   add_builtin_type ("ARRAY", env, type_array, 1, NULL);
   add_builtin_type ("VECTOR", env, type_vector, 1, "ARRAY", "SEQUENCE", NULL);
   add_builtin_type ("STRING", env, type_string, 1, "VECTOR", "ARRAY", "SEQUENCE",
@@ -6706,6 +6709,14 @@ type_cons (const struct object *obj, const struct object *typespec,
 	   struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_CONS_PAIR;
+}
+
+
+int
+type_atom (const struct object *obj, const struct object *typespec,
+	   struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type != TYPE_CONS_PAIR;
 }
 
 
