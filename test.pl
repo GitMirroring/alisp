@@ -316,6 +316,7 @@ make_test ("(typep 'aaa 'symbol)", "T");
 make_test ("(typep nil 'boolean)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
 make_test ("(typep (open #p\"README\") 'stream)", "T");
+make_test ("(make-string 3)", "\"\0\0\0\"");
 make_test ("(make-symbol \"aaa\")", "#:|aaa|");
 make_test ("(boundp 'b)", "T");
 make_test ("(boundp 'g3)", "()");
