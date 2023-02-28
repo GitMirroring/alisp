@@ -582,6 +582,7 @@ object_type
     TYPE_SYMBOL_NAME = 1 << 5,
     TYPE_SYMBOL = 1 << 6,
     TYPE_INTEGER = 1 << 7,
+    TYPE_FIXNUM = 1 << 24,
     TYPE_RATIO = 1 << 8,
     TYPE_FLOAT = 1 << 9,
     TYPE_CONS_PAIR = 1 << 10,
@@ -613,6 +614,7 @@ object_ptr_union
   struct symbol_name *symbol_name;
   struct object *next;
   mpz_t integer;
+  long *fixnum;
   mpq_t ratio;
   mpf_t floating;
   struct cons_pair *cons_pair;
@@ -1073,6 +1075,8 @@ int type_rational (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct eval_outcome *outcome);
 int type_integer (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct eval_outcome *outcome);
+int type_fixnum (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome);
 int type_ratio (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct eval_outcome *outcome);
 int type_float (const struct object *obj, const struct object *typespec,
@@ -1898,6 +1902,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("REAL", env, type_real, 1, "NUMBER", NULL);
   add_builtin_type ("RATIONAL", env, type_rational, 1, "REAL", NULL);
   add_builtin_type ("INTEGER", env, type_integer, 1, "RATIONAL", NULL);
+  add_builtin_type ("FIXNUM", env, type_fixnum, 1, "INTEGER", NULL);
   add_builtin_type ("RATIO", env, type_ratio, 1, "RATIONAL", NULL);
   add_builtin_type ("FLOAT", env, type_float, 1, NULL);
   add_builtin_type ("SHORT-FLOAT", env, type_short_float, 1, "SINGLE-FLOAT",
@@ -6796,6 +6801,14 @@ type_integer (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_INTEGER;
+}
+
+
+int
+type_fixnum (const struct object *obj, const struct object *typespec,
+	     struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_FIXNUM;
 }
 
 
