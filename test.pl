@@ -295,6 +295,7 @@ make_test ("(typep 0.1 'real)", "T");
 make_test ("(typep 0 'rational)", "T");
 make_test ("(typep 0.1 'rational)", "()");
 make_test ("(typep 0 'integer)", "T");
+make_test ("(typep 0 'bignum)", "T");
 make_test ("(typep 0 'fixnum)", "()");
 make_test ("(typep 1/2 'ratio)", "T");
 make_test ("(typep 3/1 'ratio)", "()");
