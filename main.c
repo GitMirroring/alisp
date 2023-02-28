@@ -31,6 +31,7 @@
 #include <stdarg.h>
 #include <ctype.h>
 #include <string.h>
+#include <limits.h>
 
 #include <gmp.h>
 
@@ -815,7 +816,7 @@ struct object *alloc_number (enum object_type numtype);
 struct object *create_number (const char *token, size_t size,
 			      size_t exp_marker_pos, int radix,
 			      enum object_type numtype);
-struct object *create_integer_from_int (int num);
+struct object *create_integer_from_long (long num);
 struct object *create_floating_from_double (double d);
 
 void print_range (const char *begin, const char *end);
@@ -963,16 +964,12 @@ struct object *add_builtin_form (char *name, struct environment *env,
 struct object *define_constant
 (struct object *sym, struct object *form, struct environment *env,
  struct eval_outcome *outcome);
-struct object *define_constant_by_name
-(char *name, size_t size, struct object *form, struct environment *env,
- struct eval_outcome *outcome);
 struct object *define_parameter
 (struct object *sym, struct object *form, struct environment *env,
  struct eval_outcome *outcome);
-struct object *define_parameter_by_name
-(char *name, size_t size, struct object *form, struct environment *env,
- struct eval_outcome *outcome);
 
+struct object *define_constant_by_name (char *name, struct object *value,
+					struct environment *env);
 struct object *define_variable (char *name, struct object *value,
 				struct environment *env);
 
@@ -1929,6 +1926,11 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("PATHNAME", env, type_pathname, 1, NULL);
   add_builtin_type ("STREAM", env, type_stream, 1, NULL);
 
+
+  define_constant_by_name ("MOST-POSITIVE-FIXNUM",
+			   create_integer_from_long (LONG_MAX), env);
+  define_constant_by_name ("MOST-NEGATIVE-FIXNUM",
+			   create_integer_from_long (LONG_MIN), env);
 
   define_variable ("*STANDARD-INPUT*", create_stream_from_open_file
 		   (CHARACTER_STREAM, INPUT_STREAM, stdin), env);
@@ -3403,7 +3405,7 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
 
 
 struct object *
-create_integer_from_int (int num)
+create_integer_from_long (long num)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
 
@@ -5112,17 +5114,6 @@ define_constant (struct object *sym, struct object *form,
 
 
 struct object *
-define_constant_by_name (char *name, size_t size, struct object *form,
-			 struct environment *env, struct eval_outcome *outcome)
-{
-  struct object *sym =
-    intern_symbol_from_char_vector (name, size, 1, env->current_package);
-
-  return define_constant (sym, form, env, outcome);
-}
-
-
-struct object *
 define_parameter (struct object *sym, struct object *form,
 		  struct environment *env, struct eval_outcome *outcome)
 {
@@ -5150,13 +5141,17 @@ define_parameter (struct object *sym, struct object *form,
 
 
 struct object *
-define_parameter_by_name (char *name, size_t size, struct object *form,
-			  struct environment *env, struct eval_outcome *outcome)
+define_constant_by_name (char *name, struct object *value,
+			 struct environment *env)
 {
   struct object *sym =
-    intern_symbol_from_char_vector (name, size, 1, env->current_package);
+    intern_symbol_from_char_vector (name, strlen (name), 1,
+				    env->current_package);
 
-  return define_parameter (sym, form, env, outcome);
+  sym->value_ptr.symbol->is_const = 1;
+  sym->value_ptr.symbol->value_cell = value;
+
+  return sym;
 }
 
 
@@ -7525,7 +7520,7 @@ builtin_list_length (struct object *list, struct environment *env,
   if (is_circular_list (CAR (list)))
     return &nil_object;
 
-  return create_integer_from_int (list_length (CAR (list)));
+  return create_integer_from_long (list_length (CAR (list)));
 }
 
 
@@ -7552,11 +7547,11 @@ builtin_length (struct object *list, struct environment *env,
 
   if (seq->type == TYPE_STRING)
     {
-      return create_integer_from_int (string_utf8_length (seq));
+      return create_integer_from_long (string_utf8_length (seq));
     }
   else if (seq->type == TYPE_CONS_PAIR || SYMBOL (seq) == &nil_object)
     {
-      return create_integer_from_int (list_length (seq));
+      return create_integer_from_long (list_length (seq));
     }
   else
     {
@@ -7567,9 +7562,9 @@ builtin_length (struct object *list, struct environment *env,
 	}
 
       if (seq->value_ptr.array->has_fill_pointer)
-	return create_integer_from_int (seq->value_ptr.array->fill_pointer);
+	return create_integer_from_long (seq->value_ptr.array->fill_pointer);
 
-      return create_integer_from_int (seq->value_ptr.array->alloc_size->size);
+      return create_integer_from_long (seq->value_ptr.array->alloc_size->size);
     }
 }
 
@@ -7591,9 +7586,9 @@ builtin_fill_pointer (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type == TYPE_STRING)
-    return create_integer_from_int (CAR (list)->value_ptr.string->fill_pointer);
+    return create_integer_from_long (CAR (list)->value_ptr.string->fill_pointer);
   else
-    return create_integer_from_int (CAR (list)->value_ptr.array->fill_pointer);
+    return create_integer_from_long (CAR (list)->value_ptr.array->fill_pointer);
 }
 
 
@@ -8276,7 +8271,7 @@ builtin_dotimes (struct object *list, struct environment *env,
 
   for (i = 0; i < cnt; i++)
     {
-      env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
+      env->vars = bind_variable (var, create_integer_from_long (i), env->vars);
 
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
@@ -8296,7 +8291,7 @@ builtin_dotimes (struct object *list, struct environment *env,
 
   if (l == 3)
     {
-      env->vars = bind_variable (var, create_integer_from_int (i), env->vars);
+      env->vars = bind_variable (var, create_integer_from_long (i), env->vars);
 
       if (env->vars->type == LEXICAL_BINDING)
 	env->var_lex_bin_num++;
@@ -9092,7 +9087,7 @@ perform_division_with_remainder (struct object *args,
       div_ = CAR (CDR (args));
     }
   else
-    div_ = create_integer_from_int (1);
+    div_ = create_integer_from_long (1);
 
   ret_type = highest_num_type (CAR (args)->type, div_->type);
 
@@ -9196,7 +9191,7 @@ builtin_plus (struct object *list, struct environment *env,
 {
   if (!list_length (list))
     {
-      return create_integer_from_int (0);
+      return create_integer_from_long (0);
     }
   else if (list_length (list) == 1)
     {
@@ -9263,7 +9258,7 @@ builtin_multiply (struct object *list, struct environment *env,
 {
   if (!list_length (list))
     {
-      return create_integer_from_int (1);
+      return create_integer_from_long (1);
     }
   else if (list_length (list) == 1)
     {
