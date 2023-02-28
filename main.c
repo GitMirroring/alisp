@@ -73,10 +73,10 @@
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
-#define IS_REAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO \
+#define IS_REAL(s) ((s)->type == TYPE_BIGNUM || (s)->type == TYPE_RATIO \
 		    || (s)->type == TYPE_FLOAT)
 
-#define IS_RATIONAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO)
+#define IS_RATIONAL(s) ((s)->type == TYPE_BIGNUM || (s)->type == TYPE_RATIO)
 
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :			\
 		   (s)->type == TYPE_SYMBOL_NAME ?			\
@@ -84,7 +84,7 @@
 		   NULL)
 
 
-#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_RATIO	\
+#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_BIGNUM | TYPE_RATIO	\
 					   | TYPE_FLOAT | TYPE_STRING	\
 					   | TYPE_CHARACTER | TYPE_FILENAME \
 					   | TYPE_STREAM))
@@ -581,7 +581,7 @@ object_type
     TYPE_DOT = 1 << 4,
     TYPE_SYMBOL_NAME = 1 << 5,
     TYPE_SYMBOL = 1 << 6,
-    TYPE_INTEGER = 1 << 7,
+    TYPE_BIGNUM = 1 << 7,
     TYPE_FIXNUM = 1 << 24,
     TYPE_RATIO = 1 << 8,
     TYPE_FLOAT = 1 << 9,
@@ -603,7 +603,7 @@ object_type
 
 
 #define TYPE_PREFIX (TYPE_QUOTE | TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT | TYPE_DOT)
-#define TYPE_REAL (TYPE_INTEGER | TYPE_RATIO | TYPE_FLOAT)
+#define TYPE_REAL (TYPE_BIGNUM | TYPE_RATIO | TYPE_FLOAT)
 #define TYPE_NUMBER (TYPE_REAL)
 
 
@@ -3238,7 +3238,7 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 
   int digits_len = radix * 2;
   
-  *numtype = TYPE_INTEGER;
+  *numtype = TYPE_BIGNUM;
   *exp_marker_pos = 0;
 
   while (i < size)
@@ -3342,7 +3342,7 @@ alloc_number (enum object_type numtype)
   obj->type = numtype;
   obj->refcount = 1;
 
-  if (numtype == TYPE_INTEGER)
+  if (numtype == TYPE_BIGNUM)
     {
       mpz_init (obj->value_ptr.integer);
     }
@@ -3372,7 +3372,7 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
   memcpy (buf, token, size);
   buf [size] = 0;
   
-  if (numtype == TYPE_INTEGER)
+  if (numtype == TYPE_BIGNUM)
     {
       mpz_init (obj->value_ptr.integer);
       mpz_set_str (obj->value_ptr.integer, buf, radix);
@@ -3404,7 +3404,7 @@ create_integer_from_int (int num)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
 
-  obj->type = TYPE_INTEGER;
+  obj->type = TYPE_BIGNUM;
   obj->refcount = 1;
 
   mpz_init (obj->value_ptr.integer);
@@ -4899,13 +4899,13 @@ collect_go_tags (struct object *body)
     {
       car = CAR (body);
 
-      if (IS_SYMBOL (car) || car->type == TYPE_INTEGER)
+      if (IS_SYMBOL (car) || car->type == TYPE_BIGNUM)
 	{
 	  destfind = CDR (body);
 
 	  while (SYMBOL (destfind) != &nil_object && (dest = CAR (destfind))
 		 && (dest->type == TYPE_SYMBOL_NAME
-		     || dest->type == TYPE_INTEGER))
+		     || dest->type == TYPE_BIGNUM))
 	    destfind = CDR (destfind);
 
 	  ret = add_go_tag (car, destfind, ret);
@@ -4974,7 +4974,7 @@ find_go_tag (struct object *tagname, struct go_tag_frame *frame)
 	  if ((tagname->type == TYPE_SYMBOL_NAME
 	       && tagname->value_ptr.symbol_name->sym
 	       == t->name->value_ptr.symbol_name->sym)
-	      || (tagname->type == TYPE_INTEGER
+	      || (tagname->type == TYPE_BIGNUM
 		  && !mpz_cmp (tagname->value_ptr.integer,
 			       t->name->value_ptr.integer)))
 	    return t;
@@ -5812,7 +5812,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
       decrement_refcount (res);
 
       if (!is_tagbody
-	  || (CAR (body)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (body))))
+	  || (CAR (body)->type != TYPE_BIGNUM && !IS_SYMBOL (CAR (body))))
 	{
 	  res = evaluate_object (CAR (body), env, outcome);
 
@@ -6774,7 +6774,7 @@ int
 type_number (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO
+  return obj->type == TYPE_BIGNUM || obj->type == TYPE_RATIO
     || obj->type == TYPE_FLOAT;
 }
 
@@ -6783,7 +6783,7 @@ int
 type_real (const struct object *obj, const struct object *typespec,
 	   struct environment *env, struct eval_outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO
+  return obj->type == TYPE_BIGNUM || obj->type == TYPE_RATIO
     || obj->type == TYPE_FLOAT;
 }
 
@@ -6792,7 +6792,7 @@ int
 type_rational (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO;
+  return obj->type == TYPE_BIGNUM || obj->type == TYPE_RATIO;
 }
 
 
@@ -6800,7 +6800,7 @@ int
 type_integer (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct eval_outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER;
+  return obj->type == TYPE_BIGNUM;
 }
 
 
@@ -7204,7 +7204,7 @@ builtin_nth (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_INTEGER
+  if (CAR (list)->type != TYPE_BIGNUM
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
@@ -7232,7 +7232,7 @@ builtin_nthcdr (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_INTEGER
+  if (CAR (list)->type != TYPE_BIGNUM
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
@@ -7262,7 +7262,7 @@ builtin_nth_value (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_INTEGER)
+  if (CAR (list)->type != TYPE_BIGNUM)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -7318,7 +7318,7 @@ builtin_elt (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (CDR (list))->type != TYPE_INTEGER)
+  if (CAR (CDR (list))->type != TYPE_BIGNUM)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -7410,7 +7410,7 @@ builtin_aref (struct object *list, struct environment *env,
 
   if (arr->type == TYPE_STRING)
     {
-      if (CAR (list)->type != TYPE_INTEGER)
+      if (CAR (list)->type != TYPE_BIGNUM)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -7446,7 +7446,7 @@ builtin_aref (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (CAR (list)->type != TYPE_INTEGER)
+	  if (CAR (list)->type != TYPE_BIGNUM)
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -7605,7 +7605,7 @@ builtin_array_dimensions (struct object *list, struct environment *env,
     {
       ret = alloc_empty_cons_pair ();
 
-      num = alloc_number (TYPE_INTEGER);
+      num = alloc_number (TYPE_BIGNUM);
 
       mpz_set_ui (num->value_ptr.integer, arr->value_ptr.string->used_size);
       ret->value_ptr.cons_pair->car = num;
@@ -7622,7 +7622,7 @@ builtin_array_dimensions (struct object *list, struct environment *env,
 	  else
 	    cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
-	  num = alloc_number (TYPE_INTEGER);
+	  num = alloc_number (TYPE_BIGNUM);
 
 	  mpz_set_ui (num->value_ptr.integer, sz->size);
 	  cons->value_ptr.cons_pair->car = num;
@@ -7657,7 +7657,7 @@ builtin_last (struct object *list, struct environment *env,
     }
 
   if ((CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
-      || (length == 2 && CAR (CDR (list))->type != TYPE_INTEGER))
+      || (length == 2 && CAR (CDR (list))->type != TYPE_BIGNUM))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -8252,7 +8252,7 @@ builtin_dotimes (struct object *list, struct environment *env,
   if (!count)
     return NULL;
 
-  if (count->type != TYPE_INTEGER)
+  if (count->type != TYPE_BIGNUM)
     {
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       decrement_refcount (count);
@@ -8781,7 +8781,7 @@ compare_two_numbers (struct object *num1, struct object *num2)
   struct object *second_p = promote_number (num2, tp);
   int eq;
 
-  if (tp == TYPE_INTEGER)
+  if (tp == TYPE_BIGNUM)
     eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
   else if (tp == TYPE_RATIO)
     eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
@@ -8849,7 +8849,7 @@ compare_any_numbers (struct object *list, struct environment *env,
 int
 is_zero (struct object *num)
 {
-  return (num->type == TYPE_INTEGER && !mpz_sgn (num->value_ptr.integer))
+  return (num->type == TYPE_BIGNUM && !mpz_sgn (num->value_ptr.integer))
     || (num->type == TYPE_RATIO && !mpq_sgn (num->value_ptr.ratio))
     || (num->type == TYPE_FLOAT && !mpf_sgn (num->value_ptr.floating));
 }
@@ -8868,14 +8868,14 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
       return NULL;
     }
 
-  if (t == TYPE_INTEGER
+  if (t == TYPE_BIGNUM
       && mpz_divisible_p (n1->value_ptr.integer, n2->value_ptr.integer))
     {
-      ret = alloc_number (TYPE_INTEGER);
+      ret = alloc_number (TYPE_BIGNUM);
       mpz_divexact (ret->value_ptr.integer, n1->value_ptr.integer,
 		    n2->value_ptr.integer);
     }
-  else if (t == TYPE_INTEGER || t == TYPE_RATIO)
+  else if (t == TYPE_BIGNUM || t == TYPE_RATIO)
     {
       pn1 = promote_number (n1, TYPE_RATIO);
       pn2 = promote_number (n2, TYPE_RATIO);
@@ -8914,7 +8914,7 @@ highest_num_type (enum object_type t1, enum object_type t2)
   if (t1 == TYPE_RATIO || t2 == TYPE_RATIO)
     return TYPE_RATIO;
 
-  return TYPE_INTEGER;
+  return TYPE_BIGNUM;
 }
 
 
@@ -8926,7 +8926,7 @@ copy_number (const struct object *num)
   ret->refcount = 1;
   ret->type = num->type;
 
-  if (num->type == TYPE_INTEGER)
+  if (num->type == TYPE_BIGNUM)
     {
       mpz_init (ret->value_ptr.integer);
       mpz_set (ret->value_ptr.integer, num->value_ptr.integer);
@@ -8970,7 +8970,7 @@ promote_number (struct object *num, enum object_type type)
     {
       mpf_init (ret->value_ptr.floating);
 
-      if (num->type == TYPE_INTEGER)
+      if (num->type == TYPE_BIGNUM)
 	mpf_set_z (ret->value_ptr.floating, num->value_ptr.integer);
       else if (num->type == TYPE_RATIO)
 	mpf_set_q (ret->value_ptr.floating, num->value_ptr.ratio);
@@ -9016,7 +9016,7 @@ apply_arithmetic_operation (struct object *list,
       op = promote_number (CAR (list), highest_num_type (ret->type,
 							 CAR (list)->type));
 
-      if (ret->type == TYPE_INTEGER)
+      if (ret->type == TYPE_BIGNUM)
 	{
 	  opz (ret->value_ptr.integer, ret->value_ptr.integer,
 	       op->value_ptr.integer);
@@ -9085,20 +9085,20 @@ perform_division_with_remainder (struct object *args,
 
   ret_type = highest_num_type (CAR (args)->type, div_->type);
 
-  if (ret_type == TYPE_INTEGER && round_behavior != ROUND_TO_NEAREST)
-    op_type = TYPE_INTEGER;
+  if (ret_type == TYPE_BIGNUM && round_behavior != ROUND_TO_NEAREST)
+    op_type = TYPE_BIGNUM;
   else
     op_type = TYPE_FLOAT;
 
   num = promote_number (CAR (args), op_type);
   div = promote_number (div_, op_type);
 
-  if (op_type == TYPE_INTEGER)
+  if (op_type == TYPE_BIGNUM)
     {
-      ret = alloc_number (TYPE_INTEGER);
+      ret = alloc_number (TYPE_BIGNUM);
       mpz_init (ret->value_ptr.integer);
 
-      ret2 = alloc_number (TYPE_INTEGER);
+      ret2 = alloc_number (TYPE_BIGNUM);
       mpz_init (ret2->value_ptr.integer);
 
       if (round_behavior == FLOOR)
@@ -9226,7 +9226,7 @@ builtin_minus (struct object *list, struct environment *env,
 
       ret = copy_number (CAR (list));
 
-      if (ret->type == TYPE_INTEGER)
+      if (ret->type == TYPE_BIGNUM)
 	{
 	  mpz_neg (ret->value_ptr.integer, ret->value_ptr.integer);
 	}
@@ -9290,7 +9290,7 @@ builtin_divide (struct object *list, struct environment *env,
 
   if (list_length (list) == 1)
     {
-      ret = alloc_number (TYPE_INTEGER);
+      ret = alloc_number (TYPE_BIGNUM);
       mpz_set_si (ret->value_ptr.integer, 1);
 
       return divide_two_numbers (ret, CAR (list), env, outcome);
@@ -9588,7 +9588,7 @@ builtin_make_string (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_INTEGER)
+  if (CAR (list)->type != TYPE_BIGNUM)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
@@ -11125,7 +11125,7 @@ evaluate_go (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (list)))
+  if (CAR (list)->type != TYPE_BIGNUM && !IS_SYMBOL (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -12165,7 +12165,7 @@ print_object (const struct object *obj, struct environment *env)
 
       if (SYMBOL (obj) == &nil_object)
 	printf ("()");
-      else if (obj->type == TYPE_INTEGER)
+      else if (obj->type == TYPE_BIGNUM)
 	mpz_out_str (NULL, 10, obj->value_ptr.integer);
       else if (obj->type == TYPE_RATIO)
 	mpq_out_str (NULL, 10, obj->value_ptr.ratio);
@@ -12677,7 +12677,7 @@ free_object (struct object *obj)
       free (obj->value_ptr.character);
       free (obj);
     }
-  else if (obj->type == TYPE_INTEGER)
+  else if (obj->type == TYPE_BIGNUM)
     free_integer (obj);
   else if (obj->type == TYPE_RATIO)
     free_ratio (obj);
