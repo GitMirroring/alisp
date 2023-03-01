@@ -7616,7 +7616,7 @@ builtin_make_array (struct object *list, struct environment *env,
   struct object *ret, *cons;
   struct array_size *size = NULL, *sz;
 
-  if (!list_length (list))
+  if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
