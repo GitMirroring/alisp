@@ -4012,8 +4012,8 @@ alloc_string (size_t size)
 
   obj->value_ptr.string = malloc_and_check (sizeof (*obj->value_ptr.string));
 
-  obj->value_ptr.string->value = malloc_and_check (sizeof (char) * size);
-  obj->value_ptr.string->alloc_size = sizeof (char) * size;
+  obj->value_ptr.string->value = malloc_and_check (size);
+  obj->value_ptr.string->alloc_size = size;
   obj->value_ptr.string->used_size = 0;
   obj->value_ptr.string->has_fill_pointer = 0;
 
@@ -4359,7 +4359,7 @@ alloc_vector (size_t size)
 
   vec->alloc_size = sz;
   vec->has_fill_pointer = 0;
-  vec->value = malloc_and_check (sizeof (*vec->value) * size);
+  vec->value = calloc_and_check (size, sizeof (*vec->value));
 
   obj->type = TYPE_ARRAY;
   obj->refcount = 1;
@@ -4382,7 +4382,7 @@ create_vector (struct object *list)
 
   vec->alloc_size = sz;
   vec->has_fill_pointer = 0;
-  vec->value = malloc_and_check (sizeof (*vec->value) * sz->size);
+  vec->value = calloc_and_check (sz->size, sizeof (*vec->value));
 
   for (i = 0; i < sz->size; i++)
     vec->value [i] = nth (i, list);
@@ -4400,7 +4400,7 @@ resize_vector (struct object *vector, size_t size)
 {
   vector->value_ptr.array->value =
     realloc_and_check (vector->value_ptr.array->value,
-		       size * sizeof (struct object *));
+		       size * sizeof (*vector->value_ptr.array->value));
 
   vector->value_ptr.array->alloc_size->size = size;
 }
