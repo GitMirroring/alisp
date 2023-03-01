@@ -283,6 +283,7 @@ eval_outcome_type
     WRONG_TYPE_OF_ARGUMENT,
     WRONG_NUMBER_OF_AXIS,
     OUT_OF_BOUND_INDEX,
+    INVALID_SIZE,
     COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
@@ -887,7 +888,8 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
 
-struct object *alloc_vector (size_t size);
+struct object *alloc_vector (size_t size, int fill_with_nil,
+			     int dont_store_size);
 struct object *create_vector (struct object *list);
 void resize_vector (struct object *vector, size_t size);
 
@@ -1132,6 +1134,8 @@ struct object *builtin_list_length
 struct object *builtin_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_fill_pointer
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_make_array
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1766,6 +1770,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FILL-POINTER", env, builtin_fill_pointer, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
@@ -4346,18 +4352,29 @@ create_filename (struct object *string)
 
 
 struct object *
-alloc_vector (size_t size)
+alloc_vector (size_t size, int fill_with_nil, int dont_store_size)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct array *vec = malloc_and_check (sizeof (*vec));
-  struct array_size *sz = malloc_and_check (sizeof (*sz));
+  struct array_size *sz;
+  size_t i;
 
-  sz->size = size;
-  sz->next = NULL;
+  if (!dont_store_size)
+    {
+      sz = malloc_and_check (sizeof (*sz));
+      sz->size = size;
+      sz->next = NULL;
+      vec->alloc_size = sz;
+    }
 
-  vec->alloc_size = sz;
   vec->fill_pointer = -1;
   vec->value = calloc_and_check (size, sizeof (*vec->value));
+
+  if (fill_with_nil)
+    {
+      for (i = 0; i < size; i++)
+	vec->value [i] = &nil_object;
+    }
 
   obj->type = TYPE_ARRAY;
   obj->refcount = 1;
@@ -7592,6 +7609,82 @@ builtin_fill_pointer (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_make_array (struct object *list, struct environment *env,
+		    struct eval_outcome *outcome)
+{
+  int indx, tot = 1;
+  struct object *ret, *cons;
+  struct array_size *size = NULL, *sz;
+
+  if (!list_length (list))
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_BIGNUM)
+    {
+      indx = mpz_get_si (CAR (list)->value_ptr.integer);
+
+      if (indx < 0)
+	{
+	  outcome->type = INVALID_SIZE;
+	  return NULL;
+	}
+
+      return alloc_vector (indx, 1, 0);
+    }
+  else if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      cons = CAR (list);
+
+      while (SYMBOL (cons) != &nil_object)
+	{
+	  if (CAR (cons)->type != TYPE_BIGNUM)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  indx = mpz_get_si (CAR (cons)->value_ptr.integer);
+
+	  if (indx < 0)
+	    {
+	      outcome->type = INVALID_SIZE;
+	      return NULL;
+	    }
+
+	  if (size)
+	    sz = sz->next = malloc_and_check (sizeof (*sz->next));
+	  else
+	    size = sz = malloc_and_check (sizeof (*sz->next));
+
+	  sz->size = indx;
+	  tot *= indx;
+
+	  cons = CDR (cons);
+	}
+
+      ret = alloc_vector (tot, 1, 1);
+      sz->next = NULL;
+      ret->value_ptr.array->alloc_size = size;
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      ret = alloc_vector (1, 1, 1);
+      ret->value_ptr.array->alloc_size = 0;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return ret;
+}
+
+
+struct object *
 builtin_array_dimensions (struct object *list, struct environment *env,
 			  struct eval_outcome *outcome)
 {
@@ -8583,7 +8676,7 @@ builtin_remove_if (struct object *list, struct environment *env,
     }
   else if (seq->type == TYPE_ARRAY)
     {
-      ret = alloc_vector (seq->value_ptr.array->alloc_size->size);
+      ret = alloc_vector (seq->value_ptr.array->alloc_size->size, 0, 0);
 
       j = 0;
 
@@ -8672,7 +8765,7 @@ builtin_reverse (struct object *list, struct environment *env,
     {
       sz = seq->value_ptr.array->alloc_size->size;
 
-      ret = alloc_vector (sz);
+      ret = alloc_vector (sz, 0, 0);
 
       for (i = 0; i < sz; i++)
 	{
@@ -12089,6 +12182,8 @@ print_array (const struct array *array, struct environment *env)
 
       printf (")");
     }
+  else
+    printf ("#<ARRAY, RANK %d>", rk);
 }
 
 
@@ -12421,6 +12516,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: out-of-bound index\n");
     }
+  else if (err->type == INVALID_SIZE)
+    {
+      printf ("eval error: not a valid size\n");
+    }
   else if (err->type == COULD_NOT_OPEN_FILE)
     {
       printf ("file error: could not open file\n");
@@ -12751,12 +12850,14 @@ free_cons_pair (struct object *obj)
 void
 free_array_size (struct array_size *size)
 {
-  struct array_size *next = size->next;
+  struct array_size *next;
 
-  free (size);
-
-  if (next)
-    free_array_size (next);
+  if (size)
+    {
+      next = size->next;
+      free (size);
+      free_array_size (next);
+    }
 }
 
 
