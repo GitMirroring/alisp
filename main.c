@@ -68,9 +68,9 @@
 			  && !(s)->value_ptr.array->alloc_size->next))
 
 #define HAS_FILL_POINTER(s) (((s)->type == TYPE_STRING			\
-			      && (s)->value_ptr.string->has_fill_pointer) \
+			      && (s)->value_ptr.string->fill_pointer >= 0) \
 			     || ((s)->type == TYPE_ARRAY		\
-				 && (s)->value_ptr.array->has_fill_pointer))
+				 && (s)->value_ptr.array->fill_pointer >= 0))
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
@@ -118,11 +118,10 @@ struct
 string
 {
   char *value;
-  size_t alloc_size;
-  size_t used_size;
+  long alloc_size;
+  long used_size;
 
-  int has_fill_pointer;
-  size_t fill_pointer;
+  long fill_pointer;
 };
 
 
@@ -354,7 +353,7 @@ struct
 symbol
 {
   char *name;
-  size_t name_len;
+  long name_len;
 
   int is_type;
   int is_standard_type;
@@ -489,7 +488,7 @@ cons_pair
 struct
 array_size
 {
-  size_t size;
+  long size;
 
   struct array_size *next;
 };
@@ -500,8 +499,7 @@ array
 {
   struct array_size *alloc_size;
 
-  int has_fill_pointer;
-  size_t fill_pointer;
+  long fill_pointer;
 
   struct object **value;
 };
@@ -4015,7 +4013,7 @@ alloc_string (size_t size)
   obj->value_ptr.string->value = malloc_and_check (size);
   obj->value_ptr.string->alloc_size = size;
   obj->value_ptr.string->used_size = 0;
-  obj->value_ptr.string->has_fill_pointer = 0;
+  obj->value_ptr.string->fill_pointer = -1;
 
   return obj;
 }
@@ -4358,7 +4356,7 @@ alloc_vector (size_t size)
   sz->next = NULL;
 
   vec->alloc_size = sz;
-  vec->has_fill_pointer = 0;
+  vec->fill_pointer = -1;
   vec->value = calloc_and_check (size, sizeof (*vec->value));
 
   obj->type = TYPE_ARRAY;
@@ -4381,7 +4379,7 @@ create_vector (struct object *list)
   sz->next = NULL;
 
   vec->alloc_size = sz;
-  vec->has_fill_pointer = 0;
+  vec->fill_pointer = -1;
   vec->value = calloc_and_check (sz->size, sizeof (*vec->value));
 
   for (i = 0; i < sz->size; i++)
@@ -7562,7 +7560,7 @@ builtin_length (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (seq->value_ptr.array->has_fill_pointer)
+      if (seq->value_ptr.array->fill_pointer >= 0)
 	return create_integer_from_long (seq->value_ptr.array->fill_pointer);
 
       return create_integer_from_long (seq->value_ptr.array->alloc_size->size);
@@ -9617,7 +9615,7 @@ builtin_make_string (struct object *list, struct environment *env,
   ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
   ret->value_ptr.string->value = calloc_and_check (sz, 1);
   ret->value_ptr.string->alloc_size = ret->value_ptr.string->used_size = sz;
-  ret->value_ptr.string->has_fill_pointer = 0;
+  ret->value_ptr.string->fill_pointer = -1;
 
   return ret;
 }
@@ -12080,7 +12078,7 @@ print_array (const struct array *array, struct environment *env)
     {
       printf ("#(");
 
-      for (i = 0; i < (array->has_fill_pointer ? array->fill_pointer :
+      for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer :
 		       array->alloc_size->size); i++)
 	{
 	  if (i)
