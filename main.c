@@ -32,11 +32,11 @@
 #include <ctype.h>
 #include <string.h>
 #include <limits.h>
+#include <errno.h>
 
 #include <gmp.h>
 
 #ifdef HAVE_LIBREADLINE
-#include <errno.h>
 #include <readline/readline.h>
 #include <readline/history.h>
 #endif
