@@ -7423,34 +7423,40 @@ struct object *
 builtin_aref (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
-  struct object *arr, *ret;
-  struct array_size *sz;
-  size_t ind;
+  struct object *arr, *ret, *lin_ind;
+  int ind, l = list_length (list);
 
-  if (!list_length (list))
+  if (!l)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
   arr = CAR (list);
-  list = CDR (list);
 
   if (arr->type == TYPE_STRING)
     {
+      list = CDR (list);
+
+      if (l != 2)
+	{
+	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	  return NULL;
+	}
+
       if (CAR (list)->type != TYPE_BIGNUM)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
-      if (mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
+      ind = mpz_get_si (CAR (list)->value_ptr.integer);
+
+      if (ind < 0)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
-
-      ind = mpz_get_ui (CAR (list)->value_ptr.integer);
 
       ret = get_nth_character (ind, arr);
 
@@ -7464,56 +7470,19 @@ builtin_aref (struct object *list, struct environment *env,
     }
   else if (arr->type == TYPE_ARRAY)
     {
-      sz = arr->value_ptr.array->alloc_size;
+      lin_ind = builtin_array_row_major_index (list, env, outcome);
 
-      while (sz)
-	{
-	  if (SYMBOL (list) == &nil_object)
-	    {
-	      outcome->type = WRONG_NUMBER_OF_AXIS;
-	      return NULL;
-	    }
+      if (!lin_ind)
+	return NULL;
 
-	  if (CAR (list)->type != TYPE_BIGNUM)
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
+      ind = mpz_get_si (lin_ind->value_ptr.integer);
 
-	  if (mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
-	    {
-	      outcome->type = OUT_OF_BOUND_INDEX;
-	      return NULL;
-	    }
-
-	  ind = mpz_get_ui (CAR (list)->value_ptr.integer);
-
-	  if (ind >= sz->size)
-	    {
-	      outcome->type = OUT_OF_BOUND_INDEX;
-	      return NULL;
-	    }
-
-	  arr = arr->value_ptr.array->value [ind];
-
-	  sz = sz->next;
-	  list = CDR (list);
-	}
-
-      if (SYMBOL (list) != &nil_object)
-	{
-	  outcome->type = WRONG_NUMBER_OF_AXIS;
-	  return NULL;
-	}
-    }
-  else
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      increment_refcount (arr->value_ptr.array->value [ind]);
+      return arr->value_ptr.array->value [ind];
     }
 
-  increment_refcount (arr);
-  return arr;
+  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+  return NULL;
 }
 
 
