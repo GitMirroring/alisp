@@ -499,6 +499,8 @@ make_test ("(reverse #(0 1 2 3))", "#(3 2 1 0)");
 make_test ("(nreverse '(0 1 2 3))", "(3 2 1 0)");
 make_test ("(nreverse \"hello\")", "\"olleh\"");
 make_test ("(nreverse #(0 1 2 3))", "#(3 2 1 0)");
+make_test ("(adjoin 0 '(0 1 2))", "(0 1 2)");
+make_test ("(adjoin 0 '(1 2))", "(0 1 2)");
 make_test ("(cond (t (+ 1 2)))", "3");
 make_test ("(cond (nil 2) (t 3) (nil 4))", "3");
 make_test ("(every #'evenp '(0 2 4))", "T");
