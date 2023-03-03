@@ -9697,7 +9697,7 @@ builtin_make_string (struct object *list, struct environment *env,
 
   if (sz < 0)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = INVALID_SIZE;
 
       return NULL;
     }
