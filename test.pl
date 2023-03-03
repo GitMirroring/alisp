@@ -403,6 +403,7 @@ make_test ("(list-length '(0 1 2 3))", "4");
 make_test ("(make-array 4)", "#(() () () ())");
 make_test ("(make-array '(1 2 3))", "#<ARRAY, RANK 3>");
 make_test ("(make-array nil)", "#<ARRAY, RANK 0>");
+make_test ("(array-has-fill-pointer-p \"aaa\")", "()");
 make_test ("(array-dimensions \"aaa\")", "(3)");
 make_test ("(array-dimensions #(1 2 3 4))", "(4)");
 make_test ("(array-dimension \"aaa\" 0)", "3");
