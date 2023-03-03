@@ -1139,6 +1139,8 @@ struct object *builtin_fill_pointer
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_make_array
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_array_has_fill_pointer_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_array_row_major_index
@@ -1776,6 +1778,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("ARRAY-HAS-FILL-POINTER-P", env,
+		    builtin_array_has_fill_pointer_p, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-ROW-MAJOR-INDEX", env, builtin_array_row_major_index,
@@ -7656,6 +7660,29 @@ builtin_make_array (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_array_has_fill_pointer_p (struct object *list, struct environment *env,
+				  struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_ARRAY (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (HAS_FILL_POINTER (CAR (list)))
+    return &t_object;
+
+  return &nil_object;
 }
 
 
