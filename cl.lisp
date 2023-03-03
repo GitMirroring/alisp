@@ -248,6 +248,10 @@
   (if (member obj list) list (cons obj list)))
 
 
+(defun array-rank (array)
+  (length (array-dimensions array)))
+
+
 (defun array-dimension (array axis)
   (nth axis (array-dimensions array)))
 
