@@ -7715,6 +7715,9 @@ builtin_array_dimensions (struct object *list, struct environment *env,
     {
       sz = arr->value_ptr.array->alloc_size;
 
+      if (!sz)
+	return &nil_object;
+
       while (sz)
 	{
 	  if (!ret)
