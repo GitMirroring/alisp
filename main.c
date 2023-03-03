@@ -67,6 +67,8 @@
 			  && (s)->value_ptr.array->alloc_size		\
 			  && !(s)->value_ptr.array->alloc_size->next))
 
+#define IS_ARRAY(s) ((s)->type == TYPE_STRING || (s)->type == TYPE_ARRAY)
+
 #define HAS_FILL_POINTER(s) (((s)->type == TYPE_STRING			\
 			      && (s)->value_ptr.string->fill_pointer >= 0) \
 			     || ((s)->type == TYPE_ARRAY		\
@@ -1139,6 +1141,8 @@ struct object *builtin_make_array
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_array_row_major_index
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eval
@@ -1773,6 +1777,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ARRAY-ROW-MAJOR-INDEX", env, builtin_array_row_major_index,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
@@ -7737,6 +7743,109 @@ builtin_array_dimensions (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_array_row_major_index (struct object *list, struct environment *env,
+			       struct eval_outcome *outcome)
+{
+  struct array_size *sz, *sz2;
+  int l = list_length (list);
+  struct object *arr;
+  int ind, tot, rest;
+
+  if (!l)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_ARRAY (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  arr = CAR (list);
+  list = CDR (list);
+
+  if (arr->type == TYPE_STRING)
+    {
+      if (l != 2)
+	{
+	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	  return NULL;
+	}
+
+      if (CAR (list)->type != TYPE_BIGNUM)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      tot = mpz_get_si (CAR (list)->value_ptr.integer);
+
+      if (tot < 0 || tot >= arr->value_ptr.string->used_size)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  sz = arr->value_ptr.array->alloc_size;
+  tot = 0;
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (!sz)
+	{
+	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  return NULL;
+	}
+
+      if (CAR (list)->type != TYPE_BIGNUM)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ind = mpz_get_si (CAR (list)->value_ptr.integer);
+
+      if (ind < 0 || ind >= sz->size)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      if (ind)
+	{
+	  sz2 = sz->next;
+	  rest = 1;
+
+	  while (sz2)
+	    {
+	      rest *= sz2->size;
+	      sz2 = sz2->next;
+	    }
+
+	  tot += ind * rest;
+	}
+
+      list = CDR (list);
+      sz = sz->next;
+    }
+
+  if (sz)
+    {
+      outcome->type = WRONG_NUMBER_OF_AXIS;
+      return NULL;
+    }
+
+  return create_integer_from_long (tot);
 }
 
 
