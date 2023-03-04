@@ -260,6 +260,14 @@
   (apply #'* (array-dimensions array)))
 
 
+(defun array-in-bounds-p (array &rest inds)
+  (and
+   (eql (array-rank array) (length inds))
+   (every (lambda (x y) (and (>= x 0) (< x y)))
+	  inds
+	  (array-dimensions array))))
+
+
 (defun char (str ind)
   (aref str ind))
 
