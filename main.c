@@ -2079,7 +2079,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 	return NO_OBJECT;
 
       input++;
-      size = --(args->multiline_comment_depth);
+      size = args->multiline_comment_depth-1;
       args->multiline_comment_depth = 0;
     }
 
@@ -2339,34 +2339,28 @@ const char *
 jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth,
 				  size_t *depth_or_new_size)
 {
-  const char *delim, *ret;
-
   if (!size)
     return NULL;
-    
-  delim = find_multiline_comment_delimiter (input, size, &size);
 
-  while (delim && depth)
+  while (depth && (input = find_multiline_comment_delimiter (input, size,
+							     &size)))
     {
-      ret = delim;
-      
-      if (*delim == '#')
+      if (*input == '#')
 	depth++;
       else
 	depth--;
 
-      delim = find_multiline_comment_delimiter (delim+2, size-2, &size);
+      input += 2, size -= 2;
     }
 
   if (!depth)
     {
-      *depth_or_new_size = size-1;
-      return ret+1;
+      *depth_or_new_size = size+1;
+      return input-1;
     }
 
   *depth_or_new_size = depth;
-  
-  return NULL;    
+  return NULL;
 }
 
 
