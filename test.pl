@@ -397,6 +397,8 @@ make_test ("(aref \"abc\" 2)", "#\\c");
 make_test ("(aref #(1 2 3) 1)", "2");
 make_test ("(aref (make-array nil))", "()");
 make_test ("(aref (make-array '(1 2 3)) 0 1 2)", "()");
+make_test ("(row-major-aref #(0 1 2) 1)", "1");
+make_test ("(row-major-aref (make-array '(3 2 1)) 5)", "()");
 make_test ("(char \"àbcdef\" 2)", "#\\c");
 make_test ("(length ())", "0");
 make_test ("(length \"aaa\")", "3");
