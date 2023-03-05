@@ -347,6 +347,29 @@
   (typep obj 'number))
 
 
+
+(defun equal (x y)
+  (cond
+    ((numberp x) (eql x y))
+    ((characterp x) (eql x y))
+    ((consp x) (and (equal (car x) (car y)) (equal (cdr x) (cdr y))))
+    (t (eq x y))))
+
+
+(defun equalp (x y)
+  (cond
+    ((and (numberp x) (numberp y)) (= x y))
+    ((and (characterp x) (characterp y)) (char-equal x y))
+    ((consp x) (and (equalp (car x) (car y)) (equalp (cdr x) (cdr y))))
+    ((and (arrayp x) (arrayp y)) (and
+				  (equal (array-dimensions x) (array-dimensions y))
+				  (dotimes (i (array-total-size x) t)
+				    (unless (equalp (row-major-aref x i) (row-major-aref y i))
+				      (return-from equalp nil)))))
+    (t (eq x y))))
+
+
+
 (defun fdefinition (fname)
   (symbol-function fname))
 
