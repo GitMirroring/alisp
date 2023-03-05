@@ -1131,6 +1131,8 @@ struct object *builtin_elt
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_aref
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_row_major_aref
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_list_length
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_length
@@ -1771,6 +1773,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
   add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
@@ -7481,6 +7485,57 @@ builtin_aref (struct object *list, struct environment *env,
 
   outcome->type = WRONG_TYPE_OF_ARGUMENT;
   return NULL;
+}
+
+
+struct object *
+builtin_row_major_aref (struct object *list, struct environment *env,
+			struct eval_outcome *outcome)
+{
+  int ind;
+  struct object *ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_ARRAY (CAR (list)) || CAR (CDR (list))->type != TYPE_BIGNUM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      if (ind < 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      ret = get_nth_character (ind, CAR (list));
+
+      if (!ret)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      return ret;
+    }
+
+  if (ind < 0 || ind >= array_total_size (CAR (list)->value_ptr.array))
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list)->value_ptr.array->value [ind]);
+  return CAR (list)->value_ptr.array->value [ind];
 }
 
 
