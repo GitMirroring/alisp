@@ -294,6 +294,62 @@
     nil))
 
 
+(defun string-upcase (s)
+  (let* ((str (string s))
+	 (ret (make-string (length str))))
+    (dotimes (i (length str))
+      (setf (aref ret i) (char-upcase (aref str i))))
+    ret))
+
+
+(defun string-downcase (s)
+  (let* ((str (string s))
+	 (ret (make-string (length str))))
+    (dotimes (i (length str))
+      (setf (aref ret i) (char-downcase (aref str i))))
+    ret))
+
+
+(defun string-capitalize (s)
+  (let* ((str (string s))
+	 (ret (make-string (length str)))
+	 (notword t))
+    (dotimes (i (length str))
+      (if (alphanumericp (aref str i))
+	  (if notword
+	      (progn
+		(setf (aref ret i) (char-upcase (aref str i)))
+		(setq notword nil))
+	      (setf (aref ret i) (aref str i)))
+	  (progn
+	    (setq notword t)
+	    (setf (aref ret i) (aref str i)))))
+    ret))
+
+
+(defun nstring-upcase (str)
+  (dotimes (i (length str))
+    (setf (aref str i) (char-upcase (aref str i))))
+  str)
+
+
+(defun nstring-downcase (str)
+  (dotimes (i (length str))
+    (setf (aref str i) (char-downcase (aref str i))))
+  str)
+
+
+(defun nstring-capitalize (str)
+  (let ((notword t))
+    (dotimes (i (length str))
+      (if (alphanumericp (aref str i))
+	  (when notword
+	    (setf (aref str i) (char-upcase (aref str i)))
+	    (setq notword nil))
+	  (setq notword t))))
+  str)
+
+
 
 (defun consp (obj)
   (typep obj 'cons))
