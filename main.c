@@ -1315,6 +1315,12 @@ struct object *builtin_lisp_implementation_type (struct object *list,
 struct object *builtin_lisp_implementation_version (struct object *list,
 						    struct environment *env,
 						    struct eval_outcome *outcome);
+struct object *builtin_software_type (struct object *list,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
+struct object *builtin_software_version (struct object *list,
+					 struct environment *env,
+					 struct eval_outcome *outcome);
 
 struct binding *create_binding_from_let_form
 (struct object *form, struct environment *env, struct eval_outcome *outcome);
@@ -1916,6 +1922,10 @@ add_standard_definitions (struct environment *env)
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
 		    builtin_lisp_implementation_version, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SOFTWARE-TYPE", env, builtin_software_type, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("SOFTWARE-VERSION", env, builtin_software_version,
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    TYPE_FUNCTION, NULL, 0);
@@ -10449,6 +10459,34 @@ builtin_lisp_implementation_version (struct object *list,
     }
 
   return create_string_from_c_string (PACKAGE_VERSION);
+}
+
+
+struct object *
+builtin_software_type (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_software_version (struct object *list, struct environment *env,
+			  struct eval_outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  return &nil_object;
 }
 
 
