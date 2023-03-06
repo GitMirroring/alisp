@@ -1303,6 +1303,12 @@ struct object *builtin_char_upcase (struct object *list, struct environment *env
 struct object *builtin_char_downcase (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
+struct object *builtin_alpha_char_p (struct object *list,
+				     struct environment *env,
+				     struct eval_outcome *outcome);
+struct object *builtin_alphanumericp (struct object *list,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -1901,6 +1907,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CHAR-UPCASE", env, builtin_char_upcase, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("CHAR-DOWNCASE", env, builtin_char_downcase, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("ALPHA-CHAR-P", env, builtin_alpha_char_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
@@ -10348,6 +10358,66 @@ builtin_char_downcase (struct object *list, struct environment *env,
     }
 
   return create_character_from_char (tolower ((unsigned char)*ch));
+}
+
+
+struct object *
+builtin_alpha_char_p (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    return &nil_object;
+
+  if (isalpha ((unsigned char) *ch))
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_alphanumericp (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  char *ch;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  if (strlen (ch) > 1)
+    return &nil_object;
+
+  if (isalnum ((unsigned char) *ch))
+    return &t_object;
+
+  return &nil_object;
 }
 
 
