@@ -366,7 +366,7 @@ symbol
   struct object_list *parent_types;
 
   struct object *(*builtin_accessor) (struct object *list,
-				      struct object *newvalform,
+				      struct object *newval,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
 
@@ -898,7 +898,8 @@ void resize_vector (struct object *vector, size_t size);
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *create_character_from_char (char ch);
-struct object *get_nth_character (int ind, struct object *str);
+struct object *get_nth_character (struct object *str, int ind);
+struct object *set_nth_character (struct object *str, int ind, char *ch);
 
 struct object *create_stream (enum stream_type type,
 			      enum stream_direction direction,
@@ -958,7 +959,7 @@ struct object *add_builtin_form (char *name, struct environment *env,
 				  struct eval_outcome *outcome),
 				 enum object_type type,
 				  struct object *(*builtin_accessor)
-				 (struct object *list, struct object *newvalform,
+				 (struct object *list, struct object *newval,
 				  struct environment *env,
 				  struct eval_outcome *outcome),
 				 int is_special_operator);
@@ -1196,12 +1197,15 @@ struct object *builtin_remove_if
 struct object *builtin_reverse
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 
-struct object *accessor_car (struct object *list, struct object *newvalform,
+struct object *accessor_car (struct object *list, struct object *newval,
 			     struct environment *env,
 			     struct eval_outcome *outcome);
-struct object *accessor_cdr (struct object *list, struct object *newvalform,
+struct object *accessor_cdr (struct object *list, struct object *newval,
 			     struct environment *env,
 			     struct eval_outcome *outcome);
+struct object *accessor_aref (struct object *list, struct object *newval,
+			      struct environment *env,
+			      struct eval_outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -1772,7 +1776,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
   add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, accessor_aref, 0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
@@ -4483,7 +4487,7 @@ create_character_from_char (char ch)
 
 
 struct object *
-get_nth_character (int ind, struct object *str)
+get_nth_character (struct object *str, int ind)
 {
   char *ch = str->value_ptr.string->value;
   size_t s = str->value_ptr.string->used_size, off;
@@ -4500,6 +4504,29 @@ get_nth_character (int ind, struct object *str)
     }
 
   return create_character_from_utf8 (ch, s);
+}
+
+
+struct object *
+set_nth_character (struct object *str, int ind, char *ch)
+{
+  char *c = str->value_ptr.string->value;
+  size_t s = str->value_ptr.string->used_size, off;
+
+  for (off = 0; ind; ind--)
+    {
+      off = next_utf8_char (ch, s);
+
+      if (!off)
+	return NULL;
+
+      c += off;
+      s -= off;
+    }
+
+  memcpy (c, ch, strlen (ch));
+
+  return create_character_from_utf8 (ch, strlen (ch));
 }
 
 
@@ -5081,7 +5108,7 @@ add_builtin_form (char *name, struct environment *env,
 		  (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome), enum object_type type,
 		  struct object *(*builtin_accessor)
-		  (struct object *list, struct object *newvalform,
+		  (struct object *list, struct object *newval,
 		   struct environment *env, struct eval_outcome *outcome),
 		  int is_special_operator)
 {
@@ -7364,7 +7391,7 @@ builtin_elt (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      ret = get_nth_character (ind, CAR (list));
+      ret = get_nth_character (CAR (list), ind);
 
       if (!ret)
 	{
@@ -7460,7 +7487,7 @@ builtin_aref (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = get_nth_character (ind, arr);
+      ret = get_nth_character (arr, ind);
 
       if (!ret)
 	{
@@ -7517,7 +7544,7 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = get_nth_character (ind, CAR (list));
+      ret = get_nth_character (CAR (list), ind);
 
       if (!ret)
 	{
@@ -8937,10 +8964,10 @@ builtin_reverse (struct object *list, struct environment *env,
 
 
 struct object *
-accessor_car (struct object *list, struct object *newvalform,
+accessor_car (struct object *list, struct object *newval,
 	      struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *obj, *val;
+  struct object *obj;
 
   if (list_length (list) != 2)
     {
@@ -8967,26 +8994,20 @@ accessor_car (struct object *list, struct object *newvalform,
       return NULL;
     }
 
-  val = evaluate_object (newvalform, env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!val)
-    return NULL;
-
+  increment_refcount_by (newval, obj->refcount - 1, obj);
   decrement_refcount_by (obj->value_ptr.cons_pair->car, obj->refcount, obj);
 
-  obj->value_ptr.cons_pair->car = val;
-  increment_refcount_by (obj->value_ptr.cons_pair->car, obj->refcount, obj);
+  obj->value_ptr.cons_pair->car = newval;
 
-  return val;
+  return newval;
 }
 
 
 struct object *
-accessor_cdr (struct object *list, struct object *newvalform,
+accessor_cdr (struct object *list, struct object *newval,
 	      struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *obj, *val;
+  struct object *obj;
 
   if (list_length (list) != 2)
     {
@@ -9013,18 +9034,96 @@ accessor_cdr (struct object *list, struct object *newvalform,
       return NULL;
     }
 
-  val = evaluate_object (newvalform, env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!val)
-    return NULL;
-
+  increment_refcount_by (newval, obj->refcount - 1, obj);
   decrement_refcount_by (obj->value_ptr.cons_pair->cdr, obj->refcount, obj);
 
-  obj->value_ptr.cons_pair->cdr = val;
-  increment_refcount_by (obj->value_ptr.cons_pair->cdr, obj->refcount, obj);
+  obj->value_ptr.cons_pair->cdr = newval;
 
-  return val;
+  return newval;
+}
+
+
+struct object *
+accessor_aref (struct object *list, struct object *newval,
+	       struct environment *env, struct eval_outcome *outcome)
+{
+  struct object *ret, *lin_ind;
+  int l = list_length (list), ind;
+
+  if (l < 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  list = evaluate_through_list (CDR (list), env, outcome);
+
+  if (!list)
+    return NULL;
+
+  if (!IS_ARRAY (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      if (l != 3)
+	{
+	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	  return NULL;
+	}
+
+      if (CAR (CDR (list))->type != TYPE_BIGNUM)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+      if (ind < 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      if (newval->type != TYPE_CHARACTER)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret = set_nth_character (CAR (list), ind, newval->value_ptr.character);
+
+      if (!ret)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+    }
+  else
+    {
+      lin_ind = builtin_array_row_major_index (list, env, outcome);
+
+      if (!lin_ind)
+	return NULL;
+
+      ind = mpz_get_si (lin_ind->value_ptr.integer);
+
+      increment_refcount_by (newval, CAR (list)->refcount-1, CAR (list));
+      decrement_refcount_by (CAR (list)->value_ptr.array->value [ind],
+			     CAR (list)->refcount, CAR (list));
+
+      CAR (list)->value_ptr.array->value [ind] = newval;
+
+      ret = newval;
+    }
+
+  decrement_refcount (list);
+
+  return ret;
 }
 
 
@@ -11170,11 +11269,14 @@ evaluate_setf (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
-	    (CAR (list), CAR (CDR (list)), env, outcome);
+	  val = evaluate_object (CAR (CDR (list)), env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!val)
 	    return NULL;
+
+	  SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
+	    (CAR (list), val, env, outcome);
 	}
       else
 	{
