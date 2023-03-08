@@ -1422,6 +1422,7 @@ int is_printer_escaping_enabled (struct environment *env);
 void print_as_symbol (const char *sym, size_t len, int print_escapes);
 void print_symbol_name (const struct symbol_name *sym, struct environment *env);
 void print_symbol (const struct symbol *sym, struct environment *env);
+void print_floating (const mpf_t f, struct environment *env);
 void print_string (const struct string *str, struct environment *env);
 void print_character (const char *character, struct environment *env);
 void print_filename (const struct filename *fn, struct environment *env);
@@ -12426,6 +12427,28 @@ print_symbol (const struct symbol *sym, struct environment *env)
 
 
 void
+print_floating (const mpf_t f, struct environment *env)
+{
+  char *out;
+  int l;
+
+  l = gmp_asprintf (&out, "%.Ff", f);
+
+  if (!strchr (out, '.'))
+    {
+      out = realloc (out, l+3);
+      out [l] = '.';
+      out [l+1] = '0';
+      out [l+2] = 0;
+    }
+
+  printf ("%s", out);
+
+  free (out);
+}
+
+
+void
 print_string (const struct string *str, struct environment *env)
 {
   size_t i;
@@ -12638,7 +12661,7 @@ print_object (const struct object *obj, struct environment *env)
       else if (obj->type == TYPE_RATIO)
 	mpq_out_str (NULL, 10, obj->value_ptr.ratio);
       else if (obj->type == TYPE_FLOAT)
-	gmp_printf ("%.Ff", obj->value_ptr.floating);
+	print_floating (obj->value_ptr.floating, env);
       else if (obj->type == TYPE_STRING)
 	print_string (obj->value_ptr.string, env);
       else if (obj->type == TYPE_CHARACTER)
