@@ -1340,6 +1340,9 @@ struct object *builtin_alpha_char_p (struct object *list,
 struct object *builtin_alphanumericp (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
+struct object *builtin_char_code (struct object *list,
+				  struct environment *env,
+				  struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -1958,6 +1961,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("CHAR-CODE", env, builtin_char_code, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -10657,6 +10661,39 @@ builtin_alphanumericp (struct object *list, struct environment *env,
     return &t_object;
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_char_code (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  char *ch;
+  long ret = 0;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ch = CAR (list)->value_ptr.character;
+
+  while (*ch)
+    {
+      ret <<= 8;
+      ret += *ch;
+
+      ch++;
+    }
+
+  return create_integer_from_long (ret);
 }
 
 
