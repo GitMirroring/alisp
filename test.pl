@@ -76,8 +76,6 @@ make_test (" #| #|\n" .
 	   "|##|\n" .
 	   "|#\n" .
 	   "  |# \"\"", "\"\"");
-make_test ("2/4", "1/2");
-make_test ("0.1s2", "10");
 make_test ("'(1 . 2)", "(1 . 2)");
 make_test ("'(1 . (2 3))", "(1 2 3)");
 make_test ("'(1 . 2\n" .
@@ -556,6 +554,10 @@ make_test ("(count-if-not #'evenp #(0 1 2))", "1");
 
 # arithmetic tests
 
+make_test ("2/4", "1/2");
+make_test ("0.1s2", "10.0");
+make_test ("0.0", "0.0");
+make_test ("0.1", "0.1");
 make_test ("(+)", "0");
 make_test ("(+ 1)", "1");
 make_test ("(+ 1 2 3)", "6");
@@ -571,8 +573,8 @@ make_test ("(/ 12 4)", "3");
 make_test ("(/ 13 4)", "13/4");
 make_test ("(/ -8)", "-1/8");
 make_test ("(/ 3 4 5)", "3/20");
-make_test ("(/ 0.5)", "2");
-make_test ("(/ 60 -2 3 5.0)", "-2");
+make_test ("(/ 0.5)", "2.0");
+make_test ("(/ 60 -2 3 5.0)", "-2.0");
 make_test ("(floor 1)", "1\n0");
 make_test ("(floor 1/2)", "0\n1/2");
 make_test ("(ceiling 2)", "2\n0");
@@ -583,8 +585,8 @@ make_test ("(truncate -.1)", "0\n-0.1");
 make_test ("(round 5)", "5\n0");
 make_test ("(round .5)", "0\n0.5");
 make_test ("(round -1.5)", "-2\n0.5");
-make_test ("(sqrt 9)", "3");
-make_test ("(sqrt 9.0)", "3");
+make_test ("(sqrt 9)", "3.0");
+make_test ("(sqrt 9.0)", "3.0");
 make_test ("(isqrt 10)", "3");
 make_test ("(= 1)", "T");
 make_test ("(= 1 1)", "T");
