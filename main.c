@@ -1243,7 +1243,7 @@ struct object *apply_arithmetic_operation
  struct eval_outcome *outcome);
 struct object *perform_division_with_remainder
 (struct object *args, enum rounding_behavior round_behavior,
- struct eval_outcome *outcome);
+ enum object_type quotient_type, struct eval_outcome *outcome);
 
 struct object *builtin_plus (struct object *list, struct environment *env,
 			     struct eval_outcome *outcome);
@@ -1255,11 +1255,19 @@ struct object *builtin_divide (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
 struct object *builtin_floor (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *builtin_ffloor (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
 struct object *builtin_ceiling (struct object *list, struct environment *env,
+				struct eval_outcome *outcome);
+struct object *builtin_fceiling (struct object *list, struct environment *env,
 				struct eval_outcome *outcome);
 struct object *builtin_truncate (struct object *list, struct environment *env,
 				 struct eval_outcome *outcome);
+struct object *builtin_ftruncate (struct object *list, struct environment *env,
+				 struct eval_outcome *outcome);
 struct object *builtin_round (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome);
+struct object *builtin_fround (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 struct object *builtin_sqrt (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
@@ -1869,9 +1877,13 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FLOOR", env, builtin_floor, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FFLOOR", env, builtin_ffloor, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CEILING", env, builtin_ceiling, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FCEILING", env, builtin_fceiling, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FTRUNCATE", env, builtin_ftruncate, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FROUND", env, builtin_fround, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SQRT", env, builtin_sqrt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COMPLEX", env, builtin_complex, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REALPART", env, builtin_realpart, TYPE_FUNCTION, NULL, 0);
@@ -9468,6 +9480,7 @@ apply_arithmetic_operation (struct object *list,
 struct object *
 perform_division_with_remainder (struct object *args,
 				 enum rounding_behavior round_behavior,
+				 enum object_type quotient_type,
 				 struct eval_outcome *outcome)
 {
   int l = list_length (args);
@@ -9519,21 +9532,35 @@ perform_division_with_remainder (struct object *args,
 
   if (op_type == TYPE_BIGNUM)
     {
-      ret = alloc_number (TYPE_BIGNUM);
-      mpz_init (ret->value_ptr.integer);
+      ret = alloc_number (quotient_type);
 
       ret2 = alloc_number (TYPE_BIGNUM);
       mpz_init (ret2->value_ptr.integer);
 
+      mpz_init (tmp);
+
       if (round_behavior == FLOOR)
-	mpz_fdiv_qr (ret->value_ptr.integer, ret2->value_ptr.integer,
-		     num->value_ptr.integer, div->value_ptr.integer);
+	mpz_fdiv_qr (tmp, ret2->value_ptr.integer, num->value_ptr.integer,
+		     div->value_ptr.integer);
       else if (round_behavior == CEILING)
-	mpz_cdiv_qr (ret->value_ptr.integer, ret2->value_ptr.integer,
-		     num->value_ptr.integer, div->value_ptr.integer);
+	mpz_cdiv_qr (tmp, ret2->value_ptr.integer, num->value_ptr.integer,
+		     div->value_ptr.integer);
       else if (round_behavior == TRUNCATE)
-	mpz_tdiv_qr (ret->value_ptr.integer, ret2->value_ptr.integer,
-		     num->value_ptr.integer, div->value_ptr.integer);
+	mpz_tdiv_qr (tmp, ret2->value_ptr.integer, num->value_ptr.integer,
+		     div->value_ptr.integer);
+
+      if (quotient_type == TYPE_BIGNUM)
+	{
+	  mpz_init (ret->value_ptr.integer);
+	  mpz_set (ret->value_ptr.integer, tmp);
+	}
+      else
+	{
+	  mpf_init (ret->value_ptr.floating);
+	  mpf_set_z (ret->value_ptr.floating, tmp);
+	}
+
+      mpz_clear (tmp);
     }
   else
     {
@@ -9576,8 +9603,12 @@ perform_division_with_remainder (struct object *args,
       mpf_mul (r, div->value_ptr.floating, q);
       mpf_sub (r, num->value_ptr.floating, r);
 
-      ret = alloc_number (TYPE_BIGNUM);
-      mpz_set_f (ret->value_ptr.integer, q);
+      ret = alloc_number (quotient_type);
+
+      if (quotient_type == TYPE_BIGNUM)
+	mpz_set_f (ret->value_ptr.integer, q);
+      else
+	mpf_set (ret->value_ptr.floating, q);
 
       ret2 = alloc_number (rem_type);
 
@@ -9745,7 +9776,15 @@ struct object *
 builtin_floor (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  return perform_division_with_remainder (list, FLOOR, outcome);
+  return perform_division_with_remainder (list, FLOOR, TYPE_BIGNUM, outcome);
+}
+
+
+struct object *
+builtin_ffloor (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, FLOOR, TYPE_FLOAT, outcome);
 }
 
 
@@ -9753,7 +9792,15 @@ struct object *
 builtin_ceiling (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
-  return perform_division_with_remainder (list, CEILING, outcome);
+  return perform_division_with_remainder (list, CEILING, TYPE_BIGNUM, outcome);
+}
+
+
+struct object *
+builtin_fceiling (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, CEILING, TYPE_FLOAT, outcome);
 }
 
 
@@ -9761,7 +9808,15 @@ struct object *
 builtin_truncate (struct object *list, struct environment *env,
 		  struct eval_outcome *outcome)
 {
-  return perform_division_with_remainder (list, TRUNCATE, outcome);
+  return perform_division_with_remainder (list, TRUNCATE, TYPE_BIGNUM, outcome);
+}
+
+
+struct object *
+builtin_ftruncate (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, TRUNCATE, TYPE_FLOAT, outcome);
 }
 
 
@@ -9769,7 +9824,17 @@ struct object *
 builtin_round (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  return perform_division_with_remainder (list, ROUND_TO_NEAREST, outcome);
+  return perform_division_with_remainder (list, ROUND_TO_NEAREST, TYPE_BIGNUM,
+					  outcome);
+}
+
+
+struct object *
+builtin_fround (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  return perform_division_with_remainder (list, ROUND_TO_NEAREST, TYPE_FLOAT,
+					  outcome);
 }
 
 
