@@ -12828,7 +12828,7 @@ print_object (const struct object *obj, struct environment *env)
       std_out->value_ptr.stream->dirty_line = 1;
 
       if (SYMBOL (obj) == &nil_object)
-	printf ("()");
+	printf ("NIL");
       else if (obj->type == TYPE_BIGNUM)
 	mpz_out_str (NULL, 10, obj->value_ptr.integer);
       else if (obj->type == TYPE_RATIO)
