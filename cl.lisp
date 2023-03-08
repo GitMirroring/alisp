@@ -26,6 +26,9 @@
 (defconstant ARRAY-TOTAL-SIZE-LIMIT 4294967296)
 
 
+(defconstant CHAR-CODE-LIMIT 4294967296)
+
+
 (defun identity (x) x)
 
 
@@ -292,6 +295,10 @@
       (if (char= char (aref str i))
 	  (return-from digit-char-p (values (floor i 2)))))
     nil))
+
+
+(defun char-int (ch)
+  (char-code ch))
 
 
 (defun string-upcase (s)
