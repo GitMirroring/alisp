@@ -580,6 +580,7 @@ make_test ("(ceiling 1/2 1)", "1\n-1/2");
 make_test ("(truncate -3 2)", "-1\n-1");
 make_test ("(truncate -1)", "-1\n0");
 make_test ("(truncate -.1)", "0\n-0.1");
+make_test ("(round 5)", "5\n0");
 make_test ("(round .5)", "0\n0.5");
 make_test ("(round -1.5)", "-2\n0.5");
 make_test ("(sqrt 9)", "3");
