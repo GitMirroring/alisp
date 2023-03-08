@@ -102,86 +102,44 @@
     } while (0)
 
 
-#define TERMINATING_MACRO_CHARS "()';\"`,"
-
-
-
 #define increment_refcount(obj) offset_refcount_by ((obj), 1, NULL, 0)
 
 #define decrement_refcount(obj) offset_refcount_by ((obj), -1, NULL, 0)
 
 
 
-
-/* not a C string. not null-terminated and explicit size. null bytes are
-   allowed inside */
-
-struct
-string
-{
-  char *value;
-  long alloc_size;
-  long used_size;
-
-  long fill_pointer;
-};
+#define TERMINATING_MACRO_CHARS "()';\"`,"
 
 
-struct
-go_tag
-{
-  struct object *name;
 
-  struct object *dest;
-
-  struct go_tag *next;
-};
-
-
-struct
-go_tag_frame
-{
-  struct go_tag *frame;
-
-  struct go_tag_frame *next;
-};
-
-
-struct
-block
-{
-  struct object *name;
-
-  struct object *body;
-
-  struct block *next;
-};
+enum
+element
+  {
+    NONE,
+    BEGIN_LIST,
+    END_LIST,
+    STRING_DELIMITER,
+    QUOTE,
+    BACKQUOTE,
+    COMMA,
+    AT,
+    SEMICOLON,
+    DOT,
+    TOKEN,
+    BEGIN_MULTILINE_COMMENT,
+    VERTICAL_BAR,
+    SHARP
+  };
 
 
-struct
-environment
-{
-  struct binding *vars;
-  int var_lex_bin_num;
-
-  struct binding *funcs;
-  int func_lex_bin_num;
-
-  struct binding *packages;
-
-  struct object *keyword_package;
-  struct object *current_package;
-
-  struct block *blocks;
-  int leavable_block_num;
-
-  struct go_tag_frame *go_tag_stack;
-  int reachable_go_tag_frame_num;
-
-  struct binding *structs;
-
-  struct object *std_out_sym, *print_escape_sym, *print_readably_sym;
-};
+enum
+readtable_case
+  {
+    CASE_UPCASE,
+    CASE_DOWNCASE,
+    CASE_PRESERVE,
+    CASE_INVERT
+  };
 
 
 struct
@@ -253,6 +211,58 @@ read_outcome
 		    | CANT_END_WITH_PACKAGE_SEPARATOR			\
 		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND \
 		    | PACKAGE_MARKER_IN_SHARP_COLON)
+
+
+
+
+struct
+go_tag
+{
+  struct object *name;
+
+  struct object *dest;
+
+  struct go_tag *next;
+};
+
+
+struct
+go_tag_frame
+{
+  struct go_tag *frame;
+
+  struct go_tag_frame *next;
+};
+
+
+struct
+block
+{
+  struct object *name;
+
+  struct object *body;
+
+  struct block *next;
+};
+
+
+enum
+binding_type
+  {
+    LEXICAL_BINDING,
+    DYNAMIC_BINDING
+  };
+
+
+struct
+binding
+{
+  enum binding_type type;
+  struct object *sym;
+  struct object *obj;
+  struct binding *next;
+};
+
 
 
 enum
@@ -328,6 +338,47 @@ object_list
 };
 
 
+
+/* not a C string. not null-terminated and explicit size. null bytes are
+   allowed inside */
+
+struct
+string
+{
+  char *value;
+  long alloc_size;
+  long used_size;
+
+  long fill_pointer;
+};
+
+
+struct
+environment
+{
+  struct binding *vars;
+  int var_lex_bin_num;
+
+  struct binding *funcs;
+  int func_lex_bin_num;
+
+  struct binding *packages;
+
+  struct object *keyword_package;
+  struct object *current_package;
+
+  struct block *blocks;
+  int leavable_block_num;
+
+  struct go_tag_frame *go_tag_stack;
+  int reachable_go_tag_frame_num;
+
+  struct binding *structs;
+
+  struct object *std_out_sym, *print_escape_sym, *print_readably_sym;
+};
+
+
 enum
 package_record_visibility
   {
@@ -400,24 +451,6 @@ symbol_name
   size_t actual_symname_used_s;
 
   struct object *sym;
-};
-
-
-enum
-binding_type
-  {
-    LEXICAL_BINDING,
-    DYNAMIC_BINDING
-  };
-
-
-struct
-binding
-{
-  enum binding_type type;
-  struct object *sym;
-  struct object *obj;
-  struct binding *next;
 };
 
 
@@ -548,6 +581,40 @@ stream
 };
 
 
+struct
+structure_slot
+{
+  struct object *name;
+  struct object *initform;
+  struct object *type;
+  int read_only;
+
+  struct structure_slot *next;
+};
+
+
+struct
+structure
+{
+  char *conc_name;
+  size_t initial_offset;
+  int named;
+
+  struct structure_slot *slots;
+};
+
+
+struct
+sharp_macro_call
+{
+  int arg;
+  int dispatch_ch;
+
+  int is_empty_list;
+  struct object *obj;
+};
+
+
 enum
 rounding_behavior
   {
@@ -643,70 +710,6 @@ object
   enum object_type type;
   union object_ptr_union value_ptr;
 };  
-
-
-struct
-structure_slot
-{
-  struct object *name;
-  struct object *initform;
-  struct object *type;
-  int read_only;
-
-  struct structure_slot *next;
-};
-
-
-struct
-structure
-{
-  char *conc_name;
-  size_t initial_offset;
-  int named;
-
-  struct structure_slot *slots;
-};
-
-
-struct
-sharp_macro_call
-{
-  int arg;
-  int dispatch_ch;
-
-  int is_empty_list;
-  struct object *obj;
-};
-
-
-enum
-element
-  {
-    NONE,
-    BEGIN_LIST,
-    END_LIST,
-    STRING_DELIMITER,
-    QUOTE,
-    BACKQUOTE,
-    COMMA,
-    AT,
-    SEMICOLON,
-    DOT,
-    TOKEN,
-    BEGIN_MULTILINE_COMMENT,
-    VERTICAL_BAR,
-    SHARP
-  };
-
-
-enum
-readtable_case
-  {
-    CASE_UPCASE,
-    CASE_DOWNCASE,
-    CASE_PRESERVE,
-    CASE_INVERT
-  };
 
 
 struct
