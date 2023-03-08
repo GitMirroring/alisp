@@ -375,6 +375,9 @@
 (defun floatp (obj)
   (typep obj 'float))
 
+(defun complexp (obj)
+  (typep obj 'complex))
+
 (defun characterp (obj)
   (typep obj 'character))
 

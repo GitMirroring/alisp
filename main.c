@@ -76,8 +76,8 @@
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
-#define IS_REAL(s) ((s)->type == TYPE_BIGNUM || (s)->type == TYPE_RATIO \
-		    || (s)->type == TYPE_FLOAT)
+#define IS_REAL(s) ((s)->type == TYPE_BIGNUM || (s)->type == TYPE_FIXNUM \
+		    || (s)->type == TYPE_RATIO || (s)->type == TYPE_FLOAT)
 
 #define IS_RATIONAL(s) ((s)->type == TYPE_BIGNUM || (s)->type == TYPE_RATIO)
 
@@ -636,6 +636,14 @@ number_comparison
   };
 
 
+struct
+complex
+{
+  struct object *real;
+  struct object *imag;
+};
+
+
 /* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
@@ -654,6 +662,7 @@ object_type
     TYPE_FIXNUM = 1 << 24,
     TYPE_RATIO = 1 << 8,
     TYPE_FLOAT = 1 << 9,
+    TYPE_COMPLEX = 1 << 24,
     TYPE_CONS_PAIR = 1 << 10,
     TYPE_STRING = 1 << 11,
     TYPE_CHARACTER = 1 << 12,
@@ -671,9 +680,10 @@ object_type
   };
 
 
-#define TYPE_PREFIX (TYPE_QUOTE | TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT | TYPE_DOT)
-#define TYPE_REAL (TYPE_BIGNUM | TYPE_RATIO | TYPE_FLOAT)
-#define TYPE_NUMBER (TYPE_REAL)
+#define TYPE_PREFIX (TYPE_QUOTE | TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT \
+		     | TYPE_DOT)
+#define TYPE_REAL (TYPE_BIGNUM | TYPE_FIXNUM | TYPE_RATIO | TYPE_FLOAT)
+#define TYPE_NUMBER (TYPE_REAL | TYPE_COMPLEX)
 
 
 union
@@ -686,6 +696,7 @@ object_ptr_union
   long *fixnum;
   mpq_t ratio;
   mpf_t floating;
+  struct complex *complex;
   struct cons_pair *cons_pair;
   struct string *string;
   char *character;
@@ -820,6 +831,7 @@ struct object *alloc_number (enum object_type numtype);
 struct object *create_number (const char *token, size_t size,
 			      size_t exp_marker_pos, int radix,
 			      enum object_type numtype);
+struct object *alloc_complex (void);
 struct object *create_integer_from_long (long num);
 struct object *create_floating_from_double (double d);
 
@@ -1094,6 +1106,8 @@ int type_double_float (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct eval_outcome *outcome);
 int type_long_float (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct eval_outcome *outcome);
+int type_complex (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct eval_outcome *outcome);
 int type_character (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct eval_outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
@@ -1249,6 +1263,12 @@ struct object *builtin_round (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 struct object *builtin_sqrt (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *builtin_complex (struct object *list, struct environment *env,
+				struct eval_outcome *outcome);
+struct object *builtin_realpart (struct object *list, struct environment *env,
+				 struct eval_outcome *outcome);
+struct object *builtin_imagpart (struct object *list, struct environment *env,
+				 struct eval_outcome *outcome);
 struct object *builtin_numbers_equal (struct object *list,
 				      struct environment *env,
 				      struct eval_outcome *outcome);
@@ -1423,6 +1443,7 @@ void print_as_symbol (const char *sym, size_t len, int print_escapes);
 void print_symbol_name (const struct symbol_name *sym, struct environment *env);
 void print_symbol (const struct symbol *sym, struct environment *env);
 void print_floating (const mpf_t f, struct environment *env);
+void print_complex (const struct complex *c, struct environment *env);
 void print_string (const struct string *str, struct environment *env);
 void print_character (const char *character, struct environment *env);
 void print_filename (const struct filename *fn, struct environment *env);
@@ -1852,6 +1873,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SQRT", env, builtin_sqrt, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("COMPLEX", env, builtin_complex, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("REALPART", env, builtin_realpart, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("IMAGPART", env, builtin_imagpart, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, NULL,
 		    0);
@@ -1958,6 +1982,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("DOUBLE-FLOAT", env, type_double_float, 1, "SINGLE-FLOAT",
 		    NULL);
   add_builtin_type ("LONG-FLOAT", env, type_long_float, 1, "SINGLE-FLOAT", NULL);
+  add_builtin_type ("COMPLEX", env, type_complex, 1, "NUMBER", NULL);
   add_builtin_type ("CHARACTER", env, type_character, 1, NULL);
   add_builtin_type ("SEQUENCE", env, type_sequence, 1, NULL);
   add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", NULL);
@@ -3441,6 +3466,19 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
   free (buf);
   
   return obj;
+}
+
+
+struct object *
+alloc_complex (void)
+{
+  struct object *ret = malloc_and_check (sizeof (*ret));
+
+  ret->refcount = 1;
+  ret->type = TYPE_COMPLEX;
+  ret->value_ptr.complex = malloc_and_check (sizeof (*ret->value_ptr.complex));
+
+  return ret;
 }
 
 
@@ -6961,6 +6999,14 @@ type_long_float (const struct object *obj, const struct object *typespec,
 
 
 int
+type_complex (const struct object *obj, const struct object *typespec,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_COMPLEX;
+}
+
+
+int
 type_character (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct eval_outcome *outcome)
 {
@@ -9760,6 +9806,122 @@ builtin_sqrt (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_complex (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *ret, *r, *i;
+  enum object_type t;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)) || (l == 2 && !IS_REAL (CAR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1 && IS_RATIONAL (CAR (list)))
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  if (l == 1)
+    {
+      ret = alloc_complex ();
+
+      increment_refcount (CAR (list));
+      ret->value_ptr.complex->real = CAR (list);
+      ret->value_ptr.complex->imag = create_floating_from_double (0.0);
+
+      return ret;
+    }
+
+  t = highest_num_type (CAR (list)->type, CAR (CDR (list))->type);
+  r = promote_number (CAR (list), t);
+  i = promote_number (CAR (CDR (list)), t);
+
+  ret = alloc_complex ();
+  ret->value_ptr.complex->real = r;
+  ret->value_ptr.complex->imag = i;
+
+  return ret;
+}
+
+
+struct object *
+builtin_realpart (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  struct object *num;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  num = CAR (list);
+
+  if (num->type == TYPE_COMPLEX)
+    {
+      increment_refcount (num->value_ptr.complex->real);
+      return num->value_ptr.complex->real;
+    }
+  else if (num->type & TYPE_REAL)
+    {
+      increment_refcount (num);
+      return num;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+}
+
+
+struct object *
+builtin_imagpart (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  struct object *num;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  num = CAR (list);
+
+  if (num->type == TYPE_COMPLEX)
+    {
+      increment_refcount (num->value_ptr.complex->imag);
+      return num->value_ptr.complex->imag;
+    }
+  else if (IS_RATIONAL (num))
+    {
+      return create_integer_from_long (0);
+    }
+  else if (num->type == TYPE_FLOAT)
+    {
+      return create_floating_from_double (0.0);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+}
+
+
+struct object *
 builtin_numbers_equal (struct object *list, struct environment *env,
 		       struct eval_outcome *outcome)
 {
@@ -12449,6 +12611,17 @@ print_floating (const mpf_t f, struct environment *env)
 
 
 void
+print_complex (const struct complex *c, struct environment *env)
+{
+  printf ("#C(");
+  print_object (c->real, env);
+  printf (" ");
+  print_object (c->imag, env);
+  printf (")");
+}
+
+
+void
 print_string (const struct string *str, struct environment *env)
 {
   size_t i;
@@ -12662,6 +12835,8 @@ print_object (const struct object *obj, struct environment *env)
 	mpq_out_str (NULL, 10, obj->value_ptr.ratio);
       else if (obj->type == TYPE_FLOAT)
 	print_floating (obj->value_ptr.floating, env);
+      else if (obj->type == TYPE_COMPLEX)
+	print_complex (obj->value_ptr.complex, env);
       else if (obj->type == TYPE_STRING)
 	print_string (obj->value_ptr.string, env);
       else if (obj->type == TYPE_CHARACTER)
@@ -13084,6 +13259,13 @@ offset_refcount_by (struct object *obj, int delta,
 	  offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
 			      antiloop_hash_t, 0);
 	}
+      else if (obj->type == TYPE_COMPLEX)
+	{
+	  offset_refcount_by (obj->value_ptr.complex->real, delta,
+			      antiloop_hash_t, 1);
+	  offset_refcount_by (obj->value_ptr.complex->imag, delta,
+			      antiloop_hash_t, 0);
+	}
       else if (obj->type == TYPE_ARRAY)
 	{
 	  sz = array_total_size (obj->value_ptr.array);
@@ -13178,6 +13360,11 @@ free_object (struct object *obj)
     free_ratio (obj);
   else if (obj->type == TYPE_FLOAT)
     free_float (obj);
+  else if (obj->type == TYPE_COMPLEX)
+    {
+      free (obj->value_ptr.complex);
+      free (obj);
+    }
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
     free_function_or_macro (obj);
   else if (obj->type == TYPE_STREAM)
