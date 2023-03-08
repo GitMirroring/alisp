@@ -9424,7 +9424,7 @@ perform_division_with_remainder (struct object *args,
 				 struct eval_outcome *outcome)
 {
   int l = list_length (args);
-  enum object_type ret_type, op_type;
+  enum object_type rem_type, op_type;
   struct object *div_, *div, *num, *half, *ret, *ret2;
   mpz_t tmp;
   mpf_t q, r;
@@ -9460,9 +9460,9 @@ perform_division_with_remainder (struct object *args,
   else
     div_ = create_integer_from_long (1);
 
-  ret_type = highest_num_type (CAR (args)->type, div_->type);
+  rem_type = highest_num_type (CAR (args)->type, div_->type);
 
-  if (ret_type == TYPE_BIGNUM && round_behavior != ROUND_TO_NEAREST)
+  if (rem_type == TYPE_BIGNUM && round_behavior != ROUND_TO_NEAREST)
     op_type = TYPE_BIGNUM;
   else
     op_type = TYPE_FLOAT;
@@ -9529,19 +9529,17 @@ perform_division_with_remainder (struct object *args,
       mpf_mul (r, div->value_ptr.floating, q);
       mpf_sub (r, num->value_ptr.floating, r);
 
-      ret = alloc_number (ret_type);
-      ret2 = alloc_number (ret_type);
+      ret = alloc_number (TYPE_BIGNUM);
+      mpz_set_f (ret->value_ptr.integer, q);
 
-      if (ret_type == TYPE_RATIO)
-	{
-	  mpq_set_f (ret->value_ptr.ratio, q);
-	  mpq_set_f (ret2->value_ptr.ratio, r);
-	}
-      else if (ret_type == TYPE_FLOAT)
-	{
-	  mpf_set (ret->value_ptr.floating, q);
-	  mpf_set (ret2->value_ptr.floating, r);
-	}
+      ret2 = alloc_number (rem_type);
+
+      if (rem_type == TYPE_BIGNUM)
+	mpz_set_f (ret2->value_ptr.integer, r);
+      else if (rem_type == TYPE_RATIO)
+	mpq_set_f (ret2->value_ptr.ratio, r);
+      else if (rem_type == TYPE_FLOAT)
+	mpf_set (ret2->value_ptr.floating, r);
 
       mpf_clear (q);
       mpf_clear (r);
