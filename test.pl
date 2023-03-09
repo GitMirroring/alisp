@@ -477,6 +477,17 @@ make_test ("(format t \"aaa~%~%\")", "aaa\n\nNIL");
 make_test ("(format t \"aa~&~&bb\")", "aa\nbb\nNIL");
 make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))",
 	   "the number is 10 and the list is (1 2 3)\nNIL");
+make_test ("(defparameter str (open \"writetest\" :direction :output))", "STR");
+make_test ("(write \"hello\" :stream str)", "\"hello\"");
+make_test ("(write #\\a :stream str)", "#\\a");
+make_test ("(write 1 :stream str)", "1");
+make_test ("(write 1/2 :stream str)", "1/2");
+make_test ("(write 0.1 :stream str)", "0.1");
+make_test ("(write (complex 1 1) :stream str)", "#C(1 1)");
+make_test ("(write-char #\\newline str)", "#\\Newline");
+make_test ("(write '(1 2 3) :stream str)", "(1 2 3)");
+make_test ("(write #(1 2 3) :stream str)", "#(1 2 3)");
+make_test ("(close str)", "T");
 make_test ("(second '(0))", "NIL");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(endp '(1 . 2))", "NIL");
