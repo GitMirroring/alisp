@@ -8122,28 +8122,33 @@ struct object *
 builtin_write_char (struct object *list, struct environment *env,
 		    struct eval_outcome *outcome)
 {
-  struct object *std_out;
+  struct stream *str;
+  int l;
 
-  if (list_length (list) != 1)
+  if (!(l = list_length (list)) || l > 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_CHARACTER)
+  if (CAR (list)->type != TYPE_CHARACTER
+      || (l == 2 && CAR (CDR (list))->type != TYPE_STREAM))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  printf ("%s", CAR (list)->value_ptr.character);
+  if (l == 2)
+    str = CAR (CDR (list))->value_ptr.stream;
+  else
+    str = inspect_variable (env->std_out_sym, env)->value_ptr.stream;
 
-  std_out = inspect_variable (env->std_out_sym, env);
+  fprintf (str->file, "%s", CAR (list)->value_ptr.character);
 
   if (!strcmp (CAR (list)->value_ptr.character, "\n"))
-    std_out->value_ptr.stream->dirty_line = 0;
+    str->dirty_line = 0;
   else
-    std_out->value_ptr.stream->dirty_line = 1;
+    str->dirty_line = 1;
 
   increment_refcount (CAR (list));
   return CAR (list);
