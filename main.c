@@ -8209,7 +8209,7 @@ builtin_open (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
   enum stream_direction dir = INPUT_STREAM;
-  struct filename *f;
+  struct string *ns;
 
   if (!list_length (list))
     {
@@ -8217,19 +8217,27 @@ builtin_open (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FILENAME)
+  if (CAR (list)->type != TYPE_FILENAME && CAR (list)->type != TYPE_STRING)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  f = CAR (list)->value_ptr.filename;
+  ns = CAR (list)->type == TYPE_FILENAME
+    ? CAR (list)->value_ptr.filename->value->value_ptr.string
+    : CAR (list)->value_ptr.string;
   list = CDR (list);
 
   while (SYMBOL (list) != &nil_object)
     {
       if (symbol_equals (CAR (list), ":DIRECTION", env))
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  if (symbol_equals (CAR (CDR (list)), ":INPUT", env))
 	    dir = INPUT_STREAM;
 	  else if (symbol_equals (CAR (CDR (list)), ":OUTPUT", env))
@@ -8248,14 +8256,14 @@ builtin_open (struct object *list, struct environment *env,
 	}
       else
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
 	  return NULL;
 	}
 
       list = CDR (list);
     }
 
-  return create_stream (BINARY_STREAM, dir, f->value->value_ptr.string, outcome);
+  return create_stream (BINARY_STREAM, dir, ns, outcome);
 }
 
 
