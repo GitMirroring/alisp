@@ -1450,18 +1450,29 @@ struct object *fresh_line (struct stream *str);
 
 int is_printer_escaping_enabled (struct environment *env);
 
-void print_as_symbol (const char *sym, size_t len, int print_escapes);
-void print_symbol_name (const struct symbol_name *sym, struct environment *env);
-void print_symbol (const struct symbol *sym, struct environment *env);
-void print_floating (const mpf_t f, struct environment *env);
-void print_complex (const struct complex *c, struct environment *env);
-void print_string (const struct string *str, struct environment *env);
-void print_character (const char *character, struct environment *env);
-void print_filename (const struct filename *fn, struct environment *env);
-void print_list (const struct cons_pair *list, struct environment *env);
-void print_array (const struct array *array, struct environment *env);
-void print_function_or_macro (const struct object *obj, struct environment *env);
-void print_object (const struct object *obj, struct environment *env);
+int print_as_symbol (const char *sym, size_t len, int print_escapes,
+		     struct stream *str);
+int print_symbol_name (const struct symbol_name *sym, struct environment *env,
+		       struct stream *str);
+int print_symbol (const struct symbol *sym, struct environment *env,
+		  struct stream *str);
+int print_floating (const mpf_t f, struct environment *env, struct stream *str);
+int print_complex (const struct complex *c, struct environment *env,
+		   struct stream *str);
+int print_string (const struct string *st, struct environment *env,
+		  struct stream *str);
+int print_character (const char *character, struct environment *env,
+		     struct stream *str);
+int print_filename (const struct filename *fn, struct environment *env,
+		    struct stream *str);
+int print_list (const struct cons_pair *list, struct environment *env,
+		struct stream *str);
+int print_array (const struct array *array, struct environment *env,
+		 struct stream *str);
+int print_function_or_macro (const struct object *obj, struct environment *env,
+			     struct stream *str);
+int print_object (const struct object *obj, struct environment *env,
+		  struct stream *str);
 
 void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const char *begin, const char *end,
@@ -1540,7 +1551,7 @@ main (int argc, char *argv [])
       result = load_file ("cl.lisp", &env, &eval_out);
 
       if (result && !opts.load_and_exit)
-	print_object (result, &env);
+	print_object (result, &env, NULL);
       else if (!opts.load_and_exit)
 	print_eval_error (&eval_out, &env);
 
@@ -1562,7 +1573,7 @@ main (int argc, char *argv [])
       result = load_file (opts.load_before_repl, &env, &eval_out);
 
       if (result && !opts.load_and_exit)
-	print_object (result, &env);
+	print_object (result, &env, NULL);
       else if (!opts.load_and_exit)
 	print_eval_error (&eval_out, &env);
 
@@ -1616,7 +1627,7 @@ main (int argc, char *argv [])
 	      std_out = inspect_variable (env.std_out_sym, &env);
 	      fresh_line (std_out->value_ptr.stream);
 
-	      print_object (result, &env);
+	      print_object (result, &env, NULL);
 	      printf ("\n");
 	      std_out->value_ptr.stream->dirty_line = 0;
 
@@ -1624,7 +1635,7 @@ main (int argc, char *argv [])
 
 	      while (vals)
 		{
-		  print_object (vals->obj, &env);
+		  print_object (vals->obj, &env, NULL);
 		  printf ("\n");
 		  std_out->value_ptr.stream->dirty_line = 0;
 		  vals = vals->next;
@@ -8071,16 +8082,50 @@ struct object *
 builtin_write (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
-  if (list_length (list) != 1)
+  struct object *obj, *str = NULL;
+
+  if (list_length (list) < 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  print_object (CAR (list), env);
+  obj = CAR (list);
+  list = CDR (list);
 
-  increment_refcount (CAR (list));
-  return CAR (list);
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":STREAM", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (list))->type == TYPE_STREAM)
+	    str = CAR (CDR (list));
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+	  return NULL;
+	}
+
+	list = CDR (list);
+    }
+
+  print_object (obj, env, str ? str->value_ptr.stream : NULL);
+
+  increment_refcount (obj);
+  return obj;
 }
 
 
@@ -12634,8 +12679,9 @@ is_printer_escaping_enabled (struct environment *env)
 }
 
 
-void
-print_as_symbol (const char *sym, size_t len, int print_escapes)
+int
+print_as_symbol (const char *sym, size_t len, int print_escapes, struct stream
+		 *str)
 {
   size_t i;
   char need_escape [] = "().,;'#\"\n\\";
@@ -12648,56 +12694,65 @@ print_as_symbol (const char *sym, size_t len, int print_escapes)
 	do_need_escape = 1;
     }
 
-  if (do_need_escape)
-    putchar ('|');
+  if (do_need_escape && putc ('|', str ? str->file : stdout) < 0)
+    return -1;
 
   for (i = 0; i < len; i++)
     {
-      if (print_escapes && (sym [i] == '|' || sym [i] == '\\'))
-	putchar ('\\');
+      if (print_escapes && (sym [i] == '|' || sym [i] == '\\')
+	  && putc ('\\', str ? str->file : stdout) < 0)
+	return -1;
 
-      putchar (sym [i]);
+      if (putc (sym [i], str ? str->file : stdout) < 0)
+	return -1;
     }
 
-  if (do_need_escape)
-    putchar ('|');
+  if (do_need_escape && putc ('|', str ? str->file : stdout) < 0)
+    return -1;
+
+  return 0;
 }
 
 
-void
-print_symbol_name (const struct symbol_name *sym, struct environment *env)
+int
+print_symbol_name (const struct symbol_name *sym, struct environment *env,
+		   struct stream *str)
 {
   int pesc = is_printer_escaping_enabled (env);
 
   if (sym->sym->value_ptr.symbol->home_package)
-    print_symbol (sym->sym->value_ptr.symbol, env);
+    return print_symbol (sym->sym->value_ptr.symbol, env, str);
   else
     {
-      if (pesc) printf ("#:");
-      print_as_symbol (sym->value, sym->used_size, 1);
+      if (pesc && fputs ("#:", str ? str->file : stdout) < 0)
+	return -1;
+
+      return print_as_symbol (sym->value, sym->used_size, 1, str);
     }
 }
 
 
-void
-print_symbol (const struct symbol *sym, struct environment *env)
+int
+print_symbol (const struct symbol *sym, struct environment *env, struct stream
+	      *str)
 {
   int pesc = is_printer_escaping_enabled (env);
 
   if (!sym->home_package)
     {
-      if (pesc)
-	printf ("#:");
+      if (pesc && fputs ("#:", str ? str->file : stdout) < 0)
+	return -1;
     }
-  else if (sym->home_package == env->keyword_package)
-    printf (":");
+  else if (sym->home_package == env->keyword_package
+	   && putc (':', str ? str->file : stdout) < 0)
+    return -1;
 
-  print_as_symbol (sym->name, sym->name_len, pesc);
+  return print_as_symbol (sym->name, sym->name_len, pesc, str);
 }
 
 
-void
-print_floating (const mpf_t f, struct environment *env)
+int
+print_floating (const mpf_t f, struct environment *env, struct stream *str)
 {
   char *out;
   int l;
@@ -12712,267 +12767,336 @@ print_floating (const mpf_t f, struct environment *env)
       out [l+2] = 0;
     }
 
-  printf ("%s", out);
+  if (fputs (out, str ? str->file : stdout) < 0)
+    {
+      free (out);
+      return -1;
+    }
 
   free (out);
+  return 0;
 }
 
 
-void
-print_complex (const struct complex *c, struct environment *env)
+int
+print_complex (const struct complex *c, struct environment *env,
+	       struct stream *str)
 {
-  printf ("#C(");
-  print_object (c->real, env);
-  printf (" ");
-  print_object (c->imag, env);
-  printf (")");
+  if (fputs ("#C(", str ? str->file : stdout) < 0)
+    return -1;
+
+  print_object (c->real, env, str);
+
+  if (putc (' ', str ? str->file : stdout) < 0)
+    return -1;
+
+  print_object (c->imag, env, str);
+
+  return fprintf (str ? str->file : stdout, ")");
 }
 
 
-void
-print_string (const struct string *str, struct environment *env)
+int
+print_string (const struct string *st, struct environment *env,
+	      struct stream *str)
 {
   size_t i;
   int pesc = is_printer_escaping_enabled (env);
 
-  if (pesc)
-    putchar ('"');
+  if (pesc && putc ('"', str ? str->file : stdout) < 0)
+    return -1;
 
-  for (i = 0; i < str->used_size; i++)
+  for (i = 0; i < st->used_size; i++)
     {
-      if (pesc && (str->value [i] == '"' || str->value [i] == '\\'))
-	putchar ('\\');
+      if (pesc && (st->value [i] == '"' || st->value [i] == '\\')
+	  && putc ('\\', str ? str->file : stdout) < 0)
+	return -1;
 
-      putchar (str->value [i]);
+      if (putc (st->value [i], str ? str->file : stdout) < 0)
+	return -1;
     }
 
   if (pesc)
-    putchar ('"');
+    return fprintf (str ? str->file : stdout, "\"");
+
+  return 0;
 }
 
 
-void
-print_character (const char *character, struct environment *env)
+int
+print_character (const char *character, struct environment *env,
+		 struct stream *str)
 {
   if (!is_printer_escaping_enabled (env))
-    {
-      printf ("%s", character);
-      return;
-    }
+    return fprintf (str ? str->file : stdout, character);
 
-  printf ("#\\");
+  if (fputs ("#\\", str ? str->file : stdout) < 0)
+    return -1;
 
   if (strlen (character) == 1)
     {
       switch (character [0])
 	{
 	case '\n':
-	  printf ("Newline");
+	  return fprintf (str ? str->file : stdout, "Newline");
 	  break;
 	case ' ':
-	  printf ("Space");
+	  return fprintf (str ? str->file : stdout, "Space");
 	  break;
 	case '\t':
-	  printf ("Tab");
+	  return fprintf (str ? str->file : stdout, "Tab");
 	  break;
 	case '\b':
-	  printf ("Backspace");
+	  return fprintf (str ? str->file : stdout, "Backspace");
 	  break;
 	case '\f':
-	  printf ("Page");
+	  return fprintf (str ? str->file : stdout, "Page");
 	  break;
 	case '\r':
-	  printf ("Return");
+	  return fprintf (str ? str->file : stdout, "Return");
 	  break;
 	default:
-	  printf ("%s", character);
+	  return fprintf (str ? str->file : stdout, character);
 	  break;
 	}
     }
   else
-    printf ("%s", character);
+    return fprintf (str ? str->file : stdout, character);
 }
 
 
-void
-print_filename (const struct filename *fn, struct environment *env)
+int
+print_filename (const struct filename *fn, struct environment *env,
+		struct stream *str)
 {
-  printf ("#P");
-  print_string (fn->value->value_ptr.string, env);
+  if (fputs ("#P", str ? str->file : stdout) < 0)
+    return -1;
+
+  return print_string (fn->value->value_ptr.string, env, str);
 }
 
 
-void
-print_list (const struct cons_pair *list, struct environment *env)
+int
+print_list (const struct cons_pair *list, struct environment *env,
+	    struct stream *str)
 {
   struct object *cdr;
-  
-  printf ("(");
 
-  print_object (list->car, env);
+  if (putc ('(', str ? str->file : stdout) < 0)
+    return -1;
+
+  if (print_object (list->car, env, str) < 0)
+    return -1;
 
   cdr = list->cdr;
-  
+
   while (cdr && SYMBOL (cdr) != &nil_object)
     {
       if (cdr->type == TYPE_CONS_PAIR)
 	{
-	  printf (" ");
-	  print_object (cdr->value_ptr.cons_pair->car, env);
+	  if (putc (' ', str ? str->file : stdout) < 0
+	      || print_object (cdr->value_ptr.cons_pair->car, env, str) < 0)
+	    return -1;
+
 	  cdr = cdr->value_ptr.cons_pair->cdr;
 	}
       else
 	{
-	  printf (" . ");
-	  print_object (cdr, env);
+	  if (fputs (" . ", str ? str->file : stdout) < 0
+	      || print_object (cdr, env, str) < 0)
+	    return -1;
+
 	  break;
 	}
     }
-  
-  printf (")");
+
+  return putc (')', str ? str->file : stdout);
 }
 
 
-void
-print_array (const struct array *array, struct environment *env)
+int
+print_array (const struct array *array, struct environment *env,
+	     struct stream *str)
 {
   int rk = array_rank (array);
   size_t i;
 
   if (rk == 1)
     {
-      printf ("#(");
+      if (fputs ("#(", str ? str->file : stdout) < 0)
+	return -1;
 
       for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer :
 		       array->alloc_size->size); i++)
 	{
-	  if (i)
-	    printf (" ");
+	  if (i && putc (' ', str ? str->file : stdout) < 0)
+	    return -1;
 
-	  print_object (array->value [i], env);
+	  if (print_object (array->value [i], env, str) < 0)
+	    return -1;
 	}
 
-      printf (")");
+      if (putc (')', str ? str->file : stdout) < 0)
+	return -1;
+      else
+	return 0;
     }
   else
-    printf ("#<ARRAY, RANK %d>", rk);
+    return fprintf (str ? str->file : stdout, "#<ARRAY, RANK %d>", rk);
 }
 
 
-void
-print_function_or_macro (const struct object *obj, struct environment *env)
+int
+print_function_or_macro (const struct object *obj, struct environment *env,
+			 struct stream *str)
 {
   if (obj->type == TYPE_FUNCTION)
     {
-      printf ("#<FUNCTION ");
+      if (fputs ("#<FUNCTION ", str ? str->file : stdout) < 0)
+	return -1;
 
-      if (obj->value_ptr.function->builtin_form)
-	printf ("BUILTIN ");
+      if (obj->value_ptr.function->builtin_form
+	  && fputs ("BUILTIN ", str ? str->file : stdout) < 0)
+	return -1;
 
       if (obj->value_ptr.function->name)
-	print_symbol (obj->value_ptr.function->name->value_ptr.symbol, env);
-      else
-	printf ("%p", (void *)obj);
+	{
+	  if (print_symbol (obj->value_ptr.function->name->value_ptr.symbol, env,
+			    str) < 0)
+	    return -1;
+	}
+      else if (fprintf (str ? str->file : stdout, "%p", (void *)obj) < 0)
+	return -1;
 
-      printf (">");
+      return putc ('>', str ? str->file : stdout);
     }
   else
     {
       if (obj->value_ptr.macro->is_special_operator)
 	{
-	  printf ("#<SPECIAL OPERATOR ");
+	  if (fputs ("#<SPECIAL OPERATOR ", str ? str->file : stdout) < 0)
+	    return -1;
 	}
       else
 	{
-	  printf ("#<MACRO ");
+	  if (fputs ("#<MACRO ", str ? str->file : stdout) < 0)
+	    return -1;
 
-	  if (obj->value_ptr.function->builtin_form)
-	    printf ("BUILTIN ");
+	  if (obj->value_ptr.function->builtin_form
+	      && fputs ("BUILTIN ", str ? str->file : stdout) < 0)
+	    return -1;
 	}
 
       if (obj->value_ptr.macro->name)
-	print_symbol (obj->value_ptr.macro->name->value_ptr.symbol, env);
-      else
-	printf ("%p", (void *)obj);
+	{
+	  if (print_symbol (obj->value_ptr.macro->name->value_ptr.symbol, env,
+			    str) < 0)
+	    return -1;
+	}
+      else if (fprintf (str ? str->file : stdout, "%p", (void *)obj) < 0)
+	return -1;
 
-      printf (">");
+      return putc ('>', str ? str->file : stdout);
     }
 }
 
 
-void
-print_object (const struct object *obj, struct environment *env)
+int
+print_object (const struct object *obj, struct environment *env,
+	      struct stream *str)
 {
   struct object *std_out;
 
   if (obj->type == TYPE_QUOTE)
     {
-      printf ("'");
-      print_object (obj->value_ptr.next, env);
+      if (putc ('\'', str ? str->file : stdout) < 0)
+	return -1;
+
+      return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      printf ("`");
-      print_object (obj->value_ptr.next, env);
+      if (putc ('`', str ? str->file : stdout) < 0)
+	return -1;
+
+      return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_COMMA)
     {
-      printf (",");
-      print_object (obj->value_ptr.next, env);
+      if (putc (',', str ? str->file : stdout) < 0)
+	return -1;
+
+      return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_AT)
     {
-      printf ("@");
-      print_object (obj->value_ptr.next, env);
+      if (putc ('@', str ? str->file : stdout) < 0)
+	return -1;
+
+      return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_DOT)
     {
-      printf (".");
-      print_object (obj->value_ptr.next, env);
+      if (putc ('.', str ? str->file : stdout) < 0)
+	return -1;
+
+      return print_object (obj->value_ptr.next, env, str);
     }
   else
     {
-      std_out = inspect_variable (env->std_out_sym, env);
-      std_out->value_ptr.stream->dirty_line = 1;
+      if (str)
+	str->dirty_line = 1;
+      else
+	{
+	  std_out = inspect_variable (env->std_out_sym, env);
+	  std_out->value_ptr.stream->dirty_line = 1;
+	}
 
       if (SYMBOL (obj) == &nil_object)
-	printf ("NIL");
+	return fputs ("NIL", str ? str->file : stdout);
       else if (obj->type == TYPE_BIGNUM)
-	mpz_out_str (NULL, 10, obj->value_ptr.integer);
+	return mpz_out_str (str ? str->file : NULL, 10, obj->value_ptr.integer)
+	  ? 0 : -1;
       else if (obj->type == TYPE_RATIO)
-	mpq_out_str (NULL, 10, obj->value_ptr.ratio);
+	return mpq_out_str (str ? str->file : NULL, 10, obj->value_ptr.ratio)
+	  ? 0 : -1;
       else if (obj->type == TYPE_FLOAT)
-	print_floating (obj->value_ptr.floating, env);
+	return print_floating (obj->value_ptr.floating, env, str);
       else if (obj->type == TYPE_COMPLEX)
-	print_complex (obj->value_ptr.complex, env);
+	return print_complex (obj->value_ptr.complex, env, str);
       else if (obj->type == TYPE_STRING)
-	print_string (obj->value_ptr.string, env);
+	return print_string (obj->value_ptr.string, env, str);
       else if (obj->type == TYPE_CHARACTER)
-	print_character (obj->value_ptr.character, env);
+	return print_character (obj->value_ptr.character, env, str);
       else if (obj->type == TYPE_FILENAME)
-	print_filename (obj->value_ptr.filename, env);
+	return print_filename (obj->value_ptr.filename, env, str);
       else if (obj->type == TYPE_SYMBOL_NAME)
-	print_symbol_name (obj->value_ptr.symbol_name, env);
+	return print_symbol_name (obj->value_ptr.symbol_name, env, str);
       else if (obj->type == TYPE_SYMBOL)
-	print_symbol (obj->value_ptr.symbol, env);
+	return print_symbol (obj->value_ptr.symbol, env, str);
       else if (obj->type == TYPE_CONS_PAIR)
-	print_list (obj->value_ptr.cons_pair, env);
+	return print_list (obj->value_ptr.cons_pair, env, str);
       else if (obj->type == TYPE_ARRAY)
-	print_array (obj->value_ptr.array, env);
+	return print_array (obj->value_ptr.array, env, str);
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
-	print_function_or_macro (obj, env);
+	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
 	{
-	  printf ("#<PACKAGE \"");
-	  print_symbol (obj->value_ptr.package->name->value_ptr.symbol, env);
-	  printf ("\">");
+	  if (fputs ("#<PACKAGE \"", str ? str->file : stdout) < 0
+	      || print_symbol (obj->value_ptr.package->name->value_ptr.symbol,
+			       env, str) < 0
+	      || fputs ("\">", str ? str->file : stdout) < 0)
+	    return -1;
+
+	  return 0;
 	}
       else if (obj->type == TYPE_ENVIRONMENT)
-	printf ("#<ENVIRONMENT %p>", (void *)obj);
+	return fprintf (str ? str->file : stdout, "#<ENVIRONMENT %p>",
+			(void *)obj);
       else if (obj->type == TYPE_STREAM)
-	printf ("#<STREAM %p>", (void *)obj);
+	return fprintf (str ? str->file : stdout, "#<STREAM %p>", (void *)obj);
       else
-	printf ("#<print not implemented>");
+	return fputs ("#<print not implemented>", str ? str->file : stdout);
     }
 }
 
@@ -13086,13 +13210,13 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
-      print_object (err->obj, env);
+      print_object (err->obj, env, NULL);
       printf (" not bound to any object\n");
     }
   else if (err->type == UNKNOWN_FUNCTION)
     {
       printf ("eval error: symbol ");
-      print_object (err->obj, env);
+      print_object (err->obj, env, NULL);
       printf (" not bound to any function, macro or special operator\n");
     }
   else if (err->type == INVALID_FUNCTION_CALL)
