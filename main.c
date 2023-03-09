@@ -5684,10 +5684,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
   *last = NULL;
 
   while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj))
-	 && car->type == TYPE_SYMBOL_NAME 
-	 && !symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&BODY", "&KEY", "&AUX", "&ALLOW_OTHER_KEYS",
-			       NULL))
+	 && !symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
+			      "&AUX", "&ALLOW_OTHER_KEYS", NULL))
     {
       increment_refcount (SYMBOL (car));
 
@@ -5717,9 +5715,8 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
   while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
     {
       if (car->type == TYPE_SYMBOL_NAME 
-	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&BODY", "&KEY", "&AUX", "&ALLOW_OTHER_KEYS",
-			       NULL))
+	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
+			      "&AUX", "&ALLOW_OTHER_KEYS", NULL))
 	{
 	  break;
 	}
@@ -5778,9 +5775,8 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
   while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
     {
       if (car->type == TYPE_SYMBOL_NAME
-	  && symname_is_among (car->value_ptr.symbol_name, "&OPTIONAL", "&REST",
-			       "&BODY", "&KEY", "&AUX", "&ALLOW_OTHER_KEYS",
-			       NULL))
+	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
+			      "&AUX", "&ALLOW_OTHER_KEYS", NULL))
 	{
 	  break;
 	}
@@ -5867,8 +5863,7 @@ parse_lambda_list (struct object *obj, struct environment *env,
   first = parse_required_parameters (obj, &last, &obj, outcome);
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && car->type == TYPE_SYMBOL_NAME
-      && symname_equals (car->value_ptr.symbol_name, "&OPTIONAL"))
+      && symbol_equals (car, "&OPTIONAL", NULL))
     {
       if (first)
 	last->next =
@@ -5878,8 +5873,7 @@ parse_lambda_list (struct object *obj, struct environment *env,
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && car->type == TYPE_SYMBOL_NAME
-      && symname_is_among (car->value_ptr.symbol_name, "&REST", "&BODY", NULL))
+      && symbol_is_among (car, NULL, "&REST", "&BODY", NULL))
     {
       increment_refcount (SYMBOL (CAR (CDR (obj))));
 
@@ -5892,8 +5886,7 @@ parse_lambda_list (struct object *obj, struct environment *env,
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && car->type == TYPE_SYMBOL_NAME
-      && symname_equals (car->value_ptr.symbol_name, "&KEY"))
+      && symbol_equals (car, "&KEY", NULL))
     {
       if (first)
 	last->next =
