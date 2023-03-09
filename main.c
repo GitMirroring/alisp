@@ -271,7 +271,7 @@ eval_outcome_type
     EVAL_OK,
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
-    KEY_NOT_FOUND_IN_FUNCALL,
+    UNKNOWN_KEYWORD_ARGUMENT,
     ODD_NUMBER_OF_ARGUMENTS,
     ODD_NUMBER_OF_KEYWORD_ARGUMENTS,
     DOTTED_LIST_NOT_ALLOWED_HERE,
@@ -6160,7 +6160,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  if (!findk || findk->type != KEYWORD_PARAM)
 	    {
-	      outcome->type = KEY_NOT_FOUND_IN_FUNCALL;
+	      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
 	      ret = NULL;
 	      goto clean_lex_env;
 	    }
@@ -13087,9 +13087,9 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
       printf ("eval error: not a function form, a macro form or a special "
 	      "form\n");
     }
-  else if (err->type == KEY_NOT_FOUND_IN_FUNCALL)
+  else if (err->type == UNKNOWN_KEYWORD_ARGUMENT)
     {
-      printf ("eval error: unknown key in keyword part of function call\n");
+      printf ("eval error: unknown keyword argument in function call\n");
     }
   else if (err->type == ODD_NUMBER_OF_ARGUMENTS)
     {
