@@ -87,8 +87,9 @@
 		   NULL)
 
 
-#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_BIGNUM | TYPE_RATIO	\
-					   | TYPE_FLOAT | TYPE_STRING	\
+#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_BIGNUM | TYPE_FIXNUM	\
+					   | TYPE_RATIO | TYPE_FLOAT \
+					   | TYPE_BYTESPEC | TYPE_STRING \
 					   | TYPE_CHARACTER | TYPE_FILENAME \
 					   | TYPE_STREAM))
 
@@ -644,6 +645,14 @@ complex
 };
 
 
+struct
+bytespec
+{
+  mpz_t size;
+  mpz_t pos;
+};
+
+
 /* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
@@ -663,20 +672,21 @@ object_type
     TYPE_RATIO = 1 << 9,
     TYPE_FLOAT = 1 << 10,
     TYPE_COMPLEX = 1 << 11,
-    TYPE_CONS_PAIR = 1 << 12,
-    TYPE_STRING = 1 << 13,
-    TYPE_CHARACTER = 1 << 14,
-    TYPE_ARRAY = 1 << 15,
-    TYPE_HASHTABLE = 1 << 16,
-    TYPE_ENVIRONMENT = 1 << 17,
-    TYPE_PACKAGE = 1 << 18,
-    TYPE_FILENAME = 1 << 19,
-    TYPE_STREAM = 1 << 20,
-    TYPE_STRUCTURE = 1 << 21,
-    TYPE_CONDITION = 1 << 22,
-    TYPE_FUNCTION = 1 << 23,
-    TYPE_MACRO = 1 << 24,
-    TYPE_SHARP_MACRO_CALL = 1 << 25,
+    TYPE_BYTESPEC = 1 << 12,
+    TYPE_CONS_PAIR = 1 << 13,
+    TYPE_STRING = 1 << 14,
+    TYPE_CHARACTER = 1 << 15,
+    TYPE_ARRAY = 1 << 16,
+    TYPE_HASHTABLE = 1 << 17,
+    TYPE_ENVIRONMENT = 1 << 18,
+    TYPE_PACKAGE = 1 << 19,
+    TYPE_FILENAME = 1 << 20,
+    TYPE_STREAM = 1 << 21,
+    TYPE_STRUCTURE = 1 << 22,
+    TYPE_CONDITION = 1 << 23,
+    TYPE_FUNCTION = 1 << 24,
+    TYPE_MACRO = 1 << 25,
+    TYPE_SHARP_MACRO_CALL = 1 << 26,
   };
 
 
@@ -697,6 +707,7 @@ object_ptr_union
   mpq_t ratio;
   mpf_t floating;
   struct complex *complex;
+  struct bytespec *bytespec;
   struct cons_pair *cons_pair;
   struct string *string;
   char *character;
@@ -856,6 +867,7 @@ struct object *alloc_empty_cons_pair (void);
 struct object *alloc_empty_list (size_t sz);
 struct object *alloc_function (void);
 struct object *alloc_sharp_macro_call (void);
+struct object *alloc_bytespec (void);
 
 struct object_list **alloc_empty_hash_table (size_t table_size);
 struct object_list **clone_hash_table (struct object_list **hash_table,
@@ -1306,6 +1318,14 @@ struct object *builtin_min (struct object *list, struct environment *env,
 struct object *builtin_max (struct object *list, struct environment *env,
 			    struct eval_outcome *outcome);
 
+struct object *builtin_byte (struct object *list, struct environment *env,
+			     struct eval_outcome *outcome);
+struct object *builtin_byte_size (struct object *list, struct environment *env,
+				  struct eval_outcome *outcome);
+struct object *builtin_byte_position (struct object *list,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
+
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 
@@ -1504,6 +1524,7 @@ void free_array (struct object *obj);
 void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
+void free_bytespec (struct object *obj);
 void free_function_or_macro (struct object *obj);
 
 void free_list_structure (struct object *list);
@@ -1964,6 +1985,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
 		    1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("BYTE-SIZE", env, builtin_byte_size, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("BYTE-POSITION", env, builtin_byte_position, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("MAKE-STRING", env, builtin_make_string, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
@@ -3838,6 +3863,23 @@ alloc_sharp_macro_call (void)
   obj->value_ptr.sharp_macro_call = call;
 
   call->is_empty_list = 0;
+
+  return obj;
+}
+
+
+struct object *
+alloc_bytespec (void)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct bytespec *bs = malloc_and_check (sizeof (*bs));
+
+  obj->type = TYPE_BYTESPEC;
+  obj->refcount = 1;
+  obj->value_ptr.bytespec = bs;
+
+  mpz_init (bs->size);
+  mpz_init (bs->pos);
 
   return obj;
 }
@@ -10333,6 +10375,88 @@ builtin_max (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_byte (struct object *list, struct environment *env,
+	      struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_BIGNUM
+      || mpz_sgn (CAR (list)->value_ptr.integer) < 0
+      || CAR (CDR (list))->type != TYPE_BIGNUM
+      || mpz_sgn (CAR (CDR (list))->value_ptr.integer) < 0)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_bytespec ();
+
+  mpz_set (ret->value_ptr.bytespec->size, CAR (list)->value_ptr.integer);
+  mpz_set (ret->value_ptr.bytespec->pos, CAR (CDR (list))->value_ptr.integer);
+
+  return ret;
+}
+
+
+struct object *
+builtin_byte_size (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_BYTESPEC)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_number (TYPE_BIGNUM);
+
+  mpz_set (ret->value_ptr.integer, CAR (list)->value_ptr.bytespec->size);
+
+  return ret;
+}
+
+
+struct object *
+builtin_byte_position (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_BYTESPEC)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_number (TYPE_BIGNUM);
+
+  mpz_set (ret->value_ptr.integer, CAR (list)->value_ptr.bytespec->pos);
+
+  return ret;
+}
+
+
+struct object *
 builtin_typep (struct object *list, struct environment *env,
 	       struct eval_outcome *outcome)
 {
@@ -13250,6 +13374,19 @@ print_object (const struct object *obj, struct environment *env,
 	return print_floating (obj->value_ptr.floating, env, str);
       else if (obj->type == TYPE_COMPLEX)
 	return print_complex (obj->value_ptr.complex, env, str);
+      else if (obj->type == TYPE_BYTESPEC)
+	{
+	  if (fputs ("#<BYTE-SPECIFIER size ", str ? str->file : stdout) < 0
+	      || mpz_out_str (str ? str->file : stdout, 10,
+			      obj->value_ptr.bytespec->size) < 0
+	      || fputs (" position ", str ? str->file : stdout) < 0
+	      || mpz_out_str (str ? str->file : stdout, 10,
+			      obj->value_ptr.bytespec->pos) < 0
+	      || fputs (">", str ? str->file : stdout) < 0)
+	    return -1;
+
+	  return 0;
+	}
       else if (obj->type == TYPE_STRING)
 	return print_string (obj->value_ptr.string, env, str);
       else if (obj->type == TYPE_CHARACTER)
@@ -13783,6 +13920,8 @@ free_object (struct object *obj)
       free (obj->value_ptr.complex);
       free (obj);
     }
+  else if (obj->type == TYPE_BYTESPEC)
+    free_bytespec (obj);
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
     free_function_or_macro (obj);
   else if (obj->type == TYPE_STREAM)
@@ -13886,6 +14025,17 @@ void
 free_float (struct object *obj)
 {
   mpf_clear (obj->value_ptr.floating);
+  free (obj);
+}
+
+
+void
+free_bytespec (struct object *obj)
+{
+  mpz_clear (obj->value_ptr.bytespec->size);
+  mpz_clear (obj->value_ptr.bytespec->pos);
+
+  free (obj->value_ptr.bytespec);
   free (obj);
 }
 
