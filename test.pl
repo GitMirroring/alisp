@@ -462,6 +462,7 @@ make_test ("(write-string \"\n" .
 	   "\")", "\n\"\n\"");
 make_test ("(write-char #\\a)", "a\n#\\a");
 make_test ("(write-char #\\newline)", "\n#\\Newline");
+make_test ("(write-byte (char-code #\\a) *standard-output*)", "a97");
 make_test ("(fresh-line)", "NIL");
 make_test ("(terpri)", "\nNIL");
 make_test ("(write-line \"aaa\")", "aaa\n\"aaa\"");
