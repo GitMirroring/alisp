@@ -618,6 +618,8 @@ make_test ("(isqrt 10)", "3");
 make_test ("(complex 1)", "1");
 make_test ("(complex 1.0)", "#C(1.0 0.0)");
 make_test ("(complex 1 1)", "#C(1 1)");
+make_test ("(complex 1 0)", "1");
+make_test ("(complex 1 0.0)", "#C(1.0 0.0)");
 make_test ("(complex 1.0 1)", "#C(1.0 1.0)");
 make_test ("(complex 1 1.0)", "#C(1.0 1.0)");
 make_test ("(realpart 1)", "1");
