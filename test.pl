@@ -164,6 +164,7 @@ make_test ("NIL", "NIL");
 make_test ("t", "T");
 make_test ("(progn)", "NIL");
 make_test ("(progn 1 2 3)", "3");
+make_test ("(progn (values 1 2 3))", "1\n2\n3");
 make_test ("(values (+ 1 0) 2 3)", "1\n2\n3");
 make_test ("(values-list '(1 2 3))", "1\n2\n3");
 make_test ("(multiple-value-list (values))", "NIL");
@@ -496,6 +497,8 @@ make_test ("(endp ())", "T");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
 make_test ("(when nil \"\" \"\" \"\")", "NIL");
 make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
+make_test ("(prog1 2 (write \"hello\"))", "\"hello\"\n2");
+make_test ("(prog2 2 3 (write \"hello\"))", "\"hello\"\n3");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
