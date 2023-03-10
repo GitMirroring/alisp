@@ -10002,6 +10002,18 @@ builtin_complex (struct object *list, struct environment *env,
       return ret;
     }
 
+  if (IS_RATIONAL (CAR (list)))
+    {
+      if ((CAR (CDR (list))->type == TYPE_BIGNUM
+	   && !mpz_sgn (CAR (CDR (list))->value_ptr.integer))
+	  || (CAR (CDR (list))->type == TYPE_RATIO
+	      && !mpq_sgn (CAR (CDR (list))->value_ptr.ratio)))
+	{
+	  increment_refcount (CAR (list));
+	  return CAR (list);
+	}
+    }
+
   t = highest_num_type (CAR (list)->type, CAR (CDR (list))->type);
   r = promote_number (CAR (list), t);
   i = promote_number (CAR (CDR (list)), t);
