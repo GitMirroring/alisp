@@ -8138,29 +8138,32 @@ builtin_write_string (struct object *list, struct environment *env,
 		      struct eval_outcome *outcome)
 {
   size_t i;
-  struct object *std_out;
+  struct stream *str;
+  int l;
 
-  if (list_length (list) != 1)
+  if (!(l = list_length (list)) || l > 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (CAR (list)->type != TYPE_STRING
+      || (l == 2 && CAR (CDR (list))->type != TYPE_STREAM))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
-    putchar (CAR (list)->value_ptr.string->value [i]);
+  str = l == 2 ? CAR (CDR (list))->value_ptr.stream
+    : inspect_variable (env->std_out_sym, env)->value_ptr.stream;
 
-  std_out = inspect_variable (env->std_out_sym, env);
+  for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
+    fputc (CAR (list)->value_ptr.string->value [i], str->file);
 
   if (CAR (list)->value_ptr.string->value [i-1] == '\n')
-    std_out->value_ptr.stream->dirty_line = 0;
+    str->dirty_line = 0;
   else
-    std_out->value_ptr.stream->dirty_line = 1;
+    str->dirty_line = 1;
 
   increment_refcount (CAR (list));
   return CAR (list);
