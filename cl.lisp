@@ -452,14 +452,14 @@
 
 
 
-(defun terpri ()
-  (write-char #\newline)
+(defun terpri (&optional (out *standard-output*))
+  (write-char #\newline out)
   nil)
 
 
-(defun write-line (string)
-  (write-string string)
-  (terpri)
+(defun write-line (string &optional (out *standard-output*))
+  (write-string string out)
+  (terpri out)
   string)
 
 
