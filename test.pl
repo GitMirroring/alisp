@@ -626,6 +626,8 @@ make_test ("(realpart 1)", "1");
 make_test ("(realpart (complex 1 2.0))", "1.0");
 make_test ("(imagpart 1)", "0");
 make_test ("(imagpart (complex 1 1/2))", "1/2");
+make_test ("(conjugate 1)", "1");
+make_test ("(conjugate (complex 1 1))", "#C(1 -1)");
 make_test ("(= 1)", "T");
 make_test ("(= 1 1)", "T");
 make_test ("(= 1 2)", "NIL");
