@@ -69,6 +69,9 @@
 (defun isqrt (num)
   (values (floor (sqrt num))))
 
+(defun conjugate (num)
+  (complex (realpart num) (- (imagpart num))))
+
 
 (defun first (list) (nth 0 list))
 (defun second (list) (nth 1 list))
