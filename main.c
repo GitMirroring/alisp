@@ -1424,6 +1424,10 @@ struct object *evaluate_funcall
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_declare
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_prog1
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_prog2
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1945,6 +1949,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FUNCALL", env, evaluate_funcall, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("PROG1", env, evaluate_prog1, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("PROG2", env, evaluate_prog2, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -11913,6 +11919,68 @@ evaluate_declare (struct object *list, struct environment *env,
   outcome->type = DECLARE_NOT_ALLOWED_HERE;
 
   return NULL;
+}
+
+
+struct object *
+evaluate_prog1 (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *tmp, *ret;
+
+  if (!list_length (list))
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  ret = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!ret)
+    return NULL;
+
+  tmp = evaluate_body (CDR (list), 0, NULL, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  decrement_refcount (tmp);
+
+  return ret;
+}
+
+
+struct object *
+evaluate_prog2 (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  struct object *tmp, *ret;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  tmp = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!tmp)
+    return NULL;
+
+  decrement_refcount (tmp);
+
+  ret = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!ret)
+    return NULL;
+
+  tmp = evaluate_body (CDR (CDR (list)), 0, NULL, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  decrement_refcount (tmp);
+
+  return ret;
 }
 
 
