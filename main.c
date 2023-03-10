@@ -1271,6 +1271,10 @@ struct object *builtin_round (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 struct object *builtin_fround (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *builtin_numerator (struct object *list, struct environment *env,
+				  struct eval_outcome *outcome);
+struct object *builtin_denominator (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome);
 struct object *builtin_sqrt (struct object *list, struct environment *env,
 			      struct eval_outcome *outcome);
 struct object *builtin_complex (struct object *list, struct environment *env,
@@ -1906,6 +1910,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("FTRUNCATE", env, builtin_ftruncate, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FROUND", env, builtin_fround, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NUMERATOR", env, builtin_numerator, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("DENOMINATOR", env, builtin_denominator, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("SQRT", env, builtin_sqrt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COMPLEX", env, builtin_complex, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REALPART", env, builtin_realpart, TYPE_FUNCTION, NULL, 0);
@@ -9930,6 +9937,71 @@ builtin_fround (struct object *list, struct environment *env,
 {
   return perform_division_with_remainder (list, ROUND_TO_NEAREST, TYPE_FLOAT,
 					  outcome);
+}
+
+
+struct object *
+builtin_numerator (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_RATIONAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_BIGNUM)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  mpq_canonicalize (CAR (list)->value_ptr.ratio);
+
+  ret = alloc_number (TYPE_BIGNUM);
+  mpq_get_num (ret->value_ptr.integer, CAR (list)->value_ptr.ratio);
+
+  return ret;
+}
+
+
+struct object *
+builtin_denominator (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_RATIONAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_BIGNUM)
+    {
+      return create_integer_from_long (1);
+    }
+
+  mpq_canonicalize (CAR (list)->value_ptr.ratio);
+
+  ret = alloc_number (TYPE_BIGNUM);
+  mpq_get_den (ret->value_ptr.integer, CAR (list)->value_ptr.ratio);
+
+  return ret;
 }
 
 
