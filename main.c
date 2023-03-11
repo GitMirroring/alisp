@@ -13757,7 +13757,8 @@ offset_refcount_by (struct object *obj, int delta,
   struct parameter *par;
   size_t i, sz;
 
-  if (!obj || obj == &nil_object || obj == &t_object)
+  if (!obj || obj == &nil_object || obj == &t_object
+      || obj->type == TYPE_PACKAGE)
     return 0;
 
   if (HAS_LEAF_TYPE (obj))
