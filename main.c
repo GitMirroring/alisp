@@ -13367,6 +13367,8 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_BIGNUM)
 	return mpz_out_str (str ? str->file : NULL, 10, obj->value_ptr.integer)
 	  ? 0 : -1;
+      else if (obj->type == TYPE_FIXNUM)
+	return fprintf (str ? str->file : stdout, "%ld", *obj->value_ptr.fixnum);
       else if (obj->type == TYPE_RATIO)
 	return mpq_out_str (str ? str->file : NULL, 10, obj->value_ptr.ratio)
 	  ? 0 : -1;
@@ -13911,6 +13913,11 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_BIGNUM)
     free_integer (obj);
+  else if (obj->type == TYPE_FIXNUM)
+    {
+      free (obj->value_ptr.fixnum);
+      free (obj);
+    }
   else if (obj->type == TYPE_RATIO)
     free_ratio (obj);
   else if (obj->type == TYPE_FLOAT)
