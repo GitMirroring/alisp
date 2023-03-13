@@ -388,6 +388,17 @@ package_record_visibility
 
 
 struct
+package_record
+{
+  enum package_record_visibility visibility;
+
+  struct object *sym;
+
+  struct package_record *next;
+};
+
+
+struct
 name_list
 {
   char *name;
@@ -408,7 +419,7 @@ package
 
   struct name_list *nicks;
 
-  struct object_list **symtable;
+  struct package_record **symtable;
 
   struct object_list *uses;
 };
@@ -443,7 +454,6 @@ symbol
   struct object *function_cell;
 
   struct object *home_package;
-  enum package_record_visibility visibility;
 };
 
 
@@ -879,6 +889,8 @@ struct object *alloc_function (void);
 struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
 
+struct package_record **alloc_empty_symtable (size_t table_size);
+
 struct object_list **alloc_empty_hash_table (size_t table_size);
 struct object_list **clone_hash_table (struct object_list **hash_table,
 				       size_t table_size);
@@ -951,9 +963,9 @@ struct object *load_file (const char *filename, struct environment *env,
 
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
-struct object_list *find_package_entry (struct object *symbol,
-					struct object_list **symtable,
-					struct object_list **prev);
+struct package_record *find_package_entry (struct object *symbol,
+					   struct package_record **symtable,
+					   struct package_record **prev);
 
 struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int do_copy,
@@ -1821,6 +1833,7 @@ void
 add_standard_definitions (struct environment *env)
 {
   struct object *cluser_package;
+  struct package_record *tr, *nr;
 
   env->keyword_package = create_package ("KEYWORD", NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
@@ -1839,12 +1852,20 @@ add_standard_definitions (struct environment *env)
   nil_symbol.home_package = env->cl_package;
 
 
-  prepend_object_to_obj_list (&t_object, &env->cl_package->value_ptr.package->
-			      symtable [hash_char_vector ("T", 1,
-							  SYMTABLE_SIZE)]);
-  prepend_object_to_obj_list (&nil_object, &env->cl_package->value_ptr.package->
-			      symtable [hash_char_vector ("NIL", 3,
-							  SYMTABLE_SIZE)]);
+  tr = malloc_and_check (sizeof (*tr));
+  tr->visibility = EXTERNAL_VISIBILITY;
+  tr->sym = &t_object;
+  tr->next = NULL;
+  env->cl_package->value_ptr.package->symtable
+    [hash_char_vector ("T", sizeof ("T"), SYMTABLE_SIZE)] = tr;
+
+  nr = malloc_and_check (sizeof (*nr));
+  nr->visibility = EXTERNAL_VISIBILITY;
+  nr->sym = &nil_object;
+  nr->next = NULL;
+  env->cl_package->value_ptr.package->symtable
+    [hash_char_vector ("NIL", sizeof ("NIL"), SYMTABLE_SIZE)] = nr;
+
 
   env->package_sym = intern_symbol_from_char_vector ("*PACKAGE*",
 						     strlen ("*PACKAGE*"), 1,
@@ -3883,6 +3904,19 @@ alloc_bytespec (void)
 }
 
 
+struct package_record **
+alloc_empty_symtable (size_t table_size)
+{
+  struct package_record **ret = malloc_and_check (table_size * sizeof (*ret));
+  size_t i;
+
+  for (i = 0; i < table_size; i++)
+    ret [i] = NULL;
+
+  return ret;
+}
+
+
 struct object_list **
 alloc_empty_hash_table (size_t table_size)
 {
@@ -4105,7 +4139,7 @@ create_package (char *name, ...)
   pack->name = name;
   pack->name_len = strlen (name);
   pack->nicks = NULL;
-  pack->symtable = alloc_empty_hash_table (SYMTABLE_SIZE);
+  pack->symtable = alloc_empty_symtable (SYMTABLE_SIZE);
 
   va_start (valist, name);
 
@@ -4889,21 +4923,21 @@ find_package (const char *name, size_t len, struct environment *env)
 }
 
 
-struct object_list *
-find_package_entry (struct object *symbol, struct object_list **symtable,
-		    struct object_list **prev)
+struct package_record *
+find_package_entry (struct object *symbol, struct package_record **symtable,
+		    struct package_record **prev)
 {
-  struct object_list *l = symtable [hash_symbol (symbol, SYMTABLE_SIZE)];
+  struct package_record *c = symtable [hash_symbol (symbol, SYMTABLE_SIZE)];
 
   *prev = NULL;
 
-  while (l && l->obj != symbol)
+  while (c && c->sym != symbol)
     {
-      *prev = l;
-      l = l->next;
+      *prev = c;
+      c = c->next;
     }
 
-  return l;
+  return c;
 }
 
 
@@ -4913,16 +4947,16 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
 {
   struct object *sym;
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
-  struct object_list *cell = package->value_ptr.package->symtable [ind],
+  struct package_record *cell = package->value_ptr.package->symtable [ind],
     *cur = cell, *new_sym;
 
   while (cur)
     {
-      if (eqmem (cur->obj->value_ptr.symbol->name,
-		 cur->obj->value_ptr.symbol->name_len, name, len))
+      if (eqmem (cur->sym->value_ptr.symbol->name,
+		 cur->sym->value_ptr.symbol->name_len, name, len))
 	{
-	  increment_refcount (cur->obj);
-	  return cur->obj;
+	  increment_refcount (cur->sym);
+	  return cur->sym;
 	}
 
       cur = cur->next;
@@ -4932,12 +4966,13 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
   sym->value_ptr.symbol->home_package = package;
 
   new_sym = malloc_and_check (sizeof (*new_sym));
-  new_sym->obj = sym;
+  new_sym->visibility = INTERNAL_VISIBILITY;
+  new_sym->sym = sym;
   new_sym->next = cell;
 
   package->value_ptr.package->symtable [ind] = new_sym;
 
-  return sym;  
+  return sym;
 }
 
 
@@ -4986,7 +5021,7 @@ unintern_symbol (struct object *sym)
 {
   struct object *s = SYMBOL (sym);
   struct object *p = s->value_ptr.symbol->home_package;
-  struct object_list *prev, *entry;
+  struct package_record *prev, *entry;
 
   entry = find_package_entry (s, p->value_ptr.package->symtable, &prev);
 
@@ -4998,7 +5033,6 @@ unintern_symbol (struct object *sym)
 
   free (entry);
 
-  /*decrement_refcount (s->value_ptr.symbol->home_package);*/
   s->value_ptr.symbol->home_package = NULL;
 }
 
@@ -11461,15 +11495,15 @@ inspect_variable_from_c_string (const char *var, struct environment *env)
 {
   size_t l = strlen (var);
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct object_list *cur = pack->value_ptr.package->symtable
+  struct package_record *cur = pack->value_ptr.package->symtable
     [hash_char_vector (var, strlen (var), SYMTABLE_SIZE)];
 
   while (cur)
     {
-      if (eqmem (cur->obj->value_ptr.symbol->name,
-		 cur->obj->value_ptr.symbol->name_len, var, l))
+      if (eqmem (cur->sym->value_ptr.symbol->name,
+		 cur->sym->value_ptr.symbol->name_len, var, l))
 	{
-	  return inspect_variable (cur->obj, env);
+	  return inspect_variable (cur->sym, env);
 	}
 
       cur = cur->next;
