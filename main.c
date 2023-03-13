@@ -363,10 +363,8 @@ environment
   struct binding *funcs;
   int func_lex_bin_num;
 
-  struct binding *packages;
-
-  struct object *keyword_package;
-  struct object *current_package;
+  struct object_list *packages;
+  struct object *cl_package, *keyword_package;
 
   struct block *blocks;
   int leavable_block_num;
@@ -376,7 +374,8 @@ environment
 
   struct binding *structs;
 
-  struct object *std_out_sym, *print_escape_sym, *print_readably_sym;
+  struct object *package_sym, *std_out_sym, *print_escape_sym,
+    *print_readably_sym;
 };
 
 
@@ -388,15 +387,26 @@ package_record_visibility
   };
 
 
+struct
+name_list
+{
+  char *name;
+  long name_len;
+
+  struct name_list *next;
+};
+
+
 #define SYMTABLE_SIZE 2048
 
 
 struct
 package
 {
-  struct object *name;
+  char *name;
+  long name_len;
 
-  struct object_list *nicks;
+  struct name_list *nicks;
 
   struct object_list **symtable;
 
@@ -888,7 +898,7 @@ void clone_lexical_environment (struct binding **lex_vars,
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
 				struct eval_outcome *outcome, int is_macro);
-struct object *create_package (char *name, size_t name_len);
+struct object *create_package (char *name, ...);
 
 const char *find_end_of_string
 (const char *input, size_t size, size_t *new_size, size_t *string_length);
@@ -1812,47 +1822,35 @@ add_standard_definitions (struct environment *env)
 {
   struct object *cluser_package;
 
-  env->keyword_package = create_package ("KEYWORD",
-					 strlen ("KEYWORD"));
-  env->packages = create_binding (env->keyword_package->value_ptr.package->name,
-				  env->keyword_package, DYNAMIC_BINDING, 1);
+  env->keyword_package = create_package ("KEYWORD", NULL);
+  prepend_object_to_obj_list (env->keyword_package, &env->packages);
 
-  env->current_package = create_package ("COMMON-LISP",
-					 strlen ("COMMON-LISP"));
-  env->packages = add_binding (create_binding
-			       (env->current_package->value_ptr.package->name,
-				env->current_package, DYNAMIC_BINDING, 1),
-			       env->packages);
-  env->packages = add_binding (create_binding
-			       (create_symbol ("CL", strlen ("CL"), 1),
-				env->current_package, DYNAMIC_BINDING, 1),
-			       env->packages);
+  env->cl_package = create_package ("COMMON-LISP", "CL", NULL);
+  prepend_object_to_obj_list (env->cl_package, &env->packages);
 
-  cluser_package = create_package ("COMMON-LISP-USER",
-				   strlen ("COMMON-LISP-USER"));
-  env->packages = add_binding (create_binding
-			       (cluser_package->value_ptr.package->name,
-				cluser_package, DYNAMIC_BINDING, 1),
-			       env->packages);
-  env->packages = add_binding (create_binding
-			       (create_symbol ("CL-USER", strlen ("CL-USER"), 1),
-				cluser_package, DYNAMIC_BINDING, 1),
-			       env->packages);
+  cluser_package = create_package ("COMMON-LISP-USER", "CL-USER", NULL);
+  prepend_object_to_obj_list (cluser_package, &env->packages);
+
 
   t_symbol.value_cell = &t_object;
-  t_symbol.home_package = env->current_package;
+  t_symbol.home_package = env->cl_package;
 
   nil_symbol.value_cell = &nil_object;
-  nil_symbol.home_package = env->current_package;
+  nil_symbol.home_package = env->cl_package;
 
-  prepend_object_to_obj_list (&t_object,
-			      &env->current_package->value_ptr.package->
+
+  prepend_object_to_obj_list (&t_object, &env->cl_package->value_ptr.package->
 			      symtable [hash_char_vector ("T", 1,
 							  SYMTABLE_SIZE)]);
-  prepend_object_to_obj_list (&nil_object,
-			      &env->current_package->value_ptr.package->
+  prepend_object_to_obj_list (&nil_object, &env->cl_package->value_ptr.package->
 			      symtable [hash_char_vector ("NIL", 3,
 							  SYMTABLE_SIZE)]);
+
+  env->package_sym = intern_symbol_from_char_vector ("*PACKAGE*",
+						     strlen ("*PACKAGE*"), 1,
+						     env->cl_package);
+  env->package_sym->value_ptr.symbol->is_parameter = 1;
+  env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
@@ -4096,14 +4094,33 @@ create_function (struct object *lambda_list, struct object *body,
 
 
 struct object *
-create_package (char *name, size_t name_len)
+create_package (char *name, ...)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct package *pack = malloc_and_check (sizeof (*pack));
-  struct object *s = create_symbol (name, name_len, 0);
+  struct name_list *nicks;
+  va_list valist;
+  char *n;
 
-  pack->name = s;
+  pack->name = name;
+  pack->name_len = strlen (name);
+  pack->nicks = NULL;
   pack->symtable = alloc_empty_hash_table (SYMTABLE_SIZE);
+
+  va_start (valist, name);
+
+  while ((n = va_arg (valist, char *)))
+    {
+      if (pack->nicks)
+	nicks = nicks->next = malloc_and_check (sizeof (*nicks));
+      else
+	pack->nicks = nicks = malloc_and_check (sizeof (*nicks));
+
+      nicks->name = n;
+      nicks->name_len = strlen (n);
+    }
+
+  va_end (valist);
 
   obj->type = TYPE_PACKAGE;
   obj->refcount = 1;
@@ -4844,15 +4861,28 @@ load_file (const char *filename, struct environment *env,
 struct object *
 find_package (const char *name, size_t len, struct environment *env)
 {
-  struct binding *bind = env->packages;
+  struct object_list *l = env->packages;
+  struct package *p;
+  struct name_list *n;
 
-  while (bind)
+  while (l)
     {
-      if (eqmem (bind->sym->value_ptr.symbol->name,
-		 bind->sym->value_ptr.symbol->name_len, name, len))
-	return bind->obj;
+      p = l->obj->value_ptr.package;
 
-      bind = bind->next;
+      if (eqmem (p->name, p->name_len, name, len))
+	return l->obj;
+
+      n = p->nicks;
+
+      while (n)
+	{
+	  if (eqmem (n->name, n->name_len, name, len))
+	    return l->obj;
+
+	  n = n->next;
+	}
+
+      l = l->next;
     }
 
   return NULL;
@@ -4944,7 +4974,7 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	}
     }
 
-  pack = env->current_package;
+  pack = inspect_variable (env->package_sym, env);
   s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1, pack);
 
   return s->sym;
@@ -5225,9 +5255,9 @@ add_builtin_type (char *name, struct environment *env,
 {
   va_list valist;
   char *s;
-  struct object *sym =
-    intern_symbol_from_char_vector (name, strlen (name), 1,
-				    env->current_package);
+  struct object *pack = inspect_variable (env->package_sym, env);
+  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
+						       pack);
   struct object *par;
 
   va_start (valist, is_standard);
@@ -5240,8 +5270,7 @@ add_builtin_type (char *name, struct environment *env,
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_from_char_vector (s, strlen (s), 1,
-					    env->current_package);
+      par = intern_symbol_from_char_vector (s, strlen (s), 1, pack);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -5260,8 +5289,9 @@ add_builtin_form (char *name, struct environment *env,
 		   struct environment *env, struct eval_outcome *outcome),
 		  int is_special_operator)
 {
+  struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       env->current_package);
+						       pack);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
@@ -5343,9 +5373,9 @@ struct object *
 define_constant_by_name (char *name, struct object *value,
 			 struct environment *env)
 {
-  struct object *sym =
-    intern_symbol_from_char_vector (name, strlen (name), 1,
-				    env->current_package);
+  struct object *pack = inspect_variable (env->package_sym, env);
+  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
+						       pack);
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -5357,9 +5387,9 @@ define_constant_by_name (char *name, struct object *value,
 struct object *
 define_variable (char *name, struct object *value, struct environment *env)
 {
-  struct object *sym =
-    intern_symbol_from_char_vector (name, strlen (name), 1,
-				    env->current_package);
+  struct object *pack = inspect_variable (env->package_sym, env);
+  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
+						       pack);
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -6361,7 +6391,7 @@ check_type_by_char_vector (const struct object *obj, char *type,
 {
   return check_type (obj,
 		     intern_symbol_from_char_vector (type, strlen (type), 1,
-						     env->current_package),
+						     env->cl_package),
 		     env, outcome);
 }
 
@@ -6391,7 +6421,7 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 {
   return is_subtype (first,
 		     intern_symbol_from_char_vector (second, strlen (second), 1,
-						     env->current_package),
+						     env->cl_package),
 		     env, outcome);
 }
 
@@ -11430,7 +11460,8 @@ struct object *
 inspect_variable_from_c_string (const char *var, struct environment *env)
 {
   size_t l = strlen (var);
-  struct object_list *cur = env->current_package->value_ptr.package->symtable
+  struct object *pack = inspect_variable (env->package_sym, env);
+  struct object_list *cur = pack->value_ptr.package->symtable
     [hash_char_vector (var, strlen (var), SYMTABLE_SIZE)];
 
   while (cur)
@@ -13408,8 +13439,8 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_PACKAGE)
 	{
 	  if (fputs ("#<PACKAGE \"", str ? str->file : stdout) < 0
-	      || print_symbol (obj->value_ptr.package->name->value_ptr.symbol,
-			       env, str) < 0
+	      || print_as_symbol (obj->value_ptr.package->name,
+				  obj->value_ptr.package->name_len, 0, str) < 0
 	      || fputs ("\">", str ? str->file : stdout) < 0)
 	    return -1;
 
