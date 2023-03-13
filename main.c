@@ -969,7 +969,8 @@ struct package_record *find_package_entry (struct object *symbol,
 
 struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int do_copy,
-					       struct object *package);
+					       struct object *package,
+					       struct package_record **record);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env);
 void unintern_symbol (struct object *sym);
@@ -1833,7 +1834,7 @@ void
 add_standard_definitions (struct environment *env)
 {
   struct object *cluser_package;
-  struct package_record *tr, *nr;
+  struct package_record *tr, *nr, *rec;
 
   env->keyword_package = create_package ("KEYWORD", NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
@@ -1869,9 +1870,10 @@ add_standard_definitions (struct environment *env)
 
   env->package_sym = intern_symbol_from_char_vector ("*PACKAGE*",
 						     strlen ("*PACKAGE*"), 1,
-						     env->cl_package);
+						     env->cl_package, &rec);
   env->package_sym->value_ptr.symbol->is_parameter = 1;
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
+  rec->visibility = EXTERNAL_VISIBILITY;
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
@@ -4943,7 +4945,8 @@ find_package_entry (struct object *symbol, struct package_record **symtable,
 
 struct object *
 intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
-				struct object *package)
+				struct object *package,
+				struct package_record **record)
 {
   struct object *sym;
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
@@ -4955,6 +4958,9 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
       if (eqmem (cur->sym->value_ptr.symbol->name,
 		 cur->sym->value_ptr.symbol->name_len, name, len))
 	{
+	  if (record)
+	    *record = cur;
+
 	  increment_refcount (cur->sym);
 	  return cur->sym;
 	}
@@ -4972,6 +4978,9 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
 
   package->value_ptr.package->symtable [ind] = new_sym;
 
+  if (record)
+    *record = new_sym;
+
   return sym;
 }
 
@@ -4988,7 +4997,7 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
-						   env->keyword_package);
+						   env->keyword_package, NULL);
 
 	  s->sym->value_ptr.symbol->is_const = 1;
 	  s->sym->value_ptr.symbol->value_cell = s->sym;
@@ -5004,13 +5013,14 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
-						   pack);
+						   pack, NULL);
 	  return s->sym;
 	}
     }
 
   pack = inspect_variable (env->package_sym, env);
-  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1, pack);
+  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1, pack,
+					   NULL);
 
   return s->sym;
 }
@@ -5290,9 +5300,12 @@ add_builtin_type (char *name, struct environment *env,
   va_list valist;
   char *s;
   struct object *pack = inspect_variable (env->package_sym, env);
+  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack);
+						       pack, &rec);
   struct object *par;
+
+  rec->visibility = EXTERNAL_VISIBILITY;
 
   va_start (valist, is_standard);
 
@@ -5304,7 +5317,7 @@ add_builtin_type (char *name, struct environment *env,
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_from_char_vector (s, strlen (s), 1, pack);
+      par = intern_symbol_from_char_vector (s, strlen (s), 1, pack, NULL);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -5324,10 +5337,13 @@ add_builtin_form (char *name, struct environment *env,
 		  int is_special_operator)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
+  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack);
+						       pack, &rec);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
+
+  rec->visibility = EXTERNAL_VISIBILITY;
 
   fun->type = type;
 
@@ -5408,8 +5424,11 @@ define_constant_by_name (char *name, struct object *value,
 			 struct environment *env)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
+  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack);
+						       pack, &rec);
+
+  rec->visibility = EXTERNAL_VISIBILITY;
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -5422,8 +5441,11 @@ struct object *
 define_variable (char *name, struct object *value, struct environment *env)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
+  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack);
+						       pack, &rec);
+
+  rec->visibility = EXTERNAL_VISIBILITY;
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -5921,7 +5943,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
 						var->value_ptr.symbol->name_len,
-						1, env->keyword_package);
+						1, env->keyword_package, NULL);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -6425,7 +6447,7 @@ check_type_by_char_vector (const struct object *obj, char *type,
 {
   return check_type (obj,
 		     intern_symbol_from_char_vector (type, strlen (type), 1,
-						     env->cl_package),
+						     env->cl_package, NULL),
 		     env, outcome);
 }
 
@@ -6455,7 +6477,7 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 {
   return is_subtype (first,
 		     intern_symbol_from_char_vector (second, strlen (second), 1,
-						     env->cl_package),
+						     env->cl_package, NULL),
 		     env, outcome);
 }
 
