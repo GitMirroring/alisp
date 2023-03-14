@@ -422,6 +422,7 @@ package
   struct package_record **symtable;
 
   struct object_list *uses;
+  struct object_list *used_by;
 };
 
 
@@ -890,6 +891,11 @@ struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
 
 struct package_record **alloc_empty_symtable (size_t table_size);
+struct package_record *inspect_accessible_symbol (char *name, size_t len,
+						  struct object *pack,
+						  int *is_inherited);
+int use_package (struct object *used, struct object *pack,
+		 struct object **conflicting);
 
 struct object_list **alloc_empty_hash_table (size_t table_size);
 struct object_list **clone_hash_table (struct object_list **hash_table,
@@ -969,8 +975,9 @@ struct package_record *find_package_entry (struct object *symbol,
 
 struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int do_copy,
-					       struct object *package,
-					       struct package_record **record);
+					       enum package_record_visibility vis,
+					       int always_create_if_missing,
+					       struct object *package);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env);
 void unintern_symbol (struct object *sym);
@@ -1834,7 +1841,7 @@ void
 add_standard_definitions (struct environment *env)
 {
   struct object *cluser_package;
-  struct package_record *tr, *nr, *rec;
+  struct package_record *rec;
 
   env->keyword_package = create_package ("KEYWORD", NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
@@ -1845,6 +1852,7 @@ add_standard_definitions (struct environment *env)
   cluser_package = create_package ("COMMON-LISP-USER", "CL-USER", NULL);
   prepend_object_to_obj_list (cluser_package, &env->packages);
 
+  use_package (env->cl_package, cluser_package, NULL);
 
   t_symbol.value_cell = &t_object;
   t_symbol.home_package = env->cl_package;
@@ -1853,27 +1861,28 @@ add_standard_definitions (struct environment *env)
   nil_symbol.home_package = env->cl_package;
 
 
-  tr = malloc_and_check (sizeof (*tr));
-  tr->visibility = EXTERNAL_VISIBILITY;
-  tr->sym = &t_object;
-  tr->next = NULL;
+  rec = malloc_and_check (sizeof (*rec));
+  rec->visibility = EXTERNAL_VISIBILITY;
+  rec->sym = &t_object;
+  rec->next = NULL;
   env->cl_package->value_ptr.package->symtable
-    [hash_char_vector ("T", sizeof ("T"), SYMTABLE_SIZE)] = tr;
+    [hash_char_vector ("T", sizeof ("T"), SYMTABLE_SIZE)] = rec;
 
-  nr = malloc_and_check (sizeof (*nr));
-  nr->visibility = EXTERNAL_VISIBILITY;
-  nr->sym = &nil_object;
-  nr->next = NULL;
+  rec = malloc_and_check (sizeof (*rec));
+  rec->visibility = EXTERNAL_VISIBILITY;
+  rec->sym = &nil_object;
+  rec->next = NULL;
   env->cl_package->value_ptr.package->symtable
-    [hash_char_vector ("NIL", sizeof ("NIL"), SYMTABLE_SIZE)] = nr;
+    [hash_char_vector ("NIL", sizeof ("NIL"), SYMTABLE_SIZE)] = rec;
 
 
   env->package_sym = intern_symbol_from_char_vector ("*PACKAGE*",
 						     strlen ("*PACKAGE*"), 1,
-						     env->cl_package, &rec);
+						     EXTERNAL_VISIBILITY, 1,
+						     env->cl_package);
   env->package_sym->value_ptr.symbol->is_parameter = 1;
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
-  rec->visibility = EXTERNAL_VISIBILITY;
+
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
   add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
@@ -2045,12 +2054,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SOFTWARE-VERSION", env, builtin_software_version,
 		    TYPE_FUNCTION, NULL, 0);
 
-  add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
-		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
-		    0);
-
   add_builtin_type ("T", env, type_t, 1, NULL);
   add_builtin_type ("NIL", env, type_nil, 1, NULL);
   add_builtin_type ("SYMBOL", env, type_symbol, 1, NULL);
@@ -2103,6 +2106,15 @@ add_standard_definitions (struct environment *env)
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
 					     env);
+
+
+  env->package_sym->value_ptr.symbol->value_cell = cluser_package;
+
+  add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
+		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
+		    0);
 }
 
 
@@ -3919,6 +3931,103 @@ alloc_empty_symtable (size_t table_size)
 }
 
 
+struct package_record *
+inspect_accessible_symbol (char *name, size_t len, struct object *pack,
+			   int *is_inherited)
+{
+  int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
+  struct package_record *cur = pack->value_ptr.package->symtable [ind];
+  struct object_list *uses;
+
+  while (cur)
+    {
+      if (eqmem (cur->sym->value_ptr.symbol->name,
+		 cur->sym->value_ptr.symbol->name_len, name, len))
+	{
+	  *is_inherited = 0;
+	  return cur;
+	}
+
+      cur = cur->next;
+    }
+
+  uses = pack->value_ptr.package->uses;
+
+  while (uses)
+    {
+      cur = uses->obj->value_ptr.package->symtable [ind];
+
+      while (cur)
+	{
+	  if (cur->visibility == EXTERNAL_VISIBILITY
+	      && eqmem (cur->sym->value_ptr.symbol->name,
+			cur->sym->value_ptr.symbol->name_len, name, len))
+	    {
+	      *is_inherited = 1;
+	      return cur;
+	    }
+
+	  cur = cur->next;
+	}
+
+      uses = uses->next;
+    }
+
+  return NULL;
+}
+
+
+int
+use_package (struct object *used, struct object *pack,
+	     struct object **conflicting)
+{
+  struct object_list *p = pack->value_ptr.package->uses;
+  struct package_record *r;
+  size_t i;
+  int inh;
+
+  while (p)
+    {
+      if (p->obj == used)
+	return 1;
+
+      p = p->next;
+    }
+
+  for (i = 0; i < SYMTABLE_SIZE; i++)
+    {
+      r = used->value_ptr.package->symtable [i];
+
+      while (r)
+	{
+	  if (r->visibility == EXTERNAL_VISIBILITY
+	      && inspect_accessible_symbol (r->sym->value_ptr.symbol->name,
+					    r->sym->value_ptr.symbol->name_len,
+					    pack, &inh))
+	    {
+	      *conflicting = r->sym;
+
+	      return 0;
+	    }
+
+	  r = r->next;
+	}
+    }
+
+  p = malloc_and_check (sizeof (*p));
+  p->obj = used;
+  p->next = pack->value_ptr.package->uses;
+  pack->value_ptr.package->uses = p;
+
+  p = malloc_and_check (sizeof (*p));
+  p->obj = pack;
+  p->next = used->value_ptr.package->used_by;
+  used->value_ptr.package->used_by = p;
+
+  return 1;
+}
+
+
 struct object_list **
 alloc_empty_hash_table (size_t table_size)
 {
@@ -4141,6 +4250,8 @@ create_package (char *name, ...)
   pack->name = name;
   pack->name_len = strlen (name);
   pack->nicks = NULL;
+  pack->uses = NULL;
+  pack->used_by = NULL;
   pack->symtable = alloc_empty_symtable (SYMTABLE_SIZE);
 
   va_start (valist, name);
@@ -4945,21 +5056,24 @@ find_package_entry (struct object *symbol, struct package_record **symtable,
 
 struct object *
 intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
-				struct object *package,
-				struct package_record **record)
+				enum package_record_visibility vis,
+				int always_create_if_missing,
+				struct object *package)
 {
   struct object *sym;
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
   struct package_record *cell = package->value_ptr.package->symtable [ind],
     *cur = cell, *new_sym;
+  struct object_list *uses;
 
   while (cur)
     {
       if (eqmem (cur->sym->value_ptr.symbol->name,
 		 cur->sym->value_ptr.symbol->name_len, name, len))
 	{
-	  if (record)
-	    *record = cur;
+	  if (vis == EXTERNAL_VISIBILITY
+	      && cur->visibility == INTERNAL_VISIBILITY)
+	    return NULL;
 
 	  increment_refcount (cur->sym);
 	  return cur->sym;
@@ -4968,18 +5082,40 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
       cur = cur->next;
     }
 
+  uses = package->value_ptr.package->uses;
+
+  while (uses)
+    {
+      cur = uses->obj->value_ptr.package->symtable [ind];
+
+      while (cur)
+	{
+	  if (cur->visibility == EXTERNAL_VISIBILITY
+	      && eqmem (cur->sym->value_ptr.symbol->name,
+			cur->sym->value_ptr.symbol->name_len, name, len))
+	    {
+	      increment_refcount (cur->sym);
+	      return cur->sym;
+	    }
+
+	  cur = cur->next;
+	}
+
+      uses = uses->next;
+    }
+
+  if (vis == EXTERNAL_VISIBILITY && !always_create_if_missing)
+    return NULL;
+
   sym = create_symbol (name, len, do_copy);
   sym->value_ptr.symbol->home_package = package;
 
   new_sym = malloc_and_check (sizeof (*new_sym));
-  new_sym->visibility = INTERNAL_VISIBILITY;
+  new_sym->visibility = vis;
   new_sym->sym = sym;
   new_sym->next = cell;
 
   package->value_ptr.package->symtable [ind] = new_sym;
-
-  if (record)
-    *record = new_sym;
 
   return sym;
 }
@@ -4997,7 +5133,8 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
-						   env->keyword_package, NULL);
+						   EXTERNAL_VISIBILITY, 1,
+						   env->keyword_package);
 
 	  s->sym->value_ptr.symbol->is_const = 1;
 	  s->sym->value_ptr.symbol->value_cell = s->sym;
@@ -5013,14 +5150,14 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
-						   pack, NULL);
+						   s->visibility, 0, pack);
 	  return s->sym;
 	}
     }
 
   pack = inspect_variable (env->package_sym, env);
-  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1, pack,
-					   NULL);
+  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1,
+					   INTERNAL_VISIBILITY, 0, pack);
 
   return s->sym;
 }
@@ -5300,12 +5437,10 @@ add_builtin_type (char *name, struct environment *env,
   va_list valist;
   char *s;
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack, &rec);
+						       EXTERNAL_VISIBILITY, 1,
+						       pack);
   struct object *par;
-
-  rec->visibility = EXTERNAL_VISIBILITY;
 
   va_start (valist, is_standard);
 
@@ -5317,7 +5452,8 @@ add_builtin_type (char *name, struct environment *env,
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_from_char_vector (s, strlen (s), 1, pack, NULL);
+      par = intern_symbol_from_char_vector (s, strlen (s), 1,
+					    EXTERNAL_VISIBILITY, 0, pack);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -5337,13 +5473,11 @@ add_builtin_form (char *name, struct environment *env,
 		  int is_special_operator)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack, &rec);
+						       EXTERNAL_VISIBILITY, 1,
+						       pack);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
-
-  rec->visibility = EXTERNAL_VISIBILITY;
 
   fun->type = type;
 
@@ -5424,11 +5558,9 @@ define_constant_by_name (char *name, struct object *value,
 			 struct environment *env)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack, &rec);
-
-  rec->visibility = EXTERNAL_VISIBILITY;
+						       EXTERNAL_VISIBILITY, 1,
+						       pack);
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -5441,11 +5573,9 @@ struct object *
 define_variable (char *name, struct object *value, struct environment *env)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct package_record *rec;
   struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       pack, &rec);
-
-  rec->visibility = EXTERNAL_VISIBILITY;
+						       EXTERNAL_VISIBILITY, 1,
+						       pack);
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -5943,7 +6073,8 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
 						var->value_ptr.symbol->name_len,
-						1, env->keyword_package, NULL);
+						1, EXTERNAL_VISIBILITY, 1,
+						env->keyword_package);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -6447,7 +6578,8 @@ check_type_by_char_vector (const struct object *obj, char *type,
 {
   return check_type (obj,
 		     intern_symbol_from_char_vector (type, strlen (type), 1,
-						     env->cl_package, NULL),
+						     EXTERNAL_VISIBILITY, 0,
+						     env->cl_package),
 		     env, outcome);
 }
 
@@ -6477,7 +6609,8 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 {
   return is_subtype (first,
 		     intern_symbol_from_char_vector (second, strlen (second), 1,
-						     env->cl_package, NULL),
+						     EXTERNAL_VISIBILITY, 0,
+						     env->cl_package),
 		     env, outcome);
 }
 
