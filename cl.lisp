@@ -370,6 +370,9 @@
 (defun symbolp (obj)
   (typep obj 'symbol))
 
+(defun keywordp (obj)
+  (typep obj 'keyword))
+
 (defun functionp (obj)
   (typep obj 'function))
 

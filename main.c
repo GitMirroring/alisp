@@ -1118,6 +1118,8 @@ int type_list (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct eval_outcome *outcome);
 int type_symbol (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
+int type_keyword (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct eval_outcome *outcome);
 int type_boolean (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct eval_outcome *outcome);
 int type_function (const struct object *obj, const struct object *typespec,
@@ -2057,6 +2059,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("T", env, type_t, 1, NULL);
   add_builtin_type ("NIL", env, type_nil, 1, NULL);
   add_builtin_type ("SYMBOL", env, type_symbol, 1, NULL);
+  add_builtin_type ("KEYWORD", env, type_keyword, 1, "SYMBOL", NULL);
   add_builtin_type ("BOOLEAN", env, type_boolean, 1, "SYMBOL", NULL);
   add_builtin_type ("FUNCTION", env, type_function, 1, NULL);
   add_builtin_type ("PACKAGE", env, type_package, 1, NULL);
@@ -7152,6 +7155,15 @@ type_symbol (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME;
+}
+
+
+int
+type_keyword (const struct object *obj, const struct object *typespec,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  return IS_SYMBOL (obj)
+    && SYMBOL (obj)->value_ptr.symbol->home_package == env->keyword_package;
 }
 
 
