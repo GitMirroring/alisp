@@ -2420,7 +2420,17 @@ struct object *
 read_object_interactively (struct environment *env, struct eval_outcome *outcome,
 			   const char **input_left, size_t *input_left_size)
 {
-  char *line = read_line_interactively ("al> ");
+  struct package *pack =
+    inspect_variable (env->package_sym, env)->value_ptr.package;
+  char *line;
+
+  fputs ("[", stdout);
+  print_as_symbol (pack->nicks ? pack->nicks->name : pack->name,
+		   pack->nicks ? pack->nicks->name_len : pack->name_len, 1,
+		   NULL);
+  fputs ("]> ", stdout);
+
+  line = read_line_interactively ("");
 
   return read_object_interactively_continued (line, strlen (line), env,
 					      outcome, input_left,
