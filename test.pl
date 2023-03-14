@@ -329,6 +329,8 @@ make_test ("(typep 0 'nil)", "NIL");
 make_test ("(typep nil nil)", "NIL");
 make_test ("(typep nil 'null)", "T");
 make_test ("(typep 'aaa 'symbol)", "T");
+make_test ("(typep :aaa 'keyword)", "T");
+make_test ("(typep 'aaa 'keyword)", "NIL");
 make_test ("(typep nil 'boolean)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
 make_test ("(typep (open #p\"README\") 'stream)", "T");
