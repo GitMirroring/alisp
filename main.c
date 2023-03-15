@@ -3289,17 +3289,19 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return create_character_from_utf8 (s->value, s->used_size);
 	}
 
-      if (eqmem (s->value, s->used_size, "nEWLINE", strlen ("nEWLINE")))
+      s->value [0] = toupper ((unsigned char)s->value [0]);
+
+      if (eqmem (s->value, s->used_size, "NEWLINE", strlen ("NEWLINE")))
 	return create_character ("\n", 1);
-      else if (eqmem (s->value, s->used_size, "sPACE", strlen ("sPACE")))
+      else if (eqmem (s->value, s->used_size, "SPACE", strlen ("SPACE")))
 	return create_character (" ", 1);
-      else if (eqmem (s->value, s->used_size, "tAB", strlen ("tAB")))
+      else if (eqmem (s->value, s->used_size, "TAB", strlen ("TAB")))
 	return create_character ("\t", 1);
-      else if (eqmem (s->value, s->used_size, "bACKSPACE", strlen ("bACKSPACE")))
+      else if (eqmem (s->value, s->used_size, "BACKSPACE", strlen ("BACKSPACE")))
 	return create_character ("\b", 1);
-      else if (eqmem (s->value, s->used_size, "pAGE", strlen ("pAGE")))
+      else if (eqmem (s->value, s->used_size, "PAGE", strlen ("PAGE")))
 	return create_character ("\f", 1);
-      else if (eqmem (s->value, s->used_size, "rETURN", strlen ("rETURN")))
+      else if (eqmem (s->value, s->used_size, "RETURN", strlen ("RETURN")))
 	return create_character ("\r", 1);
       else
 	{
