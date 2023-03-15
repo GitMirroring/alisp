@@ -1845,13 +1845,13 @@ add_standard_definitions (struct environment *env)
   struct object *cluser_package;
   struct package_record *rec;
 
-  env->keyword_package = create_package ("KEYWORD", NULL);
+  env->keyword_package = create_package ("KEYWORD", (char *)NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
 
-  env->cl_package = create_package ("COMMON-LISP", "CL", NULL);
+  env->cl_package = create_package ("COMMON-LISP", "CL", (char *)NULL);
   prepend_object_to_obj_list (env->cl_package, &env->packages);
 
-  cluser_package = create_package ("COMMON-LISP-USER", "CL-USER", NULL);
+  cluser_package = create_package ("COMMON-LISP-USER", "CL-USER", (char *)NULL);
   prepend_object_to_obj_list (cluser_package, &env->packages);
 
   use_package (env->cl_package, cluser_package, NULL);
@@ -2056,42 +2056,44 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SOFTWARE-VERSION", env, builtin_software_version,
 		    TYPE_FUNCTION, NULL, 0);
 
-  add_builtin_type ("T", env, type_t, 1, NULL);
-  add_builtin_type ("NIL", env, type_nil, 1, NULL);
-  add_builtin_type ("SYMBOL", env, type_symbol, 1, NULL);
-  add_builtin_type ("KEYWORD", env, type_keyword, 1, "SYMBOL", NULL);
-  add_builtin_type ("BOOLEAN", env, type_boolean, 1, "SYMBOL", NULL);
-  add_builtin_type ("FUNCTION", env, type_function, 1, NULL);
-  add_builtin_type ("PACKAGE", env, type_package, 1, NULL);
-  add_builtin_type ("NUMBER", env, type_number, 1, NULL);
-  add_builtin_type ("REAL", env, type_real, 1, "NUMBER", NULL);
-  add_builtin_type ("RATIONAL", env, type_rational, 1, "REAL", NULL);
-  add_builtin_type ("INTEGER", env, type_integer, 1, "RATIONAL", NULL);
-  add_builtin_type ("BIGNUM", env, type_bignum, 1, "INTEGER", NULL);
-  add_builtin_type ("FIXNUM", env, type_fixnum, 1, "INTEGER", NULL);
-  add_builtin_type ("RATIO", env, type_ratio, 1, "RATIONAL", NULL);
-  add_builtin_type ("FLOAT", env, type_float, 1, NULL);
+  add_builtin_type ("T", env, type_t, 1, (char *)NULL);
+  add_builtin_type ("NIL", env, type_nil, 1, (char *)NULL);
+  add_builtin_type ("SYMBOL", env, type_symbol, 1, (char *)NULL);
+  add_builtin_type ("KEYWORD", env, type_keyword, 1, "SYMBOL", (char *)NULL);
+  add_builtin_type ("BOOLEAN", env, type_boolean, 1, "SYMBOL", (char *)NULL);
+  add_builtin_type ("FUNCTION", env, type_function, 1, (char *)NULL);
+  add_builtin_type ("PACKAGE", env, type_package, 1, (char *)NULL);
+  add_builtin_type ("NUMBER", env, type_number, 1, (char *)NULL);
+  add_builtin_type ("REAL", env, type_real, 1, "NUMBER", (char *)NULL);
+  add_builtin_type ("RATIONAL", env, type_rational, 1, "REAL", (char *)NULL);
+  add_builtin_type ("INTEGER", env, type_integer, 1, "RATIONAL", (char *)NULL);
+  add_builtin_type ("BIGNUM", env, type_bignum, 1, "INTEGER", (char *)NULL);
+  add_builtin_type ("FIXNUM", env, type_fixnum, 1, "INTEGER", (char *)NULL);
+  add_builtin_type ("RATIO", env, type_ratio, 1, "RATIONAL", (char *)NULL);
+  add_builtin_type ("FLOAT", env, type_float, 1, (char *)NULL);
   add_builtin_type ("SHORT-FLOAT", env, type_short_float, 1, "SINGLE-FLOAT",
-		    NULL);
+		    (char *)NULL);
   add_builtin_type ("SINGLE-FLOAT", env, type_single_float, 1, "FLOAT",
-		    "SHORT-FLOAT", "DOUBLE-FLOAT", "LONG-FLOAT", NULL);
+		    "SHORT-FLOAT", "DOUBLE-FLOAT", "LONG-FLOAT", (char *)NULL);
   add_builtin_type ("DOUBLE-FLOAT", env, type_double_float, 1, "SINGLE-FLOAT",
-		    NULL);
-  add_builtin_type ("LONG-FLOAT", env, type_long_float, 1, "SINGLE-FLOAT", NULL);
-  add_builtin_type ("COMPLEX", env, type_complex, 1, "NUMBER", NULL);
-  add_builtin_type ("CHARACTER", env, type_character, 1, NULL);
-  add_builtin_type ("SEQUENCE", env, type_sequence, 1, NULL);
-  add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", NULL);
-  add_builtin_type ("CONS", env, type_cons, 1, "LIST", "SEQUENCE", NULL);
-  add_builtin_type ("ATOM", env, type_atom, 1, NULL);
-  add_builtin_type ("ARRAY", env, type_array, 1, NULL);
-  add_builtin_type ("VECTOR", env, type_vector, 1, "ARRAY", "SEQUENCE", NULL);
+		    (char *)NULL);
+  add_builtin_type ("LONG-FLOAT", env, type_long_float, 1, "SINGLE-FLOAT",
+		    (char *)NULL);
+  add_builtin_type ("COMPLEX", env, type_complex, 1, "NUMBER", (char *)NULL);
+  add_builtin_type ("CHARACTER", env, type_character, 1, (char *)NULL);
+  add_builtin_type ("SEQUENCE", env, type_sequence, 1, (char *)NULL);
+  add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", (char *)NULL);
+  add_builtin_type ("CONS", env, type_cons, 1, "LIST", "SEQUENCE", (char *)NULL);
+  add_builtin_type ("ATOM", env, type_atom, 1, (char *)NULL);
+  add_builtin_type ("ARRAY", env, type_array, 1, (char *)NULL);
+  add_builtin_type ("VECTOR", env, type_vector, 1, "ARRAY", "SEQUENCE",
+		    (char *)NULL);
   add_builtin_type ("STRING", env, type_string, 1, "VECTOR", "ARRAY", "SEQUENCE",
-		    NULL);
+		    (char *)NULL);
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
-		    NULL);
-  add_builtin_type ("PATHNAME", env, type_pathname, 1, NULL);
-  add_builtin_type ("STREAM", env, type_stream, 1, NULL);
+		    (char *)NULL);
+  add_builtin_type ("PATHNAME", env, type_pathname, 1, (char *)NULL);
+  add_builtin_type ("STREAM", env, type_stream, 1, (char *)NULL);
 
 
   define_constant_by_name ("MOST-POSITIVE-FIXNUM",
@@ -5986,7 +5988,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
   while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj))
 	 && !symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			      "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
     {
       increment_refcount (SYMBOL (car));
 
@@ -6017,7 +6019,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
     {
       if (car->type == TYPE_SYMBOL_NAME 
 	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			      "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
 	{
 	  break;
 	}
@@ -6077,7 +6079,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
     {
       if (car->type == TYPE_SYMBOL_NAME
 	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			      "&AUX", "&ALLOW_OTHER_KEYS", NULL))
+			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
 	{
 	  break;
 	}
@@ -6175,7 +6177,7 @@ parse_lambda_list (struct object *obj, struct environment *env,
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && symbol_is_among (car, NULL, "&REST", "&BODY", NULL))
+      && symbol_is_among (car, NULL, "&REST", "&BODY", (char *)NULL))
     {
       increment_refcount (SYMBOL (CAR (CDR (obj))));
 
