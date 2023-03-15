@@ -137,6 +137,7 @@ make_test ("#\\\\", "#\\\\");
 make_test ("#\\|", "#\\|");
 make_test ("#\\newLINE", "#\\Newline");
 make_test ("#\\\n ", "#\\Newline");
+make_test ("#\\Newline", "#\\Newline");
 make_test ("#.\"\"", "\"\"");
 make_test ("#p\".\"", "#P\".\"");
 make_test ("#(1 2 3)", "#(1 2 3)");
