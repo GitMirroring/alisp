@@ -926,7 +926,7 @@ struct object *alloc_string (size_t size);
 struct object *create_string_from_char_vector (const char *str, size_t size);
 struct object *create_string_from_c_string (const char *str);
 void resize_string (struct object *string, size_t size);
-char *copy_to_c_string (struct string *str);
+char *copy_string_to_c_string (struct string *str);
 
 struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
 void resize_symbol_name (struct object *symname, size_t value_s,
@@ -956,10 +956,10 @@ struct object *create_character_from_char (char ch);
 struct object *get_nth_character (struct object *str, int ind);
 struct object *set_nth_character (struct object *str, int ind, char *ch);
 
-struct object *create_stream (enum stream_type type,
-			      enum stream_direction direction,
-			      struct string *filename,
-			      struct eval_outcome *outcome);
+struct object *create_file_stream (enum stream_type type,
+				   enum stream_direction direction,
+				   struct string *filename,
+				   struct eval_outcome *outcome);
 struct object *create_stream_from_open_file (enum stream_type type,
 					     enum stream_direction direction,
 					     FILE *file);
@@ -4402,7 +4402,7 @@ resize_string (struct object *string, size_t size)
 
 
 char *
-copy_to_c_string (struct string *str)
+copy_string_to_c_string (struct string *str)
 {
   char *ret = malloc_and_check (str->used_size + 1);
 
@@ -4860,12 +4860,12 @@ set_nth_character (struct object *str, int ind, char *ch)
 
 
 struct object *
-create_stream (enum stream_type type, enum stream_direction direction,
-	       struct string *filename, struct eval_outcome *outcome)
+create_file_stream (enum stream_type type, enum stream_direction direction,
+		    struct string *filename, struct eval_outcome *outcome)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct stream *str = malloc_and_check (sizeof (*str));
-  char *fn = copy_to_c_string (filename);
+  char *fn = copy_string_to_c_string (filename);
 
   if (direction == INPUT_STREAM)
     str->file = fopen (fn, "r");
@@ -8575,7 +8575,7 @@ builtin_load (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fn = copy_to_c_string (CAR (list)->value_ptr.string);
+  fn = copy_string_to_c_string (CAR (list)->value_ptr.string);
 
   ret = load_file (fn, env, outcome);
 
@@ -8644,7 +8644,7 @@ builtin_open (struct object *list, struct environment *env,
       list = CDR (list);
     }
 
-  return create_stream (BINARY_STREAM, dir, ns, outcome);
+  return create_file_stream (BINARY_STREAM, dir, ns, outcome);
 }
 
 
