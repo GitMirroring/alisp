@@ -3260,7 +3260,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 
   if (macro_call->dispatch_ch == '\'')
     {
-      if (obj->type != TYPE_SYMBOL && obj->type != TYPE_SYMBOL_NAME)
+      if (!IS_SYMBOL (obj))
 	{
 	  *r_outcome = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 
@@ -5336,8 +5336,7 @@ collect_go_tags (struct object *body)
 	  destfind = CDR (body);
 
 	  while (SYMBOL (destfind) != &nil_object && (dest = CAR (destfind))
-		 && (dest->type == TYPE_SYMBOL_NAME
-		     || dest->type == TYPE_BIGNUM))
+		 && (IS_SYMBOL (dest) || dest->type == TYPE_BIGNUM))
 	    destfind = CDR (destfind);
 
 	  ret = add_go_tag (car, destfind, ret);
@@ -5403,9 +5402,8 @@ find_go_tag (struct object *tagname, struct go_tag_frame *frame)
     {
       if (tagname->type == t->name->type)
 	{
-	  if ((tagname->type == TYPE_SYMBOL_NAME
-	       && tagname->value_ptr.symbol_name->sym
-	       == t->name->value_ptr.symbol_name->sym)
+	  if ((IS_SYMBOL (tagname)
+	       && SYMBOL (tagname) == SYMBOL (t->name))
 	      || (tagname->type == TYPE_BIGNUM
 		  && !mpz_cmp (tagname->value_ptr.integer,
 			       t->name->value_ptr.integer)))
@@ -6017,13 +6015,13 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
   while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
     {
-      if (car->type == TYPE_SYMBOL_NAME 
+      if (IS_SYMBOL (car)
 	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
 			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
 	{
 	  break;
 	}
-      else if (car->type == TYPE_SYMBOL_NAME)
+      else if (IS_SYMBOL (car))
 	{
 	  increment_refcount (SYMBOL (car));
 
@@ -6077,13 +6075,13 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
   while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
     {
-      if (car->type == TYPE_SYMBOL_NAME
+      if (IS_SYMBOL (car)
 	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
 			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
 	{
 	  break;
 	}
-      else if (car->type == TYPE_SYMBOL_NAME)
+      else if (IS_SYMBOL (car))
 	{
 	  var = SYMBOL (car);
 	  increment_refcount (var);
@@ -6610,8 +6608,7 @@ type_starts_with (const struct object *typespec, const char *type,
     return 1;
 
   if (typespec->type == TYPE_CONS_PAIR
-      && (CAR (typespec)->type == TYPE_SYMBOL_NAME
-	  || CAR (typespec)->type == TYPE_SYMBOL)
+      && IS_SYMBOL (CAR (typespec))
       && symbol_equals (CAR (typespec), type, env))
     return 1;
 
@@ -7045,7 +7042,7 @@ evaluate_list (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_SYMBOL_NAME)
+  if (!IS_SYMBOL (CAR (list)))
     {
       outcome->type = INVALID_FUNCTION_CALL;
       outcome->obj = CAR (list);
@@ -12033,7 +12030,7 @@ evaluate_defun (struct object *list, struct environment *env,
 {
   struct object *fun, *sym;
 
-  if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
+  if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
@@ -12080,7 +12077,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
 {
   struct object *mac, *sym;
 
-  if (list_length (list) < 2 || CAR (list)->type != TYPE_SYMBOL_NAME
+  if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
