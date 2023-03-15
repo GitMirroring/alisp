@@ -1559,6 +1559,7 @@ void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
 void free_function_or_macro (struct object *obj);
 
+void free_sharp_macro_call (struct object *macro);
 void free_list_structure (struct object *list);
 
 void print_welcome_message (void);
@@ -2227,9 +2228,9 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 {
   enum read_outcome out;
   int bts, cs;
-  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref,
-					       NULL, NULL);
-  struct object *l;
+  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref, NULL,
+					       NULL);
+  struct object *l, *call;
 
   backts_commas_balance += (bts - cs);
 
@@ -2293,8 +2294,10 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
       if (out == COMPLETE_OBJECT)
 	{
-	  ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
+	  call = ob;
+	  ob = call_sharp_macro (call->value_ptr.sharp_macro_call, env, outcome,
 				 &out);
+	  free_sharp_macro_call (call);
 
 	  if (out & READ_ERROR)
 	    {
@@ -2682,7 +2685,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	     struct read_outcome_args *args)
 {
   int found_prefix = 0;
-  struct object *last_pref, *ob = NULL;
+  struct object *last_pref, *ob = NULL, *call;
   enum object_type numtype;
   enum read_outcome out = NO_OBJECT;
   const char *num_end;
@@ -2750,8 +2753,10 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (out == COMPLETE_OBJECT)
 	    {
-	      ob = call_sharp_macro (ob->value_ptr.sharp_macro_call, env, outcome,
-				     &out);
+	      call = ob;
+	      ob = call_sharp_macro (call->value_ptr.sharp_macro_call, env,
+				     outcome, &out);
+	      free_sharp_macro_call (call);
 
 	      if (out & READ_ERROR)
 		{
@@ -14305,6 +14310,14 @@ free_function_or_macro (struct object *obj)
 
   free (obj->value_ptr.function);
   free (obj);
+}
+
+
+void
+free_sharp_macro_call (struct object *macro)
+{
+  free (macro->value_ptr.sharp_macro_call);
+  free (macro);
 }
 
 
