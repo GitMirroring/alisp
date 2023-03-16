@@ -2998,7 +2998,7 @@ read_string (struct object **obj, const char *input, size_t size,
 
   if (!*string_end)
     out = INCOMPLETE_STRING;
-    
+
   if (!ob)
     {
       ob = alloc_string (length);
@@ -3009,13 +3009,13 @@ read_string (struct object **obj, const char *input, size_t size,
 
   if (!length)
     return COMPLETE_OBJECT;
-    
+
   str = ob->value_ptr.string;
-  
+
   normalize_string (str->value + str->used_size, input, size);
-  
+
   str->used_size += length;
-  
+
   return out;
 }
 
@@ -3096,7 +3096,7 @@ read_prefix (struct object **obj, const char *input, size_t size,
   enum element el;
   int num_backts, num_commas;
   int found_comma = 0;
-  
+
   if (!size)
     return NO_OBJECT;
 
@@ -3106,14 +3106,14 @@ read_prefix (struct object **obj, const char *input, size_t size,
 
   if (*backts_commas_balance < 0)
     return TOO_MANY_COMMAS;
-  
+
   el = find_next_element (input, size, &n);
-  
+
   while (el == QUOTE || el == BACKQUOTE || el == COMMA || el == AT || el == DOT)
     {
       if ((el == AT || el == DOT) && !found_comma)
 	return JUST_PREFIX;
-      
+
       *prefix_end = n;
 
       if (!*last)
@@ -13243,8 +13243,8 @@ is_printer_escaping_enabled (struct environment *env)
 
 
 int
-print_as_symbol (const char *sym, size_t len, int print_escapes, struct stream
-		 *str)
+print_as_symbol (const char *sym, size_t len, int print_escapes,
+		 struct stream *str)
 {
   size_t i;
   char need_escape [] = "().,;'#\"\n\\";
@@ -13296,8 +13296,8 @@ print_symbol_name (const struct symbol_name *sym, struct environment *env,
 
 
 int
-print_symbol (const struct symbol *sym, struct environment *env, struct stream
-	      *str)
+print_symbol (const struct symbol *sym, struct environment *env,
+	      struct stream *str)
 {
   int pesc = is_printer_escaping_enabled (env);
 
@@ -13750,7 +13750,8 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     }
   else if (err == TOO_MANY_COLONS)
     {
-      printf ("read error: more than two consecutive colons cannot appear in a token\n");
+      printf ("read error: more than two consecutive colons cannot appear in a "
+	      "token\n");
     }
   else if (err == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE)
     {
@@ -13773,7 +13774,8 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     }
   else if (err == PACKAGE_MARKER_IN_SHARP_COLON)
     {
-      printf ("read error: a package marker can't appear in a sharp-colon macro\n");
+      printf ("read error: a package marker can't appear in a sharp-colon "
+	      "macro\n");
     }
 }
 
