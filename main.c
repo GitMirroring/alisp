@@ -8447,7 +8447,10 @@ builtin_write (struct object *list, struct environment *env,
 	list = CDR (list);
     }
 
-  print_object (obj, env, str ? str->value_ptr.stream : NULL);
+  if (!str)
+    str = inspect_variable (env->std_out_sym, env);
+
+  print_object (obj, env, str->value_ptr.stream);
 
   increment_refcount (obj);
   return obj;
