@@ -925,7 +925,7 @@ void normalize_string (char *output, const char *input, size_t size);
 struct object *alloc_string (size_t size);
 struct object *create_string_from_char_vector (const char *str, size_t size);
 struct object *create_string_from_c_string (const char *str);
-void resize_string (struct object *string, size_t size);
+void resize_string_allocation (struct object *string, size_t size);
 char *copy_string_to_c_string (struct string *str);
 
 struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
@@ -3005,7 +3005,7 @@ read_string (struct object **obj, const char *input, size_t size,
       *obj = ob;
     }
   else
-    resize_string (ob, ob->value_ptr.string->used_size + length);  
+    resize_string_allocation (ob, ob->value_ptr.string->used_size + length);
 
   if (!length)
     return COMPLETE_OBJECT;
@@ -4394,8 +4394,11 @@ create_string_from_c_string (const char *str)
 
 
 void
-resize_string (struct object *string, size_t size)
+resize_string_allocation (struct object *string, size_t size)
 {
+  if (size == string->value_ptr.string->alloc_size)
+    return;
+
   string->value_ptr.string->value =
     realloc_and_check (string->value_ptr.string->value, size);
 
@@ -8970,11 +8973,13 @@ builtin_concatenate (struct object *list, struct environment *env,
 
       for (i = 1; i < l; i++)
 	{
-	  resize_string (ret, ret->value_ptr.string->alloc_size
-			 + nth (i, list)->value_ptr.string->used_size);
+	  resize_string_allocation (ret, ret->value_ptr.string->alloc_size
+				    + nth (i, list)->value_ptr.string->used_size);
+
 	  memcpy (ret->value_ptr.string->value + ret->value_ptr.string->used_size,
 		  nth (i, list)->value_ptr.string->value,
 		  nth(i, list)->value_ptr.string->used_size);
+
 	  ret->value_ptr.string->used_size += nth (i, list)->
 	    value_ptr.string->used_size;
 	}
