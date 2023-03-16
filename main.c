@@ -374,6 +374,8 @@ environment
 
   struct binding *structs;
 
+  struct object *c_stdout;
+
   struct object *package_sym, *std_out_sym, *print_escape_sym,
     *print_readably_sym;
 };
@@ -1589,7 +1591,7 @@ main (int argc, char *argv [])
   int c;
 #endif
 
-  struct object *result, *obj, *std_out;
+  struct object *result, *obj, *c_stdout;
   struct object_list *vals;
   struct environment env = {NULL};
 
@@ -1605,6 +1607,8 @@ main (int argc, char *argv [])
 
   add_standard_definitions (&env);
 
+  c_stdout = env.c_stdout;
+
   if (!opts.load_and_exit)
     print_welcome_message ();
 
@@ -1616,7 +1620,7 @@ main (int argc, char *argv [])
       result = load_file ("cl.lisp", &env, &eval_out);
 
       if (result && !opts.load_and_exit)
-	print_object (result, &env, NULL);
+	print_object (result, &env, c_stdout->value_ptr.stream);
       else if (!opts.load_and_exit)
 	print_eval_error (&eval_out, &env);
 
@@ -1625,8 +1629,7 @@ main (int argc, char *argv [])
       if (!opts.load_and_exit)
 	{
 	  printf ("\n");
-	  std_out = inspect_variable (env.std_out_sym, &env);
-	  std_out->value_ptr.stream->dirty_line = 0;
+	  c_stdout->value_ptr.stream->dirty_line = 0;
 	}
     }
 
@@ -1638,7 +1641,7 @@ main (int argc, char *argv [])
       result = load_file (opts.load_before_repl, &env, &eval_out);
 
       if (result && !opts.load_and_exit)
-	print_object (result, &env, NULL);
+	print_object (result, &env, c_stdout->value_ptr.stream);
       else if (!opts.load_and_exit)
 	print_eval_error (&eval_out, &env);
 
@@ -1689,20 +1692,19 @@ main (int argc, char *argv [])
 	    eval_out.no_value = 0;
 	  else
 	    {
-	      std_out = inspect_variable (env.std_out_sym, &env);
-	      fresh_line (std_out->value_ptr.stream);
+	      fresh_line (c_stdout->value_ptr.stream);
 
-	      print_object (result, &env, NULL);
+	      print_object (result, &env, c_stdout->value_ptr.stream);
 	      printf ("\n");
-	      std_out->value_ptr.stream->dirty_line = 0;
+	      c_stdout->value_ptr.stream->dirty_line = 0;
 
 	      vals = eval_out.other_values;
 
 	      while (vals)
 		{
-		  print_object (vals->obj, &env, NULL);
+		  print_object (vals->obj, &env, c_stdout->value_ptr.stream);
 		  printf ("\n");
-		  std_out->value_ptr.stream->dirty_line = 0;
+		  c_stdout->value_ptr.stream->dirty_line = 0;
 		  vals = vals->next;
 		}
 
@@ -2105,11 +2107,11 @@ add_standard_definitions (struct environment *env)
 
   define_variable ("*STANDARD-INPUT*", create_stream_from_open_file
 		   (CHARACTER_STREAM, INPUT_STREAM, stdin), env);
-  env->std_out_sym = define_variable
-    ("*STANDARD-OUTPUT*", create_stream_from_open_file (CHARACTER_STREAM,
-							OUTPUT_STREAM,
-							stdout), env);
 
+  env->c_stdout = create_stream_from_open_file (CHARACTER_STREAM, OUTPUT_STREAM,
+						stdout);
+
+  env->std_out_sym = define_variable ("*STANDARD-OUTPUT*", env->c_stdout, env);
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
 					     env);
@@ -13809,13 +13811,13 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
-      print_object (err->obj, env, NULL);
+      print_object (err->obj, env, env->c_stdout->value_ptr.stream);
       printf (" not bound to any object\n");
     }
   else if (err->type == UNKNOWN_FUNCTION)
     {
       printf ("eval error: symbol ");
-      print_object (err->obj, env, NULL);
+      print_object (err->obj, env, env->c_stdout->value_ptr.stream);
       printf (" not bound to any function, macro or special operator\n");
     }
   else if (err->type == INVALID_FUNCTION_CALL)
