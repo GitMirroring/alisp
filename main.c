@@ -787,6 +787,7 @@ void *al_memmem (const void *haystack, size_t haystacklen, const void *needle,
 
 char *al_readline (const char prompt []);
 char *read_line_interactively (const char prompt []);
+char *generate_prompt (struct environment *env);
 
 enum read_outcome read_object_continued
 (struct object **obj, int backts_commas_balance, int is_empty_list,
@@ -2219,6 +2220,25 @@ read_line_interactively (const char prompt [])
 }
 
 
+char *
+generate_prompt (struct environment *env)
+{
+  struct package *pack =
+    inspect_variable (env->package_sym, env)->value_ptr.package;
+  size_t s = pack->nicks ? pack->nicks->name_len + 5 : pack->name_len + 5;
+  char *ret = malloc_and_check (s);
+
+  ret [0] = '[';
+  memcpy (ret+1, pack->nicks ? pack->nicks->name : pack->name, s);
+  ret [s-4] = ']';
+  ret [s-3] = '>';
+  ret [s-2] = ' ';
+  ret [s-1] = 0;
+
+  return ret;
+}
+
+
 enum read_outcome
 read_object_continued (struct object **obj, int backts_commas_balance,
 		       int is_empty_list, const char *input, size_t size,
@@ -2425,21 +2445,17 @@ struct object *
 read_object_interactively (struct environment *env, struct eval_outcome *outcome,
 			   const char **input_left, size_t *input_left_size)
 {
-  struct package *pack =
-    inspect_variable (env->package_sym, env)->value_ptr.package;
-  char *line;
+  char *pr = generate_prompt (env), *line;
+  struct object *ret;
 
-  fputs ("[", stdout);
-  print_as_symbol (pack->nicks ? pack->nicks->name : pack->name,
-		   pack->nicks ? pack->nicks->name_len : pack->name_len, 1,
-		   NULL);
-  fputs ("]> ", stdout);
+  line = read_line_interactively (pr);
 
-  line = read_line_interactively ("");
+  ret = read_object_interactively_continued (line, strlen (line), env, outcome,
+					     input_left, input_left_size);
 
-  return read_object_interactively_continued (line, strlen (line), env,
-					      outcome, input_left,
-					      input_left_size);
+  free (pr);
+
+  return ret;
 }
 
 
