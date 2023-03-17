@@ -73,6 +73,22 @@
   (complex (realpart num) (- (imagpart num))))
 
 
+(defparameter *gensym-counter* 1)
+
+(defun gensym (&optional x)
+  (let ((str (make-string-output-stream)))
+    (cond
+      ((stringp x) (write-string x str)
+       (write *gensym-counter* :stream str)
+       (incf *gensym-counter*))
+      ((integerp x) (write-string "G" str)
+       (write x :stream str))
+      ((null x) (write-string "G" str)
+       (write *gensym-counter* :stream str)
+       (incf *gensym-counter*)))
+    (make-symbol (get-output-stream-string str))))
+
+
 (defun first (list) (nth 0 list))
 (defun second (list) (nth 1 list))
 (defun third (list) (nth 2 list))
