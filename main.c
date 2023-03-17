@@ -573,6 +573,14 @@ filename
 
 
 enum
+stream_medium
+  {
+    FILE_STREAM,
+    STRING_STREAM
+  };
+
+
+enum
 stream_type
   {
     CHARACTER_STREAM,
@@ -593,11 +601,15 @@ stream_direction
 struct
 stream
 {
+  enum stream_medium medium;
+
   enum stream_type type;
 
   enum stream_direction direction;
 
   FILE *file;
+
+  struct object *string;
 
   int is_open;
 
@@ -966,6 +978,8 @@ struct object *create_file_stream (enum stream_type type,
 struct object *create_stream_from_open_file (enum stream_type type,
 					     enum stream_direction direction,
 					     FILE *file);
+struct object *create_string_stream (enum stream_direction direction,
+				     struct object *instr);
 
 struct object *load_file (const char *filename, struct environment *env,
 			  struct eval_outcome *outcome);
@@ -1237,6 +1251,10 @@ struct object *builtin_open_stream_p
 struct object *builtin_input_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_output_stream_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_make_string_output_stream
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_get_output_stream_string
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_upper_case_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1515,15 +1533,22 @@ struct object *fresh_line (struct stream *str);
 
 int is_printer_escaping_enabled (struct environment *env);
 
+int write_to_stream (struct stream *stream, const char *str, size_t size);
+int write_char_to_stream (struct stream *stream, char ch);
+int write_long_to_stream (struct stream *stream, long z);
+
 int print_as_symbol (const char *sym, size_t len, int print_escapes,
 		     struct stream *str);
 int print_symbol_name (const struct symbol_name *sym, struct environment *env,
 		       struct stream *str);
 int print_symbol (const struct symbol *sym, struct environment *env,
 		  struct stream *str);
+int print_bignum (const mpz_t z, struct environment *env, struct stream *str);
 int print_floating (const mpf_t f, struct environment *env, struct stream *str);
 int print_complex (const struct complex *c, struct environment *env,
 		   struct stream *str);
+int print_bytespec (const struct bytespec *bs, struct environment *env,
+		    struct stream *str);
 int print_string (const struct string *st, struct environment *env,
 		  struct stream *str);
 int print_character (const char *character, struct environment *env,
@@ -1938,6 +1963,10 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("OUTPUT-STREAM-P", env, builtin_output_stream_p,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-STRING-OUTPUT-STREAM", env,
+		    builtin_make_string_output_stream, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("GET-OUTPUT-STREAM-STRING", env,
+		    builtin_get_output_stream_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, TYPE_FUNCTION,
@@ -4893,6 +4922,8 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
   struct stream *str = malloc_and_check (sizeof (*str));
   char *fn = copy_string_to_c_string (filename);
 
+  str->medium = FILE_STREAM;
+
   if (direction == INPUT_STREAM)
     str->file = fopen (fn, "r");
   else if (direction == OUTPUT_STREAM)
@@ -4930,11 +4961,39 @@ create_stream_from_open_file (enum stream_type type,
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct stream *str = malloc_and_check (sizeof (*str));
 
+  str->medium = FILE_STREAM;
   str->type = type;
   str->direction = direction;
   str->is_open = 1;
   str->dirty_line = 0;
   str->file = file;
+
+  obj->type = TYPE_STREAM;
+  obj->refcount = 1;
+  obj->value_ptr.stream = str;
+
+  return obj;
+}
+
+
+struct object *
+create_string_stream (enum stream_direction direction, struct object *instr)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct stream *str = malloc_and_check (sizeof (*str));
+
+  str->medium = STRING_STREAM;
+  str->direction = direction;
+  str->is_open = 1;
+  str->dirty_line = 0;
+
+  if (direction == INPUT_STREAM)
+    {
+      increment_refcount (instr);
+      str->string = instr;
+    }
+  else
+    str->string = alloc_string (0);
 
   obj->type = TYPE_STREAM;
   obj->refcount = 1;
@@ -8463,7 +8522,7 @@ struct object *
 builtin_write_string (struct object *list, struct environment *env,
 		      struct eval_outcome *outcome)
 {
-  size_t i;
+  struct string *s;
   struct stream *str;
   int l;
 
@@ -8480,13 +8539,14 @@ builtin_write_string (struct object *list, struct environment *env,
       return NULL;
     }
 
+  s = CAR (list)->value_ptr.string;
+
   str = l == 2 ? CAR (CDR (list))->value_ptr.stream
     : inspect_variable (env->std_out_sym, env)->value_ptr.stream;
 
-  for (i = 0; i < CAR (list)->value_ptr.string->used_size; i++)
-    fputc (CAR (list)->value_ptr.string->value [i], str->file);
+  write_to_stream (str, s->value, s->used_size);
 
-  if (CAR (list)->value_ptr.string->value [i-1] == '\n')
+  if (s->value [s->used_size - 1] == '\n')
     str->dirty_line = 0;
   else
     str->dirty_line = 1;
@@ -8521,7 +8581,8 @@ builtin_write_char (struct object *list, struct environment *env,
   else
     str = inspect_variable (env->std_out_sym, env)->value_ptr.stream;
 
-  fprintf (str->file, "%s", CAR (list)->value_ptr.character);
+  write_to_stream (str, CAR (list)->value_ptr.character,
+		   strlen (CAR (list)->value_ptr.character));
 
   if (!strcmp (CAR (list)->value_ptr.character, "\n"))
     str->dirty_line = 0;
@@ -8537,7 +8598,7 @@ struct object *
 builtin_write_byte (struct object *list, struct environment *env,
 		    struct eval_outcome *outcome)
 {
-  unsigned char b;
+  char b;
 
   if (list_length (list) != 2)
     {
@@ -8553,7 +8614,7 @@ builtin_write_byte (struct object *list, struct environment *env,
 
   b = mpz_get_ui (CAR (list)->value_ptr.integer);
 
-  fputc (b, CAR (CDR (list))->value_ptr.stream->file);
+  write_to_stream (CAR (CDR (list))->value_ptr.stream, &b, 1);
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -8774,6 +8835,47 @@ builtin_output_stream_p (struct object *list, struct environment *env,
     return &t_object;
   else
     return &nil_object;
+}
+
+
+struct object *
+builtin_make_string_output_stream (struct object *list, struct environment *env,
+				   struct eval_outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  return create_string_stream (OUTPUT_STREAM, NULL);
+}
+
+
+struct object *
+builtin_get_output_stream_string (struct object *list, struct environment *env,
+				  struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM
+      || CAR (list)->value_ptr.stream->medium != STRING_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = CAR (list)->value_ptr.stream->string;
+
+  CAR (list)->value_ptr.stream->string = alloc_string (0);
+
+  return ret;
 }
 
 
@@ -13243,13 +13345,89 @@ fresh_line (struct stream *str)
 {
   if (str->dirty_line)
     {
-      fprintf (str->file, "\n");
+      write_to_stream (str, "\n", 1);
       str->dirty_line = 0;
 
       return &t_object;
     }
 
   return &nil_object;
+}
+
+
+int
+write_to_stream (struct stream *stream, const char *str, size_t size)
+{
+  struct string *s;
+  size_t i;
+
+  if (stream->medium == FILE_STREAM)
+    {
+      if (fwrite (str, 1, size, stream->file) < size)
+	return -1;
+
+      return 0;
+    }
+  else
+    {
+      s = stream->string->value_ptr.string;
+      resize_string_allocation (stream->string, s->used_size + size);
+
+      for (i = 0; i < size; i++)
+	s->value [s->used_size + i] = str [i];
+
+      s->used_size = s->alloc_size;
+
+      return 0;
+    }
+}
+
+
+int
+write_char_to_stream (struct stream *stream, char ch)
+{
+  return write_to_stream (stream, &ch, 1);
+}
+
+
+int
+write_long_to_stream (struct stream *stream, long z)
+{
+  int exp = 1, is_negative = 0, size = 1;
+
+  if (!z)
+    return write_to_stream (stream, "0", 1);
+
+  if (z < 0)
+    {
+      z = -z;
+      is_negative = 1;
+      size++;
+    }
+
+  while (z / exp >= 10)
+    {
+      exp *= 10;
+      size++;
+    }
+
+  if (stream->medium == STRING_STREAM)
+    resize_string_allocation (stream->string,
+			      stream->string->value_ptr.string->used_size + size);
+
+  if (is_negative && write_to_stream (stream, "-", 1) < 0)
+    return -1;
+
+  while (exp > 0)
+    {
+      if (write_char_to_stream (stream, z / exp + '0') < 0)
+	return -1;
+
+      exp /= 10;
+      z /= 10;
+    }
+
+  return 0;
 }
 
 
@@ -13267,31 +13445,47 @@ int
 print_as_symbol (const char *sym, size_t len, int print_escapes,
 		 struct stream *str)
 {
-  size_t i;
+  size_t i, sz;
   char need_escape [] = "().,;'#\"\n\\";
   int do_need_escape = 0;
 
-  for (i = 0; print_escapes && i < len && !do_need_escape; i++)
+  for (i = 0, sz = 0; print_escapes && i < len; i++)
     {
       if (strchr (need_escape, sym [i]) || !sym [i]
 	  || islower ((unsigned char)sym [i]))
-	do_need_escape = 1;
+	{
+	  do_need_escape = 1;
+
+	  if (str->medium == FILE_STREAM)
+	    break;
+
+	  sz += 2;
+	}
+      else
+	sz++;
     }
 
-  if (do_need_escape && putc ('|', str ? str->file : stdout) < 0)
+  if (do_need_escape)
+    sz += 2;
+
+  if (str->medium == STRING_STREAM)
+    resize_string_allocation (str->string,
+			      str->string->value_ptr.string->used_size + sz);
+
+  if (do_need_escape && write_to_stream (str, "|", 1) < 0)
     return -1;
 
   for (i = 0; i < len; i++)
     {
       if (print_escapes && (sym [i] == '|' || sym [i] == '\\')
-	  && putc ('\\', str ? str->file : stdout) < 0)
+	  && write_to_stream (str, "\\", 1) < 0)
 	return -1;
 
-      if (putc (sym [i], str ? str->file : stdout) < 0)
+      if (write_to_stream (str, &sym [i], 1) < 0)
 	return -1;
     }
 
-  if (do_need_escape && putc ('|', str ? str->file : stdout) < 0)
+  if (do_need_escape && write_to_stream (str, "|", 1) < 0)
     return -1;
 
   return 0;
@@ -13308,7 +13502,7 @@ print_symbol_name (const struct symbol_name *sym, struct environment *env,
     return print_symbol (sym->sym->value_ptr.symbol, env, str);
   else
     {
-      if (pesc && fputs ("#:", str ? str->file : stdout) < 0)
+      if (pesc && write_to_stream (str, "#:", 2) < 0)
 	return -1;
 
       return print_as_symbol (sym->value, sym->used_size, 1, str);
@@ -13324,14 +13518,28 @@ print_symbol (const struct symbol *sym, struct environment *env,
 
   if (!sym->home_package)
     {
-      if (pesc && fputs ("#:", str ? str->file : stdout) < 0)
+      if (pesc && write_to_stream (str, "#:", 2) < 0)
 	return -1;
     }
   else if (sym->home_package == env->keyword_package
-	   && putc (':', str ? str->file : stdout) < 0)
+	   && write_to_stream (str, ":", 1) < 0)
     return -1;
 
   return print_as_symbol (sym->name, sym->name_len, pesc, str);
+}
+
+
+int
+print_bignum (const mpz_t z, struct environment *env, struct stream *str)
+{
+  char *out;
+  int ret;
+
+  gmp_asprintf (&out, "%Zd", z);
+
+  ret = write_to_stream (str, out, strlen (out));
+  free (out);
+  return ret;
 }
 
 
@@ -13351,7 +13559,7 @@ print_floating (const mpf_t f, struct environment *env, struct stream *str)
       out [l+2] = 0;
     }
 
-  if (fputs (out, str ? str->file : stdout) < 0)
+  if (write_to_stream (str, out, strlen (out)) < 0)
     {
       free (out);
       return -1;
@@ -13366,17 +13574,33 @@ int
 print_complex (const struct complex *c, struct environment *env,
 	       struct stream *str)
 {
-  if (fputs ("#C(", str ? str->file : stdout) < 0)
+  if (write_to_stream (str, "#C(", 3) < 0)
     return -1;
 
   print_object (c->real, env, str);
 
-  if (putc (' ', str ? str->file : stdout) < 0)
+  if (write_to_stream (str, " ", 1) < 0)
     return -1;
 
   print_object (c->imag, env, str);
 
-  return fprintf (str ? str->file : stdout, ")");
+  return write_to_stream (str, ")", 1);
+}
+
+
+int
+print_bytespec (const struct bytespec *bs, struct environment *env,
+		struct stream *str)
+{
+  if (write_to_stream (str, "#<BYTE-SPECIFIER size ",
+		       strlen ("#<BYTE-SPECIFIER size ")) < 0
+      || print_bignum (bs->size, env, str) < 0
+      || write_to_stream (str, " position ", strlen (" position ")) < 0
+      || print_bignum (bs->pos, env, str) < 0
+      || write_to_stream (str, ">", 1) < 0)
+    return -1;
+
+  return 0;
 }
 
 
@@ -13387,21 +13611,21 @@ print_string (const struct string *st, struct environment *env,
   size_t i;
   int pesc = is_printer_escaping_enabled (env);
 
-  if (pesc && putc ('"', str ? str->file : stdout) < 0)
+  if (pesc && write_to_stream (str, "\"", 1) < 0)
     return -1;
 
   for (i = 0; i < st->used_size; i++)
     {
       if (pesc && (st->value [i] == '"' || st->value [i] == '\\')
-	  && putc ('\\', str ? str->file : stdout) < 0)
+	  && write_to_stream (str, "\\", 1) < 0)
 	return -1;
 
-      if (putc (st->value [i], str ? str->file : stdout) < 0)
+      if (write_to_stream (str, &st->value [i], 1) < 0)
 	return -1;
     }
 
   if (pesc)
-    return fprintf (str ? str->file : stdout, "\"");
+    return write_to_stream (str, "\"", 1);
 
   return 0;
 }
@@ -13412,9 +13636,9 @@ print_character (const char *character, struct environment *env,
 		 struct stream *str)
 {
   if (!is_printer_escaping_enabled (env))
-    return fprintf (str ? str->file : stdout, character);
+    return write_to_stream (str, character, strlen (character));
 
-  if (fputs ("#\\", str ? str->file : stdout) < 0)
+  if (write_to_stream (str, "#\\", 2) < 0)
     return -1;
 
   if (strlen (character) == 1)
@@ -13422,30 +13646,30 @@ print_character (const char *character, struct environment *env,
       switch (character [0])
 	{
 	case '\n':
-	  return fprintf (str ? str->file : stdout, "Newline");
+	  return write_to_stream (str, "Newline", strlen ("Newline"));
 	  break;
 	case ' ':
-	  return fprintf (str ? str->file : stdout, "Space");
+	  return write_to_stream (str, "Space", strlen ("Space"));
 	  break;
 	case '\t':
-	  return fprintf (str ? str->file : stdout, "Tab");
+	  return write_to_stream (str, "Tab", strlen ("Tab"));
 	  break;
 	case '\b':
-	  return fprintf (str ? str->file : stdout, "Backspace");
+	  return write_to_stream (str, "Backspace", strlen ("Backspace"));
 	  break;
 	case '\f':
-	  return fprintf (str ? str->file : stdout, "Page");
+	  return write_to_stream (str, "Page", strlen ("Page"));
 	  break;
 	case '\r':
-	  return fprintf (str ? str->file : stdout, "Return");
+	  return write_to_stream (str, "Return", strlen ("Return"));
 	  break;
 	default:
-	  return fprintf (str ? str->file : stdout, character);
+	  return write_to_stream (str, character, strlen (character));
 	  break;
 	}
     }
   else
-    return fprintf (str ? str->file : stdout, character);
+    return write_to_stream (str, character, strlen (character));
 }
 
 
@@ -13453,7 +13677,7 @@ int
 print_filename (const struct filename *fn, struct environment *env,
 		struct stream *str)
 {
-  if (fputs ("#P", str ? str->file : stdout) < 0)
+  if (write_to_stream (str, "#P", 2) < 0)
     return -1;
 
   return print_string (fn->value->value_ptr.string, env, str);
@@ -13466,7 +13690,7 @@ print_list (const struct cons_pair *list, struct environment *env,
 {
   struct object *cdr;
 
-  if (putc ('(', str ? str->file : stdout) < 0)
+  if (write_to_stream (str, "(", 1) < 0)
     return -1;
 
   if (print_object (list->car, env, str) < 0)
@@ -13478,7 +13702,7 @@ print_list (const struct cons_pair *list, struct environment *env,
     {
       if (cdr->type == TYPE_CONS_PAIR)
 	{
-	  if (putc (' ', str ? str->file : stdout) < 0
+	  if (write_to_stream (str, " ", 1) < 0
 	      || print_object (cdr->value_ptr.cons_pair->car, env, str) < 0)
 	    return -1;
 
@@ -13486,7 +13710,7 @@ print_list (const struct cons_pair *list, struct environment *env,
 	}
       else
 	{
-	  if (fputs (" . ", str ? str->file : stdout) < 0
+	  if (write_to_stream (str, " . ", 3) < 0
 	      || print_object (cdr, env, str) < 0)
 	    return -1;
 
@@ -13494,7 +13718,7 @@ print_list (const struct cons_pair *list, struct environment *env,
 	}
     }
 
-  return putc (')', str ? str->file : stdout);
+  return write_to_stream (str, ")", 1);
 }
 
 
@@ -13507,26 +13731,30 @@ print_array (const struct array *array, struct environment *env,
 
   if (rk == 1)
     {
-      if (fputs ("#(", str ? str->file : stdout) < 0)
+      if (write_to_stream (str, "#(", 2) < 0)
 	return -1;
 
       for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer :
 		       array->alloc_size->size); i++)
 	{
-	  if (i && putc (' ', str ? str->file : stdout) < 0)
+	  if (i && write_to_stream (str, " ", 1) < 0)
 	    return -1;
 
 	  if (print_object (array->value [i], env, str) < 0)
 	    return -1;
 	}
 
-      if (putc (')', str ? str->file : stdout) < 0)
+      if (write_to_stream (str, ")", 1) < 0)
 	return -1;
       else
 	return 0;
     }
-  else
-    return fprintf (str ? str->file : stdout, "#<ARRAY, RANK %d>", rk);
+  else if (write_to_stream (str, "#<ARRAY, RANK ", strlen ("#<ARRAY, RANK ")) < 0
+	   || write_long_to_stream (str, rk) < 0
+	   || write_to_stream (str, ">", 1) < 0)
+    return -1;
+
+  return 0;
 }
 
 
@@ -13536,11 +13764,11 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 {
   if (obj->type == TYPE_FUNCTION)
     {
-      if (fputs ("#<FUNCTION ", str ? str->file : stdout) < 0)
+      if (write_to_stream (str, "#<FUNCTION ", strlen ("#<FUNCTION ")) < 0)
 	return -1;
 
       if (obj->value_ptr.function->builtin_form
-	  && fputs ("BUILTIN ", str ? str->file : stdout) < 0)
+	  && write_to_stream (str, "BUILTIN ", strlen ("BUILTIN ")) < 0)
 	return -1;
 
       if (obj->value_ptr.function->name)
@@ -13549,25 +13777,26 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 			    str) < 0)
 	    return -1;
 	}
-      else if (fprintf (str ? str->file : stdout, "%p", (void *)obj) < 0)
+      else if (write_to_stream (str, "?", 1) < 0)
 	return -1;
 
-      return putc ('>', str ? str->file : stdout);
+      return write_to_stream (str, ">", 1);
     }
   else
     {
       if (obj->value_ptr.macro->is_special_operator)
 	{
-	  if (fputs ("#<SPECIAL OPERATOR ", str ? str->file : stdout) < 0)
+	  if (write_to_stream (str, "#<SPECIAL OPERATOR ",
+			       strlen ("#<SPECIAL OPERATOR ")) < 0)
 	    return -1;
 	}
       else
 	{
-	  if (fputs ("#<MACRO ", str ? str->file : stdout) < 0)
+	  if (write_to_stream (str, "#<MACRO ", strlen ("#<MACRO ")) < 0)
 	    return -1;
 
 	  if (obj->value_ptr.function->builtin_form
-	      && fputs ("BUILTIN ", str ? str->file : stdout) < 0)
+	      && write_to_stream (str, "BUILTIN ", strlen ("BUILTIN ")) < 0)
 	    return -1;
 	}
 
@@ -13577,10 +13806,10 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 			    str) < 0)
 	    return -1;
 	}
-      else if (fprintf (str ? str->file : stdout, "%p", (void *)obj) < 0)
+      else if (write_to_stream (str, "?", 1) < 0)
 	return -1;
 
-      return putc ('>', str ? str->file : stdout);
+      return write_to_stream (str, ">", 1);
     }
 }
 
@@ -13589,80 +13818,68 @@ int
 print_object (const struct object *obj, struct environment *env,
 	      struct stream *str)
 {
-  struct object *std_out;
+  char *out;
+  int ret;
 
   if (obj->type == TYPE_QUOTE)
     {
-      if (putc ('\'', str ? str->file : stdout) < 0)
+      if (write_to_stream (str, "'", 1) < 0)
 	return -1;
 
       return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
-      if (putc ('`', str ? str->file : stdout) < 0)
+      if (write_to_stream (str, "`", 1) < 0)
 	return -1;
 
       return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_COMMA)
     {
-      if (putc (',', str ? str->file : stdout) < 0)
+      if (write_to_stream (str, ",", 1) < 0)
 	return -1;
 
       return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_AT)
     {
-      if (putc ('@', str ? str->file : stdout) < 0)
+      if (write_to_stream (str, "@", 1) < 0)
 	return -1;
 
       return print_object (obj->value_ptr.next, env, str);
     }
   else if (obj->type == TYPE_DOT)
     {
-      if (putc ('.', str ? str->file : stdout) < 0)
+      if (write_to_stream (str, ".", 1) < 0)
 	return -1;
 
       return print_object (obj->value_ptr.next, env, str);
     }
   else
     {
-      if (str)
-	str->dirty_line = 1;
-      else
-	{
-	  std_out = inspect_variable (env->std_out_sym, env);
-	  std_out->value_ptr.stream->dirty_line = 1;
-	}
+      str->dirty_line = 1;
 
       if (SYMBOL (obj) == &nil_object)
-	return fputs ("NIL", str ? str->file : stdout);
+	return write_to_stream (str, "NIL", strlen ("NIL"));
       else if (obj->type == TYPE_BIGNUM)
-	return mpz_out_str (str ? str->file : NULL, 10, obj->value_ptr.integer)
-	  ? 0 : -1;
+	return print_bignum (obj->value_ptr.integer, env, str);
       else if (obj->type == TYPE_FIXNUM)
-	return fprintf (str ? str->file : stdout, "%ld", *obj->value_ptr.fixnum);
+	return write_long_to_stream (str, *obj->value_ptr.fixnum);
       else if (obj->type == TYPE_RATIO)
-	return mpq_out_str (str ? str->file : NULL, 10, obj->value_ptr.ratio)
-	  ? 0 : -1;
+	{
+	  gmp_asprintf (&out, "%Qd", obj->value_ptr.integer);
+
+	  ret = write_to_stream (str, out, strlen (out));
+	  free (out);
+	  return ret;
+	}
       else if (obj->type == TYPE_FLOAT)
 	return print_floating (obj->value_ptr.floating, env, str);
       else if (obj->type == TYPE_COMPLEX)
 	return print_complex (obj->value_ptr.complex, env, str);
       else if (obj->type == TYPE_BYTESPEC)
-	{
-	  if (fputs ("#<BYTE-SPECIFIER size ", str ? str->file : stdout) < 0
-	      || mpz_out_str (str ? str->file : stdout, 10,
-			      obj->value_ptr.bytespec->size) < 0
-	      || fputs (" position ", str ? str->file : stdout) < 0
-	      || mpz_out_str (str ? str->file : stdout, 10,
-			      obj->value_ptr.bytespec->pos) < 0
-	      || fputs (">", str ? str->file : stdout) < 0)
-	    return -1;
-
-	  return 0;
-	}
+	return print_bytespec (obj->value_ptr.bytespec, env, str);
       else if (obj->type == TYPE_STRING)
 	return print_string (obj->value_ptr.string, env, str);
       else if (obj->type == TYPE_CHARACTER)
@@ -13681,21 +13898,23 @@ print_object (const struct object *obj, struct environment *env,
 	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
 	{
-	  if (fputs ("#<PACKAGE \"", str ? str->file : stdout) < 0
+	  if (write_to_stream (str, "#<PACKAGE \"", strlen ("#<PACKAGE \"")) < 0
 	      || print_as_symbol (obj->value_ptr.package->name,
 				  obj->value_ptr.package->name_len, 0, str) < 0
-	      || fputs ("\">", str ? str->file : stdout) < 0)
+	      || write_to_stream (str, "\">", strlen ("\">")) < 0)
 	    return -1;
 
 	  return 0;
 	}
       else if (obj->type == TYPE_ENVIRONMENT)
-	return fprintf (str ? str->file : stdout, "#<ENVIRONMENT %p>",
-			(void *)obj);
+	return write_to_stream (str, "#<ENVIRONMENT ?>",
+				strlen ("#<ENVIRONMENT ?>"));
       else if (obj->type == TYPE_STREAM)
-	return fprintf (str ? str->file : stdout, "#<STREAM %p>", (void *)obj);
+	return write_to_stream (str, "#<STREAM ?>",
+				strlen ("#<STREAM ?>"));
       else
-	return fputs ("#<print not implemented>", str ? str->file : stdout);
+	return write_to_stream (str, "#<print not implemented>",
+				strlen ("#<print not implemented>"));
     }
 }
 
