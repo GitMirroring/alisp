@@ -1423,6 +1423,12 @@ struct object *builtin_package_name (struct object *list,
 struct object *builtin_package_nicknames (struct object *list,
 					  struct environment *env,
 					  struct eval_outcome *outcome);
+struct object *builtin_package_use_list (struct object *list,
+					 struct environment *env,
+					 struct eval_outcome *outcome);
+struct object *builtin_package_used_by_list (struct object *list,
+					     struct environment *env,
+					     struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -2086,6 +2092,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PACKAGE-NAME", env, builtin_package_name, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("PACKAGE-NICKNAMES", env, builtin_package_nicknames,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("PACKAGE-USE-LIST", env, builtin_package_use_list,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("PACKAGE-USED-BY-LIST", env, builtin_package_used_by_list,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
@@ -11483,6 +11493,102 @@ builtin_package_nicknames (struct object *list, struct environment *env,
 	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
       increment_refcount (n->obj);
+      cons->value_ptr.cons_pair->car = n->obj;
+
+      n = n->next;
+    }
+
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
+builtin_package_use_list (struct object *list, struct environment *env,
+			  struct eval_outcome *outcome)
+{
+  struct object *pack, *ret = &nil_object, *cons;
+  struct object_list *n;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  pack = inspect_package_by_designator (CAR (list), env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  n = pack->value_ptr.package->uses;
+
+  while (n)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      cons->value_ptr.cons_pair->car = n->obj;
+
+      n = n->next;
+    }
+
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
+builtin_package_used_by_list (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome)
+{
+  struct object *pack, *ret = &nil_object, *cons;
+  struct object_list *n;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  pack = inspect_package_by_designator (CAR (list), env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  n = pack->value_ptr.package->used_by;
+
+  while (n)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
       cons->value_ptr.cons_pair->car = n->obj;
 
       n = n->next;
