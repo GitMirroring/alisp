@@ -594,6 +594,10 @@ make_test ("(package-name \"CL\")", "\"COMMON-LISP\"");
 make_test ("(package-name *package*)", "\"COMMON-LISP-USER\"");
 make_test ("(package-nicknames *package*)", "(\"CL-USER\")");
 make_test ("(package-nicknames (symbol-package :fff))", "NIL");
+make_test ("(package-use-list *package*)", "(#<PACKAGE \"COMMON-LISP\">)");
+make_test ("(package-use-list (symbol-package :fff))", "NIL");
+make_test ("(package-used-by-list *package*)", "NIL");
+make_test ("(package-used-by-list (symbol-package 'if))", "(#<PACKAGE \"COMMON-LISP-USER\">)");
 
 
 # arithmetic tests
