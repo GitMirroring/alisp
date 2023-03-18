@@ -590,6 +590,10 @@ make_test ("(count 2 '(1 2 3))", "1");
 make_test ("(count-if #'upper-case-p \"aAbBcCdD\")", "4");
 make_test ("(count-if-not #'evenp #(0 1 2))", "1");
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
+make_test ("(package-name \"CL\")", "\"COMMON-LISP\"");
+make_test ("(package-name *package*)", "\"COMMON-LISP-USER\"");
+make_test ("(package-nicknames *package*)", "(\"CL-USER\")");
+make_test ("(package-nicknames (symbol-package :fff))", "NIL");
 
 
 # arithmetic tests
