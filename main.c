@@ -400,26 +400,15 @@ package_record
 };
 
 
-struct
-name_list
-{
-  char *name;
-  long name_len;
-
-  struct name_list *next;
-};
-
-
 #define SYMTABLE_SIZE 2048
 
 
 struct
 package
 {
-  char *name;
-  long name_len;
+  struct object *name;
 
-  struct name_list *nicks;
+  struct object_list *nicks;
 
   struct package_record **symtable;
 
@@ -2256,15 +2245,17 @@ generate_prompt (struct environment *env)
 {
   struct package *pack =
     inspect_variable (env->package_sym, env)->value_ptr.package;
-  size_t s = pack->nicks ? pack->nicks->name_len + 5 : pack->name_len + 5;
-  char *ret = malloc_and_check (s);
+  struct string *s = pack->nicks ? pack->nicks->obj->value_ptr.string :
+    pack->name->value_ptr.string;
+  size_t sz = s->used_size + 5;
+  char *ret = malloc_and_check (sz);
 
   ret [0] = '[';
-  memcpy (ret+1, pack->nicks ? pack->nicks->name : pack->name, s);
-  ret [s-4] = ']';
-  ret [s-3] = '>';
-  ret [s-2] = ' ';
-  ret [s-1] = 0;
+  memcpy (ret+1, s->value, s->used_size);
+  ret [sz-4] = ']';
+  ret [sz-3] = '>';
+  ret [sz-2] = ' ';
+  ret [sz-1] = 0;
 
   return ret;
 }
@@ -4312,12 +4303,11 @@ create_package (char *name, ...)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct package *pack = malloc_and_check (sizeof (*pack));
-  struct name_list *nicks;
+  struct object_list *nicks;
   va_list valist;
   char *n;
 
-  pack->name = name;
-  pack->name_len = strlen (name);
+  pack->name = create_string_from_char_vector (name, strlen (name));
   pack->nicks = NULL;
   pack->uses = NULL;
   pack->used_by = NULL;
@@ -4332,8 +4322,7 @@ create_package (char *name, ...)
       else
 	pack->nicks = nicks = malloc_and_check (sizeof (*nicks));
 
-      nicks->name = n;
-      nicks->name_len = strlen (n);
+      nicks->obj = create_string_from_char_vector (n, strlen (n));
     }
 
   va_end (valist);
@@ -5112,20 +5101,22 @@ find_package (const char *name, size_t len, struct environment *env)
 {
   struct object_list *l = env->packages;
   struct package *p;
-  struct name_list *n;
+  struct object_list *n;
 
   while (l)
     {
       p = l->obj->value_ptr.package;
 
-      if (eqmem (p->name, p->name_len, name, len))
+      if (eqmem (p->name->value_ptr.string->value,
+		 p->name->value_ptr.string->used_size, name, len))
 	return l->obj;
 
       n = p->nicks;
 
       while (n)
 	{
-	  if (eqmem (n->name, n->name_len, name, len))
+	  if (eqmem (n->obj->value_ptr.string->value,
+		     n->obj->value_ptr.string->used_size, name, len))
 	    return l->obj;
 
 	  n = n->next;
@@ -13898,10 +13889,10 @@ print_object (const struct object *obj, struct environment *env,
 	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
 	{
-	  if (write_to_stream (str, "#<PACKAGE \"", strlen ("#<PACKAGE \"")) < 0
-	      || print_as_symbol (obj->value_ptr.package->name,
-				  obj->value_ptr.package->name_len, 0, str) < 0
-	      || write_to_stream (str, "\">", strlen ("\">")) < 0)
+	  if (write_to_stream (str, "#<PACKAGE ", strlen ("#<PACKAGE ")) < 0
+	      || print_string (obj->value_ptr.package->name->value_ptr.string,
+			       env, str) < 0
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
