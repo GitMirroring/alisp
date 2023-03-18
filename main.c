@@ -4356,6 +4356,9 @@ create_package (char *name, ...)
 
   va_end (valist);
 
+  if (pack->nicks)
+    nicks->next = NULL;
+
   obj->type = TYPE_PACKAGE;
   obj->refcount = 1;
   obj->value_ptr.package = pack;
@@ -11485,7 +11488,8 @@ builtin_package_nicknames (struct object *list, struct environment *env,
       n = n->next;
     }
 
-  cons->value_ptr.cons_pair->cdr = &nil_object;
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
 }
