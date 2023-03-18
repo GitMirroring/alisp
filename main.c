@@ -190,7 +190,7 @@ read_outcome
     CANT_BEGIN_WITH_TWO_COLONS_OR_MORE = 1 << 27,
     CANT_END_WITH_PACKAGE_SEPARATOR = 1 << 28,
     MORE_THAN_A_PACKAGE_SEPARATOR = 1 << 29,
-    PACKAGE_NOT_FOUND = 1 << 30,
+    PACKAGE_NOT_FOUND_IN_READ = 1 << 30,
     PACKAGE_MARKER_IN_SHARP_COLON = 1 << 31
   };
 
@@ -210,7 +210,7 @@ read_outcome
 		    | MORE_THAN_A_CONSING_DOT_NOT_ALLOWED | TOO_MANY_COLONS \
 		    | CANT_BEGIN_WITH_TWO_COLONS_OR_MORE		\
 		    | CANT_END_WITH_PACKAGE_SEPARATOR			\
-		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND \
+		    | MORE_THAN_A_PACKAGE_SEPARATOR | PACKAGE_NOT_FOUND_IN_READ \
 		    | PACKAGE_MARKER_IN_SHARP_COLON)
 
 
@@ -310,7 +310,8 @@ eval_outcome_type
     FUNCTION_NOT_FOUND_IN_EVAL,
     DECLARE_NOT_ALLOWED_HERE,
     CANT_DIVIDE_BY_ZERO,
-    INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT
+    INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT,
+    PACKAGE_NOT_FOUND_IN_EVAL
   };
 
 
@@ -898,6 +899,8 @@ struct package_record **alloc_empty_symtable (size_t table_size);
 struct package_record *inspect_accessible_symbol (char *name, size_t len,
 						  struct object *pack,
 						  int *is_inherited);
+struct object *inspect_package_by_designator (struct object *des,
+					      struct environment *env);
 int use_package (struct object *used, struct object *pack,
 		 struct object **conflicting);
 
@@ -1414,6 +1417,12 @@ struct object *builtin_alphanumericp (struct object *list,
 struct object *builtin_char_code (struct object *list,
 				  struct environment *env,
 				  struct eval_outcome *outcome);
+struct object *builtin_package_name (struct object *list,
+				     struct environment *env,
+				     struct eval_outcome *outcome);
+struct object *builtin_package_nicknames (struct object *list,
+					  struct environment *env,
+					  struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -2074,6 +2083,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CHAR-CODE", env, builtin_char_code, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("PACKAGE-NAME", env, builtin_package_name, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("PACKAGE-NICKNAMES", env, builtin_package_nicknames,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -2331,7 +2344,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 	{
 	  args->obj = ob;
-	  return PACKAGE_NOT_FOUND;
+	  return PACKAGE_NOT_FOUND_IN_READ;
 	}
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
@@ -2834,7 +2847,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
 		{
 		  args->obj = ob;
-		  return PACKAGE_NOT_FOUND;
+		  return PACKAGE_NOT_FOUND_IN_READ;
 		}
 	    }
 
@@ -4039,6 +4052,17 @@ inspect_accessible_symbol (char *name, size_t len, struct object *pack,
     }
 
   return NULL;
+}
+
+
+struct object *
+inspect_package_by_designator (struct object *des, struct environment *env)
+{
+  if (des->type == TYPE_PACKAGE)
+    return des;
+
+  return find_package (des->value_ptr.string->value,
+		       des->value_ptr.string->used_size, env);
 }
 
 
@@ -11389,6 +11413,85 @@ builtin_char_code (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_package_name (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  struct object *pack;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  pack = inspect_package_by_designator (CAR (list), env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  increment_refcount (pack->value_ptr.package->name);
+  return pack->value_ptr.package->name;
+}
+
+
+struct object *
+builtin_package_nicknames (struct object *list, struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  struct object *pack, *ret = &nil_object, *cons;
+  struct object_list *n;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  pack = inspect_package_by_designator (CAR (list), env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  n = pack->value_ptr.package->nicks;
+
+  while (n)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      increment_refcount (n->obj);
+      cons->value_ptr.cons_pair->car = n->obj;
+
+      n = n->next;
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
 builtin_lisp_implementation_type (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome)
 {
@@ -14022,7 +14125,7 @@ print_read_error (enum read_outcome err, const char *input, size_t size,
     {
       printf ("read error: more than a package separator not allowed in token\n");
     }
-  else if (err == PACKAGE_NOT_FOUND)
+  else if (err == PACKAGE_NOT_FOUND_IN_READ)
     {
       printf ("read error: package ");
       fwrite (args->obj->value_ptr.symbol_name->value,
@@ -14211,6 +14314,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT)
     {
       printf ("eval error: incorrect syntax in loop construct\n");
+    }
+  else if (err->type == PACKAGE_NOT_FOUND_IN_EVAL)
+    {
+      printf ("eval error: package not found\n");
     }
 
   std_out->value_ptr.stream->dirty_line = 0;
