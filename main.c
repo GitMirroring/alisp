@@ -1388,6 +1388,9 @@ struct object *builtin_symbol_function (struct object *list,
 					struct eval_outcome *outcome);
 struct object *builtin_symbol_name (struct object *list, struct environment *env,
 				    struct eval_outcome *outcome);
+struct object *builtin_symbol_package (struct object *list,
+				       struct environment *env,
+				       struct eval_outcome *outcome);
 struct object *builtin_special_operator_p (struct object *list,
 					   struct environment *env,
 					   struct eval_outcome *outcome);
@@ -2055,6 +2058,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
@@ -11065,6 +11070,27 @@ builtin_symbol_name (struct object *list, struct environment *env,
   s = SYMBOL (CAR (list))->value_ptr.symbol;
 
   return create_string_from_char_vector (s->name, s->name_len);
+}
+
+
+struct object *
+builtin_symbol_package (struct object *list, struct environment *env,
+			struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return SYMBOL (CAR (list))->value_ptr.symbol->home_package;
 }
 
 
