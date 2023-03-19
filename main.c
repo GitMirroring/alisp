@@ -1417,6 +1417,9 @@ struct object *builtin_alphanumericp (struct object *list,
 struct object *builtin_char_code (struct object *list,
 				  struct environment *env,
 				  struct eval_outcome *outcome);
+struct object *builtin_find_package (struct object *list,
+				     struct environment *env,
+				     struct eval_outcome *outcome);
 struct object *builtin_package_name (struct object *list,
 				     struct environment *env,
 				     struct eval_outcome *outcome);
@@ -2089,6 +2092,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CHAR-CODE", env, builtin_char_code, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FIND-PACKAGE", env, builtin_find_package, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("PACKAGE-NAME", env, builtin_package_name, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("PACKAGE-NICKNAMES", env, builtin_package_nicknames,
@@ -11422,6 +11427,50 @@ builtin_char_code (struct object *list, struct environment *env,
     }
 
   return create_integer_from_long (ret);
+}
+
+
+struct object *
+builtin_find_package (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_PACKAGE)
+    {
+      return CAR (list);
+    }
+  else if (CAR (list)->type == TYPE_STRING)
+    {
+      ret = find_package (CAR (list)->value_ptr.string->value,
+			  CAR (list)->value_ptr.string->used_size, env);
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      ret = find_package (SYMBOL (CAR (list))->value_ptr.symbol->name,
+			  SYMBOL (CAR (list))->value_ptr.symbol->name_len, env);
+    }
+  else if (CAR (list)->type == TYPE_CHARACTER)
+    {
+      ret = find_package (CAR (list)->value_ptr.character,
+			  strlen (CAR (list)->value_ptr.character), env);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!ret)
+    return &nil_object;
+
+  return ret;
 }
 
 
