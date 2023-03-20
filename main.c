@@ -311,7 +311,8 @@ eval_outcome_type
     DECLARE_NOT_ALLOWED_HERE,
     CANT_DIVIDE_BY_ZERO,
     INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT,
-    PACKAGE_NOT_FOUND_IN_EVAL
+    PACKAGE_NOT_FOUND_IN_EVAL,
+    PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE
   };
 
 
@@ -906,6 +907,8 @@ struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
 
 struct package_record **alloc_empty_symtable (size_t table_size);
+struct object *create_package (char *name, int name_len);
+struct object *create_package_from_c_strings (char *name, ...);
 struct package_record *inspect_accessible_symbol (char *name, size_t len,
 						  struct object *pack,
 						  int *is_inherited);
@@ -933,7 +936,6 @@ void clone_lexical_environment (struct binding **lex_vars,
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
 				struct eval_outcome *outcome, int is_macro);
-struct object *create_package (char *name, ...);
 
 const char *find_end_of_string
 (const char *input, size_t size, size_t *new_size, size_t *string_length);
@@ -1452,6 +1454,9 @@ struct object *builtin_package_use_list (struct object *list,
 struct object *builtin_package_used_by_list (struct object *list,
 					     struct environment *env,
 					     struct eval_outcome *outcome);
+struct object *builtin_make_package (struct object *list,
+				     struct environment *env,
+				     struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -1905,13 +1910,15 @@ add_standard_definitions (struct environment *env)
   struct object *cluser_package;
   struct package_record *rec;
 
-  env->keyword_package = create_package ("KEYWORD", (char *)NULL);
+  env->keyword_package = create_package_from_c_strings ("KEYWORD", (char *)NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
 
-  env->cl_package = create_package ("COMMON-LISP", "CL", (char *)NULL);
+  env->cl_package = create_package_from_c_strings ("COMMON-LISP", "CL",
+						   (char *)NULL);
   prepend_object_to_obj_list (env->cl_package, &env->packages);
 
-  cluser_package = create_package ("COMMON-LISP-USER", "CL-USER", (char *)NULL);
+  cluser_package = create_package_from_c_strings ("COMMON-LISP-USER", "CL-USER",
+						  (char *)NULL);
   prepend_object_to_obj_list (cluser_package, &env->packages);
 
   use_package (env->cl_package, cluser_package, NULL);
@@ -2129,6 +2136,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PACKAGE-USED-BY-LIST", env, builtin_package_used_by_list,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-PACKAGE", env, builtin_make_package, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -4052,6 +4061,66 @@ alloc_empty_symtable (size_t table_size)
 }
 
 
+struct object *
+create_package (char *name, int name_len)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct package *pack = malloc_and_check (sizeof (*pack));
+
+  pack->name = create_string_from_char_vector (name, name_len);
+  pack->nicks = NULL;
+  pack->uses = NULL;
+  pack->used_by = NULL;
+  pack->symtable = alloc_empty_symtable (SYMTABLE_SIZE);
+
+  obj->type = TYPE_PACKAGE;
+  obj->refcount = 1;
+  obj->value_ptr.package = pack;
+
+  return obj;
+}
+
+
+struct object *
+create_package_from_c_strings (char *name, ...)
+{
+  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct package *pack = malloc_and_check (sizeof (*pack));
+  struct object_list *nicks;
+  va_list valist;
+  char *n;
+
+  pack->name = create_string_from_char_vector (name, strlen (name));
+  pack->nicks = NULL;
+  pack->uses = NULL;
+  pack->used_by = NULL;
+  pack->symtable = alloc_empty_symtable (SYMTABLE_SIZE);
+
+  va_start (valist, name);
+
+  while ((n = va_arg (valist, char *)))
+    {
+      if (pack->nicks)
+	nicks = nicks->next = malloc_and_check (sizeof (*nicks));
+      else
+	pack->nicks = nicks = malloc_and_check (sizeof (*nicks));
+
+      nicks->obj = create_string_from_char_vector (n, strlen (n));
+    }
+
+  va_end (valist);
+
+  if (pack->nicks)
+    nicks->next = NULL;
+
+  obj->type = TYPE_PACKAGE;
+  obj->refcount = 1;
+  obj->value_ptr.package = pack;
+
+  return obj;
+}
+
+
 struct package_record *
 inspect_accessible_symbol (char *name, size_t len, struct object *pack,
 			   int *is_inherited)
@@ -4367,46 +4436,6 @@ create_function (struct object *lambda_list, struct object *body,
   f->body = body;
 
   return fun;
-}
-
-
-struct object *
-create_package (char *name, ...)
-{
-  struct object *obj = malloc_and_check (sizeof (*obj));
-  struct package *pack = malloc_and_check (sizeof (*pack));
-  struct object_list *nicks;
-  va_list valist;
-  char *n;
-
-  pack->name = create_string_from_char_vector (name, strlen (name));
-  pack->nicks = NULL;
-  pack->uses = NULL;
-  pack->used_by = NULL;
-  pack->symtable = alloc_empty_symtable (SYMTABLE_SIZE);
-
-  va_start (valist, name);
-
-  while ((n = va_arg (valist, char *)))
-    {
-      if (pack->nicks)
-	nicks = nicks->next = malloc_and_check (sizeof (*nicks));
-      else
-	pack->nicks = nicks = malloc_and_check (sizeof (*nicks));
-
-      nicks->obj = create_string_from_char_vector (n, strlen (n));
-    }
-
-  va_end (valist);
-
-  if (pack->nicks)
-    nicks->next = NULL;
-
-  obj->type = TYPE_PACKAGE;
-  obj->refcount = 1;
-  obj->value_ptr.package = pack;
-
-  return obj;
 }
 
 
@@ -11769,6 +11798,57 @@ builtin_package_used_by_list (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_make_package (struct object *list, struct environment *env,
+		      struct eval_outcome *outcome)
+{
+  char *name;
+  int len;
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
+      && !IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      name = CAR (list)->value_ptr.string->value;
+      len = CAR (list)->value_ptr.string->used_size;
+    }
+  else if (CAR (list)->type == TYPE_CHARACTER)
+    {
+      name = CAR (list)->value_ptr.character;
+      len = strlen (name);
+    }
+  else
+    {
+      name = SYMBOL (CAR (list))->value_ptr.symbol->name;
+      len = SYMBOL (CAR (list))->value_ptr.symbol->name_len;
+    }
+
+  if (find_package (name, len, env))
+    {
+      outcome->type = PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE;
+      return NULL;
+    }
+
+  ret = create_package (name, len);
+
+  prepend_object_to_obj_list (ret, &env->packages);
+
+  return ret;
+}
+
+
+struct object *
 builtin_lisp_implementation_type (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome)
 {
@@ -14609,6 +14689,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == PACKAGE_NOT_FOUND_IN_EVAL)
     {
       printf ("eval error: package not found\n");
+    }
+  else if (err->type == PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE)
+    {
+      printf ("eval error: package name or nickname is already in use\n");
     }
 
   std_out->value_ptr.stream->dirty_line = 0;
