@@ -606,6 +606,7 @@ make_test ("(package-use-list *package*)", "(#<PACKAGE \"COMMON-LISP\">)");
 make_test ("(package-use-list (symbol-package :fff))", "NIL");
 make_test ("(package-used-by-list *package*)", "NIL");
 make_test ("(package-used-by-list (symbol-package 'if))", "(#<PACKAGE \"COMMON-LISP-USER\">)");
+make_test ("(make-package \"test\")", "#<PACKAGE \"test\">");
 
 
 # arithmetic tests
