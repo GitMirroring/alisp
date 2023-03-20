@@ -460,6 +460,7 @@ make_test ("(array-row-major-index (make-array '(1 2 3)) 0 0 0)", "0");
 make_test ("(array-row-major-index (make-array '(2 3 4)) 0 0 1)", "1");
 make_test ("(array-row-major-index (make-array '(2 3 4)) 0 2 0)", "8");
 make_test ("(array-row-major-index (make-array '(2 3 4)) 1 0 0)", "12");
+make_test ("(make-hash-table)", "#<HASH-TABLE EQ 0/1024>");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "NIL");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
