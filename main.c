@@ -1234,6 +1234,10 @@ struct object *builtin_array_row_major_index
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_make_hash_table
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_hash_table_size
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_hash_table_count
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eval
@@ -1971,6 +1975,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ARRAY-ROW-MAJOR-INDEX", env, builtin_array_row_major_index,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-HASH-TABLE", env, builtin_make_hash_table,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("HASH-TABLE-SIZE", env, builtin_hash_table_size,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("HASH-TABLE-COUNT", env, builtin_hash_table_count,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
@@ -8504,6 +8512,47 @@ builtin_make_hash_table (struct object *list, struct environment *env,
   ret->value_ptr.hashtable = ht;
 
   return ret;
+}
+
+
+struct object *
+builtin_hash_table_size (struct object *list, struct environment *env,
+			 struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return create_integer_from_long (LISP_HASHTABLE_SIZE);
+}
+
+
+struct object *
+builtin_hash_table_count (struct object *list, struct environment *env,
+			  struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return create_integer_from_long
+    (hash_table_count (CAR (list)->value_ptr.hashtable));
 }
 
 
