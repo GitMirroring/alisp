@@ -555,6 +555,15 @@ array
 };
 
 
+#define LISP_HASHTABLE_SIZE 1024
+
+struct
+hashtable
+{
+  struct object **table;
+};
+
+
 struct
 filename
 {
@@ -737,6 +746,7 @@ object_ptr_union
   struct string *string;
   char *character;
   struct array *array;
+  struct hashtable *hashtable;
   struct environment *environment;
   struct package *package;
   struct filename *filename;
@@ -1067,6 +1077,8 @@ struct object *copy_list_structure (struct object *list,
 int array_rank (const struct array *array);
 size_t array_total_size (const struct array *array);
 
+int hash_table_count (const struct hashtable *hasht);
+
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
 struct parameter *parse_required_parameters
@@ -1217,6 +1229,8 @@ struct object *builtin_array_has_fill_pointer_p
 struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_array_row_major_index
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_make_hash_table
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1591,6 +1605,7 @@ void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
 void free_array_size (struct array_size *size);
 void free_array (struct object *obj);
+void free_hashtable (struct object *obj);
 void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
@@ -1952,6 +1967,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-ROW-MAJOR-INDEX", env, builtin_array_row_major_index,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-HASH-TABLE", env, builtin_make_hash_table,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
@@ -6084,6 +6101,21 @@ array_total_size (const struct array *array)
 }
 
 
+int
+hash_table_count (const struct hashtable *hasht)
+{
+  int i, cnt = 0;
+
+  for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
+    {
+      if (hasht->table [i])
+	cnt++;
+    }
+
+  return cnt;
+}
+
+
 struct parameter *
 alloc_parameter (enum parameter_type type, struct object *sym)
 {
@@ -8435,6 +8467,32 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
     }
 
   return create_integer_from_long (tot);
+}
+
+
+struct object *
+builtin_make_hash_table (struct object *list, struct environment *env,
+			 struct eval_outcome *outcome)
+{
+  struct object *ret;
+  struct hashtable *ht;
+
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  ret = malloc_and_check (sizeof (*ret));
+  ht = malloc_and_check (sizeof (*ht));
+
+  ht->table = calloc_and_check (LISP_HASHTABLE_SIZE, sizeof (*ht->table));
+
+  ret->refcount = 1;
+  ret->type = TYPE_HASHTABLE;
+  ret->value_ptr.hashtable = ht;
+
+  return ret;
 }
 
 
@@ -14173,6 +14231,20 @@ print_object (const struct object *obj, struct environment *env,
 	return print_list (obj->value_ptr.cons_pair, env, str);
       else if (obj->type == TYPE_ARRAY)
 	return print_array (obj->value_ptr.array, env, str);
+      else if (obj->type == TYPE_HASHTABLE)
+	{
+	  if (write_to_stream (str, "#<HASH-TABLE EQ ",
+			       strlen ("#<HASH-TABLE EQ ")) < 0
+	      || write_long_to_stream (str,
+				       hash_table_count
+				       (obj->value_ptr.hashtable)) < 0
+	      || write_to_stream (str, "/", 1) < 0
+	      || write_long_to_stream (str, LISP_HASHTABLE_SIZE) < 0
+	      || write_to_stream (str, ">", 1) < 0)
+	    return -1;
+
+	  return 0;
+	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
@@ -14616,6 +14688,18 @@ offset_refcount_by (struct object *obj, int delta,
 	    offset_refcount_by (obj->value_ptr.array->value [sz-1], delta,
 				antiloop_hash_t, 0);
 	}
+      else if (obj->type == TYPE_HASHTABLE)
+	{
+	  for (i = 0; i < LISP_HASHTABLE_SIZE - 1; i++)
+	    {
+	      offset_refcount_by (obj->value_ptr.hashtable->table [i], delta,
+				  antiloop_hash_t, 1);
+	    }
+
+	  offset_refcount_by (obj->value_ptr.hashtable->table
+			      [LISP_HASHTABLE_SIZE-1], delta, antiloop_hash_t,
+			      0);
+	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
 	  offset_refcount_by (obj->value_ptr.function->body, delta,
@@ -14685,6 +14769,8 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_ARRAY)
     free_array (obj);
+  else if (obj->type == TYPE_HASHTABLE)
+    free_hashtable (obj);
   else if (obj->type == TYPE_CHARACTER)
     {
       free (obj->value_ptr.character);
@@ -14787,6 +14873,15 @@ free_array (struct object *obj)
 {
   free_array_size (obj->value_ptr.array->alloc_size);
   free (obj->value_ptr.array);
+  free (obj);
+}
+
+
+void
+free_hashtable (struct object *obj)
+{
+  free (obj->value_ptr.hashtable->table);
+  free (obj->value_ptr.hashtable);
   free (obj);
 }
 
