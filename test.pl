@@ -323,6 +323,7 @@ make_test ("(typep \"abc\" 'string)", "T");
 make_test ("(typep \"abc\" '(string))", "T");
 make_test ("(typep \"abc\" 'array)", "T");
 make_test ("(typep 0 'string)", "NIL");
+make_test ("(typep (make-hash-table) 'hash-table)", "T");
 make_test ("(typep '(1 2) 'list)", "T");
 make_test ("(typep #(1 2) 'sequence)", "T");
 make_test ("(typep \"\" t)", "T");
