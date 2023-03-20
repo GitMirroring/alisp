@@ -13702,8 +13702,8 @@ write_long_to_stream (struct stream *stream, long z)
       if (write_char_to_stream (stream, z / exp + '0') < 0)
 	return -1;
 
+      z %= exp;
       exp /= 10;
-      z /= 10;
     }
 
   return 0;
