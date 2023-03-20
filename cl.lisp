@@ -422,6 +422,9 @@
 (defun stringp (obj)
   (typep obj 'string))
 
+(defun hash-table-p (obj)
+  (typep obj 'hash-table))
+
 (defun pathnamep (obj)
   (typep obj 'pathname))
 

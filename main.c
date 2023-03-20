@@ -1183,6 +1183,8 @@ int type_sequence (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct eval_outcome *outcome);
 int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
+int type_hash_table (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct eval_outcome *outcome);
 int type_pathname (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct eval_outcome *outcome);
 int type_stream (const struct object *obj, const struct object *typespec,
@@ -2162,6 +2164,7 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("STRING", env, type_string, 1, "VECTOR", "ARRAY", "SEQUENCE",
 		    (char *)NULL);
+  add_builtin_type ("HASH-TABLE", env, type_hash_table, 1, (char *)NULL);
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
 		    (char *)NULL);
   add_builtin_type ("PATHNAME", env, type_pathname, 1, (char *)NULL);
@@ -7521,6 +7524,14 @@ type_string (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_STRING;
+}
+
+
+int
+type_hash_table (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_HASHTABLE;
 }
 
 
