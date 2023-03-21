@@ -9028,7 +9028,8 @@ builtin_close (struct object *list, struct environment *env,
   if (!s->is_open)
     return &nil_object;
 
-  fclose (s->file);
+  if (s->medium == FILE_STREAM)
+    fclose (s->file);
 
   s->is_open = 0;
 
@@ -15107,7 +15108,8 @@ free_object (struct object *obj)
     free_function_or_macro (obj);
   else if (obj->type == TYPE_STREAM)
     {
-      if (obj->value_ptr.stream->is_open)
+      if (obj->value_ptr.stream->is_open
+	  && obj->value_ptr.stream->medium == FILE_STREAM)
 	fclose (obj->value_ptr.stream->file);
 
       free (obj->value_ptr.stream);
