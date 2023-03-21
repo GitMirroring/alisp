@@ -1240,6 +1240,10 @@ struct object *builtin_hash_table_size
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_hash_table_count
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_gethash
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_remhash
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eval
@@ -1990,6 +1994,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("HASH-TABLE-COUNT", env, builtin_hash_table_count,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
@@ -8587,6 +8593,73 @@ builtin_hash_table_count (struct object *list, struct environment *env,
 
   return create_integer_from_long
     (hash_table_count (CAR (list)->value_ptr.hashtable));
+}
+
+
+struct object *
+builtin_gethash (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *ret, *pres = &t_object;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = CAR (CDR (list))->value_ptr.hashtable->table
+    [hash_object (CAR (list), LISP_HASHTABLE_SIZE)];
+
+  if (!ret)
+    {
+      ret = &nil_object;
+      pres = &nil_object;
+    }
+
+  increment_refcount (ret);
+  prepend_object_to_obj_list (pres, &outcome->other_values);
+  return ret;
+}
+
+
+struct object *
+builtin_remhash (struct object *list, struct environment *env,
+		 struct eval_outcome *outcome)
+{
+  struct object *cell;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  cell = CAR (CDR (list))->value_ptr.hashtable->table
+    [hash_object (CAR (list), LISP_HASHTABLE_SIZE)];
+
+  if (cell)
+    {
+      decrement_refcount_by (cell, CAR (CDR (list))->refcount, CAR (CDR (list)));
+      CAR (CDR (list))->value_ptr.hashtable->table
+	[hash_object (CAR (list), LISP_HASHTABLE_SIZE)] = NULL;
+
+      return &t_object;
+    }
+
+  return &nil_object;
 }
 
 
