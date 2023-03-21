@@ -1454,6 +1454,9 @@ struct object *builtin_package_use_list (struct object *list,
 struct object *builtin_package_used_by_list (struct object *list,
 					     struct environment *env,
 					     struct eval_outcome *outcome);
+struct object *builtin_list_all_packages (struct object *list,
+					  struct environment *env,
+					  struct eval_outcome *outcome);
 struct object *builtin_make_package (struct object *list,
 				     struct environment *env,
 				     struct eval_outcome *outcome);
@@ -2135,6 +2138,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PACKAGE-USE-LIST", env, builtin_package_use_list,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PACKAGE-USED-BY-LIST", env, builtin_package_used_by_list,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LIST-ALL-PACKAGES", env, builtin_list_all_packages,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-PACKAGE", env, builtin_make_package, TYPE_FUNCTION,
 		    NULL, 0);
@@ -11788,6 +11793,40 @@ builtin_package_used_by_list (struct object *list, struct environment *env,
       cons->value_ptr.cons_pair->car = n->obj;
 
       n = n->next;
+    }
+
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
+builtin_list_all_packages (struct object *list, struct environment *env,
+			   struct eval_outcome *outcome)
+{
+  struct object *ret = &nil_object, *cons;
+  struct object_list *p;
+
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  p = env->packages;
+
+  while (p)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      cons->value_ptr.cons_pair->car = p->obj;
+
+      p = p->next;
     }
 
   if (ret != &nil_object)
