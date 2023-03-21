@@ -505,6 +505,7 @@ make_test ("(write-char #\\newline str)", "#\\Newline");
 make_test ("(write '(1 2 3) :stream str)", "(1 2 3)");
 make_test ("(write #(1 2 3) :stream str)", "#(1 2 3)");
 make_test ("(close str)", "T");
+make_test ("(make-string-input-stream \"aaa\")", "#<STREAM ?>");
 make_test ("(defparameter str (make-string-output-stream))", "STR");
 make_test ("(write 'aaa :stream str)", "AAA");
 make_test ("(write \"bbb\" :stream str)", "\"bbb\"");
