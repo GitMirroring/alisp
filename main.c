@@ -1464,6 +1464,8 @@ struct object *builtin_list_all_packages (struct object *list,
 struct object *builtin_make_package (struct object *list,
 				     struct environment *env,
 				     struct eval_outcome *outcome);
+struct object *builtin_in_package (struct object *list, struct environment *env,
+				   struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -2149,6 +2151,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-PACKAGE", env, builtin_make_package, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("IN-PACKAGE", env, builtin_in_package, TYPE_MACRO, NULL,
+		    0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -11957,6 +11961,55 @@ builtin_make_package (struct object *list, struct environment *env,
   prepend_object_to_obj_list (ret, &env->packages);
 
   return ret;
+}
+
+
+struct object *
+builtin_in_package (struct object *list, struct environment *env,
+		    struct eval_outcome *outcome)
+{
+  char *name;
+  int len;
+  struct object *pack;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
+      && !IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      name = CAR (list)->value_ptr.string->value;
+      len = CAR (list)->value_ptr.string->used_size;
+    }
+  else if (CAR (list)->type == TYPE_CHARACTER)
+    {
+      name = CAR (list)->value_ptr.character;
+      len = strlen (name);
+    }
+  else
+    {
+      name = SYMBOL (CAR (list))->value_ptr.symbol->name;
+      len = SYMBOL (CAR (list))->value_ptr.symbol->name_len;
+    }
+
+  pack = find_package (name, len, env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  return set_value (env->package_sym, pack, env, outcome);
 }
 
 
