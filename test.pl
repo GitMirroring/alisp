@@ -611,6 +611,10 @@ make_test ("(package-used-by-list (symbol-package 'if))", "(#<PACKAGE \"COMMON-L
 make_test ("(list-all-packages)", "(#<PACKAGE \"COMMON-LISP-USER\"> #<PACKAGE \"COMMON-LISP\"> #<PACKAGE \"KEYWORD\">)");
 make_test ("(make-package \"test\")", "#<PACKAGE \"test\">");
 make_test ("(list-all-packages)", "(#<PACKAGE \"test\"> #<PACKAGE \"COMMON-LISP-USER\"> #<PACKAGE \"COMMON-LISP\"> #<PACKAGE \"KEYWORD\">)");
+make_test ("(in-package \"CL\")", "#<PACKAGE \"COMMON-LISP\">");
+make_test ("*package*", "#<PACKAGE \"COMMON-LISP\">");
+make_test ("(in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
+make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 
 
 # arithmetic tests
