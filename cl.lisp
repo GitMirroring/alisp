@@ -236,6 +236,22 @@
   (find-if (complement pred) seq))
 
 
+(defun assoc (obj alist)
+  (assoc-if (lambda (x) (eql obj x)) alist))
+
+
+(defun assoc-if (pred alist)
+  (let ((subl alist))
+    (dotimes (i (length alist))
+      (if (funcall pred (car (car subl)))
+	  (return-from assoc-if (car subl)))
+      (setq subl (cdr subl)))))
+
+
+(defun assoc-if-not (pred alist)
+  (assoc-if (complement pred) alist))
+
+
 (defun position (obj seq)
   (position-if (lambda (x) (eql obj x)) seq))
 
