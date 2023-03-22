@@ -222,6 +222,34 @@
   (member-if (complement pred) list))
 
 
+(defun find (obj seq)
+  (find-if (lambda (x) (eql obj x)) seq))
+
+
+(defun find-if (pred seq)
+  (dotimes (i (length seq) nil)
+    (if (funcall pred (elt seq i))
+	(return-from find-if (elt seq i)))))
+
+
+(defun find-if-not (pred seq)
+  (find-if (complement pred) seq))
+
+
+(defun position (obj seq)
+  (position-if (lambda (x) (eql obj x)) seq))
+
+
+(defun position-if (pred seq)
+  (dotimes (i (length seq) nil)
+    (if (funcall pred (elt seq i))
+	(return-from position-if i))))
+
+
+(defun position-if-not (pred seq)
+  (position-if (complement pred) seq))
+
+
 (defun count (obj seq)
   (let ((ret 0))
     (dotimes (i (length seq))
@@ -240,20 +268,6 @@
 
 (defun count-if-not (pred seq)
   (count-if (complement pred) seq))
-
-
-(defun position (obj seq)
-  (position-if (lambda (x) (eql obj x)) seq))
-
-
-(defun position-if (pred seq)
-  (dotimes (i (length seq) nil)
-    (if (funcall pred (elt seq i))
-	(return-from position-if i))))
-
-
-(defun position-if-not (pred seq)
-  (position-if (complement pred) seq))
 
 
 (defun remove (obj seq)
