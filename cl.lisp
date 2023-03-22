@@ -242,6 +242,20 @@
   (count-if (complement pred) seq))
 
 
+(defun position (obj seq)
+  (position-if (lambda (x) (eql obj x)) seq))
+
+
+(defun position-if (pred seq)
+  (dotimes (i (length seq) nil)
+    (if (funcall pred (elt seq i))
+	(return-from position-if i))))
+
+
+(defun position-if-not (pred seq)
+  (position-if (complement pred) seq))
+
+
 (defun remove (obj seq)
   (remove-if (lambda (ob) (eql ob obj)) seq))
 
