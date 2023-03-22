@@ -394,6 +394,9 @@
 (defun consp (obj)
   (typep obj 'cons))
 
+(defun atom (obj)
+  (typep obj 'atom))
+
 (defun listp (obj)
   (typep obj 'list))
 
