@@ -1208,6 +1208,8 @@ struct object *builtin_list_star
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_append
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_nconc
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nth
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_nthcdr
@@ -1972,6 +1974,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST*", env, builtin_list_star, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NCONC", env, builtin_nconc, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
@@ -7859,6 +7862,49 @@ builtin_append (struct object *list, struct environment *env,
   increment_refcount (obj);
 
   return ret;
+}
+
+
+struct object *
+builtin_nconc (struct object *list, struct environment *env,
+	       struct eval_outcome *outcome)
+{
+  int i, l = list_length (list);
+  struct object *argcons = list, *lastcons = NULL;
+
+  if (!l)
+    return &nil_object;
+
+  for (i = 0; i < l-1; i++)
+    {
+      if (!IS_LIST (CAR (argcons)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      argcons = CDR (argcons);
+    }
+
+  increment_refcount (CAR (list));
+
+  argcons = list;
+
+  for (i = 0; i < l; i++)
+    {
+      if (lastcons)
+	lastcons->value_ptr.cons_pair->cdr = CAR (argcons);
+
+      if (CAR (argcons)->type == TYPE_CONS_PAIR)
+	lastcons = last_cons_pair (CAR (argcons));
+
+      argcons = CDR (argcons);
+
+      if (lastcons)
+	increment_refcount_by (CAR (argcons), lastcons->refcount, lastcons);
+    }
+
+  return CAR (list);
 }
 
 
