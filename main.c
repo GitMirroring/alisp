@@ -377,7 +377,7 @@ environment
 
   struct object *c_stdout;
 
-  struct object *package_sym, *std_out_sym, *print_escape_sym,
+  struct object *package_sym, *std_in_sym, *std_out_sym, *print_escape_sym,
     *print_readably_sym;
 };
 
@@ -941,7 +941,8 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (size_t size);
-struct object *create_string_from_char_vector (const char *str, size_t size);
+struct object *create_string_from_char_vector (const char *str, size_t size,
+					       int do_copy);
 struct object *create_string_from_c_string (const char *str);
 void resize_string_allocation (struct object *string, size_t size);
 char *copy_string_to_c_string (struct string *str);
@@ -1246,6 +1247,8 @@ struct object *builtin_gethash
 struct object *builtin_remhash
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_last
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_read_line
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_eval
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -2003,6 +2006,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
@@ -2214,8 +2218,10 @@ add_standard_definitions (struct environment *env)
   define_constant_by_name ("MOST-NEGATIVE-FIXNUM",
 			   create_integer_from_long (LONG_MIN), env);
 
-  define_variable ("*STANDARD-INPUT*", create_stream_from_open_file
-		   (CHARACTER_STREAM, INPUT_STREAM, stdin), env);
+  env->std_in_sym = define_variable ("*STANDARD-INPUT*",
+				     create_stream_from_open_file
+				     (CHARACTER_STREAM, INPUT_STREAM, stdin),
+				     env);
 
   env->c_stdout = create_stream_from_open_file (CHARACTER_STREAM, OUTPUT_STREAM,
 						stdout);
@@ -2224,7 +2230,6 @@ add_standard_definitions (struct environment *env)
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
 					     env);
-
 
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
 
@@ -4088,7 +4093,7 @@ create_package (char *name, int name_len)
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct package *pack = malloc_and_check (sizeof (*pack));
 
-  pack->name = create_string_from_char_vector (name, name_len);
+  pack->name = create_string_from_char_vector (name, name_len, 1);
   pack->nicks = NULL;
   pack->uses = NULL;
   pack->used_by = NULL;
@@ -4111,7 +4116,7 @@ create_package_from_c_strings (char *name, ...)
   va_list valist;
   char *n;
 
-  pack->name = create_string_from_char_vector (name, strlen (name));
+  pack->name = create_string_from_char_vector (name, strlen (name), 1);
   pack->nicks = NULL;
   pack->uses = NULL;
   pack->used_by = NULL;
@@ -4126,7 +4131,7 @@ create_package_from_c_strings (char *name, ...)
       else
 	pack->nicks = nicks = malloc_and_check (sizeof (*nicks));
 
-      nicks->obj = create_string_from_char_vector (n, strlen (n));
+      nicks->obj = create_string_from_char_vector (n, strlen (n), 1);
     }
 
   va_end (valist);
@@ -4533,7 +4538,7 @@ alloc_string (size_t size)
 
 
 struct object *
-create_string_from_char_vector (const char *str, size_t size)
+create_string_from_char_vector (const char *str, size_t size, int do_copy)
 {
   size_t i;
   struct object *ret = alloc_string (size);
@@ -4550,7 +4555,7 @@ create_string_from_char_vector (const char *str, size_t size)
 struct object *
 create_string_from_c_string (const char *str)
 {
-  return create_string_from_char_vector (str, strlen (str));
+  return create_string_from_char_vector (str, strlen (str), 1);
 }
 
 
@@ -8759,6 +8764,104 @@ builtin_last (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_read_line (struct object *list, struct environment *env,
+		   struct eval_outcome *outcome)
+{
+  int l = list_length (list), ch, sz = 32, i, eof;
+  struct stream *s;
+  struct object *ret, *str;
+  char *in;
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l && CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  str = l ? CAR (list) : inspect_variable (env->std_in_sym, env);
+  s = str->value_ptr.stream;
+
+  if (s->medium == FILE_STREAM)
+    {
+      i = 0, eof = 0;
+
+      in = malloc_and_check (sz);
+
+      ch = getc (s->file);
+
+      while (ch != '\n')
+	{
+	  if (ch == EOF)
+	    {
+	      eof = 1;
+	      break;
+	    }
+
+	  if (i == sz)
+	    {
+	      sz *= 2;
+	      in = realloc_and_check (in, sz);
+	    }
+
+	  in [i++] = ch;
+
+	  ch = getc (s->file);
+	}
+
+      ret = create_string_from_char_vector (in, i, 0);
+      ret->value_ptr.string->alloc_size = sz;
+    }
+  else if (s->medium == STRING_STREAM)
+    {
+      eof = 1;
+
+      for (i = 0; i < s->string->value_ptr.string->used_size; i++)
+	{
+	  if (s->string->value_ptr.string->value [i] == '\n')
+	    {
+	      eof = 0;
+	      break;
+	    }
+	}
+
+      if (eof)
+	{
+	  ret = s->string;
+	  decrement_refcount_by (ret, str->refcount-1, NULL);
+
+	  s->string = alloc_string (0);
+	  increment_refcount_by (s->string, str->refcount-1, NULL);
+	}
+      else
+	{
+	  ret = s->string;
+
+	  s->string = create_string_from_char_vector
+	    (ret->value_ptr.string->value+i+1,
+	     ret->value_ptr.string->used_size-i-1, 1);
+	  increment_refcount_by (s->string, str->refcount-1, str);
+
+	  resize_string_allocation (ret, i);
+	  decrement_refcount_by (ret, str->refcount-1, NULL);
+	}
+    }
+
+  if (eof)
+    prepend_object_to_obj_list (&t_object, &outcome->other_values);
+  else
+    prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+
+  return ret;
+}
+
+
+struct object *
 builtin_eval (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
@@ -11416,7 +11519,7 @@ builtin_symbol_name (struct object *list, struct environment *env,
 
   s = SYMBOL (CAR (list))->value_ptr.symbol;
 
-  return create_string_from_char_vector (s->name, s->name_len);
+  return create_string_from_char_vector (s->name, s->name_len, 1);
 }
 
 
@@ -11494,7 +11597,7 @@ builtin_string (struct object *list, struct environment *env,
     {
       s = SYMBOL (CAR (list))->value_ptr.symbol;
 
-      return create_string_from_char_vector (s->name, s->name_len);
+      return create_string_from_char_vector (s->name, s->name_len, 1);
     }
   else if (CAR (list)->type == TYPE_CHARACTER)
     {
