@@ -90,8 +90,7 @@
 #define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_BIGNUM | TYPE_FIXNUM	\
 					   | TYPE_RATIO | TYPE_FLOAT \
 					   | TYPE_BYTESPEC | TYPE_STRING \
-					   | TYPE_CHARACTER | TYPE_FILENAME \
-					   | TYPE_STREAM))
+					   | TYPE_CHARACTER | TYPE_FILENAME))
 
 
 #define CLEAR_MULTIPLE_OR_NO_VALUES(out)	\
@@ -9213,8 +9212,11 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
     }
 
   ret = CAR (list)->value_ptr.stream->string;
+  decrement_refcount_by (ret, CAR (list)->refcount-1, NULL);
 
   CAR (list)->value_ptr.stream->string = alloc_string (0);
+  increment_refcount_by (CAR (list)->value_ptr.stream->string,
+			 CAR (list)->refcount-1, NULL);
 
   return ret;
 }
@@ -15082,6 +15084,14 @@ offset_refcount_by (struct object *obj, int delta,
 	  offset_refcount_by (obj->value_ptr.hashtable->table
 			      [LISP_HASHTABLE_SIZE-1], delta, antiloop_hash_t,
 			      0);
+	}
+      else if (obj->type == TYPE_STREAM)
+	{
+	  if (obj->value_ptr.stream->medium == STRING_STREAM)
+	    {
+	      offset_refcount_by (obj->value_ptr.stream->string, delta,
+				  antiloop_hash_t, 0);
+	    }
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	{
