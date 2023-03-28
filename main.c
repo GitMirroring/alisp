@@ -7772,7 +7772,10 @@ builtin_list (struct object *list, struct environment *env,
       list = CDR (list);
     }
 
-  return l;
+  if (l)
+    return l;
+
+  return &nil_object;
 }
 
 
