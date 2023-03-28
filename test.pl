@@ -475,6 +475,9 @@ make_test ("(remhash '(1 2) (make-hash-table))", "NIL");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "NIL");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
+make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
+make_test ("(read-line (make-string-input-stream \"hello world\n" .
+	   "\"))", "\"hello world\"\nNIL");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
 make_test ("(let ((var 12)) (eval 'var))", "10");
