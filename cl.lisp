@@ -314,6 +314,16 @@
   (if (member obj list) list (cons obj list)))
 
 
+(defmacro push (item place)
+  `(setf ,place (cons ,item ,place)))
+
+
+(defmacro pop (place)
+  `(let ((c (car ,place)))
+     (setf ,place (cdr ,place))
+     c))
+
+
 (defun array-rank (array)
   (length (array-dimensions array)))
 
