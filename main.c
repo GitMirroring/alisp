@@ -6286,7 +6286,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	    *last = (*last)->next =
 	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 
-	  if (l == 2)
+	  if (l >= 2)
 	    {
 	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
