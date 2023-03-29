@@ -7827,7 +7827,10 @@ builtin_list (struct object *list, struct environment *env,
     }
 
   if (l)
-    return l;
+    {
+      last_cons->value_ptr.cons_pair->cdr = &nil_object;
+      return l;
+    }
 
   return &nil_object;
 }
