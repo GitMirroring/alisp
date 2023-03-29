@@ -556,6 +556,13 @@
     (write obj :stream out)))
 
 
+(defun print (obj &optional (out *standard-output*))
+  (terpri out)
+  (prin1 obj out)
+  (write-char #\space out)
+  obj)
+
+
 (defun format (out fstr &rest args)
   (let (in-spec at-sign colon sign num dirargs)
     (dotimes (i (length fstr))
