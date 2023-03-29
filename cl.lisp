@@ -545,15 +545,15 @@
   string)
 
 
-(defun prin1 (obj)
+(defun prin1 (obj &optional (out *standard-output*))
   (let ((*print-escape* t))
-    (write obj)))
+    (write obj :stream out)))
 
 
-(defun princ (obj)
+(defun princ (obj &optional (out *standard-output*))
   (let ((*print-escape* nil)
 	(*print-readably* nil))
-    (write obj)))
+    (write obj :stream out)))
 
 
 (defun format (out fstr &rest args)
