@@ -473,6 +473,7 @@ make_test ("(array-row-major-index (make-array '(2 3 4)) 1 0 0)", "12");
 make_test ("(make-hash-table)", "#<HASH-TABLE EQ 0/1024>");
 make_test ("(hash-table-size (make-hash-table))", "1024");
 make_test ("(hash-table-count (make-hash-table))", "0");
+make_test ("(hash-table-test (make-hash-table))", "EQ");
 make_test ("(gethash 10 (make-hash-table))", "NIL\nNIL");
 make_test ("(remhash '(1 2) (make-hash-table))", "NIL");
 make_test ("(last '(1 2 3))", "(3)");
