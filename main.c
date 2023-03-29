@@ -1242,6 +1242,8 @@ struct object *builtin_hash_table_size
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_hash_table_count
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_hash_table_test
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_gethash
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_remhash
@@ -2002,6 +2004,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("HASH-TABLE-SIZE", env, builtin_hash_table_size,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("HASH-TABLE-COUNT", env, builtin_hash_table_count,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("HASH-TABLE-TEST", env, builtin_hash_table_test,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
@@ -8760,6 +8764,27 @@ builtin_hash_table_count (struct object *list, struct environment *env,
 
   return create_integer_from_long
     (hash_table_count (CAR (list)->value_ptr.hashtable));
+}
+
+
+struct object *
+builtin_hash_table_test (struct object *list, struct environment *env,
+			 struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return intern_symbol_from_char_vector ("EQ", strlen ("EQ"), 1,
+					 EXTERNAL_VISIBILITY, 1, env->cl_package);
 }
 
 
