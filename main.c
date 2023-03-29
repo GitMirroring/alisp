@@ -6326,11 +6326,14 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 {
   struct object *car, *caar, *key, *var;
   struct parameter *first = NULL;
+  int l;
 
   *last = NULL;
 
-  while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
+  while (obj && SYMBOL (obj) != &nil_object)
     {
+      car = CAR (obj);
+
       if (IS_SYMBOL (car)
 	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
 			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
@@ -6357,18 +6360,45 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
+	  l = list_length (car);
+
+	  if (!l || l > 3)
+	    {
+	      outcome->type = INVALID_LAMBDA_LIST;
+	      return NULL;
+	    }
+
 	  caar = CAR (car);
 
 	  if (IS_SYMBOL (caar))
-	    key = var = SYMBOL (caar);
+	    {
+	      var = SYMBOL (caar);
+	      increment_refcount (var);
+
+	      key = intern_symbol_from_char_vector
+		(var->value_ptr.symbol->name, var->value_ptr.symbol->name_len,
+		 1, EXTERNAL_VISIBILITY, 1, env->keyword_package);
+	    }
 	  else if (caar->type == TYPE_CONS_PAIR)
 	    {
-	      key = CAR (caar);
-	      var = CAR (CDR (caar));
-	    }
+	      if (list_length (caar) != 2 || !IS_SYMBOL (CAR (caar))
+		  || !IS_SYMBOL (CAR (CDR (caar))))
+		{
+		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
 
-	  increment_refcount (key);
-	  increment_refcount (var);
+	      key = SYMBOL (CAR (caar));
+	      increment_refcount (key);
+
+	      var = SYMBOL (CAR (CDR (caar)));
+	      increment_refcount (var);
+	    }
+	  else
+	    {
+	      outcome->type = INVALID_LAMBDA_LIST;
+	      return NULL;
+	    }
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -6378,17 +6408,28 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  (*last)->key = key;
 
-	  if (list_length (car) == 2)
+	  if (l >= 2)
 	    {
 	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
 	    }
 
-	  if (list_length (car) == 3)
+	  if (l == 3)
 	    {
+	      if (!IS_SYMBOL (CAR (CDR (CDR (car)))))
+		{
+		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
+
 	      increment_refcount (SYMBOL (nth (2, car)));
 	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
 	    }
+	}
+      else
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
 	}
 
       obj = CDR (obj);
@@ -6777,6 +6818,18 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		val = &nil_object;
 
 	      bins = bind_variable (findk->name, val, bins);
+	      argsnum++;
+
+	      if (findk->supplied_p_param)
+		{
+		  bins = bind_variable (findk->supplied_p_param, &nil_object,
+					bins);
+		  argsnum++;
+		}
+	    }
+	  else if (findk->supplied_p_param)
+	    {
+	      bins = bind_variable (findk->supplied_p_param, &t_object, bins);
 	      argsnum++;
 	    }
 
