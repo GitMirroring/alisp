@@ -4444,6 +4444,7 @@ create_function (struct object *lambda_list, struct object *body,
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
+  outcome->type = EVAL_OK;
   f->lambda_list = parse_lambda_list (lambda_list, env, outcome);
 
   if (outcome->type == INVALID_LAMBDA_LIST)
@@ -6205,10 +6206,22 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj))
-	 && !symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
+  while (obj && SYMBOL (obj) != &nil_object)
     {
+      car = CAR (obj);
+
+      if (!IS_SYMBOL (car))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      if (symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
+			   "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
+	{
+	  break;
+	}
+
       increment_refcount (SYMBOL (car));
 
       if (!first)
@@ -6231,11 +6244,14 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 {
   struct object *car;
   struct parameter *first = NULL;
+  int l;
 
   *last = NULL;
 
-  while (obj && SYMBOL (obj) != &nil_object && (car = CAR (obj)))
+  while (obj && SYMBOL (obj) != &nil_object)
     {
+      car = CAR (obj);
+
       if (IS_SYMBOL (car)
 	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
 			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
@@ -6254,6 +6270,14 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
+	  l = list_length (car);
+
+	  if (!l || l > 3 || !IS_SYMBOL (CAR (car)))
+	    {
+	      outcome->type = INVALID_LAMBDA_LIST;
+	      return NULL;
+	    }
+
 	  increment_refcount (SYMBOL (CAR (car)));
 
 	  if (!first)
@@ -6262,17 +6286,28 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	    *last = (*last)->next =
 	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 
-	  if (list_length (car) == 2)
+	  if (l == 2)
 	    {
 	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
 	    }
 
-	  if (list_length (car) == 3)
+	  if (l == 3)
 	    {
-	      increment_refcount (SYMBOL (nth (2, car)));
-	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
+	      if (!IS_SYMBOL (CAR (CDR (CDR (car)))))
+		{
+		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      increment_refcount (SYMBOL (CAR (CDR (CDR (car)))));
+	      (*last)->supplied_p_param = SYMBOL (CAR (CDR (CDR (car))));
 	    }
+	}
+      else
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
 	}
 
       obj = CDR (obj);
@@ -6385,6 +6420,9 @@ parse_lambda_list (struct object *obj, struct environment *env,
 
   first = parse_required_parameters (obj, &last, &obj, outcome);
 
+  if (outcome->type != EVAL_OK)
+    return NULL;
+
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && symbol_equals (car, "&OPTIONAL", NULL))
     {
@@ -6393,11 +6431,20 @@ parse_lambda_list (struct object *obj, struct environment *env,
 	  parse_optional_parameters (CDR (obj), &last, &obj, outcome);
       else
 	first = parse_optional_parameters (CDR (obj), &last, &obj, outcome);
+
+      if (outcome->type != EVAL_OK)
+	return NULL;
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && symbol_is_among (car, NULL, "&REST", "&BODY", (char *)NULL))
     {
+      if (SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
       increment_refcount (SYMBOL (CAR (CDR (obj))));
 
       if (first)
@@ -6416,6 +6463,9 @@ parse_lambda_list (struct object *obj, struct environment *env,
 	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
       else
 	first = parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
+
+      if (outcome->type != EVAL_OK)
+	return NULL;
     }
 
   if (SYMBOL (obj) != &nil_object)
@@ -12985,8 +13035,7 @@ evaluate_defun (struct object *list, struct environment *env,
   struct object *fun, *sym;
 
   if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
-      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && SYMBOL (CAR (CDR (list))) != &nil_object))
+      || (!IS_LIST (CAR (CDR (list)))))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
@@ -13032,8 +13081,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
   struct object *mac, *sym;
 
   if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
-      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && SYMBOL (CAR (CDR (list))) != &nil_object))
+      || (!IS_LIST (CAR (CDR (list)))))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFMACRO;
       return NULL;
