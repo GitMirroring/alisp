@@ -494,6 +494,7 @@ make_test ("(write-byte (char-code #\\a) *standard-output*)", "a97");
 make_test ("(fresh-line)", "NIL");
 make_test ("(terpri)", "\nNIL");
 make_test ("(write-line \"aaa\")", "aaa\n\"aaa\"");
+make_test ("(write-sequence \"hello world\" *standard-output* :start 1 :end 5)", "ello\n\"hello world\"");
 make_test ("(prin1 '|Aa,a|)", "|Aa,a|\n|Aa,a|");
 make_test ("(prin1 #\\a)", "#\\a\n#\\a");
 make_test ("(prin1 \"aaa\" *standard-output*)", "\"aaa\"\n\"aaa\"");
