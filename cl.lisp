@@ -545,6 +545,12 @@
   string)
 
 
+(defun write-sequence (seq str &key (start 0) (end nil))
+  (dotimes (i (if end (- end start) (length seq)))
+    (princ (elt seq (+ i start)) str))
+  seq)
+
+
 (defun prin1 (obj &optional (out *standard-output*))
   (let ((*print-escape* t))
     (write obj :stream out)))
