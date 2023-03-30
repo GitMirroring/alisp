@@ -86,6 +86,11 @@
 		   (s)->value_ptr.symbol_name->sym :			\
 		   NULL)
 
+#define IS_STRING_DESIGNATOR(s) ((s)->type == TYPE_CHARACTER || IS_SYMBOL (s) \
+				 || (s)->type == TYPE_STRING)
+
+#define IS_PACKAGE_DESIGNATOR(s) (IS_STRING_DESIGNATOR(s) \
+				  || (s)->type == TYPE_PACKAGE)
 
 #define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_BIGNUM | TYPE_FIXNUM	\
 					   | TYPE_RATIO | TYPE_FLOAT \
@@ -401,15 +406,26 @@ package_record
 };
 
 
+struct
+name_list
+{
+  char *name;
+  long name_len;
+
+  struct name_list *next;
+};
+
+
 #define SYMTABLE_SIZE 2048
 
 
 struct
 package
 {
-  struct object *name;
+  char *name;
+  long name_len;
 
-  struct object_list *nicks;
+  struct name_list *nicks;
 
   struct package_record **symtable;
 
@@ -908,11 +924,17 @@ struct object *alloc_bytespec (void);
 struct package_record **alloc_empty_symtable (size_t table_size);
 struct object *create_package (char *name, int name_len);
 struct object *create_package_from_c_strings (char *name, ...);
+void free_name_list (struct name_list *list);
 struct package_record *inspect_accessible_symbol (char *name, size_t len,
 						  struct object *pack,
 						  int *is_inherited);
 struct object *inspect_package_by_designator (struct object *des,
 					      struct environment *env);
+struct object *find_package (const char *name, size_t len,
+			     struct environment *env);
+struct package_record *find_package_entry (struct object *symbol,
+					   struct package_record **symtable,
+					   struct package_record **prev);
 int use_package (struct object *used, struct object *pack,
 		 struct object **conflicting);
 
@@ -987,12 +1009,6 @@ struct object *create_string_stream (enum stream_direction direction,
 
 struct object *load_file (const char *filename, struct environment *env,
 			  struct eval_outcome *outcome);
-
-struct object *find_package (const char *name, size_t len,
-			     struct environment *env);
-struct package_record *find_package_entry (struct object *symbol,
-					   struct package_record **symtable,
-					   struct package_record **prev);
 
 struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int do_copy,
@@ -1464,6 +1480,9 @@ struct object *builtin_package_name (struct object *list,
 struct object *builtin_package_nicknames (struct object *list,
 					  struct environment *env,
 					  struct eval_outcome *outcome);
+struct object *builtin_rename_package (struct object *list,
+				       struct environment *env,
+				       struct eval_outcome *outcome);
 struct object *builtin_package_use_list (struct object *list,
 					 struct environment *env,
 					 struct eval_outcome *outcome);
@@ -2162,6 +2181,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("PACKAGE-NICKNAMES", env, builtin_package_nicknames,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("RENAME-PACKAGE", env, builtin_rename_package, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("PACKAGE-USE-LIST", env, builtin_package_use_list,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PACKAGE-USED-BY-LIST", env, builtin_package_used_by_list,
@@ -2350,17 +2371,15 @@ generate_prompt (struct environment *env)
 {
   struct package *pack =
     inspect_variable (env->package_sym, env)->value_ptr.package;
-  struct string *s = pack->nicks ? pack->nicks->obj->value_ptr.string :
-    pack->name->value_ptr.string;
-  size_t sz = s->used_size + 5;
-  char *ret = malloc_and_check (sz);
+  size_t s = pack->nicks ? pack->nicks->name_len + 5 : pack->name_len + 5;
+  char *ret = malloc_and_check (s);
 
   ret [0] = '[';
-  memcpy (ret+1, s->value, s->used_size);
-  ret [sz-4] = ']';
-  ret [sz-3] = '>';
-  ret [sz-2] = ' ';
-  ret [sz-1] = 0;
+  memcpy (ret+1, pack->nicks ? pack->nicks->name : pack->name, s);
+  ret [s-4] = ']';
+  ret [s-3] = '>';
+  ret [s-2] = ' ';
+  ret [s-1] = 0;
 
   return ret;
 }
@@ -4102,7 +4121,10 @@ create_package (char *name, int name_len)
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct package *pack = malloc_and_check (sizeof (*pack));
 
-  pack->name = create_string_from_char_vector (name, name_len, 1);
+  pack->name = malloc_and_check (name_len);
+  memcpy (pack->name, name, name_len);
+
+  pack->name_len = name_len;
   pack->nicks = NULL;
   pack->uses = NULL;
   pack->used_by = NULL;
@@ -4121,11 +4143,12 @@ create_package_from_c_strings (char *name, ...)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   struct package *pack = malloc_and_check (sizeof (*pack));
-  struct object_list *nicks;
+  struct name_list *nicks;
   va_list valist;
   char *n;
 
-  pack->name = create_string_from_char_vector (name, strlen (name), 1);
+  pack->name = name;
+  pack->name_len = strlen (name);
   pack->nicks = NULL;
   pack->uses = NULL;
   pack->used_by = NULL;
@@ -4140,7 +4163,8 @@ create_package_from_c_strings (char *name, ...)
       else
 	pack->nicks = nicks = malloc_and_check (sizeof (*nicks));
 
-      nicks->obj = create_string_from_char_vector (n, strlen (n), 1);
+      nicks->name = n;
+      nicks->name_len = strlen (n);
     }
 
   va_end (valist);
@@ -4153,6 +4177,21 @@ create_package_from_c_strings (char *name, ...)
   obj->value_ptr.package = pack;
 
   return obj;
+}
+
+
+void
+free_name_list (struct name_list *list)
+{
+  struct name_list *next;
+
+  while (list)
+    {
+      next = list->next;
+      free (list->name);
+      free (list);
+      list = next;
+    }
 }
 
 
@@ -4205,11 +4244,78 @@ inspect_accessible_symbol (char *name, size_t len, struct object *pack,
 struct object *
 inspect_package_by_designator (struct object *des, struct environment *env)
 {
+  char *name;
+  int len;
+
   if (des->type == TYPE_PACKAGE)
     return des;
 
-  return find_package (des->value_ptr.string->value,
-		       des->value_ptr.string->used_size, env);
+  if (des->type == TYPE_STRING)
+    {
+      name = des->value_ptr.string->value;
+      len = des->value_ptr.string->used_size;
+    }
+  else if (des->type == TYPE_CHARACTER)
+    {
+      name = des->value_ptr.character;
+      len = strlen (name);
+    }
+  else
+    {
+      name = SYMBOL (des)->value_ptr.symbol->name;
+      len = SYMBOL (des)->value_ptr.symbol->name_len;
+    }
+
+  return find_package (name, len, env);
+}
+
+
+struct object *
+find_package (const char *name, size_t len, struct environment *env)
+{
+  struct object_list *l = env->packages;
+  struct package *p;
+  struct name_list *n;
+
+  while (l)
+    {
+      p = l->obj->value_ptr.package;
+
+      if (eqmem (p->name, p->name_len, name, len))
+	return l->obj;
+
+      n = p->nicks;
+
+      while (n)
+	{
+	  if (eqmem (n->name, n->name_len, name, len))
+	    return l->obj;
+
+	  n = n->next;
+	}
+
+      l = l->next;
+    }
+
+  return NULL;
+}
+
+
+struct package_record *
+find_package_entry (struct object *symbol, struct package_record **symtable,
+		    struct package_record **prev)
+{
+  struct package_record *c = symtable [hash_symbol (symbol, SYMTABLE_SIZE)];
+
+  *prev = NULL;
+
+  while (c && c->sym != symbol)
+    {
+      *prev = c;
+      c = c->next;
+    }
+
+  return c;
 }
 
 
@@ -5233,57 +5339,6 @@ load_file (const char *filename, struct environment *env,
 	  return &nil_object;
 	}
     }
-}
-
-
-struct object *
-find_package (const char *name, size_t len, struct environment *env)
-{
-  struct object_list *l = env->packages;
-  struct package *p;
-  struct object_list *n;
-
-  while (l)
-    {
-      p = l->obj->value_ptr.package;
-
-      if (eqmem (p->name->value_ptr.string->value,
-		 p->name->value_ptr.string->used_size, name, len))
-	return l->obj;
-
-      n = p->nicks;
-
-      while (n)
-	{
-	  if (eqmem (n->obj->value_ptr.string->value,
-		     n->obj->value_ptr.string->used_size, name, len))
-	    return l->obj;
-
-	  n = n->next;
-	}
-
-      l = l->next;
-    }
-
-  return NULL;
-}
-
-
-struct package_record *
-find_package_entry (struct object *symbol, struct package_record **symtable,
-		    struct package_record **prev)
-{
-  struct package_record *c = symtable [hash_symbol (symbol, SYMTABLE_SIZE)];
-
-  *prev = NULL;
-
-  while (c && c->sym != symbol)
-    {
-      *prev = c;
-      c = c->next;
-    }
-
-  return c;
 }
 
 
@@ -12086,7 +12141,7 @@ builtin_package_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -12100,8 +12155,8 @@ builtin_package_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (pack->value_ptr.package->name);
-  return pack->value_ptr.package->name;
+  return create_string_from_char_vector (pack->value_ptr.package->name,
+					 pack->value_ptr.package->name_len, 1);
 }
 
 
@@ -12110,7 +12165,7 @@ builtin_package_nicknames (struct object *list, struct environment *env,
 			   struct eval_outcome *outcome)
 {
   struct object *pack, *ret = &nil_object, *cons;
-  struct object_list *n;
+  struct name_list *n;
 
   if (list_length (list) != 1)
     {
@@ -12118,7 +12173,7 @@ builtin_package_nicknames (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -12141,8 +12196,8 @@ builtin_package_nicknames (struct object *list, struct environment *env,
       else
 	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
-      increment_refcount (n->obj);
-      cons->value_ptr.cons_pair->car = n->obj;
+      cons->value_ptr.cons_pair->car =
+	create_string_from_char_vector (n->name, n->name_len, 1);
 
       n = n->next;
     }
@@ -12151,6 +12206,121 @@ builtin_package_nicknames (struct object *list, struct environment *env,
     cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
+}
+
+
+struct object *
+builtin_rename_package (struct object *list, struct environment *env,
+			struct eval_outcome *outcome)
+{
+  int l = list_length (list), len;
+  struct object *cons, *pack;
+  struct package *p;
+  struct name_list *nicks;
+  char *name;
+
+  if (l < 2 || l > 3)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list))
+      || !IS_PACKAGE_DESIGNATOR (CAR (CDR (list)))
+      || !IS_LIST (CAR (CDR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  cons = CAR (CDR (CDR (list)));
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (!IS_STRING_DESIGNATOR (CAR (cons)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      cons = CDR (cons);
+    }
+
+  pack = inspect_package_by_designator (CAR (list), env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  p = pack->value_ptr.package;
+
+  free (p->name);
+  free_name_list (p->nicks);
+
+  if (CAR (CDR (list))->type == TYPE_PACKAGE)
+    {
+      name = CAR (CDR (list))->value_ptr.package->name;
+      len = CAR (CDR (list))->value_ptr.package->name_len;
+    }
+  else if (CAR (CDR (list))->type == TYPE_STRING)
+    {
+      name = CAR (CDR (list))->value_ptr.string->value;
+      len = CAR (CDR (list))->value_ptr.string->used_size;
+    }
+  else if (CAR (CDR (list))->type == TYPE_CHARACTER)
+    {
+      name = CAR (CDR (list))->value_ptr.character;
+      len = strlen (name);
+    }
+  else
+    {
+      name = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name;
+      len = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name_len;
+    }
+
+  p->name = malloc_and_check (len);
+  memcpy (p->name, name, len);
+  p->name_len = len;
+
+  cons = CAR (CDR (CDR (list)));
+  p->nicks = NULL;
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (CAR (cons)->type == TYPE_STRING)
+	{
+	  name = CAR (cons)->value_ptr.string->value;
+	  len = CAR (cons)->value_ptr.string->used_size;
+	}
+      else if (CAR (cons)->type == TYPE_CHARACTER)
+	{
+	  name = CAR (cons)->value_ptr.character;
+	  len = strlen (name);
+	}
+      else
+	{
+	  name = SYMBOL (CAR (cons))->value_ptr.symbol->name;
+	  len = SYMBOL (CAR (cons))->value_ptr.symbol->name_len;
+	}
+
+      if (p->nicks)
+	nicks = nicks->next = malloc_and_check (sizeof (*nicks));
+      else
+	p->nicks = nicks = malloc_and_check (sizeof (*nicks));
+
+      nicks->name = malloc_and_check (len);
+      memcpy (nicks->name, name, len);
+      nicks->name_len = len;
+
+      cons = CDR (cons);
+    }
+
+  if (p->nicks)
+    nicks->next = NULL;
+
+  return pack;
 }
 
 
@@ -12167,7 +12337,7 @@ builtin_package_use_list (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -12215,7 +12385,7 @@ builtin_package_used_by_list (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_PACKAGE && CAR (list)->type != TYPE_STRING)
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -14923,10 +15093,10 @@ print_object (const struct object *obj, struct environment *env,
 	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
 	{
-	  if (write_to_stream (str, "#<PACKAGE ", strlen ("#<PACKAGE ")) < 0
-	      || print_string (obj->value_ptr.package->name->value_ptr.string,
-			       env, str) < 0
-	      || write_to_stream (str, ">", 1) < 0)
+	  if (write_to_stream (str, "#<PACKAGE \"", strlen ("#<PACKAGE \"")) < 0
+	      || write_to_stream (str, obj->value_ptr.package->name,
+				  obj->value_ptr.package->name_len) < 0
+	      || write_to_stream (str, "\">", 2) < 0)
 	    return -1;
 
 	  return 0;
