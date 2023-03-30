@@ -1079,6 +1079,7 @@ struct object *copy_list_structure (struct object *list,
 int array_rank (const struct array *array);
 size_t array_total_size (const struct array *array);
 
+int hash_object_respecting_eq (const struct object *object, size_t table_size);
 int hash_table_count (const struct hashtable *hasht);
 
 struct parameter *alloc_parameter (enum parameter_type type,
@@ -1316,6 +1317,9 @@ struct object *accessor_cdr (struct object *list, struct object *newval,
 struct object *accessor_aref (struct object *list, struct object *newval,
 			      struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *accessor_gethash (struct object *list, struct object *newval,
+				 struct environment *env,
+				 struct eval_outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -2007,7 +2011,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("HASH-TABLE-TEST", env, builtin_hash_table_test,
 		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION,
+		    accessor_gethash, 0);
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
@@ -6173,6 +6178,17 @@ array_total_size (const struct array *array)
 
 
 int
+hash_object_respecting_eq (const struct object *object, size_t table_size)
+{
+  return (long int)(IS_SYMBOL (object) ? SYMBOL (object) : object)
+    % table_size;  /* FIXME the cast works on common
+		      platforms, but is not allowed by ansi.
+		      we should probably change to a hash
+		      function on object fields */
+}
+
+
+int
 hash_table_count (const struct hashtable *hasht)
 {
   int i, cnt = 0;
@@ -8807,7 +8823,7 @@ builtin_gethash (struct object *list, struct environment *env,
     }
 
   ret = CAR (CDR (list))->value_ptr.hashtable->table
-    [hash_object (CAR (list), LISP_HASHTABLE_SIZE)];
+    [hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE)];
 
   if (!ret)
     {
@@ -8840,13 +8856,13 @@ builtin_remhash (struct object *list, struct environment *env,
     }
 
   cell = CAR (CDR (list))->value_ptr.hashtable->table
-    [hash_object (CAR (list), LISP_HASHTABLE_SIZE)];
+    [hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE)];
 
   if (cell)
     {
       decrement_refcount_by (cell, CAR (CDR (list))->refcount, CAR (CDR (list)));
       CAR (CDR (list))->value_ptr.hashtable->table
-	[hash_object (CAR (list), LISP_HASHTABLE_SIZE)] = NULL;
+	[hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE)] = NULL;
 
       return &t_object;
     }
@@ -10302,6 +10318,51 @@ accessor_aref (struct object *list, struct object *newval,
   decrement_refcount (list);
 
   return ret;
+}
+
+
+struct object *
+accessor_gethash (struct object *list, struct object *newval,
+		  struct environment *env, struct eval_outcome *outcome)
+{
+  struct object *key, *table, *oldval;
+  int ind;
+
+  if (list_length (list) != 3)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  key = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!key)
+    return NULL;
+
+  table = evaluate_object (CAR (CDR (CDR (list))), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!table)
+    return NULL;
+
+  if (table->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ind = hash_object_respecting_eq (key, LISP_HASHTABLE_SIZE);
+
+  oldval = table->value_ptr.hashtable->table [ind];
+
+  increment_refcount_by (newval, table->refcount, table);
+
+  table->value_ptr.hashtable->table [ind] = newval;
+
+  decrement_refcount_by (oldval, table->refcount, table);
+
+  return newval;
 }
 
 
