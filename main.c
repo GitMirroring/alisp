@@ -10380,7 +10380,7 @@ struct object *
 accessor_gethash (struct object *list, struct object *newval,
 		  struct environment *env, struct eval_outcome *outcome)
 {
-  struct object *key, *table, *oldval;
+  struct object *key, *table;
   int ind;
 
   if (list_length (list) != 3)
@@ -10409,13 +10409,12 @@ accessor_gethash (struct object *list, struct object *newval,
 
   ind = hash_object_respecting_eq (key, LISP_HASHTABLE_SIZE);
 
-  oldval = table->value_ptr.hashtable->table [ind];
-
   increment_refcount_by (newval, table->refcount, table);
 
-  table->value_ptr.hashtable->table [ind] = newval;
+  decrement_refcount_by (table->value_ptr.hashtable->table [ind],
+			 table->refcount, table);
 
-  decrement_refcount_by (oldval, table->refcount, table);
+  table->value_ptr.hashtable->table [ind] = newval;
 
   return newval;
 }
