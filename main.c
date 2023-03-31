@@ -12253,11 +12253,6 @@ builtin_rename_package (struct object *list, struct environment *env,
       return NULL;
     }
 
-  p = pack->value_ptr.package;
-
-  free (p->name);
-  free_name_list (p->nicks);
-
   if (CAR (CDR (list))->type == TYPE_PACKAGE)
     {
       name = CAR (CDR (list))->value_ptr.package->name;
@@ -12278,6 +12273,17 @@ builtin_rename_package (struct object *list, struct environment *env,
       name = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name;
       len = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name_len;
     }
+
+  if (find_package (name, len, env))
+    {
+      outcome->type = PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE;
+      return NULL;
+    }
+
+  p = pack->value_ptr.package;
+
+  free (p->name);
+  free_name_list (p->nicks);
 
   p->name = malloc_and_check (len);
   memcpy (p->name, name, len);
@@ -12304,6 +12310,15 @@ builtin_rename_package (struct object *list, struct environment *env,
 	  len = SYMBOL (CAR (cons))->value_ptr.symbol->name_len;
 	}
 
+      if (find_package (name, len, env))
+	{
+	  if (p->nicks)
+	    nicks->next = NULL;
+
+	  outcome->type = PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE;
+	  return NULL;
+	}
+
       if (p->nicks)
 	nicks = nicks->next = malloc_and_check (sizeof (*nicks));
       else
@@ -12312,6 +12327,7 @@ builtin_rename_package (struct object *list, struct environment *env,
       nicks->name = malloc_and_check (len);
       memcpy (nicks->name, name, len);
       nicks->name_len = len;
+      nicks->next = NULL;
 
       cons = CDR (cons);
     }
