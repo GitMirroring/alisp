@@ -232,6 +232,8 @@ make_test ("arr", "#(NIL NIL \"aaa\")");
 make_test ("(let ((b 10)) b)", "10");
 make_test ("(let ((b 1)) (setf b 2) b)", "2");
 make_test ("b", "9");
+make_test ("(let ((s \"aaa\")) (list (setf (elt s 1) #\\b) s))", "(#\\b \"aba\")");
+make_test ("(let ((l (list 'a 'b 'c))) (list (setf (elt l 2) 'd) l))", "(D (A B D))");
 make_test ("(let* ((x 1) (y x)) y)", "1");
 make_test ("(defun f ())", "F");
 make_test ("#'f", "#<FUNCTION F>");
