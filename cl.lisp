@@ -314,6 +314,12 @@
   (if (member obj list) list (cons obj list)))
 
 
+(defun fill (seq obj &key (start 0) end)
+  (dotimes (i (if end (- end start) (length seq)))
+    (setf (elt seq (+ i start)) obj))
+  seq)
+
+
 (defmacro push (item place)
   `(setf ,place (cons ,item ,place)))
 
@@ -545,7 +551,7 @@
   string)
 
 
-(defun write-sequence (seq str &key (start 0) (end nil))
+(defun write-sequence (seq str &key (start 0) end)
   (dotimes (i (if end (- end start) (length seq)))
     (princ (elt seq (+ i start)) str))
   seq)
