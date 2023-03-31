@@ -1333,6 +1333,9 @@ struct object *accessor_cdr (struct object *list, struct object *newval,
 struct object *accessor_aref (struct object *list, struct object *newval,
 			      struct environment *env,
 			      struct eval_outcome *outcome);
+struct object *accessor_elt (struct object *list, struct object *newval,
+			     struct environment *env,
+			     struct eval_outcome *outcome);
 struct object *accessor_gethash (struct object *list, struct object *newval,
 				 struct environment *env,
 				 struct eval_outcome *outcome);
@@ -2005,7 +2008,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, accessor_elt, 0);
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, accessor_aref, 0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
 		    NULL, 0);
@@ -10366,6 +10369,88 @@ accessor_aref (struct object *list, struct object *newval,
 			     CAR (list)->refcount, CAR (list));
 
       CAR (list)->value_ptr.array->value [ind] = newval;
+
+      ret = newval;
+    }
+
+  decrement_refcount (list);
+
+  return ret;
+}
+
+
+struct object *
+accessor_elt (struct object *list, struct object *newval,
+	      struct environment *env, struct eval_outcome *outcome)
+{
+  struct object *ret, *cons;
+  int ind;
+
+  if (list_length (list) != 3)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  list = evaluate_through_list (CDR (list), env, outcome);
+
+  if (!list)
+    return NULL;
+
+  if (!IS_SEQUENCE (CAR (list)) || CAR (CDR (list))->type != TYPE_BIGNUM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+  if (ind < 0)
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      if (newval->type != TYPE_CHARACTER)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret = set_nth_character (CAR (list), ind, newval->value_ptr.character);
+
+      if (!ret)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      increment_refcount_by (newval, CAR (list)->refcount-1, CAR (list));
+      decrement_refcount_by (CAR (list)->value_ptr.array->value [ind],
+			     CAR (list)->refcount, CAR (list));
+
+      CAR (list)->value_ptr.array->value [ind] = newval;
+
+      ret = newval;
+    }
+  else
+    {
+      if (ind >= list_length (CAR (list)))
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      cons = nthcdr (ind, CAR (list));
+
+      increment_refcount_by (newval, cons->refcount-1, cons);
+      decrement_refcount_by (CAR (cons), cons->refcount, cons);
+
+      cons->value_ptr.cons_pair->car = newval;
 
       ret = newval;
     }
