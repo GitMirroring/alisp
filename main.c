@@ -13520,8 +13520,11 @@ evaluate_setf (struct object *list, struct environment *env,
 	  if (!val)
 	    return NULL;
 
-	  SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
+	  val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
 	    (CAR (list), val, env, outcome);
+
+	  if (!val)
+	    return NULL;
 	}
       else
 	{
