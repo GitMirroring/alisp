@@ -9801,13 +9801,11 @@ builtin_dotimes (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, create_integer_from_long (i), env->vars);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary++;
+      env->lex_env_vars_boundary++;
 
       ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary--;
+      env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -9821,14 +9819,12 @@ builtin_dotimes (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, create_integer_from_long (i), env->vars);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary++;
+      env->lex_env_vars_boundary++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary--;
+      env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -9874,13 +9870,11 @@ builtin_dolist (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, CAR (cons), env->vars);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary++;
+      env->lex_env_vars_boundary++;
 
       ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary--;
+      env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -9896,14 +9890,12 @@ builtin_dolist (struct object *list, struct environment *env,
     {
       env->vars = bind_variable (var, &nil_object, env->vars);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary++;
+      env->lex_env_vars_boundary++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      if (env->vars->type == LEXICAL_BINDING)
-	env->lex_env_vars_boundary--;
+      env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
