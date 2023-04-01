@@ -364,10 +364,10 @@ struct
 environment
 {
   struct binding *vars;
-  int var_lex_bin_num;
+  int lex_env_vars_boundary;
 
   struct binding *funcs;
-  int func_lex_bin_num;
+  int lex_env_funcs_boundary;
 
   struct object_list *packages;
   struct object *cl_package, *keyword_package;
@@ -4574,8 +4574,8 @@ create_function (struct object *lambda_list, struct object *body,
 
   if (!is_macro)
     clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
-			       env->var_lex_bin_num, env->funcs,
-			       env->func_lex_bin_num);
+			       env->lex_env_vars_boundary, env->funcs,
+			       env->lex_env_funcs_boundary);
 
   increment_refcount (body);
   f->body = body;
@@ -6689,7 +6689,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct parameter *par = func->value_ptr.function->lambda_list, *findk;
   struct binding *bins = NULL, *b;
   struct object *val, *ret, *ret2, *args = NULL;
-  int argsnum = 0, closnum = 0, prev_lex_bin_num = env->var_lex_bin_num,
+  int argsnum = 0, closnum = 0, prev_lex_bin_num = env->lex_env_vars_boundary,
     rest_found = 0;
 
   if (func->value_ptr.function->builtin_form)
@@ -6922,13 +6922,13 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   bins = NULL;
 
   if (is_macro)
-    env->var_lex_bin_num += argsnum;
+    env->lex_env_vars_boundary += argsnum;
   else
-    env->var_lex_bin_num = argsnum;
+    env->lex_env_vars_boundary = argsnum;
 
   env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
 			      &closnum);
-  env->var_lex_bin_num += closnum;
+  env->lex_env_vars_boundary += closnum;
 
   ret = evaluate_body (func->value_ptr.function->body, 0,
 		       func->value_ptr.function->name, env, outcome);
@@ -6958,7 +6958,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   else
     remove_bindings (bins, argsnum);
 
-  env->var_lex_bin_num = prev_lex_bin_num;
+  env->lex_env_vars_boundary = prev_lex_bin_num;
 
   return ret;
 }
@@ -7111,7 +7111,7 @@ evaluate_object (struct object *obj, struct environment *env,
       else
 	{
 	  bind = find_binding (sym->value_ptr.symbol, env->vars,
-			       LEXICAL_BINDING, env->var_lex_bin_num);
+			       LEXICAL_BINDING, env->lex_env_vars_boundary);
 
 	  if (bind)
 	    {
@@ -7465,7 +7465,7 @@ evaluate_list (struct object *list, struct environment *env,
   else
     {
       bind = find_binding (sym->value_ptr.symbol, env->funcs, LEXICAL_BINDING,
-			   env->func_lex_bin_num);
+			   env->lex_env_funcs_boundary);
 
       if (bind)
 	fun = bind->obj;
@@ -9070,8 +9070,8 @@ struct object *
 builtin_eval (struct object *list, struct environment *env,
 	      struct eval_outcome *outcome)
 {
-  int lex_vars = env->var_lex_bin_num;
-  int lex_funcs = env->func_lex_bin_num;
+  int lex_vars = env->lex_env_vars_boundary;
+  int lex_funcs = env->lex_env_funcs_boundary;
   struct object *ret;
 
   if (list_length (list) != 1)
@@ -9080,12 +9080,12 @@ builtin_eval (struct object *list, struct environment *env,
       return NULL;
     }
 
-  env->var_lex_bin_num = env->func_lex_bin_num = 0;
+  env->lex_env_vars_boundary = env->lex_env_funcs_boundary = 0;
 
   ret = evaluate_object (CAR (list), env, outcome);
 
-  env->var_lex_bin_num = lex_vars;
-  env->func_lex_bin_num = lex_funcs;
+  env->lex_env_vars_boundary = lex_vars;
+  env->lex_env_funcs_boundary = lex_funcs;
 
   return ret;
 }
@@ -9802,12 +9802,12 @@ builtin_dotimes (struct object *list, struct environment *env,
       env->vars = bind_variable (var, create_integer_from_long (i), env->vars);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++;
+	env->lex_env_vars_boundary++;
 
       ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num--;
+	env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -9822,13 +9822,13 @@ builtin_dotimes (struct object *list, struct environment *env,
       env->vars = bind_variable (var, create_integer_from_long (i), env->vars);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++;
+	env->lex_env_vars_boundary++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num--;
+	env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -9875,12 +9875,12 @@ builtin_dolist (struct object *list, struct environment *env,
       env->vars = bind_variable (var, CAR (cons), env->vars);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++;
+	env->lex_env_vars_boundary++;
 
       ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num--;
+	env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -9897,13 +9897,13 @@ builtin_dolist (struct object *list, struct environment *env,
       env->vars = bind_variable (var, &nil_object, env->vars);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num++;
+	env->lex_env_vars_boundary++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (env->vars->type == LEXICAL_BINDING)
-	env->var_lex_bin_num--;
+	env->lex_env_vars_boundary--;
 
       env->vars = remove_bindings (env->vars, 1);
 
@@ -12804,13 +12804,13 @@ evaluate_let (struct object *list, struct environment *env,
 
   env->vars = chain_bindings (bins, env->vars, NULL);
 
-  env->var_lex_bin_num += bin_num;
+  env->lex_env_vars_boundary += bin_num;
 
   res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->vars = remove_bindings (env->vars, bin_num);
 
-  env->var_lex_bin_num -= bin_num;
+  env->lex_env_vars_boundary -= bin_num;
 
   return res;
 }
@@ -12842,7 +12842,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 	return NULL;
 
       env->vars = add_binding (bin, env->vars);
-      env->var_lex_bin_num++, bin_num++;
+      env->lex_env_vars_boundary++, bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -12851,7 +12851,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 
   env->vars = remove_bindings (env->vars, bin_num);
 
-  env->var_lex_bin_num -= bin_num;
+  env->lex_env_vars_boundary -= bin_num;
 
   return res;
 }
@@ -12932,13 +12932,13 @@ evaluate_flet (struct object *list, struct environment *env,
 
   env->funcs = chain_bindings (bins, env->funcs, NULL);
 
-  env->func_lex_bin_num += bin_num;
+  env->lex_env_funcs_boundary += bin_num;
 
   res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
-  env->func_lex_bin_num -= bin_num;
+  env->lex_env_funcs_boundary -= bin_num;
 
   return res;
 }
@@ -12971,7 +12971,7 @@ evaluate_labels (struct object *list, struct environment *env,
 	return NULL;
 
       env->funcs = add_binding (bin, env->funcs);
-      env->func_lex_bin_num++, bin_num++;
+      env->lex_env_funcs_boundary++, bin_num++;
 
       bind_forms = CDR (bind_forms);
     }
@@ -12980,7 +12980,7 @@ evaluate_labels (struct object *list, struct environment *env,
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
-  env->func_lex_bin_num -= bin_num;
+  env->lex_env_funcs_boundary -= bin_num;
 
   return res;
 }
@@ -13020,13 +13020,13 @@ evaluate_macrolet (struct object *list, struct environment *env,
 
   env->funcs = chain_bindings (bins, env->funcs, NULL);
 
-  env->func_lex_bin_num += bin_num;
+  env->lex_env_funcs_boundary += bin_num;
 
   res = evaluate_body (body, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num);
 
-  env->func_lex_bin_num -= bin_num;
+  env->lex_env_funcs_boundary -= bin_num;
 
   return res;
 }
@@ -13178,7 +13178,8 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
     }
   else
     {
-      b = find_binding (s, env->vars, LEXICAL_BINDING, env->var_lex_bin_num);
+      b = find_binding (s, env->vars, LEXICAL_BINDING,
+			env->lex_env_vars_boundary);
 
       if (b)
 	{
