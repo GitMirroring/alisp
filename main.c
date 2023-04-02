@@ -6631,13 +6631,18 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 		goto cleanup_and_leave;
 	      else if (outcome->tag_to_jump_to)
 		{
-		  t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
+		  if (is_tagbody)
+		    {
+		      t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
 
-		  if (!t)
+		      if (!t)
+			goto cleanup_and_leave;
+
+		      outcome->tag_to_jump_to = NULL;
+		      body = t->dest;
+		    }
+		  else
 		    goto cleanup_and_leave;
-
-		  outcome->tag_to_jump_to = NULL;
-		  body = t->dest;
 		}
 	      else if (outcome->block_to_leave)
 		{
