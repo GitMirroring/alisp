@@ -557,6 +557,7 @@ make_test ("(tagbody\n" .
 	   "  (write \"3\"))", "\"1\"\"3\"\nNIL");
 make_test ("(tagbody 1 (go 3) 2 3 (go 4) 4 (write \"\"))", "\"\"\nNIL");
 make_test ("(tagbody 1 2 (tagbody 3 (go 4)) 4 (write \"\"))", "\"\"\nNIL");
+make_test ("(tagbody (write 1) (block nil (write 2) (go c)) c (write 4))", "124\nNIL");
 make_test ("(block test (write 1) (write 2) (return-from test 10) (write 3))", "12\n10");
 make_test ("(block test (write 1) (block test2 (write 2) (return-from test 10) (write 3)))", "12\n10");
 make_test ("(block test (write 1) (block test2 (write 2) (return-from test (values 10 11)) (write 3)))", "12\n10\n11");
