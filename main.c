@@ -373,10 +373,8 @@ environment
   struct object *cl_package, *keyword_package;
 
   struct block *blocks;
-  int leavable_block_num;
 
   struct go_tag_frame *go_tag_stack;
-  int reachable_go_tag_frame_num;
 
   struct binding *structs;
 
@@ -6612,7 +6610,6 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 	{
 	  env->go_tag_stack = add_go_tag_frame (env->go_tag_stack);
 	  env->go_tag_stack->frame = tags;
-	  env->reachable_go_tag_frame_num++;
 	}
     }
 
@@ -6671,7 +6668,6 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
   if (tags)
     {
       env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
-      env->reachable_go_tag_frame_num--;
     }
 
   if (block_name)
