@@ -9878,14 +9878,27 @@ builtin_dolist (struct object *list, struct environment *env,
       return NULL;
     }
 
+  env->blocks = add_block (&nil_object, env->blocks);
+
   lst = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!lst)
-    return NULL;
+    {
+      env->blocks = remove_block (env->blocks);
+
+      if (outcome->block_to_leave == &nil_object)
+	{
+	  outcome->block_to_leave = NULL;
+	  return outcome->return_value;
+	}
+      else
+	return NULL;
+    }
 
   if (lst->type != TYPE_CONS_PAIR && SYMBOL (lst) != &nil_object)
     {
+      env->blocks = remove_block (env->blocks);
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       decrement_refcount (lst);
       return NULL;
@@ -9896,6 +9909,7 @@ builtin_dolist (struct object *list, struct environment *env,
 
   while (SYMBOL (cons) != &nil_object)
     {
+      increment_refcount (CAR (cons));
       env->vars = bind_variable (var, CAR (cons), env->vars);
 
       env->lex_env_vars_boundary++;
@@ -9906,12 +9920,22 @@ builtin_dolist (struct object *list, struct environment *env,
 
       env->vars = remove_bindings (env->vars, 1);
 
-      cons = CDR (cons);
-
       if (!ret)
-	return NULL;
+	{
+	  env->blocks = remove_block (env->blocks);
+
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      return outcome->return_value;
+	    }
+	  else
+	    return NULL;
+	}
 
       decrement_refcount (ret);
+
+      cons = CDR (cons);
     }
 
   if (l == 3)
@@ -9921,7 +9945,6 @@ builtin_dolist (struct object *list, struct environment *env,
       env->lex_env_vars_boundary++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       env->lex_env_vars_boundary--;
 
@@ -9929,9 +9952,25 @@ builtin_dolist (struct object *list, struct environment *env,
 
       decrement_refcount (lst);
 
+      if (!ret)
+	{
+	  env->blocks = remove_block (env->blocks);
+
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      return outcome->return_value;
+	    }
+	  else
+	    return NULL;
+	}
+
+      env->blocks = remove_block (env->blocks);
+
       return ret;
     }
 
+  env->blocks = remove_block (env->blocks);
   decrement_refcount (lst);
   return &nil_object;
 }
