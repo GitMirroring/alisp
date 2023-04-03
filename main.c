@@ -9823,6 +9823,7 @@ builtin_dotimes (struct object *list, struct environment *env,
 	    return NULL;
 	}
 
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
       decrement_refcount (ret);
     }
 
@@ -9833,7 +9834,6 @@ builtin_dotimes (struct object *list, struct environment *env,
       env->lex_env_vars_boundary++;
 
       ret = evaluate_object (nth (2, CAR (list)), env, outcome);
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       env->lex_env_vars_boundary--;
 
@@ -9851,6 +9851,8 @@ builtin_dotimes (struct object *list, struct environment *env,
 	  else
 	    return NULL;
 	}
+
+      env->blocks = remove_block (env->blocks);
 
       return ret;
     }
