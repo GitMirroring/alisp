@@ -9768,14 +9768,27 @@ builtin_dotimes (struct object *list, struct environment *env,
       return NULL;
     }
 
+  env->blocks = add_block (&nil_object, env->blocks);
+
   count = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!count)
-    return NULL;
+    {
+      env->blocks = remove_block (env->blocks);
+
+      if (outcome->block_to_leave == &nil_object)
+	{
+	  outcome->block_to_leave = NULL;
+	  return outcome->return_value;
+	}
+      else
+	return NULL;
+    }
 
   if (count->type != TYPE_BIGNUM)
     {
+      env->blocks = remove_block (env->blocks);
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       decrement_refcount (count);
       return NULL;
@@ -9798,7 +9811,17 @@ builtin_dotimes (struct object *list, struct environment *env,
       env->vars = remove_bindings (env->vars, 1);
 
       if (!ret)
-	return NULL;
+	{
+	  env->blocks = remove_block (env->blocks);
+
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      return outcome->return_value;
+	    }
+	  else
+	    return NULL;
+	}
 
       decrement_refcount (ret);
     }
@@ -9816,8 +9839,23 @@ builtin_dotimes (struct object *list, struct environment *env,
 
       env->vars = remove_bindings (env->vars, 1);
 
+      if (!ret)
+	{
+	  env->blocks = remove_block (env->blocks);
+
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      return outcome->return_value;
+	    }
+	  else
+	    return NULL;
+	}
+
       return ret;
     }
+
+  env->blocks = remove_block (env->blocks);
 
   return &nil_object;
 }
