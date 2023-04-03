@@ -240,17 +240,6 @@ go_tag_frame
 };
 
 
-struct
-block
-{
-  struct object *name;
-
-  struct object *body;
-
-  struct block *next;
-};
-
-
 enum
 binding_type
   {
@@ -372,7 +361,7 @@ environment
   struct object_list *packages;
   struct object *cl_package, *keyword_package;
 
-  struct block *blocks;
+  struct object_list *blocks;
 
   struct go_tag_frame *go_tag_stack;
 
@@ -1036,9 +1025,8 @@ struct go_tag *add_go_tag (struct object *tagname, struct object *tagdest,
 struct go_tag_frame *remove_go_tag_frame (struct go_tag_frame *stack);
 struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 
-struct block *add_block (struct object *name, struct object *body,
-			 struct block *blocks);
-struct block *remove_block (struct block *blocks);
+struct object_list *add_block (struct object *name, struct object_list *blocks);
+struct object_list *remove_block (struct object_list *blocks);
 
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
@@ -5689,23 +5677,22 @@ find_go_tag (struct object *tagname, struct go_tag_frame *frame)
 }
 
 
-struct block *
-add_block (struct object *name, struct object *body, struct block *blocks)
+struct object_list *
+add_block (struct object *name, struct object_list *blocks)
 {
-  struct block *new = malloc_and_check (sizeof (*new));
+  struct object_list *new = malloc_and_check (sizeof (*new));
 
-  new->name = name;
-  new->body = body;
+  new->obj = name;
   new->next = blocks;
 
   return new;
 }
 
 
-struct block *
-remove_block (struct block *blocks)
+struct object_list *
+remove_block (struct object_list *blocks)
 {
-  struct block *next = blocks->next;
+  struct object_list *next = blocks->next;
 
   free (blocks);
 
@@ -6614,7 +6601,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
     }
 
   if (block_name)
-    env->blocks = add_block (block_name, NULL, env->blocks);
+    env->blocks = add_block (block_name, env->blocks);
 
   do
     {
@@ -6646,7 +6633,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 		}
 	      else if (outcome->block_to_leave)
 		{
-		  if (block_name && outcome->block_to_leave == env->blocks->name)
+		  if (block_name && outcome->block_to_leave == env->blocks->obj)
 		    {
 		      outcome->block_to_leave = NULL;
 
