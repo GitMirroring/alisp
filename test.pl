@@ -298,6 +298,7 @@ make_test ("(input-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-output*)", "NIL");
 make_test ("(output-stream-p *standard-input*)", "NIL");
 make_test ("(output-stream-p *standard-output*)", "T");
+make_test ("(interactive-stream-p *standard-input*)", "NIL");
 make_test ("(upper-case-p #\\A)", "T");
 make_test ("(upper-case-p #\\a)", "NIL");
 make_test ("(upper-case-p #\\2)", "NIL");
