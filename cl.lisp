@@ -506,7 +506,15 @@
   (cond
     ((numberp x) (eql x y))
     ((characterp x) (eql x y))
-    ((consp x) (and (equal (car x) (car y)) (equal (cdr x) (cdr y))))
+    ((and (consp x) (consp y))
+     (and
+      (let (l)
+	(= (setq l (length x)) (length y))
+	(dotimes (i l)
+	  (if (equal (car x) (car y))
+	      (setq x (cdr x) y (cdr y))
+	      (return-from equal nil)))
+	(equal x y))))
     (t (eq x y))))
 
 
@@ -514,7 +522,15 @@
   (cond
     ((and (numberp x) (numberp y)) (= x y))
     ((and (characterp x) (characterp y)) (char-equal x y))
-    ((consp x) (and (equalp (car x) (car y)) (equalp (cdr x) (cdr y))))
+    ((and (consp x) (consp y))
+     (and
+      (let (l)
+	(= (setq l (length x)) (length y))
+	(dotimes (i l)
+	  (if (equalp (car x) (car y))
+	      (setq x (cdr x) y (cdr y))
+	      (return-from equalp nil)))
+	(equalp x y))))
     ((and (arrayp x) (arrayp y)) (and
 				  (equal (array-dimensions x) (array-dimensions y))
 				  (dotimes (i (array-total-size x) t)
