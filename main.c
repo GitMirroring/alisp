@@ -1282,6 +1282,8 @@ struct object *builtin_input_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_output_stream_p
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *builtin_interactive_stream_p
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_make_string_input_stream
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *builtin_make_string_output_stream
@@ -2045,6 +2047,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("INPUT-STREAM-P", env, builtin_input_stream_p, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("OUTPUT-STREAM-P", env, builtin_output_stream_p,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("INTERACTIVE-STREAM-P", env, builtin_interactive_stream_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-STRING-INPUT-STREAM", env,
 		    builtin_make_string_input_stream, TYPE_FUNCTION, NULL, 0);
@@ -9455,6 +9459,26 @@ builtin_output_stream_p (struct object *list, struct environment *env,
     return &t_object;
   else
     return &nil_object;
+}
+
+
+struct object *
+builtin_interactive_stream_p (struct object *list, struct environment *env,
+			      struct eval_outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return &nil_object;
 }
 
 
