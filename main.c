@@ -112,6 +112,9 @@
 #define decrement_refcount(obj) offset_refcount_by ((obj), -1, NULL, 0)
 
 
+#define ANTILOOP_HASH_T_SIZE 64
+
+
 
 #define TERMINATING_MACRO_CHARS "()';\"`,"
 
@@ -6048,30 +6051,31 @@ is_dotted_or_circular_list (struct object *list, int *is_circular)
       return 0;
     }
 
-  hash_t = alloc_empty_hash_table (1024);
+  hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
 
   while (SYMBOL (list) != &nil_object)
     {
       if (list->type != TYPE_CONS_PAIR)
 	{
-	  free_hash_table (hash_t, 1024);
+	  free_hash_table (hash_t, ANTILOOP_HASH_T_SIZE);
 	  *is_circular = 0;
 	  return 1;
 	}
 
-      if (is_object_in_hash_table (list, hash_t, 1024))
+      if (is_object_in_hash_table (list, hash_t, ANTILOOP_HASH_T_SIZE))
 	{
-	  free_hash_table (hash_t, 1024);
+	  free_hash_table (hash_t, ANTILOOP_HASH_T_SIZE);
 	  *is_circular = 1;
 	  return 0;
 	}
 
-      prepend_object_to_obj_list (list, &hash_t [hash_object (list, 1024)]);
+      prepend_object_to_obj_list
+	(list, &hash_t [hash_object (list, ANTILOOP_HASH_T_SIZE)]);
 
       list = CDR (list);
     }
 
-  free_hash_table (hash_t, 1024);
+  free_hash_table (hash_t, ANTILOOP_HASH_T_SIZE);
 
   *is_circular = 0;
   return 0;
@@ -15564,9 +15568,6 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 
   std_out->value_ptr.stream->dirty_line = 0;
 }
-
-
-#define ANTILOOP_HASH_T_SIZE 64
 
 
 void
