@@ -776,6 +776,17 @@ object
 
 
 struct
+refcounted_object_list
+{
+  int refc;
+
+  struct object *obj;
+
+  struct refcounted_object_list *next;
+};
+
+
+struct
 line_list
 {
   int refcount;
@@ -928,17 +939,27 @@ struct package_record *find_package_entry (struct object *symbol,
 int use_package (struct object *used, struct object *pack,
 		 struct object **conflicting);
 
-struct object_list **alloc_empty_hash_table (size_t table_size);
-struct object_list **clone_hash_table (struct object_list **hash_table,
-				       size_t table_size);
-void free_hash_table (struct object_list **hash_table, size_t table_size);
 int hash_object (const struct object *object, size_t table_size);
 int hash_char_vector (const char *str, size_t sz, size_t table_size);
 int hash_symbol_name (const struct object *symname, size_t table_size);
 int hash_symbol (const struct object *sym, size_t table_size);
+
+struct object_list **alloc_empty_hash_table (size_t table_size);
 int is_object_in_hash_table (const struct object *object,
 			     struct object_list **hash_table,
 			     size_t table_size);
+void free_hash_table (struct object_list **hash_table, size_t table_size);
+
+struct refcounted_object_list **alloc_empty_tailsharing_hash_table
+(size_t table_size);
+int is_object_in_refcounted_obj_list (const struct object *obj,
+				      const struct refcounted_object_list *list);
+void prepend_object_to_refcounted_obj_list (struct object *obj,
+					    struct refcounted_object_list **list);
+struct refcounted_object_list **clone_tailsharing_hash_table
+(struct refcounted_object_list **hash_table, size_t table_size);
+void free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
+				  size_t table_size);
 
 void clone_lexical_environment (struct binding **lex_vars,
 				struct binding **lex_funcs, struct binding *vars,
@@ -1645,7 +1666,8 @@ void print_eval_error (struct eval_outcome *err, struct environment *env);
 void increment_refcount_by (struct object *obj, int count, struct object *parent);
 int decrement_refcount_by (struct object *obj, int count, struct object *parent);
 int offset_refcount_by (struct object *obj, int delta,
-			struct object_list **antiloop_hash_t, int clone_hash_t);
+			struct refcounted_object_list **antiloop_hash_t,
+			int clone_hash_t);
 
 void free_object (struct object *obj);
 void free_string (struct object *obj);
@@ -4374,83 +4396,6 @@ use_package (struct object *used, struct object *pack,
 }
 
 
-struct object_list **
-alloc_empty_hash_table (size_t table_size)
-{
-  struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
-  size_t i;
-
-  for (i = 0; i < table_size; i++)
-    ret [i] = NULL;
-
-  return ret;
-}
-
-
-struct object_list **
-clone_hash_table (struct object_list **hash_table, size_t table_size)
-{
-  struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
-  struct object_list *orig, *cp;
-  size_t i;
-
-  for (i = 0; i < table_size; i++)
-    {
-      if (hash_table [i])
-	{
-	  ret [i] = malloc_and_check (sizeof (*cp));
-
-	  ret [i]->obj = hash_table [i]->obj;
-
-	  orig = hash_table [i];
-	  cp = ret [i];
-
-	  orig = orig->next;
-
-	  while (orig)
-	    {
-	      cp = cp->next = malloc_and_check (sizeof (*cp));
-
-	      cp->obj = orig->obj;
-
-	      orig = orig->next;
-	    }
-
-	  cp->next = NULL;
-	}
-      else
-	ret [i] = NULL;
-    }
-
-  return ret;
-}
-
-
-void
-free_hash_table (struct object_list **hash_table, size_t table_size)
-{
-  size_t i;
-  struct object_list *l, *n;
-
-  for (i = 0; i < table_size; i++)
-    {
-      if (hash_table [i])
-	{
-	  l = hash_table [i];
-
-	  while (l)
-	    {
-	      n = l->next;
-	      free (l);
-	      l = n;
-	    }
-	}
-    }
-
-  free (hash_table);
-}
-
-
 int
 hash_object (const struct object *object, size_t table_size)
 {
@@ -4498,12 +4443,150 @@ hash_symbol (const struct object *sym, size_t table_size)
 }
 
 
+struct object_list **
+alloc_empty_hash_table (size_t table_size)
+{
+  struct object_list **ret = malloc_and_check (table_size * sizeof (*ret));
+  size_t i;
+
+  for (i = 0; i < table_size; i++)
+    ret [i] = NULL;
+
+  return ret;
+}
+
+
 int
 is_object_in_hash_table (const struct object *object,
 			 struct object_list **hash_table, size_t table_size)
 {
   return is_object_in_obj_list (object,
 				hash_table [hash_object (object, table_size)]);
+}
+
+
+void
+free_hash_table (struct object_list **hash_table, size_t table_size)
+{
+  size_t i;
+  struct object_list *l, *n;
+
+  for (i = 0; i < table_size; i++)
+    {
+      if (hash_table [i])
+	{
+	  l = hash_table [i];
+
+	  while (l)
+	    {
+	      n = l->next;
+	      free (l);
+	      l = n;
+	    }
+	}
+    }
+
+  free (hash_table);
+}
+
+
+struct refcounted_object_list **
+alloc_empty_tailsharing_hash_table (size_t table_size)
+{
+  struct refcounted_object_list **ret =
+    malloc_and_check (table_size * sizeof (*ret));
+  size_t i;
+
+  for (i = 0; i < table_size; i++)
+    ret [i] = NULL;
+
+  return ret;
+}
+
+
+int
+is_object_in_refcounted_obj_list (const struct object *obj,
+				  const struct refcounted_object_list *list)
+{
+  while (list)
+    {
+      if (obj == list->obj)
+	return 1;
+
+      list = list->next;
+    }
+
+  return 0;
+}
+
+
+void
+prepend_object_to_refcounted_obj_list (struct object *obj,
+				       struct refcounted_object_list **list)
+{
+  struct refcounted_object_list *l = malloc_and_check (sizeof (*l));
+
+  l->obj = obj;
+  l->next = *list;
+  l->refc = 1;
+
+  if (*list)
+    (*list)->refc--;
+
+  *list = l;
+}
+
+
+struct refcounted_object_list **
+clone_tailsharing_hash_table (struct refcounted_object_list **hash_table,
+			      size_t table_size)
+{
+  struct refcounted_object_list **ret =
+    malloc_and_check (table_size * sizeof (*ret));
+  size_t i;
+
+  for (i = 0; i < table_size; i++)
+    {
+      ret [i] = hash_table [i];
+
+      if (hash_table [i])
+	hash_table [i]->refc++;
+    }
+
+  return ret;
+}
+
+
+void
+free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
+			     size_t table_size)
+{
+  size_t i;
+  struct refcounted_object_list *l, *n;
+
+  for (i = 0; i < table_size; i++)
+    {
+      if (hash_table [i])
+	{
+	  l = hash_table [i];
+
+	  l->refc--;
+
+	  if (!l->refc)
+	    {
+	      l = l->next;
+
+	      while (l && !l->refc)
+		{
+		  n = l->next;
+		  free (l);
+		  l = n;
+		}
+	    }
+	}
+    }
+
+  free (hash_table);
 }
 
 
@@ -15625,39 +15708,43 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 void
 increment_refcount_by (struct object *obj, int count, struct object *parent)
 {
-  struct object_list **antiloop_hash_t = NULL;
+  struct refcounted_object_list **antiloop_hash_t = NULL;
 
   if (parent)
     {
-      antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-      prepend_object_to_obj_list
+      antiloop_hash_t =
+	alloc_empty_tailsharing_hash_table (ANTILOOP_HASH_T_SIZE);
+
+      prepend_object_to_refcounted_obj_list
 	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
     }
 
   offset_refcount_by (obj, count, antiloop_hash_t, 0);
 
   if (antiloop_hash_t)
-    free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
+    free_tailsharing_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
 }
 
 
 int
 decrement_refcount_by (struct object *obj, int count, struct object *parent)
 {
-  struct object_list **antiloop_hash_t = NULL;
+  struct refcounted_object_list **antiloop_hash_t = NULL;
   int ret;
 
   if (parent)
     {
-      antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
-      prepend_object_to_obj_list
+      antiloop_hash_t =
+	alloc_empty_tailsharing_hash_table (ANTILOOP_HASH_T_SIZE);
+
+      prepend_object_to_refcounted_obj_list
 	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
     }
 
   ret = offset_refcount_by (obj, -count, antiloop_hash_t, 0);
 
   if (antiloop_hash_t)
-    free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
+    free_tailsharing_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
 
   return ret;
 }
@@ -15665,7 +15752,8 @@ decrement_refcount_by (struct object *obj, int count, struct object *parent)
 
 int
 offset_refcount_by (struct object *obj, int delta,
-		    struct object_list **antiloop_hash_t, int clone_hash_t)
+		    struct refcounted_object_list **antiloop_hash_t,
+		    int clone_hash_t)
 {
   int allocated_now = 0;
   struct parameter *par;
@@ -15681,25 +15769,28 @@ offset_refcount_by (struct object *obj, int delta,
     {
       if (!antiloop_hash_t)
 	{
-	  antiloop_hash_t = alloc_empty_hash_table (ANTILOOP_HASH_T_SIZE);
+	  antiloop_hash_t =
+	    alloc_empty_tailsharing_hash_table (ANTILOOP_HASH_T_SIZE);
+
 	  allocated_now = 1;
 	}
 
       ind = hash_object (obj, ANTILOOP_HASH_T_SIZE);
 
-      if (!allocated_now && is_object_in_obj_list (obj, antiloop_hash_t [ind]))
+      if (!allocated_now
+	  && is_object_in_refcounted_obj_list (obj, antiloop_hash_t [ind]))
 	return 0;
 
       obj->refcount += delta;
 
       if (!allocated_now && clone_hash_t)
 	{
-	  antiloop_hash_t = clone_hash_table (antiloop_hash_t,
-					      ANTILOOP_HASH_T_SIZE);
+	  antiloop_hash_t = clone_tailsharing_hash_table (antiloop_hash_t,
+							  ANTILOOP_HASH_T_SIZE);
 	  allocated_now = 1;
 	}
 
-      prepend_object_to_obj_list (obj, &antiloop_hash_t [ind]);
+      prepend_object_to_refcounted_obj_list (obj, &antiloop_hash_t [ind]);
 
       if (obj->type & TYPE_PREFIX)
 	offset_refcount_by (obj->value_ptr.next, delta, antiloop_hash_t, 0);
@@ -15802,7 +15893,7 @@ offset_refcount_by (struct object *obj, int delta,
 	}
 
       if (allocated_now)
-	free_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
+	free_tailsharing_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
     }
 
   if (!obj->refcount)
