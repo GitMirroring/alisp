@@ -1197,6 +1197,10 @@ int type_pathname (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct eval_outcome *outcome);
 int type_stream (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct eval_outcome *outcome);
+int type_file_stream (const struct object *obj, const struct object *typespec,
+		      struct environment *env, struct eval_outcome *outcome);
+int type_string_stream (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct eval_outcome *outcome);
 
 struct object *builtin_car
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -2237,6 +2241,10 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("PATHNAME", env, type_pathname, 1, (char *)NULL);
   add_builtin_type ("STREAM", env, type_stream, 1, (char *)NULL);
+  add_builtin_type ("FILE-STREAM", env, type_file_stream, 1, "STREAM",
+		    (char *)NULL);
+  add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
+		    (char *)NULL);
 
 
   define_constant_by_name ("MOST-POSITIVE-FIXNUM",
@@ -7788,6 +7796,24 @@ type_stream (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct eval_outcome *outcome)
 {
   return obj->type == TYPE_STREAM;
+}
+
+
+int
+type_file_stream (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_STREAM
+    && obj->value_ptr.stream->medium == FILE_STREAM;
+}
+
+
+int
+type_string_stream (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct eval_outcome *outcome)
+{
+  return obj->type == TYPE_STREAM
+    && obj->value_ptr.stream->medium == STRING_STREAM;
 }
 
 
