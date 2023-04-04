@@ -531,11 +531,17 @@
 	      (setq x (cdr x) y (cdr y))
 	      (return-from equalp nil)))
 	(equalp x y))))
-    ((and (arrayp x) (arrayp y)) (and
-				  (equal (array-dimensions x) (array-dimensions y))
-				  (dotimes (i (array-total-size x) t)
-				    (unless (equalp (row-major-aref x i) (row-major-aref y i))
-				      (return-from equalp nil)))))
+    ((and (arrayp x) (arrayp y)) (let ((dimsx (array-dimensions x))
+				       (dimsy (array-dimensions y)))
+				   (and
+				    (= (length dimsx) (length dimsy))
+				    (dolist (dimx dimsx t)
+				      (unless (= dimx (car dimsy))
+					 (return-from equalp nil))
+				      (setq dimsy (cdr dimsy)))
+				    (dotimes (i (array-total-size x) t)
+				      (unless (equalp (row-major-aref x i) (row-major-aref y i))
+					(return-from equalp nil))))))
     (t (eq x y))))
 
 
