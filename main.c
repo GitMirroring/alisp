@@ -6056,6 +6056,7 @@ int
 is_dotted_or_circular_list (struct object *list, int *is_circular)
 {
   struct object_list **hash_t;
+  int ind;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -6074,15 +6075,16 @@ is_dotted_or_circular_list (struct object *list, int *is_circular)
 	  return 1;
 	}
 
-      if (is_object_in_hash_table (list, hash_t, ANTILOOP_HASH_T_SIZE))
+      ind = hash_object (list, ANTILOOP_HASH_T_SIZE);
+
+      if (is_object_in_obj_list (list, hash_t [ind]))
 	{
 	  free_hash_table (hash_t, ANTILOOP_HASH_T_SIZE);
 	  *is_circular = 1;
 	  return 0;
 	}
 
-      prepend_object_to_obj_list
-	(list, &hash_t [hash_object (list, ANTILOOP_HASH_T_SIZE)]);
+      prepend_object_to_obj_list (list, &hash_t [ind]);
 
       list = CDR (list);
     }
@@ -15667,7 +15669,7 @@ offset_refcount_by (struct object *obj, int delta,
 {
   int allocated_now = 0;
   struct parameter *par;
-  size_t i, sz;
+  size_t i, sz, ind;
 
   if (!obj || obj == &nil_object || obj == &t_object
       || obj->type == TYPE_PACKAGE)
@@ -15683,8 +15685,9 @@ offset_refcount_by (struct object *obj, int delta,
 	  allocated_now = 1;
 	}
 
-      if (!allocated_now && is_object_in_hash_table (obj, antiloop_hash_t,
-						     ANTILOOP_HASH_T_SIZE))
+      ind = hash_object (obj, ANTILOOP_HASH_T_SIZE);
+
+      if (!allocated_now && is_object_in_obj_list (obj, antiloop_hash_t [ind]))
 	return 0;
 
       obj->refcount += delta;
@@ -15696,8 +15699,7 @@ offset_refcount_by (struct object *obj, int delta,
 	  allocated_now = 1;
 	}
 
-      prepend_object_to_obj_list
-	(obj, &antiloop_hash_t [hash_object (obj, ANTILOOP_HASH_T_SIZE)]);
+      prepend_object_to_obj_list (obj, &antiloop_hash_t [ind]);
 
       if (obj->type & TYPE_PREFIX)
 	offset_refcount_by (obj->value_ptr.next, delta, antiloop_hash_t, 0);
