@@ -372,6 +372,9 @@ environment
 
   struct object *c_stdout;
 
+  struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
+    *amp_allow_other_keys_sym, *amp_aux_sym;
+
   struct object *package_sym, *std_in_sym, *std_out_sym, *print_escape_sym,
     *print_readably_sym;
 };
@@ -1113,10 +1116,10 @@ struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
 struct parameter *parse_required_parameters
 (struct object *obj, struct parameter **last, struct object **next,
- struct eval_outcome *outcome);
+ struct environment *env, struct eval_outcome *outcome);
 struct parameter *parse_optional_parameters
 (struct object *obj, struct parameter **last, struct object **next,
- struct eval_outcome *outcome);
+ struct environment *env, struct eval_outcome *outcome);
 struct parameter *parse_keyword_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct eval_outcome *outcome);
@@ -2270,6 +2273,29 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
 		    (char *)NULL);
+
+
+  env->amp_optional_sym = intern_symbol_from_char_vector ("&OPTIONAL",
+							  strlen ("&OPTIONAL"),
+							  1, EXTERNAL_VISIBILITY,
+							  1, env->cl_package);
+  env->amp_rest_sym = intern_symbol_from_char_vector ("&REST", strlen ("&REST"),
+						      1, EXTERNAL_VISIBILITY, 1,
+						      env->cl_package);
+  env->amp_body_sym = intern_symbol_from_char_vector ("&BODY", strlen ("&BODY"),
+						      1, EXTERNAL_VISIBILITY, 1,
+						      env->cl_package);
+  env->amp_key_sym = intern_symbol_from_char_vector ("&KEY", strlen ("&KEY"), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     env->cl_package);
+  env->amp_allow_other_keys_sym =
+    intern_symbol_from_char_vector ("&ALLOW-OTHER-KEYS",
+				    strlen ("&ALLOW-OTHER-KEYS"), 1,
+				    EXTERNAL_VISIBILITY, 1, env->cl_package);
+  env->amp_aux_sym = intern_symbol_from_char_vector ("&AUX",
+						     strlen ("&AUX"), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     env->cl_package);
 
 
   define_constant_by_name ("MOST-POSITIVE-FIXNUM",
@@ -6374,7 +6400,8 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 
 struct parameter *
 parse_required_parameters (struct object *obj, struct parameter **last,
-			   struct object **rest, struct eval_outcome *outcome)
+			   struct object **rest, struct environment *env,
+			   struct eval_outcome *outcome)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -6391,18 +6418,21 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  return NULL;
 	}
 
-      if (symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			   "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
+      car = SYMBOL (car);
+
+      if (car == env->amp_optional_sym || car == env->amp_rest_sym
+	  || car == env->amp_body_sym || car == env->amp_key_sym
+	  || car == env->amp_allow_other_keys_sym || car == env->amp_aux_sym)
 	{
 	  break;
 	}
 
-      increment_refcount (SYMBOL (car));
+      increment_refcount (car);
 
       if (!first)
-	*last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
+	*last = first = alloc_parameter (REQUIRED_PARAM, car);
       else
-	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, SYMBOL (car));
+	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, car);
 
       obj = CDR (obj);
     }
@@ -6415,7 +6445,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
 struct parameter *
 parse_optional_parameters (struct object *obj, struct parameter **last,
-			   struct object **next, struct eval_outcome *outcome)
+			   struct object **next, struct environment *env,
+			   struct eval_outcome *outcome)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -6427,9 +6458,11 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
     {
       car = CAR (obj);
 
-      if (IS_SYMBOL (car)
-	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
+      if (IS_SYMBOL (car) && (car = SYMBOL (car))
+	  && (car == env->amp_optional_sym || car == env->amp_rest_sym
+	      || car == env->amp_body_sym || car == env->amp_key_sym
+	      || car == env->amp_allow_other_keys_sym
+	      || car == env->amp_aux_sym))
 	{
 	  break;
 	}
@@ -6509,9 +6542,11 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
     {
       car = CAR (obj);
 
-      if (IS_SYMBOL (car)
-	  && symbol_is_among (car, NULL, "&OPTIONAL", "&REST", "&BODY", "&KEY",
-			      "&AUX", "&ALLOW_OTHER_KEYS", (char *)NULL))
+      if (IS_SYMBOL (car) && (car = SYMBOL (car))
+	  && (car == env->amp_optional_sym || car == env->amp_rest_sym
+	      || car == env->amp_body_sym || car == env->amp_key_sym
+	      || car == env->amp_allow_other_keys_sym
+	      || car == env->amp_aux_sym))
 	{
 	  break;
 	}
@@ -6634,26 +6669,27 @@ parse_lambda_list (struct object *obj, struct environment *env,
       return NULL;
     }
 
-  first = parse_required_parameters (obj, &last, &obj, outcome);
+  first = parse_required_parameters (obj, &last, &obj, env, outcome);
 
   if (outcome->type != EVAL_OK)
     return NULL;
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && symbol_equals (car, "&OPTIONAL", NULL))
+      && SYMBOL (car) == env->amp_optional_sym)
     {
       if (first)
 	last->next =
-	  parse_optional_parameters (CDR (obj), &last, &obj, outcome);
+	  parse_optional_parameters (CDR (obj), &last, &obj, env, outcome);
       else
-	first = parse_optional_parameters (CDR (obj), &last, &obj, outcome);
+	first = parse_optional_parameters (CDR (obj), &last, &obj, env, outcome);
 
       if (outcome->type != EVAL_OK)
 	return NULL;
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && symbol_is_among (car, NULL, "&REST", "&BODY", (char *)NULL))
+      && (SYMBOL (car) == env->amp_rest_sym
+	  || SYMBOL (car) == env->amp_body_sym))
     {
       if (SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj))))
 	{
@@ -6672,7 +6708,7 @@ parse_lambda_list (struct object *obj, struct environment *env,
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && symbol_equals (car, "&KEY", NULL))
+      && SYMBOL (car) == env->amp_key_sym)
     {
       if (first)
 	last->next =
