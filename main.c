@@ -828,13 +828,14 @@ enum read_outcome read_object_continued
 struct object *complete_object_interactively
 (struct object *obj, int is_empty_list, struct environment *env,
  struct eval_outcome *outcome, size_t multiline_comment_depth,
- const char **input_left, size_t *input_left_size);
+ const char **input_left, size_t *input_left_size, char **wholeline);
 struct object *read_object_interactively_continued
 (const char *input, size_t input_size, struct environment *env,
- struct eval_outcome *outcome, const char **input_left, size_t *input_left_size);
+ struct eval_outcome *outcome, const char **input_left, size_t *input_left_size,
+ char **wholeline);
 struct object *read_object_interactively
 (struct environment *env, struct eval_outcome *outcome, const char **input_left,
- size_t *input_left_size);
+ size_t *input_left_size, char **wholeline);
 
 const char *skip_space_block
 (const char *input, size_t size, size_t *new_size);
@@ -1720,6 +1721,7 @@ main (int argc, char *argv [])
 
   const char *input_left = NULL;
   size_t input_left_s = 0;
+  char *wholel = NULL;
 
   struct command_line_options opts = {1};
 
@@ -1789,8 +1791,9 @@ main (int argc, char *argv [])
 
   while (!end_repl)
     {
+      free (wholel);
       obj = read_object_interactively (&env, &eval_out, &input_left,
-				       &input_left_s);
+				       &input_left_s, &wholel);
 
       while (obj && input_left && input_left_s > 0)
 	{
@@ -1840,7 +1843,7 @@ main (int argc, char *argv [])
 	  obj = read_object_interactively_continued (input_left, input_left_s,
 						     &env, &eval_out,
 						     &input_left,
-						     &input_left_s);
+						     &input_left_s, &wholel);
 	}
     }
 
@@ -2519,7 +2522,8 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 			       struct environment *env,
 			       struct eval_outcome *outcome,
 			       size_t multiline_comment_depth,
-			       const char **input_left, size_t *input_left_size)
+			       const char **input_left, size_t *input_left_size,
+			       char **wholeline)
 {
   char *line;
   enum read_outcome read_out;
@@ -2546,6 +2550,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 	  return NULL;
 	}
 
+      free (line);
       line = read_line_interactively ("> ");
       len = strlen (line);
 
@@ -2559,7 +2564,8 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
   *input_left = end + 1;
   *input_left_size = (line + len) - end - 1;
-  
+  *wholeline = line;
+
   return obj;
 }
 
@@ -2569,7 +2575,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
 				     struct environment *env,
 				     struct eval_outcome *outcome,
 				     const char **input_left,
-				     size_t *input_left_size)
+				     size_t *input_left_size, char **wholeline)
 {
   enum read_outcome read_out;
   struct object *obj = NULL;
@@ -2604,26 +2610,31 @@ read_object_interactively_continued (const char *input, size_t input_size,
     {
       return complete_object_interactively (obj, 1, env, outcome,
 					    args.multiline_comment_depth,
-					    input_left, input_left_size);
+					    input_left, input_left_size,
+					    wholeline);
     }
   else
     return complete_object_interactively (obj, 0, env, outcome,
 					  args.multiline_comment_depth,
-					  input_left, input_left_size);
+					  input_left, input_left_size,
+					  wholeline);
 }
 
 
 struct object *
 read_object_interactively (struct environment *env, struct eval_outcome *outcome,
-			   const char **input_left, size_t *input_left_size)
+			   const char **input_left, size_t *input_left_size,
+			   char **wholeline)
 {
   char *pr = generate_prompt (env), *line;
   struct object *ret;
 
   line = read_line_interactively (pr);
+  *wholeline = line;
 
   ret = read_object_interactively_continued (line, strlen (line), env, outcome,
-					     input_left, input_left_size);
+					     input_left, input_left_size,
+					     wholeline);
 
   free (pr);
 
