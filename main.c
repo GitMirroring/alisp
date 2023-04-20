@@ -112,6 +112,11 @@
 #define decrement_refcount(obj) delete_reference (NULL, obj, 0)
 
 
+
+#define IS_LOWEST_BYTE_IN_UTF8(ch) (((ch) & 0xc0) != 0x80)
+
+
+
 #define ANTILOOP_HASH_T_SIZE 64
 
 
@@ -3969,7 +3974,7 @@ utf8len (const char *string)
 
   for (; *string != '\0'; string++)
     {
-      if ((*string & 0xc0) >> 6 != 2)
+      if (IS_LOWEST_BYTE_IN_UTF8 (*string))
 	s++;
     }
 
@@ -3984,7 +3989,7 @@ next_utf8_char (char *str, size_t sz)
 
   for (off = 1; off < sz; off++)
     {
-      if ((str [off] & 0xc0) >> 6 != 2)
+      if (IS_LOWEST_BYTE_IN_UTF8 (str [off]))
 	return off;
     }
 
@@ -3999,7 +4004,7 @@ char_vector_utf8_length (const char *str, size_t sz)
 
   for (i = 0; i < sz; i++)
     {
-      if ((str [i] & 0xc0) >> 6 != 2)
+      if (IS_LOWEST_BYTE_IN_UTF8 (str [i]))
 	len++;
     }
 
@@ -5237,7 +5242,7 @@ create_character_from_utf8 (char *character, size_t size)
 
   for (sz = 1; sz < size; sz++)
     {
-      if ((character [sz] & 0xc0) >> 6 != 2)
+      if (IS_LOWEST_BYTE_IN_UTF8 (character [sz]))
 	break;
     }
 
