@@ -107,9 +107,9 @@
     } while (0)
 
 
-#define increment_refcount(obj) offset_refcount_by ((obj), 1, NULL, 0)
+#define increment_refcount(obj) INC_STRONG_REFCOUNT(obj)
 
-#define decrement_refcount(obj) offset_refcount_by ((obj), -1, NULL, 0)
+#define decrement_refcount(obj) delete_reference (NULL, obj, 0)
 
 
 #define ANTILOOP_HASH_T_SIZE 64
@@ -500,8 +500,10 @@ parameter
   struct object *init_form;
   struct object *supplied_p_param;
 
+  int reference_strength_factor;
+
   int key_passed;
-  
+
   struct parameter *next;
 };
 
@@ -561,6 +563,8 @@ array
   long fill_pointer;
 
   struct object **value;
+
+  int *reference_strength_factor;
 };
 
 
@@ -570,6 +574,8 @@ struct
 hashtable
 {
   struct object **table;
+
+  int *reference_strength_factor;
 };
 
 
@@ -770,12 +776,40 @@ object_ptr_union
 struct
 object
 {
-  int refcount;
+  int refcount1;
+  int refcount2;
+  int mark;
+  int flags;
+
   const char *begin;
   const char *end;
   enum object_type type;
   union object_ptr_union value_ptr;
 };  
+
+
+#define DONT_GC(obj) (!(obj) || (obj) == &nil_object || (obj) == &t_object \
+		      || (obj)->type == TYPE_PACKAGE)
+
+#define STRENGTH_FACTOR_OF_OBJECT(x) ((x)->flags & 0x100)
+#define FLIP_STRENGTH_FACTOR_OF_OBJECT(x) ((x)->flags ^= 0x100)
+
+#define STRONG_REFCOUNT(x) (STRENGTH_FACTOR_OF_OBJECT(x) ? (x)->refcount1 \
+			    : (x)->refcount2)
+#define INC_STRONG_REFCOUNT(x) (STRENGTH_FACTOR_OF_OBJECT(x) ? (x)->refcount1++ \
+				: (x)->refcount2++)
+#define DEC_STRONG_REFCOUNT(x) (STRENGTH_FACTOR_OF_OBJECT(x) ? (x)->refcount1-- \
+				: (x)->refcount2--)
+
+#define WEAK_REFCOUNT(x) (STRENGTH_FACTOR_OF_OBJECT(x) ? (x)->refcount2 \
+			  : (x)->refcount1)
+#define INC_WEAK_REFCOUNT(x) (STRENGTH_FACTOR_OF_OBJECT(x) ? (x)->refcount2++ :\
+			      (x)->refcount1++)
+#define DEC_WEAK_REFCOUNT(x) (STRENGTH_FACTOR_OF_OBJECT(x) ? (x)->refcount2-- :\
+			      (x)->refcount1--)
+
+#define WITH_CHANGED_BIT(x,ind,new)		\
+  (((x) & ~(1 << (ind))) | ((new) << (ind)))
 
 
 struct
@@ -1003,7 +1037,7 @@ struct object *create_filename (struct object *string);
 
 struct object *alloc_vector (size_t size, int fill_with_nil,
 			     int dont_store_size);
-struct object *create_vector (struct object *list);
+struct object *create_vector_from_list (struct object *list);
 void resize_vector (struct object *vector, size_t size);
 
 struct object *create_character (char *character, int do_copy);
@@ -1103,7 +1137,7 @@ int is_proper_list (struct object *list);
 struct object *copy_prefix (const struct object *begin, const struct object *end,
 			    struct object **last_prefix, int refcount);
 struct object *copy_list_structure (struct object *list,
-				    const struct object *prefix, int cell_num,
+				    const struct object *prefix, int num_conses,
 				    struct object **last_cell);
 
 int array_rank (const struct array *array);
@@ -1667,11 +1701,19 @@ void print_read_error (enum read_outcome err, const char *input, size_t size,
 		       const struct read_outcome_args *args);
 void print_eval_error (struct eval_outcome *err, struct environment *env);
 
-void increment_refcount_by (struct object *obj, int count, struct object *parent);
-int decrement_refcount_by (struct object *obj, int count, struct object *parent);
-int offset_refcount_by (struct object *obj, int delta,
-			struct refcounted_object_list **antiloop_hash_t,
-			int clone_hash_t);
+int is_reference_weak (struct object *src, int ind, struct object *dest);
+void set_reference_strength_factor (struct object *src, int ind,
+				    struct object *dest, int new_weakness,
+				    int increase_refcount,
+				    int decrease_other_refcount);
+void add_strong_reference (struct object *src, struct object *dest, int ind);
+void add_reference (struct object *src, struct object *dest, int ind);
+void delete_reference (struct object *src, struct object *dest, int ind);
+void weakify_loops (struct object *root, int *depth);
+void restore_invariants_at_edge (struct object *src, struct object *dest,
+				 int ind, struct object *root, int *depth);
+void restore_invariants_at_node (struct object *node, struct object *root,
+				 int *depth);
 
 void free_object (struct object *obj);
 void free_string (struct object *obj);
@@ -1696,14 +1738,16 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, NULL,
+  NULL, NULL, 1};
 
-struct object nil_object = {1, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
+struct object nil_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, NULL, NULL,
+  NULL, 1};
 
-struct object t_object = {1, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
+struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
 
 
@@ -3561,7 +3605,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
       return create_filename (obj);
     }
   else if (macro_call->dispatch_ch == '(')
-    return create_vector (obj);
+    return create_vector_from_list (obj);
   else if (macro_call->dispatch_ch == ':')
     {
       if (!obj)
@@ -3756,10 +3800,9 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 struct object *
 alloc_number (enum object_type numtype)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
 
   obj->type = numtype;
-  obj->refcount = 1;
 
   if (numtype == TYPE_BIGNUM)
     {
@@ -3782,11 +3825,10 @@ struct object *
 create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
 	       enum object_type numtype)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   char *buf = malloc_and_check (size + 1);
   
   obj->type = numtype;
-  obj->refcount = 1;
   
   memcpy (buf, token, size);
   buf [size] = 0;
@@ -3821,9 +3863,8 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
 struct object *
 alloc_complex (void)
 {
-  struct object *ret = malloc_and_check (sizeof (*ret));
+  struct object *ret = alloc_object ();
 
-  ret->refcount = 1;
   ret->type = TYPE_COMPLEX;
   ret->value_ptr.complex = malloc_and_check (sizeof (*ret->value_ptr.complex));
 
@@ -3834,10 +3875,9 @@ alloc_complex (void)
 struct object *
 create_integer_from_long (long num)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
 
   obj->type = TYPE_BIGNUM;
-  obj->refcount = 1;
 
   mpz_init (obj->value_ptr.integer);
   mpz_set_si (obj->value_ptr.integer, num);
@@ -3849,10 +3889,9 @@ create_integer_from_long (long num)
 struct object *
 create_floating_from_double (double d)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
 
   obj->type = TYPE_FLOAT;
-  obj->refcount = 1;
 
   mpf_init (obj->value_ptr.floating);
   mpf_set_d (obj->value_ptr.floating, d);
@@ -4029,7 +4068,9 @@ alloc_object (void)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
   
-  obj->refcount = 1;
+  obj->refcount1 = 0;
+  obj->refcount2 = 1;
+  obj->flags = 0;
   
   return obj;
 }
@@ -4038,7 +4079,7 @@ alloc_object (void)
 struct object *
 alloc_prefix (enum element type)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
 
   switch (type)
     {
@@ -4061,8 +4102,6 @@ alloc_prefix (enum element type)
       break;
     }
 	
-  obj->refcount = 1;
-
   obj->value_ptr.next = NULL;
 
   return obj;
@@ -4072,7 +4111,7 @@ alloc_prefix (enum element type)
 struct object *
 alloc_empty_cons_pair (void)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct cons_pair *cons = malloc_and_check (sizeof (*cons));
 
   cons->filling_car = 0;
@@ -4084,7 +4123,6 @@ alloc_empty_cons_pair (void)
   cons->cdr = NULL;
 
   obj->type = TYPE_CONS_PAIR;
-  obj->refcount = 1;
   obj->value_ptr.cons_pair = cons;
 
   return obj;
@@ -4099,7 +4137,11 @@ alloc_empty_list (size_t sz)
   ret = cons = alloc_empty_cons_pair ();
 
   for (sz--; sz; sz--)
-    cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+    {
+      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      set_reference_strength_factor (cons, 1, CDR (cons), 0, 0, 0);
+      cons = CDR (cons);
+    }
 
   cons->value_ptr.cons_pair->cdr = &nil_object;
 
@@ -4110,7 +4152,7 @@ alloc_empty_list (size_t sz)
 struct object *
 alloc_function (void)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct function *fun = malloc_and_check (sizeof (*fun));
 
   fun->name = NULL;
@@ -4125,7 +4167,6 @@ alloc_function (void)
   fun->body = NULL;
 
   obj->type = TYPE_FUNCTION;
-  obj->refcount = 1;
   obj->value_ptr.function = fun;
 
   return obj;
@@ -4135,11 +4176,10 @@ alloc_function (void)
 struct object *
 alloc_sharp_macro_call (void)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct sharp_macro_call *call = malloc_and_check (sizeof (*call));
 
   obj->type = TYPE_SHARP_MACRO_CALL;
-  obj->refcount = 1;
   obj->value_ptr.sharp_macro_call = call;
 
   call->is_empty_list = 0;
@@ -4151,11 +4191,10 @@ alloc_sharp_macro_call (void)
 struct object *
 alloc_bytespec (void)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct bytespec *bs = malloc_and_check (sizeof (*bs));
 
   obj->type = TYPE_BYTESPEC;
-  obj->refcount = 1;
   obj->value_ptr.bytespec = bs;
 
   mpz_init (bs->size);
@@ -4181,7 +4220,7 @@ alloc_empty_symtable (size_t table_size)
 struct object *
 create_package (char *name, int name_len)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct package *pack = malloc_and_check (sizeof (*pack));
 
   pack->name = malloc_and_check (name_len);
@@ -4194,7 +4233,6 @@ create_package (char *name, int name_len)
   pack->symtable = alloc_empty_symtable (SYMTABLE_SIZE);
 
   obj->type = TYPE_PACKAGE;
-  obj->refcount = 1;
   obj->value_ptr.package = pack;
 
   return obj;
@@ -4204,7 +4242,7 @@ create_package (char *name, int name_len)
 struct object *
 create_package_from_c_strings (char *name, ...)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct package *pack = malloc_and_check (sizeof (*pack));
   struct name_list *nicks;
   va_list valist;
@@ -4236,7 +4274,6 @@ create_package_from_c_strings (char *name, ...)
     nicks->next = NULL;
 
   obj->type = TYPE_PACKAGE;
-  obj->refcount = 1;
   obj->value_ptr.package = pack;
 
   return obj;
@@ -4698,8 +4735,8 @@ create_function (struct object *lambda_list, struct object *body,
 			       env->lex_env_vars_boundary, env->funcs,
 			       env->lex_env_funcs_boundary);
 
-  increment_refcount (body);
   f->body = body;
+  add_reference (fun, body, 1);
 
   return fun;
 }
@@ -4761,10 +4798,9 @@ normalize_string (char *output, const char *input, size_t size)
 struct object *
 alloc_string (size_t size)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
 
   obj->type = TYPE_STRING;
-  obj->refcount = 1;
 
   obj->value_ptr.string = malloc_and_check (sizeof (*obj->value_ptr.string));
 
@@ -4831,11 +4867,10 @@ copy_string_to_c_string (struct string *str)
 struct object *
 alloc_symbol_name (size_t value_s, size_t actual_symname_s)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct symbol_name *s;
 
   obj->type = TYPE_SYMBOL_NAME;
-  obj->refcount = 1;
 
   obj->value_ptr.symbol_name =
     malloc_and_check (sizeof (*obj->value_ptr.symbol_name));
@@ -5054,9 +5089,8 @@ create_symbol (char *name, size_t size, int do_copy)
   struct object *obj;
   struct symbol *sym;
 
-  obj = malloc_and_check (sizeof (*obj));
+  obj = alloc_object ();
   obj->type = TYPE_SYMBOL;
-  obj->refcount = 1;
 
   sym = malloc_and_check (sizeof (*sym));
 
@@ -5092,11 +5126,10 @@ create_symbol (char *name, size_t size, int do_copy)
 struct object *
 create_filename (struct object *string)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct filename *fn = malloc_and_check (sizeof (*fn));
 
   obj->type = TYPE_FILENAME;
-  obj->refcount = 1;
 
   fn->value = string;
 
@@ -5109,7 +5142,7 @@ create_filename (struct object *string)
 struct object *
 alloc_vector (size_t size, int fill_with_nil, int dont_store_size)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct array *vec = malloc_and_check (sizeof (*vec));
   struct array_size *sz;
   size_t i;
@@ -5124,15 +5157,18 @@ alloc_vector (size_t size, int fill_with_nil, int dont_store_size)
 
   vec->fill_pointer = -1;
   vec->value = calloc_and_check (size, sizeof (*vec->value));
+  vec->reference_strength_factor = malloc_and_check (size * sizeof (int));
 
   if (fill_with_nil)
     {
       for (i = 0; i < size; i++)
-	vec->value [i] = &nil_object;
+	{
+	  vec->value [i] = &nil_object;
+	  vec->reference_strength_factor [i] = 0;
+	}
     }
 
   obj->type = TYPE_ARRAY;
-  obj->refcount = 1;
   obj->value_ptr.array = vec;
 
   return obj;
@@ -5140,9 +5176,9 @@ alloc_vector (size_t size, int fill_with_nil, int dont_store_size)
 
 
 struct object *
-create_vector (struct object *list)
+create_vector_from_list (struct object *list)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct array *vec = malloc_and_check (sizeof (*vec));
   struct array_size *sz = malloc_and_check (sizeof (*sz));
   size_t i;
@@ -5153,12 +5189,12 @@ create_vector (struct object *list)
   vec->alloc_size = sz;
   vec->fill_pointer = -1;
   vec->value = calloc_and_check (sz->size, sizeof (*vec->value));
+  vec->reference_strength_factor = malloc_and_check (sz->size * sizeof (int));
 
   for (i = 0; i < sz->size; i++)
     vec->value [i] = nth (i, list);
 
   obj->type = TYPE_ARRAY;
-  obj->refcount = 1;
   obj->value_ptr.array = vec;
 
   return obj;
@@ -5179,10 +5215,9 @@ resize_vector (struct object *vector, size_t size)
 struct object *
 create_character (char *character, int do_copy)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
 
   obj->type = TYPE_CHARACTER;
-  obj->refcount = 1;
 
   if (do_copy)
     {
@@ -5277,7 +5312,7 @@ struct object *
 create_file_stream (enum stream_type type, enum stream_direction direction,
 		    struct string *filename, struct eval_outcome *outcome)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
   char *fn = copy_string_to_c_string (filename);
 
@@ -5306,7 +5341,6 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
   str->dirty_line = 0;
 
   obj->type = TYPE_STREAM;
-  obj->refcount = 1;
   obj->value_ptr.stream = str;
 
   return obj;
@@ -5317,7 +5351,7 @@ struct object *
 create_stream_from_open_file (enum stream_type type,
 			      enum stream_direction direction, FILE *file)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
 
   str->medium = FILE_STREAM;
@@ -5328,7 +5362,6 @@ create_stream_from_open_file (enum stream_type type,
   str->file = file;
 
   obj->type = TYPE_STREAM;
-  obj->refcount = 1;
   obj->value_ptr.stream = str;
 
   return obj;
@@ -5338,7 +5371,7 @@ create_stream_from_open_file (enum stream_type type,
 struct object *
 create_string_stream (enum stream_direction direction, struct object *instr)
 {
-  struct object *obj = malloc_and_check (sizeof (*obj));
+  struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
 
   str->medium = STRING_STREAM;
@@ -5355,7 +5388,6 @@ create_string_stream (enum stream_direction direction, struct object *instr)
     str->string = alloc_string (0);
 
   obj->type = TYPE_STREAM;
-  obj->refcount = 1;
   obj->value_ptr.stream = str;
 
   return obj;
@@ -5945,7 +5977,7 @@ define_parameter (struct object *sym, struct object *form,
 
   if (!val)
     return NULL;
-  
+
   s = SYMBOL (sym);
 
   if (!s->value_ptr.symbol->is_parameter)
@@ -5954,8 +5986,8 @@ define_parameter (struct object *sym, struct object *form,
       s->value_ptr.symbol->is_parameter = 1;
     }
 
-  increment_refcount_by (val, s->refcount - 1, NULL);
   s->value_ptr.symbol->value_cell = val;
+  add_reference (s, val, 0);
 
   increment_refcount (s);
   return s;
@@ -6245,7 +6277,7 @@ copy_prefix (const struct object *begin, const struct object *end,
 			  begin->type == TYPE_DOT ? DOT
 			  : NONE);
 
-      tmp->refcount = refcount;
+      /*tmp->refcount = refcount;*/
 
       if (pr)
 	pr->value_ptr.next = tmp;
@@ -6263,7 +6295,7 @@ copy_prefix (const struct object *begin, const struct object *end,
 			  begin->type == TYPE_AT ? AT :
 			  begin->type == TYPE_DOT ? DOT : NONE);
 
-      tmp->refcount = refcount;
+      /*tmp->refcount = refcount;*/
     }
 
   if (pr)
@@ -6280,42 +6312,53 @@ copy_prefix (const struct object *begin, const struct object *end,
 
 struct object *
 copy_list_structure (struct object *list, const struct object *prefix,
-		     int cell_num, struct object **last_cell)
+		     int num_conses, struct object **last_cell)
 {
-  struct object *cons, *out, *lastpref;
+  struct object *cons, *out, *lastpref, *cdr;
   int i = 1;
 
   out = cons = alloc_empty_cons_pair ();
 
-  increment_refcount (CAR (list));
   out->value_ptr.cons_pair->car = CAR (list);
+  add_reference (out, CAR (list), 0);
 
   list = CDR (list);
 
-  while (list->type == TYPE_CONS_PAIR && (i < cell_num || cell_num < 0))
+  while (list->type == TYPE_CONS_PAIR && (i < num_conses || num_conses < 0))
     {
-      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      cdr = alloc_empty_cons_pair ();
 
-      increment_refcount (CAR (list));
+      cons->value_ptr.cons_pair->cdr = cdr;
+      add_reference (cons, cdr, 1);
+      decrement_refcount (cdr);
+
+      cons = CDR (cons);
 
       if (prefix)
 	{
 	  cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref,
-							cons->refcount);
+							0);
+	  add_reference (cons, CAR (cons), 0);
+	  decrement_refcount (CAR (cons));
+
 	  lastpref->value_ptr.next = CAR (list);
+	  add_reference (lastpref, CAR (list), 0);
 	}
       else
-	cons->value_ptr.cons_pair->car = CAR (list);
+	{
+	  cons->value_ptr.cons_pair->car = CAR (list);
+	  add_reference (cons, CAR (list), 0);
+	}
 
       list = CDR (list);
       i++;
     }
 
-  if (SYMBOL (list) != &nil_object && cell_num < 0)
-    increment_refcount (list);
-
-  if (cell_num < 0)
-    cons->value_ptr.cons_pair->cdr = list;
+  if (SYMBOL (list) != &nil_object && (i < num_conses || num_conses < 0))
+    {
+      cons->value_ptr.cons_pair->cdr = list;
+      add_reference (cons, list, 1);
+    }
 
   if (last_cell)
     *last_cell = cons;
@@ -6392,6 +6435,7 @@ alloc_parameter (enum parameter_type type, struct object *sym)
   par->name = sym;
   par->init_form = NULL;
   par->supplied_p_param = NULL;
+  par->key = NULL;
   par->next = NULL;
   
   return par;
@@ -6427,12 +6471,13 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  break;
 	}
 
-      increment_refcount (car);
-
       if (!first)
 	*last = first = alloc_parameter (REQUIRED_PARAM, car);
       else
 	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, car);
+
+      (*last)->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (car);
+      INC_WEAK_REFCOUNT (car);
 
       obj = CDR (obj);
     }
@@ -6448,7 +6493,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 			   struct object **next, struct environment *env,
 			   struct eval_outcome *outcome)
 {
-  struct object *car;
+  struct object *car, *supplp;
   struct parameter *first = NULL;
   int l;
 
@@ -6475,6 +6520,10 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  else
 	    *last = (*last)->next =
 	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (car));
+
+	  (*last)->reference_strength_factor =
+	    !STRENGTH_FACTOR_OF_OBJECT (SYMBOL (car));
+	  INC_WEAK_REFCOUNT (SYMBOL (car));
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
@@ -6486,18 +6535,23 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	      return NULL;
 	    }
 
-	  increment_refcount (SYMBOL (CAR (car)));
-
 	  if (!first)
 	    *last = first = alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 	  else
 	    *last = (*last)->next =
 	      alloc_parameter (OPTIONAL_PARAM, SYMBOL (CAR (car)));
 
+	  (*last)->reference_strength_factor =
+	    !STRENGTH_FACTOR_OF_OBJECT (SYMBOL (CAR (car)));
+	  INC_WEAK_REFCOUNT (SYMBOL (CAR (car)));
+
 	  if (l >= 2)
 	    {
-	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
+	      (*last)->reference_strength_factor =
+		WITH_CHANGED_BIT ((*last)->reference_strength_factor, 1,
+				  !STRENGTH_FACTOR_OF_OBJECT (nth (1, car)));
+	      INC_WEAK_REFCOUNT (nth (1, car));
 	    }
 
 	  if (l == 3)
@@ -6508,8 +6562,13 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 		  return NULL;
 		}
 
-	      increment_refcount (SYMBOL (CAR (CDR (CDR (car)))));
-	      (*last)->supplied_p_param = SYMBOL (CAR (CDR (CDR (car))));
+	      supplp = SYMBOL (CAR (CDR (CDR (car))));
+
+	      (*last)->supplied_p_param = supplp;
+	      (*last)->reference_strength_factor =
+		WITH_CHANGED_BIT ((*last)->reference_strength_factor, 2,
+				  !STRENGTH_FACTOR_OF_OBJECT (supplp));
+	      INC_WEAK_REFCOUNT (supplp);
 	    }
 	}
       else
@@ -6532,7 +6591,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 			  struct object **next, struct environment *env,
 			  struct eval_outcome *outcome)
 {
-  struct object *car, *caar, *key, *var;
+  struct object *car, *caar, *key, *var, *supplp;
   struct parameter *first = NULL;
   int l;
 
@@ -6553,7 +6612,6 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
       else if (IS_SYMBOL (car))
 	{
 	  var = SYMBOL (car);
-	  increment_refcount (var);
 
 	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
 						var->value_ptr.symbol->name_len,
@@ -6567,6 +6625,14 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	      alloc_parameter (KEYWORD_PARAM, var);
 
 	  (*last)->key = key;
+
+	  (*last)->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (var);
+	  INC_WEAK_REFCOUNT (var);
+
+	  (*last)->reference_strength_factor =
+	    WITH_CHANGED_BIT ((*last)->reference_strength_factor, 3,
+			      !STRENGTH_FACTOR_OF_OBJECT (key));
+	  INC_WEAK_REFCOUNT (key);
 	}
       else if (car->type == TYPE_CONS_PAIR)
 	{
@@ -6583,7 +6649,6 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	  if (IS_SYMBOL (caar))
 	    {
 	      var = SYMBOL (caar);
-	      increment_refcount (var);
 
 	      key = intern_symbol_from_char_vector
 		(var->value_ptr.symbol->name, var->value_ptr.symbol->name_len,
@@ -6599,10 +6664,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 		}
 
 	      key = SYMBOL (CAR (caar));
-	      increment_refcount (key);
-
 	      var = SYMBOL (CAR (CDR (caar)));
-	      increment_refcount (var);
 	    }
 	  else
 	    {
@@ -6618,10 +6680,21 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  (*last)->key = key;
 
+	  (*last)->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (var);
+	  INC_WEAK_REFCOUNT (var);
+
+	  (*last)->reference_strength_factor =
+	    WITH_CHANGED_BIT ((*last)->reference_strength_factor, 3,
+			      !STRENGTH_FACTOR_OF_OBJECT (key));
+	  INC_WEAK_REFCOUNT (key);
+
 	  if (l >= 2)
 	    {
-	      increment_refcount (nth (1, car));
 	      (*last)->init_form = nth (1, car);
+	      (*last)->reference_strength_factor =
+		WITH_CHANGED_BIT ((*last)->reference_strength_factor, 1,
+				  !STRENGTH_FACTOR_OF_OBJECT (nth (1, car)));
+	      INC_WEAK_REFCOUNT (nth (1, car));
 	    }
 
 	  if (l == 3)
@@ -6632,8 +6705,13 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 		  return NULL;
 		}
 
-	      increment_refcount (SYMBOL (nth (2, car)));
-	      (*last)->supplied_p_param = SYMBOL (nth (2, car));
+	      supplp = SYMBOL (nth (2, car));
+
+	      (*last)->supplied_p_param = supplp;
+	      (*last)->reference_strength_factor =
+		WITH_CHANGED_BIT ((*last)->reference_strength_factor, 2,
+				  !STRENGTH_FACTOR_OF_OBJECT (supplp));
+	      INC_WEAK_REFCOUNT (supplp);
 	    }
 	}
       else
@@ -6697,12 +6775,15 @@ parse_lambda_list (struct object *obj, struct environment *env,
 	  return NULL;
 	}
 
-      increment_refcount (SYMBOL (CAR (CDR (obj))));
-
       if (first)
-	last->next = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+	last = last->next =
+	  alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
       else
-	first = last = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+	last = first = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+
+      last->reference_strength_factor =
+	!STRENGTH_FACTOR_OF_OBJECT (SYMBOL (CAR (CDR (obj))));
+      INC_WEAK_REFCOUNT (SYMBOL (CAR (CDR (obj))));
 
       obj = CDR (CDR (obj));
     }
@@ -6714,7 +6795,8 @@ parse_lambda_list (struct object *obj, struct environment *env,
 	last->next =
 	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
       else
-	first = parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
+	first =
+	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
 
       if (outcome->type != EVAL_OK)
 	return NULL;
@@ -7288,7 +7370,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 {
   struct object *obj, *ret, *retform, *retcons, *reading_cons, *cons, *lastpr,
     *tmp, *lp;
-  int do_spl, must_copy, refc = 1;
+  int do_spl, must_copy;
 
   if (!backts_commas_balance)
     {
@@ -7306,13 +7388,15 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
       if (ret == form->value_ptr.next)
 	{
-	  form->refcount++;
 	  !forbid_splicing ? *last_pref = ret : NULL;
+	  increment_refcount (form);
+	  decrement_refcount (form->value_ptr.next);
 	  return form;
 	}
 
       retform = alloc_prefix (BACKQUOTE);
       retform->value_ptr.next = ret;
+      set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
       !forbid_splicing ? *last_pref = retform : NULL;
 
       return retform;
@@ -7371,13 +7455,15 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 	  if (ret == form->value_ptr.next)
 	    {
-	      form->refcount++;
 	      !forbid_splicing ? *last_pref = ret : NULL;
+	      increment_refcount (form);
+	      decrement_refcount (form->value_ptr.next);
 	      return form;
 	    }
 
 	  retform = alloc_prefix (COMMA);
 	  retform->value_ptr.next = ret;
+	  set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
 	  !forbid_splicing ? *last_pref = retform : NULL;
 
 	  return retform;
@@ -7462,7 +7548,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  alloc_empty_cons_pair ();
 
 		      retcons->value_ptr.cons_pair->car = ret;
-		      increment_refcount_by (retcons, refc - 1, NULL);
+		      /*increment_refcount_by (retcons, refc - 1, NULL);*/
 		    }
 		  else
 		    retcons->value_ptr.cons_pair->cdr = ret;
@@ -7487,8 +7573,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			    {
 			      tmp = CAR (retcons);
 			      retcons->value_ptr.cons_pair->car =
-				copy_prefix (ret, lastpr, &lp,
-					     retcons->refcount);
+				copy_prefix (ret, lastpr, &lp, 0);
+					     /*retcons->refcount);*/
 			      lp->value_ptr.next = tmp;
 
 			      if (SYMBOL (CDR (retcons)) == &nil_object)
@@ -7500,7 +7586,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		      else if (ret->type == TYPE_CONS_PAIR)
 			retcons = last_cons_pair (ret);
 
-		      refc = retcons->refcount;
+		      /*refc = retcons->refcount;*/
 		    }
 		  else
 		    {
@@ -7517,8 +7603,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  if (lastpr)
 			    {
 			      retcons->value_ptr.cons_pair->car =
-				copy_prefix (ret, lastpr, &lp,
-					     retcons->refcount);
+				copy_prefix (ret, lastpr, &lp, 0);
+			      /*retcons->refcount);*/
 			      lp->value_ptr.next = CAR (cons);
 			    }
 			  else
@@ -7549,13 +7635,15 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 	  while (form->type == TYPE_CONS_PAIR)
 	    {
-	      form->refcount++;
+	      decrement_refcount (CAR (form));
 
 	      form = CDR (form);
 
 	      if (form->type != TYPE_CONS_PAIR)
 		break;
 	    }
+
+	  increment_refcount (retform);
 	}
 
       return retform;
@@ -7634,11 +7722,19 @@ evaluate_through_list (struct object *list, struct environment *env,
 
       cons = alloc_empty_cons_pair ();
       cons->value_ptr.cons_pair->car = obj;
+      add_reference (cons, obj, 0);
+      decrement_refcount (obj);
 
       if (!args)
 	args = last_cons = cons;
       else
-	last_cons = last_cons->value_ptr.cons_pair->cdr = cons;
+	{
+	  last_cons->value_ptr.cons_pair->cdr = cons;
+	  add_reference (last_cons, cons, 1);
+	  decrement_refcount (cons);
+
+	  last_cons = cons;
+	}
 
       list = CDR (list);
     }
@@ -8025,10 +8121,10 @@ builtin_rplaca (struct object *list, struct environment *env,
       return NULL;
     }
 
-  decrement_refcount_by (CAR (CAR (list)), CAR (list)->refcount, CAR (list));
+  add_reference (CAR (list), CAR (CDR (list)), 0);
+  delete_reference (CAR (list), CAR (CAR (list)), 0);
 
   CAR (list)->value_ptr.cons_pair->car = CAR (CDR (list));
-  increment_refcount_by (CAR (CAR (list)), CAR (list)->refcount, CAR (list));
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -8051,10 +8147,10 @@ builtin_rplacd (struct object *list, struct environment *env,
       return NULL;
     }
 
-  decrement_refcount_by (CDR (CAR (list)), CAR (list)->refcount, CAR (list));
+  add_reference (CAR (list), CAR (CDR (list)), 1);
+  delete_reference (CAR (list), CDR (CAR (list)), 1);
 
   CAR (list)->value_ptr.cons_pair->cdr = CAR (CDR (list));
-  increment_refcount_by (CDR (CAR (list)), CAR (list)->refcount, CAR (list));
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -8191,8 +8287,11 @@ builtin_append (struct object *list, struct environment *env,
       obj = nth (i, list);
 
       if (last)
-	last->value_ptr.cons_pair->cdr = copy_list_structure (obj, NULL, -1,
-							      &last);
+	{
+	  last->value_ptr.cons_pair->cdr = copy_list_structure (obj, NULL, -1,
+								&last);
+	  add_reference (last, CDR (last), 1);
+	}
       else
 	ret = copy_list_structure (obj, NULL, -1, &last);
     }
@@ -8200,7 +8299,10 @@ builtin_append (struct object *list, struct environment *env,
   obj = nth (length - 1, list);
 
   if (last)
-    last->value_ptr.cons_pair->cdr = obj;
+    {
+      last->value_ptr.cons_pair->cdr = obj;
+      add_reference (last, CDR (last), 1);
+    }
   else
     ret = obj;
 
@@ -8238,15 +8340,15 @@ builtin_nconc (struct object *list, struct environment *env,
   for (i = 0; i < l; i++)
     {
       if (lastcons)
-	lastcons->value_ptr.cons_pair->cdr = CAR (argcons);
+	{
+	  lastcons->value_ptr.cons_pair->cdr = CAR (argcons);
+	  add_reference (lastcons, CAR (argcons), 1);
+	}
 
       if (CAR (argcons)->type == TYPE_CONS_PAIR)
 	lastcons = last_cons_pair (CAR (argcons));
 
       argcons = CDR (argcons);
-
-      if (lastcons)
-	increment_refcount_by (CAR (argcons), lastcons->refcount, lastcons);
     }
 
   return CAR (list);
@@ -8941,12 +9043,13 @@ builtin_make_hash_table (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = malloc_and_check (sizeof (*ret));
+  ret = alloc_object ();
   ht = malloc_and_check (sizeof (*ht));
 
   ht->table = calloc_and_check (LISP_HASHTABLE_SIZE, sizeof (*ht->table));
+  ht->reference_strength_factor =
+    malloc_and_check (LISP_HASHTABLE_SIZE * sizeof (int));
 
-  ret->refcount = 1;
   ret->type = TYPE_HASHTABLE;
   ret->value_ptr.hashtable = ht;
 
@@ -9054,6 +9157,7 @@ builtin_remhash (struct object *list, struct environment *env,
 		 struct eval_outcome *outcome)
 {
   struct object *cell;
+  int ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
 
   if (list_length (list) != 2)
     {
@@ -9067,14 +9171,12 @@ builtin_remhash (struct object *list, struct environment *env,
       return NULL;
     }
 
-  cell = CAR (CDR (list))->value_ptr.hashtable->table
-    [hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE)];
+  cell = CAR (CDR (list))->value_ptr.hashtable->table [ind];
 
   if (cell)
     {
-      decrement_refcount_by (cell, CAR (CDR (list))->refcount, CAR (CDR (list)));
-      CAR (CDR (list))->value_ptr.hashtable->table
-	[hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE)] = NULL;
+      delete_reference (CAR (CDR (list)), cell, ind);
+      CAR (CDR (list))->value_ptr.hashtable->table [ind] = NULL;
 
       return &t_object;
     }
@@ -9192,22 +9294,24 @@ builtin_read_line (struct object *list, struct environment *env,
       if (eof)
 	{
 	  ret = s->string;
-	  decrement_refcount_by (ret, str->refcount-1, NULL);
+	  increment_refcount (ret);
+	  delete_reference (str, s->string, 0);
 
 	  s->string = alloc_string (0);
-	  increment_refcount_by (s->string, str->refcount-1, NULL);
+	  add_reference (str, s->string, 0);
 	}
       else
 	{
 	  ret = s->string;
+	  increment_refcount (ret);
+	  delete_reference (str, s->string, 0);
 
 	  s->string = create_string_from_char_vector
 	    (ret->value_ptr.string->value+i+1,
 	     ret->value_ptr.string->used_size-i-1, 1);
-	  increment_refcount_by (s->string, str->refcount-1, str);
-
 	  resize_string_allocation (ret, i);
-	  decrement_refcount_by (ret, str->refcount-1, NULL);
+
+	  add_reference (str, s->string, 0);
 	}
     }
 
@@ -9694,11 +9798,11 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
     }
 
   ret = CAR (list)->value_ptr.stream->string;
-  decrement_refcount_by (ret, CAR (list)->refcount-1, NULL);
+  increment_refcount (ret);
+  delete_reference (CAR (list), ret, 0);
 
   CAR (list)->value_ptr.stream->string = alloc_string (0);
-  increment_refcount_by (CAR (list)->value_ptr.stream->string,
-			 CAR (list)->refcount-1, NULL);
+  add_reference (CAR (list), CAR (list)->value_ptr.stream->string, 0);
 
   return ret;
 }
@@ -10227,6 +10331,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	}
 
       retcons->value_ptr.cons_pair->car = val;
+      set_reference_strength_factor (retcons, 0, val, 1, 0, 0);
 
       cdrlistcons = cdrlist;
 
@@ -10242,7 +10347,10 @@ builtin_mapcar (struct object *list, struct environment *env,
 	}
 
       if (!finished)
-	retcons = retcons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	{
+	  retcons = retcons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  set_reference_strength_factor (retcons, 1, CDR (retcons), 0, 0, 0);
+	}
     }
 
   retcons->value_ptr.cons_pair->cdr = &nil_object;
@@ -10305,7 +10413,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 		cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
 	      cons->value_ptr.cons_pair->car = CAR (seq);
-	      increment_refcount (CAR (seq));
+	      add_reference (cons, CAR (cons), 0);
 	    }
 
 	  decrement_refcount (res);
@@ -10348,8 +10456,8 @@ builtin_remove_if (struct object *list, struct environment *env,
 	      ret->value_ptr.string->used_size +=
 		strlen (CAR (arg)->value_ptr.character);
 	    }
-	  else
-	    decrement_refcount (CAR (arg));
+
+	  decrement_refcount (CAR (arg));
 
 	  decrement_refcount (res);
 
@@ -10373,7 +10481,10 @@ builtin_remove_if (struct object *list, struct environment *env,
 	    return NULL;
 
 	  if (SYMBOL (res) == &nil_object)
-	    ret->value_ptr.array->value [j++] = CAR (arg);
+	    {
+	      ret->value_ptr.array->value [j++] = CAR (arg);
+	      add_reference (ret, ret->value_ptr.array->value [j-1], j-1);
+	    }
 	  else
 	    decrement_refcount (CAR (arg));
 
@@ -10383,7 +10494,9 @@ builtin_remove_if (struct object *list, struct environment *env,
       resize_vector (ret, j);
     }
 
-  free_cons_pair (arg);
+  free (arg->value_ptr.cons_pair);
+  free (arg);
+
   return ret;
 }
 
@@ -10491,11 +10604,14 @@ accessor_car (struct object *list, struct object *newval,
       return NULL;
     }
 
-  increment_refcount_by (newval, obj->refcount - 1, obj);
-  decrement_refcount_by (obj->value_ptr.cons_pair->car, obj->refcount, obj);
+  add_reference (obj, newval, 0);
+  decrement_refcount (newval);
+
+  delete_reference (obj, CAR (obj), 0);
 
   obj->value_ptr.cons_pair->car = newval;
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -10531,11 +10647,14 @@ accessor_cdr (struct object *list, struct object *newval,
       return NULL;
     }
 
-  increment_refcount_by (newval, obj->refcount - 1, obj);
-  decrement_refcount_by (obj->value_ptr.cons_pair->cdr, obj->refcount, obj);
+  add_reference (obj, newval, 1);
+  decrement_refcount (newval);
+
+  delete_reference (obj, CDR (obj), 1);
 
   obj->value_ptr.cons_pair->cdr = newval;
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -10609,9 +10728,9 @@ accessor_aref (struct object *list, struct object *newval,
 
       ind = mpz_get_si (lin_ind->value_ptr.integer);
 
-      increment_refcount_by (newval, CAR (list)->refcount-1, CAR (list));
-      decrement_refcount_by (CAR (list)->value_ptr.array->value [ind],
-			     CAR (list)->refcount, CAR (list));
+      add_reference (CAR (list), newval, ind);
+      delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
+			ind);
 
       CAR (list)->value_ptr.array->value [ind] = newval;
 
@@ -10674,9 +10793,15 @@ accessor_elt (struct object *list, struct object *newval,
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
-      increment_refcount_by (newval, CAR (list)->refcount-1, CAR (list));
-      decrement_refcount_by (CAR (list)->value_ptr.array->value [ind],
-			     CAR (list)->refcount, CAR (list));
+      if (ind >= CAR (list)->value_ptr.array->alloc_size->size)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      add_reference (CAR (list), newval, ind);
+      delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
+			ind);
 
       CAR (list)->value_ptr.array->value [ind] = newval;
 
@@ -10692,8 +10817,8 @@ accessor_elt (struct object *list, struct object *newval,
 
       cons = nthcdr (ind, CAR (list));
 
-      increment_refcount_by (newval, cons->refcount-1, cons);
-      decrement_refcount_by (CAR (cons), cons->refcount, cons);
+      add_reference (cons, newval, 0);
+      delete_reference (cons, CAR (cons), 0);
 
       cons->value_ptr.cons_pair->car = newval;
 
@@ -10739,13 +10864,14 @@ accessor_gethash (struct object *list, struct object *newval,
 
   ind = hash_object_respecting_eq (key, LISP_HASHTABLE_SIZE);
 
-  increment_refcount_by (newval, table->refcount, table);
+  add_reference (table, newval, ind);
+  decrement_refcount (newval);
 
-  decrement_refcount_by (table->value_ptr.hashtable->table [ind],
-			 table->refcount, table);
+  delete_reference (table, table->value_ptr.hashtable->table [ind], ind);
 
   table->value_ptr.hashtable->table [ind] = newval;
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -10898,9 +11024,8 @@ highest_num_type (enum object_type t1, enum object_type t2)
 struct object *
 copy_number (const struct object *num)
 {
-  struct object *ret = malloc_and_check (sizeof (*ret));
+  struct object *ret = alloc_object ();
 
-  ret->refcount = 1;
   ret->type = num->type;
 
   if (num->type == TYPE_BIGNUM)
@@ -10934,8 +11059,7 @@ promote_number (struct object *num, enum object_type type)
       return num;
     }
 
-  ret = malloc_and_check (sizeof (*ret));
-  ret->refcount = 1;
+  ret = alloc_object ();
   ret->type = type;
 
   if (type == TYPE_RATIO)
@@ -11260,7 +11384,8 @@ builtin_multiply (struct object *list, struct environment *env,
       return CAR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_mul, mpq_mul, mpf_mul, env, outcome);
+  return apply_arithmetic_operation (list, mpz_mul, mpq_mul, mpf_mul, env,
+				     outcome);
 }
 
 
@@ -13398,11 +13523,11 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
     {
       if (!s->value_dyn_bins_num)
 	{
-	  if (s->value_cell)
-	    decrement_refcount_by (s->value_cell,
-				   sym->refcount, NULL);
+	  add_reference (sym, val, 0);
 
-	  increment_refcount_by (val, sym->refcount - 1, NULL);
+	  if (s->value_cell)
+	    delete_reference (sym, s->value_cell, 0);
+
 	  s->value_cell = val;
 	}
       else
@@ -13716,16 +13841,19 @@ evaluate_defun (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell)
     {
-      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount,
-			     sym);
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
     }
   else
-    increment_refcount (sym);
-
-  fun->value_ptr.function->name = sym;
+    {
+      increment_refcount (sym);
+    }
 
   sym->value_ptr.symbol->function_cell = fun;
-  increment_refcount_by (fun, sym->refcount - 1, sym);
+  add_strong_reference (sym, fun, 1);
+  decrement_refcount (fun);
+
+  fun->value_ptr.function->name = sym;
+  add_reference (fun, sym, 0);
 
   increment_refcount (sym);
   return sym;
@@ -13764,16 +13892,19 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell)
     {
-      decrement_refcount_by (sym->value_ptr.symbol->function_cell, sym->refcount,
-			     sym);
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
     }
   else
-    increment_refcount (sym);
-
-  mac->value_ptr.function->name = sym;
+    {
+      increment_refcount (sym);
+    }
 
   sym->value_ptr.symbol->function_cell = mac;
-  increment_refcount_by (mac, sym->refcount - 1, sym);
+  add_strong_reference (sym, mac, 1);
+  decrement_refcount (mac);
+
+  mac->value_ptr.function->name = sym;
+  add_reference (mac, sym, 0);
 
   increment_refcount (sym);
   return sym;
@@ -15752,204 +15883,292 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
 }
 
 
-void
-increment_refcount_by (struct object *obj, int count, struct object *parent)
-{
-  struct refcounted_object_list **antiloop_hash_t = NULL;
-
-  if (parent)
-    {
-      antiloop_hash_t =
-	alloc_empty_tailsharing_hash_table (ANTILOOP_HASH_T_SIZE);
-
-      prepend_object_to_refcounted_obj_list
-	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
-    }
-
-  offset_refcount_by (obj, count, antiloop_hash_t, 0);
-
-  if (antiloop_hash_t)
-    free_tailsharing_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
-}
-
-
 int
-decrement_refcount_by (struct object *obj, int count, struct object *parent)
+is_reference_weak (struct object *src, int ind, struct object *dest)
 {
-  struct refcounted_object_list **antiloop_hash_t = NULL;
-  int ret;
-
-  if (parent)
-    {
-      antiloop_hash_t =
-	alloc_empty_tailsharing_hash_table (ANTILOOP_HASH_T_SIZE);
-
-      prepend_object_to_refcounted_obj_list
-	(parent, &antiloop_hash_t [hash_object (parent, ANTILOOP_HASH_T_SIZE)]);
-    }
-
-  ret = offset_refcount_by (obj, -count, antiloop_hash_t, 0);
-
-  if (antiloop_hash_t)
-    free_tailsharing_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
-
-  return ret;
-}
-
-
-int
-offset_refcount_by (struct object *obj, int delta,
-		    struct refcounted_object_list **antiloop_hash_t,
-		    int clone_hash_t)
-{
-  int allocated_now = 0;
   struct parameter *par;
-  size_t i, sz, ind;
 
-  if (!obj || obj == &nil_object || obj == &t_object
-      || obj->type == TYPE_PACKAGE)
-    return 0;
-
-  if (HAS_LEAF_TYPE (obj))
-    obj->refcount += delta;
-  else
+  if (src->type == TYPE_ARRAY)
     {
-      if (!antiloop_hash_t)
+      return !src->value_ptr.array->reference_strength_factor [ind]
+	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
+  else if (src->type == TYPE_HASHTABLE)
+    {
+      return !src->value_ptr.hashtable->reference_strength_factor [ind]
+	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
+  else if (src->type == TYPE_FUNCTION || src->type == TYPE_MACRO)
+    {
+      if (ind <= 1)
 	{
-	  antiloop_hash_t =
-	    alloc_empty_tailsharing_hash_table (ANTILOOP_HASH_T_SIZE);
-
-	  allocated_now = 1;
+	  return !(src->flags & (0x1 << ind))
+	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
-
-      ind = hash_object (obj, ANTILOOP_HASH_T_SIZE);
-
-      if (!allocated_now
-	  && is_object_in_refcounted_obj_list (obj, antiloop_hash_t [ind]))
-	return 0;
-
-      obj->refcount += delta;
-
-      if (!allocated_now && clone_hash_t)
+      else
 	{
-	  antiloop_hash_t = clone_tailsharing_hash_table (antiloop_hash_t,
-							  ANTILOOP_HASH_T_SIZE);
-	  allocated_now = 1;
-	}
+	  ind -= 2;
+	  par = src->value_ptr.function->lambda_list;
 
-      prepend_object_to_refcounted_obj_list (obj, &antiloop_hash_t [ind]);
-
-      if (obj->type & TYPE_PREFIX)
-	offset_refcount_by (obj->value_ptr.next, delta, antiloop_hash_t, 0);
-      else if (obj->type == TYPE_SYMBOL_NAME)
-	offset_refcount_by (obj->value_ptr.symbol_name->sym, delta,
-			    antiloop_hash_t, 0);
-      else if (obj->type == TYPE_SYMBOL)
-	{
-	  if (obj->value_ptr.symbol->value_cell
-	      && obj->value_ptr.symbol->function_cell)
+	  while (ind > 3)
 	    {
-	      offset_refcount_by (obj->value_ptr.symbol->value_cell, delta,
-				  antiloop_hash_t, 1);
-	      offset_refcount_by (obj->value_ptr.symbol->function_cell, delta,
-				  antiloop_hash_t, 0);
-	    }
-	  else
-	    {
-	      offset_refcount_by (obj->value_ptr.symbol->value_cell, delta,
-				  antiloop_hash_t, 1);
-	      offset_refcount_by (obj->value_ptr.symbol->function_cell, delta,
-				  antiloop_hash_t, 0);
-	    }
-	}
-      else if (obj->type == TYPE_CONS_PAIR)
-	{
-	  offset_refcount_by (obj->value_ptr.cons_pair->cdr, delta,
-			      antiloop_hash_t, 1);
-	  offset_refcount_by (obj->value_ptr.cons_pair->car, delta,
-			      antiloop_hash_t, 0);
-	}
-      else if (obj->type == TYPE_COMPLEX)
-	{
-	  offset_refcount_by (obj->value_ptr.complex->real, delta,
-			      antiloop_hash_t, 1);
-	  offset_refcount_by (obj->value_ptr.complex->imag, delta,
-			      antiloop_hash_t, 0);
-	}
-      else if (obj->type == TYPE_ARRAY)
-	{
-	  sz = array_total_size (obj->value_ptr.array);
-
-	  for (i = 0; sz && i < sz-1; i++)
-	    {
-	      offset_refcount_by (obj->value_ptr.array->value [i], delta,
-				  antiloop_hash_t, 1);
-	    }
-
-	  if (sz)
-	    offset_refcount_by (obj->value_ptr.array->value [sz-1], delta,
-				antiloop_hash_t, 0);
-	}
-      else if (obj->type == TYPE_HASHTABLE)
-	{
-	  for (i = 0; i < LISP_HASHTABLE_SIZE - 1; i++)
-	    {
-	      offset_refcount_by (obj->value_ptr.hashtable->table [i], delta,
-				  antiloop_hash_t, 1);
-	    }
-
-	  offset_refcount_by (obj->value_ptr.hashtable->table
-			      [LISP_HASHTABLE_SIZE-1], delta, antiloop_hash_t,
-			      0);
-	}
-      else if (obj->type == TYPE_STREAM)
-	{
-	  if (obj->value_ptr.stream->medium == STRING_STREAM)
-	    {
-	      offset_refcount_by (obj->value_ptr.stream->string, delta,
-				  antiloop_hash_t, 0);
-	    }
-	}
-      else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
-	{
-	  offset_refcount_by (obj->value_ptr.function->body, delta,
-			      antiloop_hash_t, 1);
-
-	  par = obj->value_ptr.function->lambda_list;
-
-	  while (par)
-	    {
-	      offset_refcount_by (par->name, delta, antiloop_hash_t, 1);
-
-	      if (par->init_form)
-		{
-		  offset_refcount_by (par->init_form, delta, antiloop_hash_t, 1);
-		}
-
-	      if (par->supplied_p_param)
-		{
-		  offset_refcount_by (par->supplied_p_param, delta,
-				      antiloop_hash_t, 1);
-		}
-
+	      ind -= 4;
 	      par = par->next;
 	    }
 
-	  offset_refcount_by (obj->value_ptr.function->name, delta,
-			      antiloop_hash_t, 0);
+	  return !(par->reference_strength_factor & (0x1 << ind))
+	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
-
-      if (allocated_now)
-	free_tailsharing_hash_table (antiloop_hash_t, ANTILOOP_HASH_T_SIZE);
     }
-
-  if (!obj->refcount)
+  else
     {
-      free_object (obj);
-      return 1;
+      return !(src->flags & (0x1 << ind)) != !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
+}
+
+
+void
+set_reference_strength_factor (struct object *src, int ind, struct object *dest,
+			       int new_weakness, int increase_refcount,
+			       int decrease_other_refcount)
+{
+  struct parameter *par;
+
+  if (src->type == TYPE_ARRAY)
+    {
+      src->value_ptr.array->reference_strength_factor [ind] =
+	!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
+  else if (src->type == TYPE_HASHTABLE)
+    {
+      src->value_ptr.hashtable->reference_strength_factor [ind] =
+	!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
+  else if (src->type == TYPE_FUNCTION || src->type == TYPE_MACRO)
+    {
+      if (ind <= 1)
+	{
+	  src->flags = (src->flags & ~(1 << ind))
+	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
+	}
+      else
+	{
+	  par = src->value_ptr.function->lambda_list;
+
+	  while (ind > 2)
+	    {
+	      ind -= 4;
+	      par = par->next;
+	    }
+
+	  par->reference_strength_factor = (par->reference_strength_factor
+					    & ~(1 << ind))
+	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
+	}
+    }
+  else
+    {
+      src->flags = (src->flags & ~(1 << ind))
+	| ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
     }
 
-  return 0;
+  if (new_weakness)
+    {
+      INC_WEAK_REFCOUNT (dest);
+      decrease_other_refcount && DEC_STRONG_REFCOUNT (dest);
+    }
+  else
+    {
+      INC_STRONG_REFCOUNT (dest);
+      decrease_other_refcount && DEC_WEAK_REFCOUNT (dest);
+    }
+}
+
+
+void
+add_strong_reference (struct object *src, struct object *dest, int ind)
+{
+  if (!DONT_GC (dest))
+    {
+      set_reference_strength_factor (src, ind, dest, 0, 1, 0);
+    }
+}
+
+
+void
+add_reference (struct object *src, struct object *dest, int ind)
+{
+  if (!DONT_GC (dest))
+    {
+      set_reference_strength_factor (src, ind, dest, 1, 1, 0);
+    }
+}
+
+
+void
+delete_reference (struct object *src, struct object *dest, int ind)
+{
+  int depth = 1;
+
+  if (DONT_GC (dest))
+    return;
+
+  if (src && is_reference_weak (src, ind, dest))
+    {
+      DEC_WEAK_REFCOUNT (dest);
+    }
+  else
+    {
+      DEC_STRONG_REFCOUNT (dest);
+
+      if (!STRONG_REFCOUNT (dest) && !WEAK_REFCOUNT (dest))
+	{
+	  free_object (dest);
+	}
+      else if (!STRONG_REFCOUNT (dest) && WEAK_REFCOUNT (dest))
+	{
+	  weakify_loops (dest, &depth);
+
+	  if (!STRONG_REFCOUNT (dest))
+	    {
+	      free_object (dest);
+	    }
+	}
+    }
+}
+
+
+void
+weakify_loops (struct object *root, int *depth)
+{
+  (*depth)++;
+  FLIP_STRENGTH_FACTOR_OF_OBJECT (root);
+  root->mark = 1;
+
+  restore_invariants_at_node (root, root, depth);
+
+  root->mark = 0;
+  (*depth)--;
+}
+
+
+void
+restore_invariants_at_edge (struct object *src, struct object *dest, int ind,
+			    struct object *root, int *depth)
+{
+  if (!dest)
+    return;
+
+  if (!is_reference_weak (src, ind, dest))
+    {
+      if (dest == root)
+	{
+	  set_reference_strength_factor (src, ind, dest, 1, 1, 1);
+	}
+      else if (!dest->mark)
+	{
+	  if (STRONG_REFCOUNT (dest) >= 2)
+	    {
+	      set_reference_strength_factor (src, ind, dest, 1, 1, 1);
+	    }
+	  else if (WEAK_REFCOUNT (dest))
+	    {
+	      weakify_loops (dest, depth);
+
+	      if (!STRONG_REFCOUNT (dest))
+		{
+		  set_reference_strength_factor (src, ind, dest, 0, 1, 1);
+		  dest->mark = 1;
+		  restore_invariants_at_node (dest, root, depth);
+		  dest->mark = 0;
+		}
+	    }
+	  else
+	    {
+	      restore_invariants_at_node (dest, root, depth);
+	    }
+	}
+      else if (dest->mark != *depth)
+	{
+	  dest->mark = *depth;
+	  restore_invariants_at_node (dest, root, depth);
+	  dest->mark = 1;
+	}
+    }
+}
+
+
+#define rest_inv_at_edge(next, ind)			\
+  restore_invariants_at_edge (node, next, ind, root, depth)
+
+
+void
+restore_invariants_at_node (struct object *node, struct object *root, int *depth)
+{
+  size_t sz, i;
+  struct parameter *par;
+
+  if (node->type & TYPE_PREFIX)
+    rest_inv_at_edge (node->value_ptr.next, 0);
+  else if (node->type == TYPE_SYMBOL_NAME)
+    rest_inv_at_edge (node->value_ptr.symbol_name->sym, 0);
+  else if (node->type == TYPE_SYMBOL)
+    {
+      rest_inv_at_edge (node->value_ptr.symbol->value_cell, 0);
+      rest_inv_at_edge (node->value_ptr.symbol->function_cell, 1);
+    }
+  else if (node->type == TYPE_CONS_PAIR)
+    {
+      rest_inv_at_edge (node->value_ptr.cons_pair->car, 0);
+      rest_inv_at_edge (node->value_ptr.cons_pair->cdr, 1);
+    }
+  else if (node->type == TYPE_COMPLEX)
+    {
+      rest_inv_at_edge (node->value_ptr.complex->real, 0);
+      rest_inv_at_edge (node->value_ptr.complex->imag, 1);
+    }
+  else if (node->type == TYPE_ARRAY)
+    {
+      sz = array_total_size (node->value_ptr.array);
+
+      for (i = 0; sz && i < sz; i++)
+	{
+	  rest_inv_at_edge (node->value_ptr.array->value [i], i);
+	}
+    }
+  else if (node->type == TYPE_HASHTABLE)
+    {
+      for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
+	{
+	  rest_inv_at_edge (node->value_ptr.hashtable->table [i], i);
+	}
+    }
+  else if (node->type == TYPE_STREAM)
+    {
+      if (node->value_ptr.stream->medium == STRING_STREAM)
+	{
+	  rest_inv_at_edge (node->value_ptr.stream->string, 0);
+	}
+    }
+  else if (node->type == TYPE_FUNCTION || node->type == TYPE_MACRO)
+    {
+      rest_inv_at_edge (node->value_ptr.function->name, 0);
+
+      rest_inv_at_edge (node->value_ptr.function->body, 1);
+
+      par = node->value_ptr.function->lambda_list;
+      i = 2;
+
+      while (par)
+	{
+	  rest_inv_at_edge (par->name, i++);
+	  rest_inv_at_edge (par->init_form, i++);
+	  rest_inv_at_edge (par->supplied_p_param, i++);
+	  rest_inv_at_edge (par->key, i++);
+
+	  par = par->next;
+	}
+    }
 }
 
 
@@ -15968,7 +16187,10 @@ free_object (struct object *obj)
 	   && !obj->value_ptr.symbol->is_special)
     free_symbol (obj);
   else if (obj->type & TYPE_PREFIX)
-    free (obj);
+    {
+      delete_reference (obj, obj->value_ptr.next, 0);
+      free (obj);
+    }
   else if (obj->type == TYPE_CONS_PAIR)
     free_cons_pair (obj);
   else if (obj->type == TYPE_FILENAME)
@@ -15999,6 +16221,9 @@ free_object (struct object *obj)
     free_float (obj);
   else if (obj->type == TYPE_COMPLEX)
     {
+      delete_reference (obj, obj->value_ptr.complex->real, 0);
+      delete_reference (obj, obj->value_ptr.complex->imag, 1);
+
       free (obj->value_ptr.complex);
       free (obj);
     }
@@ -16011,6 +16236,9 @@ free_object (struct object *obj)
       if (obj->value_ptr.stream->is_open
 	  && obj->value_ptr.stream->medium == FILE_STREAM)
 	fclose (obj->value_ptr.stream->file);
+
+      if (obj->value_ptr.stream->medium == STRING_STREAM)
+	delete_reference (obj, obj->value_ptr.stream->string, 0);
 
       free (obj->value_ptr.stream);
       free (obj);
@@ -16032,6 +16260,8 @@ free_symbol_name (struct object *obj)
 {
   struct symbol_name *s = obj->value_ptr.symbol_name;
 
+  delete_reference (obj, s->sym, 0);
+
   free (s->value);
 
   if (s->packname_present)
@@ -16048,6 +16278,9 @@ free_symbol (struct object *obj)
   struct object *p = obj->value_ptr.symbol->home_package;
   struct symbol *s = obj->value_ptr.symbol;
 
+  delete_reference (obj, s->value_cell, 0);
+  delete_reference (obj, s->function_cell, 1);
+
   if (p)
     unintern_symbol (obj);
 
@@ -16060,6 +16293,9 @@ free_symbol (struct object *obj)
 void
 free_cons_pair (struct object *obj)
 {
+  delete_reference (obj, CAR (obj), 0);
+  delete_reference (obj, CDR (obj), 1);
+
   free (obj->value_ptr.cons_pair);
   free (obj);
 }
@@ -16082,7 +16318,16 @@ free_array_size (struct array_size *size)
 void
 free_array (struct object *obj)
 {
+  size_t i, sz = array_total_size (obj->value_ptr.array);
+
+  for (i = 0; i < sz; i++)
+    {
+      delete_reference (obj, obj->value_ptr.array->value [i], i);
+    }
+
   free_array_size (obj->value_ptr.array->alloc_size);
+  free (obj->value_ptr.array->value);
+  free (obj->value_ptr.array->reference_strength_factor);
   free (obj->value_ptr.array);
   free (obj);
 }
@@ -16091,7 +16336,15 @@ free_array (struct object *obj)
 void
 free_hashtable (struct object *obj)
 {
+  size_t i;
+
+  for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
+    {
+      delete_reference (obj, obj->value_ptr.hashtable->table [i], i);
+    }
+
   free (obj->value_ptr.hashtable->table);
+  free (obj->value_ptr.hashtable->reference_strength_factor);
   free (obj->value_ptr.hashtable);
   free (obj);
 }
@@ -16136,9 +16389,18 @@ void
 free_function_or_macro (struct object *obj)
 {
   struct parameter *n, *l = obj->value_ptr.function->lambda_list;
+  int i = 2;
+
+  delete_reference (obj, obj->value_ptr.function->name, 0);
+  delete_reference (obj, obj->value_ptr.function->body, 1);
 
   while (l)
     {
+      delete_reference (obj, l->name, i++);
+      delete_reference (obj, l->init_form, i++);
+      delete_reference (obj, l->supplied_p_param, i++);
+      delete_reference (obj, l->key, i++);
+
       n = l->next;
       free (l);
       l = n;
@@ -16163,7 +16425,8 @@ free_list_structure (struct object *list)
   if (list->type == TYPE_CONS_PAIR)
     {
       free_list_structure (CDR (list));
-      free_cons_pair (list);
+      free (list->value_ptr.cons_pair);
+      free (list);
     }
 }
 
