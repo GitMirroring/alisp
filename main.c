@@ -1738,14 +1738,12 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, NULL,
-  NULL, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
 
 struct object nil_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, NULL, NULL,
-  NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
 
 struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
