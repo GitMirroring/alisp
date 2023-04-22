@@ -47,6 +47,9 @@
 #endif
 
 
+typedef int fixnum;
+
+
 #define CAR(list) (SYMBOL (list) == &nil_object ? &nil_object :	\
 		   (list)->value_ptr.cons_pair->car)
 
@@ -350,10 +353,10 @@ struct
 string
 {
   char *value;
-  long alloc_size;
-  long used_size;
+  fixnum alloc_size;
+  fixnum used_size;
 
-  long fill_pointer;
+  fixnum fill_pointer;
 };
 
 
@@ -554,7 +557,7 @@ cons_pair
 struct
 array_size
 {
-  long size;
+  fixnum size;
 
   struct array_size *next;
 };
@@ -565,7 +568,7 @@ array
 {
   struct array_size *alloc_size;
 
-  long fill_pointer;
+  fixnum fill_pointer;
 
   struct object **value;
 
@@ -757,7 +760,7 @@ object_ptr_union
   struct symbol_name *symbol_name;
   struct object *next;
   mpz_t integer;
-  long *fixnum;
+  fixnum *fixnum;
   mpq_t ratio;
   mpf_t floating;
   struct complex *complex;
@@ -1016,11 +1019,11 @@ const char *find_end_of_string
 (const char *input, size_t size, size_t *new_size, size_t *string_length);
 void normalize_string (char *output, const char *input, size_t size);
 
-struct object *alloc_string (size_t size);
-struct object *create_string_from_char_vector (char *str, size_t size,
+struct object *alloc_string (fixnum size);
+struct object *create_string_from_char_vector (char *str, fixnum size,
 					       int copy_vector);
 struct object *create_string_from_c_string (char *str);
-void resize_string_allocation (struct object *string, size_t size);
+void resize_string_allocation (struct object *string, fixnum size);
 char *copy_string_to_c_string (struct string *str);
 
 struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
@@ -1040,10 +1043,10 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
 
-struct object *alloc_vector (size_t size, int fill_with_nil,
+struct object *alloc_vector (fixnum size, int fill_with_nil,
 			     int dont_store_size);
 struct object *create_vector_from_list (struct object *list);
-void resize_vector (struct object *vector, size_t size);
+void resize_vector (struct object *vector, fixnum size);
 
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
@@ -1132,7 +1135,7 @@ struct object *append_prefix (struct object *obj, enum element type);
 struct object *nth (unsigned int ind, struct object *list);
 struct object *nthcdr (unsigned int ind, struct object *list);
 
-unsigned int list_length (const struct object *list);
+fixnum list_length (const struct object *list);
 struct object *last_cons_pair (struct object *list);
 int is_dotted_list (const struct object *list);
 int is_circular_list (struct object *list);
@@ -1145,8 +1148,8 @@ struct object *copy_list_structure (struct object *list,
 				    const struct object *prefix, int num_conses,
 				    struct object **last_cell);
 
-int array_rank (const struct array *array);
-size_t array_total_size (const struct array *array);
+fixnum array_rank (const struct array *array);
+fixnum array_total_size (const struct array *array);
 
 int hash_object_respecting_eq (const struct object *object, size_t table_size);
 int hash_table_count (const struct hashtable *hasht);
@@ -4799,7 +4802,7 @@ normalize_string (char *output, const char *input, size_t size)
 
 
 struct object *
-alloc_string (size_t size)
+alloc_string (fixnum size)
 {
   struct object *obj = alloc_object ();
 
@@ -4817,9 +4820,9 @@ alloc_string (size_t size)
 
 
 struct object *
-create_string_from_char_vector (char *str, size_t size, int copy_vector)
+create_string_from_char_vector (char *str, fixnum size, int copy_vector)
 {
-  size_t i;
+  fixnum i;
   struct object *ret;
 
   if (copy_vector)
@@ -4853,7 +4856,7 @@ create_string_from_c_string (char *str)
 
 
 void
-resize_string_allocation (struct object *string, size_t size)
+resize_string_allocation (struct object *string, fixnum size)
 {
   if (size == string->value_ptr.string->alloc_size)
     return;
@@ -5157,12 +5160,12 @@ create_filename (struct object *string)
 
 
 struct object *
-alloc_vector (size_t size, int fill_with_nil, int dont_store_size)
+alloc_vector (fixnum size, int fill_with_nil, int dont_store_size)
 {
   struct object *obj = alloc_object ();
   struct array *vec = malloc_and_check (sizeof (*vec));
   struct array_size *sz;
-  size_t i;
+  fixnum i;
 
   if (!dont_store_size)
     {
@@ -5198,7 +5201,7 @@ create_vector_from_list (struct object *list)
   struct object *obj = alloc_object ();
   struct array *vec = malloc_and_check (sizeof (*vec));
   struct array_size *sz = malloc_and_check (sizeof (*sz));
-  size_t i;
+  fixnum i;
 
   sz->size = list_length (list);
   sz->next = NULL;
@@ -5219,7 +5222,7 @@ create_vector_from_list (struct object *list)
 
 
 void
-resize_vector (struct object *vector, size_t size)
+resize_vector (struct object *vector, fixnum size)
 {
   vector->value_ptr.array->value =
     realloc_and_check (vector->value_ptr.array->value,
@@ -6162,10 +6165,10 @@ nthcdr (unsigned int ind, struct object *list)
 }
 
 
-unsigned int
+fixnum
 list_length (const struct object *list)
 {
-  unsigned int l = 0;
+  fixnum l = 0;
   
   while (list && list->type == TYPE_CONS_PAIR)
     {
@@ -6384,11 +6387,11 @@ copy_list_structure (struct object *list, const struct object *prefix,
 }
 
 
-int
+fixnum
 array_rank (const struct array *array)
 {
   struct array_size *as = array->alloc_size;
-  int rank = 0;
+  fixnum rank = 0;
 
   while (as)
     {
@@ -6401,10 +6404,10 @@ array_rank (const struct array *array)
 }
 
 
-size_t
+fixnum
 array_total_size (const struct array *array)
 {
-  size_t ret = 1;
+  fixnum ret = 1;
   struct array_size *s = array->alloc_size;
 
   while (s)
@@ -8489,7 +8492,7 @@ struct object *
 builtin_elt (struct object *list, struct environment *env,
 	     struct eval_outcome *outcome)
 {
-  size_t ind;
+  fixnum ind;
   struct object *ret;
 
   if (list_length (list) != 2)
@@ -8510,7 +8513,7 @@ builtin_elt (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ind = mpz_get_ui (CAR (CDR (list))->value_ptr.integer);
+  ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
 
   if (CAR (list)->type == TYPE_STRING)
     {
@@ -10384,7 +10387,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 		   struct eval_outcome *outcome)
 {
   struct object *fun, *seq, *ret, *cons, *arg, *res;
-  size_t sz, off, i, j;
+  fixnum sz, off, i, j;
   char *s, *out;
 
   if (list_length (list) != 2)
@@ -15005,7 +15008,7 @@ symbol_is_among (const struct object *sym, struct environment *env, ...)
 int
 equal_strings (const struct string *s1, const struct string *s2)
 {
-  size_t i;
+  fixnum i;
   
   if (s1->used_size != s2->used_size)
     return 0;
@@ -15286,7 +15289,7 @@ int
 print_string (const struct string *st, struct environment *env,
 	      struct stream *str)
 {
-  size_t i;
+  fixnum i;
   int pesc = is_printer_escaping_enabled (env);
 
   if (pesc && write_to_stream (str, "\"", 1) < 0)
@@ -15404,8 +15407,7 @@ int
 print_array (const struct array *array, struct environment *env,
 	     struct stream *str)
 {
-  int rk = array_rank (array);
-  size_t i;
+  fixnum rk = array_rank (array), i;
 
   if (rk == 1)
     {
