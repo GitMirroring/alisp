@@ -1017,9 +1017,9 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (size_t size);
-struct object *create_string_from_char_vector (const char *str, size_t size,
-					       int do_copy);
-struct object *create_string_from_c_string (const char *str);
+struct object *create_string_from_char_vector (char *str, size_t size,
+					       int copy_vector);
+struct object *create_string_from_c_string (char *str);
 void resize_string_allocation (struct object *string, size_t size);
 char *copy_string_to_c_string (struct string *str);
 
@@ -4817,13 +4817,27 @@ alloc_string (size_t size)
 
 
 struct object *
-create_string_from_char_vector (const char *str, size_t size, int do_copy)
+create_string_from_char_vector (char *str, size_t size, int copy_vector)
 {
   size_t i;
-  struct object *ret = alloc_string (size);
+  struct object *ret;
 
-  for (i = 0; i < size; i++)
-    ret->value_ptr.string->value [i] = str [i];
+  if (copy_vector)
+    {
+      ret = alloc_string (size);
+
+      for (i = 0; i < size; i++)
+	ret->value_ptr.string->value [i] = str [i];
+    }
+  else
+    {
+      ret = alloc_object ();
+      ret->type = TYPE_STRING;
+      ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
+
+      ret->value_ptr.string->value = str;
+      ret->value_ptr.string->alloc_size = size;
+    }
 
   ret->value_ptr.string->used_size = size;
 
@@ -4832,7 +4846,7 @@ create_string_from_char_vector (const char *str, size_t size, int do_copy)
 
 
 struct object *
-create_string_from_c_string (const char *str)
+create_string_from_c_string (char *str)
 {
   return create_string_from_char_vector (str, strlen (str), 1);
 }
