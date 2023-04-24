@@ -15993,12 +15993,12 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 
   if (new_weakness)
     {
-      INC_WEAK_REFCOUNT (dest);
+      increase_refcount && INC_WEAK_REFCOUNT (dest);
       decrease_other_refcount && DEC_STRONG_REFCOUNT (dest);
     }
   else
     {
-      INC_STRONG_REFCOUNT (dest);
+      increase_refcount && INC_STRONG_REFCOUNT (dest);
       decrease_other_refcount && DEC_WEAK_REFCOUNT (dest);
     }
 }
