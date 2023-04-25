@@ -290,10 +290,12 @@ eval_outcome_type
     INCORRECT_SYNTAX_IN_FLET,
     INCORRECT_SYNTAX_IN_DEFUN,
     INCORRECT_SYNTAX_IN_DEFMACRO,
+    INCORRECT_SYNTAX_IN_DEFTYPE,
     INVALID_LAMBDA_LIST,
     CANT_REDEFINE_SPECIAL_OPERATOR,
     CANT_REDEFINE_CONSTANT,
     CANT_REBIND_CONSTANT,
+    CANT_REDEFINE_STANDARD_TYPE,
     TOO_FEW_ARGUMENTS,
     TOO_MANY_ARGUMENTS,
     WRONG_NUMBER_OF_ARGUMENTS,
@@ -445,6 +447,8 @@ symbol
   int is_standard_type;
   int (*builtin_type) (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct eval_outcome *outcome);
+  struct binding *type_lex_vars, *type_lex_funcs;
+  struct parameter *type_lambda_list;
   struct object *typespec;
   struct object_list *parent_types;
 
@@ -1645,6 +1649,8 @@ struct object *evaluate_prog1
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
 struct object *evaluate_prog2
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
+struct object *evaluate_deftype
+(struct object *list, struct environment *env, struct eval_outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct eval_outcome *outcome);
@@ -1746,12 +1752,14 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, NULL,
+  NULL, NULL, 1};
 
 struct object nil_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, NULL, NULL,
+  NULL, 1};
 
 struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
@@ -2215,6 +2223,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROG1", env, evaluate_prog1, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROG2", env, evaluate_prog2, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFTYPE", env, evaluate_deftype, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -14247,6 +14256,48 @@ evaluate_prog2 (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_deftype (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  struct object *typename;
+
+  if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
+      || !IS_LIST (CAR (CDR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_DEFTYPE;
+      return NULL;
+    }
+
+  typename = SYMBOL (CAR (list));
+
+  if (typename->value_ptr.symbol->is_type
+      && typename->value_ptr.symbol->is_standard_type)
+    {
+      outcome->type = CANT_REDEFINE_STANDARD_TYPE;
+      return NULL;
+    }
+
+  outcome->type = EVAL_OK;
+  typename->value_ptr.symbol->type_lambda_list =
+    parse_lambda_list (CAR (CDR (list)), env, outcome);
+
+  if (outcome->type == INVALID_LAMBDA_LIST)
+    return NULL;
+
+  clone_lexical_environment (&typename->value_ptr.symbol->type_lex_vars,
+			     &typename->value_ptr.symbol->type_lex_funcs,
+			     env->vars, env->lex_env_vars_boundary,
+			     env->funcs, env->lex_env_funcs_boundary);
+
+  increment_refcount (CDR (CDR (list)));
+  typename->value_ptr.symbol->typespec = CDR (CDR (list));
+
+  increment_refcount (typename);
+  return typename;
+}
+
+
+struct object *
 evaluate_tagbody (struct object *list, struct environment *env,
 		  struct eval_outcome *outcome)
 {
@@ -15789,6 +15840,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: incorrect syntax in DEFMACRO\n");
     }
+  else if (err->type == INCORRECT_SYNTAX_IN_DEFTYPE)
+    {
+      printf ("eval error: incorrect syntax in DEFTYPE\n");
+    }
   else if (err->type == INVALID_LAMBDA_LIST)
     {
       printf ("eval error: lambda list is invalid\n");
@@ -15804,6 +15859,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == CANT_REBIND_CONSTANT)
     {
       printf ("eval error: rebinding constants is not allowed\n");
+    }
+  else if (err->type == CANT_REDEFINE_STANDARD_TYPE)
+    {
+      printf ("eval error: redefining standard types is not allowed\n");
     }
   else if (err->type == TOO_FEW_ARGUMENTS)
     {
