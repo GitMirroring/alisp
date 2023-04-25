@@ -355,6 +355,7 @@ make_test ("(typep #p\"\" 'pathname)", "T");
 make_test ("(typep (open #p\"README\") 'stream)", "T");
 make_test ("(typep (open #p\"README\") 'file-stream)", "T");
 make_test ("(typep (make-string-input-stream \"hello\") 'string-stream)", "T");
+make_test ("(deftype not-integer () `(not integer))", "NOT-INTEGER");
 make_test ("(make-string 3)", "\"\0\0\0\"");
 make_test ("(make-symbol \"aaa\")", "#:|aaa|");
 make_test ("(boundp 'b)", "T");
