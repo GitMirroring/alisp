@@ -5539,7 +5539,6 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
 	      && cur->visibility == INTERNAL_VISIBILITY)
 	    return NULL;
 
-	  increment_refcount (cur->sym);
 	  return cur->sym;
 	}
 
@@ -5558,7 +5557,6 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
 	      && eqmem (cur->sym->value_ptr.symbol->name,
 			cur->sym->value_ptr.symbol->name_len, name, len))
 	    {
-	      increment_refcount (cur->sym);
 	      return cur->sym;
 	    }
 
@@ -5602,6 +5600,7 @@ intern_symbol_name (struct object *symname, struct environment *env)
 
 	  s->sym->value_ptr.symbol->is_const = 1;
 	  s->sym->value_ptr.symbol->value_cell = s->sym;
+	  add_reference (symname, s->sym, 0);
 
 	  return s->sym;
 	}
@@ -5615,6 +5614,8 @@ intern_symbol_name (struct object *symname, struct environment *env)
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
 						   s->visibility, 0, pack);
+	  add_reference (symname, s->sym, 0);
+
 	  return s->sym;
 	}
     }
@@ -5622,6 +5623,7 @@ intern_symbol_name (struct object *symname, struct environment *env)
   pack = inspect_variable (env->package_sym, env);
   s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1,
 					   INTERNAL_VISIBILITY, 0, pack);
+  add_reference (symname, s->sym, 0);
 
   return s->sym;
 }
@@ -5909,8 +5911,6 @@ add_builtin_type (char *name, struct environment *env,
   sym->value_ptr.symbol->is_standard_type = is_standard;
   sym->value_ptr.symbol->builtin_type = builtin_type;
 
-  increment_refcount (sym);
-
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_from_char_vector (s, strlen (s), 1,
@@ -5954,7 +5954,7 @@ add_builtin_form (char *name, struct environment *env,
 
 
 struct object *
-define_constant (struct object *sym, struct object *form, 
+define_constant (struct object *sym, struct object *form,
 		 struct environment *env, struct eval_outcome *outcome)
 {
   struct object *val;
@@ -5973,16 +5973,12 @@ define_constant (struct object *sym, struct object *form,
       return NULL;
     }
 
+  sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = val;
-
-  if (!sym->value_ptr.symbol->is_const && !sym->value_ptr.symbol->is_parameter)
-    {
-      increment_refcount (sym);
-      sym->value_ptr.symbol->is_const = 1;
-    }
+  add_reference (sym, val, 0);
+  decrement_refcount (val);
 
   increment_refcount (sym);
-
   return sym;
 }
 
@@ -6000,14 +5996,10 @@ define_parameter (struct object *sym, struct object *form,
 
   s = SYMBOL (sym);
 
-  if (!s->value_ptr.symbol->is_parameter)
-    {
-      increment_refcount (s);
-      s->value_ptr.symbol->is_parameter = 1;
-    }
-
+  s->value_ptr.symbol->is_parameter = 1;
   s->value_ptr.symbol->value_cell = val;
   add_reference (s, val, 0);
+  decrement_refcount (val);
 
   increment_refcount (s);
   return s;
@@ -9122,6 +9114,8 @@ struct object *
 builtin_hash_table_test (struct object *list, struct environment *env,
 			 struct eval_outcome *outcome)
 {
+  struct object *ret;
+
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -9134,8 +9128,11 @@ builtin_hash_table_test (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return intern_symbol_from_char_vector ("EQ", strlen ("EQ"), 1,
-					 EXTERNAL_VISIBILITY, 1, env->cl_package);
+  ret = intern_symbol_from_char_vector ("EQ", strlen ("EQ"), 1,
+					EXTERNAL_VISIBILITY, 1, env->cl_package);
+  increment_refcount (ret);
+
+  return ret;
 }
 
 
@@ -16201,9 +16198,7 @@ free_object (struct object *obj)
     free_string (obj);
   else if (obj->type == TYPE_SYMBOL_NAME)
     free_symbol_name (obj);
-  else if (obj->type == TYPE_SYMBOL && !obj->value_ptr.symbol->is_const
-	   && !obj->value_ptr.symbol->is_parameter
-	   && !obj->value_ptr.symbol->is_special)
+  else if (obj->type == TYPE_SYMBOL)
     free_symbol (obj);
   else if (obj->type & TYPE_PREFIX)
     {
