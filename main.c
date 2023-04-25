@@ -796,8 +796,8 @@ object
 };  
 
 
-#define DONT_GC(obj) (!(obj) || (obj) == &nil_object || (obj) == &t_object \
-		      || (obj)->type == TYPE_PACKAGE)
+#define DONT_REFCOUNT(obj) (!(obj) || (obj) == &nil_object	\
+			    || (obj) == &t_object || (obj)->type == TYPE_PACKAGE)
 
 #define STRENGTH_FACTOR_OF_OBJECT(x) ((x)->flags & 0x100)
 #define FLIP_STRENGTH_FACTOR_OF_OBJECT(x) ((x)->flags ^= 0x100)
@@ -16007,7 +16007,7 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 void
 add_strong_reference (struct object *src, struct object *dest, int ind)
 {
-  if (!DONT_GC (dest))
+  if (!DONT_REFCOUNT (dest))
     {
       set_reference_strength_factor (src, ind, dest, 0, 1, 0);
     }
@@ -16017,7 +16017,7 @@ add_strong_reference (struct object *src, struct object *dest, int ind)
 void
 add_reference (struct object *src, struct object *dest, int ind)
 {
-  if (!DONT_GC (dest))
+  if (!DONT_REFCOUNT (dest))
     {
       set_reference_strength_factor (src, ind, dest, 1, 1, 0);
     }
@@ -16029,7 +16029,7 @@ delete_reference (struct object *src, struct object *dest, int ind)
 {
   int depth = 1;
 
-  if (DONT_GC (dest))
+  if (DONT_REFCOUNT (dest))
     return;
 
   if (src && is_reference_weak (src, ind, dest))
@@ -16075,7 +16075,7 @@ void
 restore_invariants_at_edge (struct object *src, struct object *dest, int ind,
 			    struct object *root, int *depth)
 {
-  if (!dest)
+  if (DONT_REFCOUNT (dest))
     return;
 
   if (!is_reference_weak (src, ind, dest))
