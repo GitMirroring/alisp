@@ -681,6 +681,12 @@ make_test ("(in-package \"CL\")", "#<PACKAGE \"COMMON-LISP\">");
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP\">");
 make_test ("(in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
+make_test ("(make-package \"newtest\")", "#<PACKAGE \"newtest\">");
+make_test ("(in-package \"newtest\")", "#<PACKAGE \"newtest\">");
+make_test ("(cl:import 'cl:car)", "T");
+make_test ("(cl:import 'cl:car)", "T");
+make_test ("(car ())", "NIL");
+make_test ("(cl:in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
 
 
 # arithmetic tests
