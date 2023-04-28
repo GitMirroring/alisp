@@ -319,7 +319,9 @@ eval_outcome_type
     INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT,
     PACKAGE_NOT_FOUND_IN_EVAL,
     PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE,
-    IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT
+    SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE,
+    IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT,
+    EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT
   };
 
 
@@ -977,9 +979,12 @@ struct package_record **alloc_empty_symtable (size_t table_size);
 struct object *create_package (char *name, int name_len);
 struct object *create_package_from_c_strings (char *name, ...);
 void free_name_list (struct name_list *list);
-struct package_record *inspect_accessible_symbol (char *name, size_t len,
+struct package_record *inspect_accessible_symbol (struct object *sym,
 						  struct object *pack,
 						  int *is_present);
+struct package_record *inspect_accessible_symbol_by_name (char *name, size_t len,
+							  struct object *pack,
+							  int *is_present);
 struct object *inspect_package_by_designator (struct object *des,
 					      struct environment *env);
 struct object *find_package (const char *name, size_t len,
@@ -987,7 +992,8 @@ struct object *find_package (const char *name, size_t len,
 struct package_record *find_package_entry (struct object *symbol,
 					   struct package_record **symtable,
 					   struct package_record **prev);
-int import_symbol (struct object *sym, struct object *pack);
+int import_symbol (struct object *sym, struct object *pack,
+		   struct package_record **rec);
 int use_package (struct object *used, struct object *pack,
 		 struct object **conflicting);
 
@@ -1569,6 +1575,8 @@ struct object *builtin_make_package (struct object *list,
 struct object *builtin_in_package (struct object *list, struct environment *env,
 				   struct eval_outcome *outcome);
 struct object *builtin_import (struct object *list, struct environment *env,
+			       struct eval_outcome *outcome);
+struct object *builtin_export (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
@@ -2285,6 +2293,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("IN-PACKAGE", env, builtin_in_package, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("IMPORT", env, builtin_import, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EXPORT", env, builtin_export, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -4316,8 +4325,52 @@ free_name_list (struct name_list *list)
 
 
 struct package_record *
-inspect_accessible_symbol (char *name, size_t len, struct object *pack,
+inspect_accessible_symbol (struct object *sym, struct object *pack,
 			   int *is_present)
+{
+  int ind = hash_char_vector (sym->value_ptr.symbol->name,
+			      sym->value_ptr.symbol->name_len, SYMTABLE_SIZE);
+  struct package_record *cur = pack->value_ptr.package->symtable [ind];
+  struct object_list *uses;
+
+  while (cur)
+    {
+      if (sym == cur->sym)
+	{
+	  *is_present = 1;
+	  return cur;
+	}
+
+      cur = cur->next;
+    }
+
+  uses = pack->value_ptr.package->uses;
+
+  while (uses)
+    {
+      cur = uses->obj->value_ptr.package->symtable [ind];
+
+      while (cur)
+	{
+	  if (cur->visibility == EXTERNAL_VISIBILITY && sym == cur->sym)
+	    {
+	      *is_present = 0;
+	      return cur;
+	    }
+
+	  cur = cur->next;
+	}
+
+      uses = uses->next;
+    }
+
+  return NULL;
+}
+
+
+struct package_record *
+inspect_accessible_symbol_by_name (char *name, size_t len, struct object *pack,
+				   int *is_present)
 {
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
   struct package_record *cur = pack->value_ptr.package->symtable [ind];
@@ -4440,20 +4493,24 @@ find_package_entry (struct object *symbol, struct package_record **symtable,
 
 
 int
-import_symbol (struct object *sym, struct object *pack)
+import_symbol (struct object *sym, struct object *pack,
+	       struct package_record **rec)
 {
   int pres, ind;
-  struct package_record *rec, *new_cell;
+  struct package_record *r, *new_cell;
 
-  if ((rec = inspect_accessible_symbol (sym->value_ptr.symbol->name,
-					sym->value_ptr.symbol->name_len, pack,
-					&pres))
-      && pres && rec->sym == sym)
+  if ((r = inspect_accessible_symbol_by_name (sym->value_ptr.symbol->name,
+					      sym->value_ptr.symbol->name_len,
+					      pack, &pres))
+      && pres && r->sym == sym)
     {
+      if (rec)
+	*rec = r;
+
       return 1;
     }
 
-  if (!rec || rec->sym == sym)
+  if (!r || r->sym == sym)
     {
       ind = hash_char_vector (sym->value_ptr.symbol->name,
 			      sym->value_ptr.symbol->name_len, SYMTABLE_SIZE);
@@ -4469,6 +4526,9 @@ import_symbol (struct object *sym, struct object *pack)
 	sym->value_ptr.symbol->home_package = pack;
 
       pack->value_ptr.package->symtable [ind] = new_cell;
+
+      if (rec)
+	*rec = new_cell;
 
       return 1;
     }
@@ -4501,9 +4561,10 @@ use_package (struct object *used, struct object *pack,
       while (r)
 	{
 	  if (r->visibility == EXTERNAL_VISIBILITY
-	      && inspect_accessible_symbol (r->sym->value_ptr.symbol->name,
-					    r->sym->value_ptr.symbol->name_len,
-					    pack, &pres))
+	      && inspect_accessible_symbol_by_name (r->sym->value_ptr.symbol->
+						    name, r->sym->
+						    value_ptr.symbol->name_len,
+						    pack, &pres))
 	    {
 	      *conflicting = r->sym;
 
@@ -13127,7 +13188,7 @@ builtin_import (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (CAR (list)))
     {
-      ret = import_symbol (SYMBOL (CAR (list)), pack);
+      ret = import_symbol (SYMBOL (CAR (list)), pack, NULL);
 
       if (!ret)
 	{
@@ -13147,7 +13208,7 @@ builtin_import (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  ret = import_symbol (SYMBOL (CAR (cons)), pack);
+	  ret = import_symbol (SYMBOL (CAR (cons)), pack, NULL);
 
 	  if (!ret)
 	    {
@@ -13163,6 +13224,109 @@ builtin_import (struct object *list, struct environment *env,
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_export (struct object *list, struct environment *env,
+		struct eval_outcome *outcome)
+{
+  int l = list_length (list), ret, pres, pres2;
+  struct object *pack, *cons = NULL, *sym;
+  struct package_record *rec;
+  struct object_list *used;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+  if (!IS_SYMBOL (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      cons = CAR (list);
+      sym = SYMBOL (CAR (cons));
+    }
+  else
+    sym = SYMBOL (CAR (list));
+
+  do
+    {
+      if (!sym)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      rec = inspect_accessible_symbol (sym, pack, &pres);
+
+      if (!rec)
+	{
+	  outcome->type = SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE;
+	  return NULL;
+	}
+
+      used = pack->value_ptr.package->used_by;
+
+      while (used)
+	{
+	  if (inspect_accessible_symbol_by_name (sym->value_ptr.symbol->name,
+						 sym->value_ptr.symbol->name_len,
+						 used->obj, &pres2))
+	    {
+	      outcome->type = EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
+	      return NULL;
+	    }
+
+	  used = used->next;
+	}
+
+      if (!pres)
+	{
+	  ret = import_symbol (sym, pack, &rec);
+
+	  if (!ret)
+	    {
+	      outcome->type = IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
+	      return NULL;
+	    }
+	}
+
+      rec->visibility = EXTERNAL_VISIBILITY;
+
+      if (cons)
+	{
+	  cons = CDR (cons);
+	  sym = SYMBOL (CAR (cons));
+	}
+    } while (cons && SYMBOL (cons) != &nil_object);
 
   return &t_object;
 }
@@ -16071,9 +16235,17 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
     {
       printf ("eval error: package name or nickname is already in use\n");
     }
+  else if (err->type == SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE)
+    {
+      printf ("eval error: symbol is not accessible in package\n");
+    }
   else if (err->type == IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT)
     {
       printf ("eval error: importing symbol would cause conflict\n");
+    }
+  else if (err->type == EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT)
+    {
+      printf ("eval error: exporting symbol would cause conflict\n");
     }
 
   std_out->value_ptr.stream->dirty_line = 0;
