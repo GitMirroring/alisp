@@ -13293,6 +13293,9 @@ builtin_export (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
+      if (rec->visibility == EXTERNAL_VISIBILITY)
+	return &t_object;
+
       used = pack->value_ptr.package->used_by;
 
       while (used)
