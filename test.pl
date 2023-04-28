@@ -373,6 +373,7 @@ make_test ("(funcall (complement #'numberp) \"\")", "T");
 make_test ("(symbol-name 'aaa)", "\"AAA\"");
 make_test ("(symbol-name :bbb)", "\"BBB\"");
 make_test ("(symbol-package 'if)", "#<PACKAGE \"COMMON-LISP\">");
+make_test ("(symbol-package 'caar)", "#<PACKAGE \"COMMON-LISP\">");
 make_test ("(symbol-package 'ggg)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(symbol-package :eee)", "#<PACKAGE \"KEYWORD\">");
 make_test ("(special-operator-p 'if)", "T");
