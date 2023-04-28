@@ -17,6 +17,11 @@
 
 
 
+(in-package cl)
+
+
+
+
 ;;; the following useless constants are just ridiculously high because there is no actual limit
 (defconstant LAMBDA-PARAMETERS-LIMIT 4294967296)
 (defconstant CALL-ARGUMENTS-LIMIT 4294967296)
@@ -614,3 +619,31 @@
 	    (if (char= ch #\~)
 		(setq in-spec t at-sign nil colon nil sign nil num nil dirargs nil)
 		(write-char ch)))))))
+
+
+
+
+(export '(lambda-parameters-limit call-arguments-limit multiple-values-limit
+	  array-rank-limit array-dimension-limit array-total-size-limit
+	  char-code-limit identity pi 1+ 1- minusp plusp abs zerop mod rem evenp
+	  oddp isqrt conjugate *gensym-counter* gensym first second third fourth
+	  fifth sixth seventh eighth ninth tenth rest caar cadr cdar cddr caaar
+	  caadr cadar caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr
+	  cadaar cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr
+	  cdddar cddddr endp when unless incf decf and or cond return every some
+	  notany notevery member member-if member-if-not find find-if
+	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not nreverse adjoin fill push pop
+	  array-rank array-dimension array-total-size array-in-bounds-p char
+	  string/= char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize consp listp symbolp keywordp functionp packagep
+	  integerp rationalp floatp complexp characterp vectorp arrayp sequencep
+	  stringp hash-table-p pathnamep streamp realp numberp equal equalp
+	  fdefinition complement mapc terpri write-line write-sequence prin1
+	  princ print format))
+
+
+
+(in-package cl-user)
