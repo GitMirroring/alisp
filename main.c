@@ -320,6 +320,7 @@ eval_outcome_type
     PACKAGE_NOT_FOUND_IN_EVAL,
     PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE,
     SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE,
+    SYMBOL_NOT_PRESENT_IN_PACKAGE,
     IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT,
     EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT
   };
@@ -1578,6 +1579,8 @@ struct object *builtin_import (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
 struct object *builtin_export (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
+struct object *builtin_unexport (struct object *list, struct environment *env,
+				 struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -2294,6 +2297,7 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("IMPORT", env, builtin_import, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EXPORT", env, builtin_export, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("UNEXPORT", env, builtin_unexport, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -13336,6 +13340,91 @@ builtin_export (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_unexport (struct object *list, struct environment *env,
+		  struct eval_outcome *outcome)
+{
+  int l = list_length (list), pres;
+  struct object *pack, *cons = NULL, *sym;
+  struct package_record *rec;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+  if (!IS_SYMBOL (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      cons = CAR (list);
+      sym = SYMBOL (CAR (cons));
+    }
+  else
+    sym = SYMBOL (CAR (list));
+
+  do
+    {
+      if (!sym)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      rec = inspect_accessible_symbol (sym, pack, &pres);
+
+      if (!rec)
+	{
+	  outcome->type = SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE;
+	  return NULL;
+	}
+
+      if (rec->visibility == INTERNAL_VISIBILITY)
+	return &t_object;
+
+      if (!pres)
+	{
+	  outcome->type = SYMBOL_NOT_PRESENT_IN_PACKAGE;
+	  return NULL;
+	}
+
+      rec->visibility = INTERNAL_VISIBILITY;
+
+      if (cons)
+	{
+	  cons = CDR (cons);
+	  sym = SYMBOL (CAR (cons));
+	}
+    } while (cons && SYMBOL (cons) != &nil_object);
+
+  return &t_object;
+}
+
+
+struct object *
 builtin_lisp_implementation_type (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome)
 {
@@ -16241,6 +16330,10 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE)
     {
       printf ("eval error: symbol is not accessible in package\n");
+    }
+  else if (err->type == SYMBOL_NOT_PRESENT_IN_PACKAGE)
+    {
+      printf ("eval error: symbol is not present in package\n");
     }
   else if (err->type == IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT)
     {
