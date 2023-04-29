@@ -685,9 +685,11 @@ make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(make-package \"newtest\")", "#<PACKAGE \"newtest\">");
 make_test ("(in-package \"newtest\")", "#<PACKAGE \"newtest\">");
 make_test ("(cl:import 'cl:car)", "T");
-make_test ("(cl:import 'cl:car)", "T");
+make_test ("(cl:import '(cl:car) '|newtest|)", "T");
 make_test ("(cl:export 'jjj)", "T");
+make_test ("(cl:export '(jjj) cl:*package*)", "T");
 make_test ("'|newtest|:jjj", "JJJ");
+make_test ("(cl:unexport '(jjj) cl:*package*)", "T");
 make_test ("(car ())", "NIL");
 make_test ("(cl:in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
 
