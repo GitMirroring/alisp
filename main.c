@@ -322,7 +322,11 @@ eval_outcome_type
     SYMBOL_NOT_ACCESSIBLE_IN_PACKAGE,
     SYMBOL_NOT_PRESENT_IN_PACKAGE,
     IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT,
-    EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT
+    EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT,
+    KEYWORD_PACKAGE_CANT_USE_ANY_PACKAGE,
+    CANT_USE_KEYWORD_PACKAGE,
+    USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL,
+    PACKAGE_IS_NOT_IN_USE
   };
 
 
@@ -335,6 +339,7 @@ eval_outcome
   struct object_list *other_values;
 
   struct object *obj;
+  struct object *pack;
 
   struct object *block_to_leave;
   struct object *return_value;
@@ -997,6 +1002,7 @@ int import_symbol (struct object *sym, struct object *pack,
 		   struct package_record **rec);
 int use_package (struct object *used, struct object *pack,
 		 struct object **conflicting);
+int unuse_package (struct object *used, struct object *pack);
 
 int hash_object (const struct object *object, size_t table_size);
 int hash_char_vector (const char *str, size_t sz, size_t table_size);
@@ -1581,6 +1587,11 @@ struct object *builtin_export (struct object *list, struct environment *env,
 			       struct eval_outcome *outcome);
 struct object *builtin_unexport (struct object *list, struct environment *env,
 				 struct eval_outcome *outcome);
+struct object *builtin_use_package (struct object *list, struct environment *env,
+				    struct eval_outcome *outcome);
+struct object *builtin_unuse_package (struct object *list,
+				      struct environment *env,
+				      struct eval_outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct eval_outcome *outcome);
@@ -2298,6 +2309,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("IMPORT", env, builtin_import, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EXPORT", env, builtin_export, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("UNEXPORT", env, builtin_unexport, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("USE-PACKAGE", env, builtin_use_package, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -4590,6 +4605,35 @@ use_package (struct object *used, struct object *pack,
   used->value_ptr.package->used_by = p;
 
   return 1;
+}
+
+
+int
+unuse_package (struct object *used, struct object *pack)
+{
+  struct object_list *p = pack->value_ptr.package->uses, *prev = NULL;
+
+  while (p)
+    {
+      if (p->obj == used)
+	{
+	  if (prev)
+	    {
+	      prev->next = p->next;
+	    }
+	  else
+	    {
+	      pack->value_ptr.package->uses = p->next;
+	    }
+
+	  return 1;
+	}
+
+      prev = p;
+      p = p->next;
+    }
+
+  return 0;
 }
 
 
@@ -13425,6 +13469,190 @@ builtin_unexport (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_use_package (struct object *list, struct environment *env,
+		     struct eval_outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *pack, *cons = NULL, *des, *use, *conf;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+  if (pack == env->keyword_package)
+    {
+      outcome->type = KEYWORD_PACKAGE_CANT_USE_ANY_PACKAGE;
+      return NULL;
+    }
+
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      cons = CAR (list);
+      des = CAR (cons);
+    }
+  else
+    des = CAR (list);
+
+  do
+    {
+      if (!IS_PACKAGE_DESIGNATOR (des))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      use = inspect_package_by_designator (des, env);
+
+      if (!des)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+
+      if (use == env->keyword_package)
+	{
+	  outcome->type = CANT_USE_KEYWORD_PACKAGE;
+	  return NULL;
+	}
+
+      if (!use_package (use, pack, &conf))
+	{
+	  outcome->type = USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL;
+	  outcome->obj = conf;
+	  outcome->pack = des;
+	  return NULL;
+	}
+
+      if (cons)
+	{
+	  cons = CDR (cons);
+	  des = CAR (cons);
+	}
+    } while (cons && SYMBOL (cons) != &nil_object);
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_unuse_package (struct object *list, struct environment *env,
+		       struct eval_outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *pack, *cons = NULL, *des, *use;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+  if (pack == env->keyword_package)
+    {
+      outcome->type = KEYWORD_PACKAGE_CANT_USE_ANY_PACKAGE;
+      return NULL;
+    }
+
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      cons = CAR (list);
+      des = CAR (cons);
+    }
+  else
+    des = CAR (list);
+
+  do
+    {
+      if (!IS_PACKAGE_DESIGNATOR (des))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      use = inspect_package_by_designator (des, env);
+
+      if (!des)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+
+      if (use == env->keyword_package)
+	{
+	  outcome->type = CANT_USE_KEYWORD_PACKAGE;
+	  return NULL;
+	}
+
+      if (!unuse_package (use, pack))
+	{
+	  outcome->type = PACKAGE_IS_NOT_IN_USE;
+	  return NULL;
+	}
+
+      if (cons)
+	{
+	  cons = CDR (cons);
+	  des = CAR (cons);
+	}
+    } while (cons && SYMBOL (cons) != &nil_object);
+
+  return &t_object;
+}
+
+
+struct object *
 builtin_lisp_implementation_type (struct object *list, struct environment *env,
 				  struct eval_outcome *outcome)
 {
@@ -16342,6 +16570,28 @@ print_eval_error (struct eval_outcome *err, struct environment *env)
   else if (err->type == EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT)
     {
       printf ("eval error: exporting symbol would cause conflict\n");
+    }
+  else if (err->type == KEYWORD_PACKAGE_CANT_USE_ANY_PACKAGE)
+    {
+      printf ("eval error: keyword package can't use any package\n");
+    }
+  else if (err->type == CANT_USE_KEYWORD_PACKAGE)
+    {
+      printf ("eval error: can't use keyword package\n");
+    }
+  else if (err->type == USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL)
+    {
+      printf ("eval error: using package ");
+      write_to_stream (std_out->value_ptr.stream,
+		       err->pack->value_ptr.package->name,
+		       err->pack->value_ptr.package->name_len);
+      printf (" would cause conflict on symbol ");
+      print_symbol (err->obj->value_ptr.symbol, env, std_out->value_ptr.stream);
+      printf ("\n");
+    }
+  else if (err->type == PACKAGE_IS_NOT_IN_USE)
+    {
+      printf ("eval error: package is not in use\n");
     }
 
   std_out->value_ptr.stream->dirty_line = 0;
