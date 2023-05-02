@@ -2409,6 +2409,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("AL-QUIT", env, builtin_al_quit, TYPE_FUNCTION, NULL, 0);
 }
 
 
@@ -15539,6 +15540,14 @@ builtin_al_print_terms_and_conditions (struct object *list,
 	"copy of the Program in return for a fee.\n");
 
   return &t_object;
+}
+
+
+struct object *
+builtin_al_quit (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  exit (0);
 }
 
 
