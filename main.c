@@ -1684,7 +1684,7 @@ struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_al_quit
+struct object *builtin_al_exit
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 int eqmem (const char *s1, size_t n1, const char *s2, size_t n2);
@@ -2409,7 +2409,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
-  add_builtin_form ("AL-QUIT", env, builtin_al_quit, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
 }
 
 
@@ -15544,10 +15544,29 @@ builtin_al_print_terms_and_conditions (struct object *list,
 
 
 struct object *
-builtin_al_quit (struct object *list, struct environment *env,
+builtin_al_exit (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  exit (0);
+  int val, l = list_length (list);
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l && CAR (list)->type != TYPE_BIGNUM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l)
+    val = mpz_get_si (CAR (list)->value_ptr.integer);
+  else
+    val = 0;
+
+  exit (val);
 }
 
 
