@@ -236,6 +236,7 @@ outcome_type
     CANT_END_WITH_PACKAGE_SEPARATOR,
     MORE_THAN_A_PACKAGE_SEPARATOR,
     PACKAGE_NOT_FOUND_IN_READ,
+    SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE,
     PACKAGE_MARKER_IN_SHARP_COLON,
 
 
@@ -324,6 +325,7 @@ outcome_type
     || (t) == CANT_END_WITH_PACKAGE_SEPARATOR				\
     || (t) == MORE_THAN_A_PACKAGE_SEPARATOR				\
     || (t) == PACKAGE_NOT_FOUND_IN_READ					\
+    || (t) == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE				\
     || (t) == PACKAGE_MARKER_IN_SHARP_COLON)
 
 
@@ -1088,7 +1090,8 @@ struct object *intern_symbol_from_char_vector (char *name, size_t len,
 					       int always_create_if_missing,
 					       struct object *package);
 struct object *intern_symbol_name (struct object *symname,
-				   struct environment *env);
+				   struct environment *env,
+				   enum outcome_type *out);
 void unintern_symbol (struct object *sym);
 
 struct binding *create_binding (struct object *sym, struct object *obj,
@@ -2588,10 +2591,10 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     {
       out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, 0);
 
-      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
+      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 	{
 	  outcome->obj = ob;
-	  return PACKAGE_NOT_FOUND_IN_READ;
+	  return out;
 	}
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
@@ -3084,10 +3087,10 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    {
 	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, 0);
 
-	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env))
+	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 		{
 		  outcome->obj = ob;
-		  return PACKAGE_NOT_FOUND_IN_READ;
+		  return out;
 		}
 	    }
 
@@ -3361,6 +3364,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 					 start_of_pack_sep - input, read_case,
 					 escape_first_char);
       sym->packname_present = 1;
+      sym->visibility = visib;
       copy_symname_with_case_conversion (sym->actual_symname
 					 + sym->actual_symname_used_s,
 					 visib == EXTERNAL_VISIBILITY ?
@@ -5721,7 +5725,8 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
 
 
 struct object *
-intern_symbol_name (struct object *symname, struct environment *env)
+intern_symbol_name (struct object *symname, struct environment *env,
+		    enum outcome_type *out)
 {
   struct symbol_name *s = symname->value_ptr.symbol_name;
   struct object *pack;
@@ -5745,12 +5750,21 @@ intern_symbol_name (struct object *symname, struct environment *env)
       pack = find_package (s->value, s->used_size, env);
 
       if (!pack)
-	return NULL;
+	{
+	  *out = PACKAGE_NOT_FOUND_IN_READ;
+	  return NULL;
+	}
       else
 	{
 	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
 						   s->actual_symname_used_s, 1,
 						   s->visibility, 0, pack);
+	  if (!s->sym)
+	    {
+	      *out = SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE;
+	      return NULL;
+	    }
+
 	  add_reference (symname, s->sym, 0);
 
 	  return s->sym;
@@ -16357,6 +16371,17 @@ print_read_error (enum outcome_type err, const char *input, size_t size,
       fwrite (args->obj->value_ptr.symbol_name->value,
 	      args->obj->value_ptr.symbol_name->used_size, 1, stdout);
       printf (" not found\n");
+    }
+  else if (err == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE)
+    {
+      printf ("read error: symbol ");
+      fwrite (args->obj->value_ptr.symbol_name->actual_symname,
+	      args->obj->value_ptr.symbol_name->actual_symname_used_s, 1,
+	      stdout);
+      printf (" is not external in package ");
+      fwrite (args->obj->value_ptr.symbol_name->value,
+	      args->obj->value_ptr.symbol_name->used_size, 1, stdout);
+      printf ("\n");
     }
   else if (err == PACKAGE_MARKER_IN_SHARP_COLON)
     {
