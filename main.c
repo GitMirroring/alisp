@@ -5700,25 +5700,28 @@ intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
       cur = cur->next;
     }
 
-  uses = package->value_ptr.package->uses;
-
-  while (uses)
+  if (vis == INTERNAL_VISIBILITY)
     {
-      cur = uses->obj->value_ptr.package->symtable [ind];
+      uses = package->value_ptr.package->uses;
 
-      while (cur)
+      while (uses)
 	{
-	  if (cur->visibility == EXTERNAL_VISIBILITY
-	      && eqmem (cur->sym->value_ptr.symbol->name,
-			cur->sym->value_ptr.symbol->name_len, name, len))
+	  cur = uses->obj->value_ptr.package->symtable [ind];
+
+	  while (cur)
 	    {
-	      return cur->sym;
+	      if (cur->visibility == EXTERNAL_VISIBILITY
+		  && eqmem (cur->sym->value_ptr.symbol->name,
+			    cur->sym->value_ptr.symbol->name_len, name, len))
+		{
+		  return cur->sym;
+		}
+
+	      cur = cur->next;
 	    }
 
-	  cur = cur->next;
+	  uses = uses->next;
 	}
-
-      uses = uses->next;
     }
 
   if (vis == EXTERNAL_VISIBILITY && !always_create_if_missing)
