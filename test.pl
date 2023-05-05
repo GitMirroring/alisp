@@ -91,6 +91,8 @@ make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'\\\n ", "|\n|");
 make_test ("'a\\\n ", "|A\n|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
+make_test ("'cl:car", "CAR");
+make_test ("'cl-user::car", "CAR");
 
 
 # now we extensively test backtick notation.  maybe some of these
