@@ -305,7 +305,7 @@ outcome_type
 				 || (t) == INCOMPLETE_SHARP_MACRO_CALL)
 
 
-#define IS_READ_ERROR(t) ((t) == CLOSING_PARENTHESIS			\
+#define IS_READ_OR_EVAL_ERROR(t) ((t) == CLOSING_PARENTHESIS		\
     || (t) == CLOSING_PARENTHESIS_AFTER_PREFIX				\
     || (t) == INVALID_SHARP_DISPATCH					\
     || (t) == UNKNOWN_SHARP_DISPATCH					\
@@ -326,7 +326,8 @@ outcome_type
     || (t) == MORE_THAN_A_PACKAGE_SEPARATOR				\
     || (t) == PACKAGE_NOT_FOUND_IN_READ					\
     || (t) == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE				\
-    || (t) == PACKAGE_MARKER_IN_SHARP_COLON)
+    || (t) == PACKAGE_MARKER_IN_SHARP_COLON				\
+    || (t) > EVAL_OK)
 
 
 struct
@@ -1733,10 +1734,7 @@ int print_function_or_macro (const struct object *obj, struct environment *env,
 int print_object (const struct object *obj, struct environment *env,
 		  struct stream *str);
 
-void print_read_error (enum outcome_type err, const char *input, size_t size,
-		       const char *begin, const char *end,
-		       const struct outcome *args);
-void print_eval_error (struct outcome *err, struct environment *env);
+void print_error (struct outcome *err, struct environment *env);
 
 int is_reference_weak (struct object *src, int ind, struct object *dest);
 void set_reference_strength_factor (struct object *src, int ind,
@@ -1829,7 +1827,7 @@ main (int argc, char *argv [])
       if (result && !opts.load_and_exit)
 	print_object (result, &env, c_stdout->value_ptr.stream);
       else if (!opts.load_and_exit)
-	print_eval_error (&eval_out, &env);
+	print_error (&eval_out, &env);
 
       eval_out.type = EVAL_OK;
 
@@ -1850,7 +1848,7 @@ main (int argc, char *argv [])
       if (result && !opts.load_and_exit)
 	print_object (result, &env, c_stdout->value_ptr.stream);
       else if (!opts.load_and_exit)
-	print_eval_error (&eval_out, &env);
+	print_error (&eval_out, &env);
 
       eval_out.type = EVAL_OK;
 
@@ -1909,7 +1907,7 @@ main (int argc, char *argv [])
 	    }
 
 	  if (!result)
-	    print_eval_error (&eval_out, &env);
+	    print_error (&eval_out, &env);
 	  else if (eval_out.no_value)
 	    eval_out.no_value = 0;
 	  else
@@ -2621,16 +2619,9 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 	  ob = call_sharp_macro (call->value_ptr.sharp_macro_call, env, outcome);
 	  free_sharp_macro_call (call);
 
-	  if (IS_READ_ERROR (out))
-	    {
-	      return out;
-	    }
-
 	  if (!ob)
 	    {
-	      print_eval_error (outcome, env);
-
-	      out = NO_OBJECT;
+	      return outcome->type;
 	    }
 	}
     }
@@ -2662,12 +2653,13 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   read_out = read_object_continued (&obj, 0, is_empty_list, line, len, env,
 				    outcome, &begin, &end);
 
-  while (IS_INCOMPLETE_OBJECT (read_out) || IS_READ_ERROR (read_out)
+  while (IS_INCOMPLETE_OBJECT (read_out) || IS_READ_OR_EVAL_ERROR (read_out)
 	 || outcome->multiline_comment_depth)
     {
-      if (IS_READ_ERROR (read_out))
+      if (IS_READ_OR_EVAL_ERROR (read_out))
 	{
-	  print_read_error (read_out, line, len, begin, end, outcome);
+	  outcome->type = read_out;
+	  print_error (outcome, env);
 	  return NULL;
 	}
 
@@ -2719,9 +2711,10 @@ read_object_interactively_continued (const char *input, size_t input_size,
       
       return NULL;
     }
-  else if (IS_READ_ERROR (read_out))
+  else if (IS_READ_OR_EVAL_ERROR (read_out))
     {
-      print_read_error (read_out, input, input_size, begin, end, outcome);
+      outcome->type = read_out;
+      print_error (outcome, env);
 
       return NULL;
     }
@@ -3071,16 +3064,9 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 				     outcome);
 	      free_sharp_macro_call (call);
 
-	      if (IS_READ_ERROR (outcome->type))
-		{
-		  return outcome->type;
-		}
-
 	      if (!ob)
 		{
-		  print_eval_error (outcome, env);
-
-		  out = NO_OBJECT;
+		  return outcome->type;
 		}
 	    }
 
@@ -3151,7 +3137,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	  if (out == COMPLETE_OBJECT)
 	    ob->value_ptr.cons_pair->filling_car =
 	      ob->value_ptr.cons_pair->filling_cdr = 0;
-	  else if (IS_INCOMPLETE_OBJECT (out) || IS_READ_ERROR (out))
+	  else if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
 	    return out;
 
 	  obj_end++;
@@ -3180,7 +3166,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 		ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
 	    }
 
-	  if (IS_INCOMPLETE_OBJECT (out) || IS_READ_ERROR (out))
+	  if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
 	    return out;
 
 	  obj_end++;
@@ -3227,7 +3213,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	  last_cons->value_ptr.cons_pair->found_dot = 1;
 	}
-      else if (IS_READ_ERROR (out))
+      else if (IS_READ_OR_EVAL_ERROR (out))
 	{
 	  return out;
 	}
@@ -3350,7 +3336,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
      &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, &out,
      escape_first_char);
 
-  if (IS_READ_ERROR (out))
+  if (IS_READ_OR_EVAL_ERROR (out))
     return out;
 
   if (!name_l && !act_name_l)
@@ -5645,7 +5631,7 @@ load_file (const char *filename, struct environment *env,
 	    }
 	  else
 	    {
-	      print_eval_error (outcome, env);
+	      print_error (outcome, env);
 
 	      free (buf);
 	      fclose (f);
@@ -5660,9 +5646,10 @@ load_file (const char *filename, struct environment *env,
 
 	  return &t_object;
 	}
-      else if (IS_READ_ERROR (out) || IS_INCOMPLETE_OBJECT (out))
+      else if (IS_READ_OR_EVAL_ERROR (out) || IS_INCOMPLETE_OBJECT (out))
 	{
-	  print_read_error (out, buf, l, obj_b, obj_e, outcome);
+	  outcome->type = out;
+	  print_error (outcome, env);
 
 	  free (buf);
 	  fclose (f);
@@ -16298,124 +16285,125 @@ print_object (const struct object *obj, struct environment *env,
 
 
 void
-print_read_error (enum outcome_type err, const char *input, size_t size,
-		  const char *begin, const char *end, const struct outcome *args)
-{
-  if (err == CLOSING_PARENTHESIS)
-    {
-      printf ("read error: mismatched closing parenthesis\n");
-    }
-  else if (err == CLOSING_PARENTHESIS_AFTER_PREFIX)
-    {
-      printf ("read error: closing parenthesis can't follows commas, ticks, "
-	      "backticks\n");
-    }
-  else if (err == INVALID_SHARP_DISPATCH)
-    {
-      printf ("read error: invalid character used as a sharp dispatch\n");
-    }
-  else if (err == UNKNOWN_SHARP_DISPATCH)
-    {
-      printf ("read error: character not known as a sharp dispatch\n");
-    }
-  else if (err == WRONG_OBJECT_TYPE_TO_SHARP_MACRO)
-    {
-      printf ("read error: wrong type of object as content of a sharp macro\n");
-    }
-  else if (err == UNKNOWN_CHARACTER_NAME)
-    {
-      printf ("read error: unknown character name\n");
-    }
-  else if (err == FUNCTION_NOT_FOUND_IN_READ)
-    {
-      printf ("read error: function not found\n");
-    }
-  else if (err == COMMA_WITHOUT_BACKQUOTE)
-    {
-      printf ("read error: comma can appear only inside a backquoted form\n");
-    }
-  else if (err == TOO_MANY_COMMAS)
-    {
-      printf ("read error: number of commas can't exceed number of pending "
-	      "backquotes\n");
-    }
-  else if (err == SINGLE_DOT)
-    {
-      printf ("read error: single dot is only allowed inside a list and must "
-	      "be followed by exactly one object\n");
-    }
-  else if (err == MULTIPLE_DOTS)
-    {
-      printf ("read error: symbol names made of non-escaped dots only are "
-	      "not allowed\n");
-    }
-  else if (err == NO_OBJ_BEFORE_DOT_IN_LIST)
-    {
-      printf ("read error: no object before dot in list\n");
-    }
-  else if (err == NO_OBJ_AFTER_DOT_IN_LIST)
-    {
-      printf ("read error: no object follows dot in list\n");
-    }
-  else if (err == MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
-    {
-      printf ("read error: more than one object follows dot in list\n");
-    }
-  else if (err == MORE_THAN_A_CONSING_DOT)
-    {
-      printf ("read error: more than one consing dot not allowed in list\n");
-    }
-  else if (err == TOO_MANY_COLONS)
-    {
-      printf ("read error: more than two consecutive colons cannot appear in a "
-	      "token\n");
-    }
-  else if (err == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE)
-    {
-      printf ("read error: a token can't begin with two colons or more\n");
-    }
-  else if (err == CANT_END_WITH_PACKAGE_SEPARATOR)
-    {
-      printf ("read error: a token can't end with a package separator\n");
-    }
-  else if (err == MORE_THAN_A_PACKAGE_SEPARATOR)
-    {
-      printf ("read error: more than a package separator not allowed in token\n");
-    }
-  else if (err == PACKAGE_NOT_FOUND_IN_READ)
-    {
-      printf ("read error: package ");
-      fwrite (args->obj->value_ptr.symbol_name->value,
-	      args->obj->value_ptr.symbol_name->used_size, 1, stdout);
-      printf (" not found\n");
-    }
-  else if (err == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE)
-    {
-      printf ("read error: symbol ");
-      fwrite (args->obj->value_ptr.symbol_name->actual_symname,
-	      args->obj->value_ptr.symbol_name->actual_symname_used_s, 1,
-	      stdout);
-      printf (" is not external in package ");
-      fwrite (args->obj->value_ptr.symbol_name->value,
-	      args->obj->value_ptr.symbol_name->used_size, 1, stdout);
-      printf ("\n");
-    }
-  else if (err == PACKAGE_MARKER_IN_SHARP_COLON)
-    {
-      printf ("read error: a package marker can't appear in a sharp-colon "
-	      "macro\n");
-    }
-}
-
-
-void
-print_eval_error (struct outcome *err, struct environment *env)
+print_error (struct outcome *err, struct environment *env)
 {
   struct object *std_out = inspect_variable (env->std_out_sym, env);
 
   fresh_line (std_out->value_ptr.stream);
 
-  if (err->type == UNBOUND_SYMBOL)
+  if (err->type == CLOSING_PARENTHESIS)
+    {
+      printf ("read error: mismatched closing parenthesis\n");
+    }
+  else if (err->type == CLOSING_PARENTHESIS_AFTER_PREFIX)
+    {
+      printf ("read error: closing parenthesis can't follows commas, ticks, "
+	      "backticks\n");
+    }
+  else if (err->type == INVALID_SHARP_DISPATCH)
+    {
+      printf ("read error: invalid character used as a sharp dispatch\n");
+    }
+  else if (err->type == UNKNOWN_SHARP_DISPATCH)
+    {
+      printf ("read error: character not known as a sharp dispatch\n");
+    }
+  else if (err->type == WRONG_OBJECT_TYPE_TO_SHARP_MACRO)
+    {
+      printf ("read error: wrong type of object as content of a sharp macro\n");
+    }
+  else if (err->type == UNKNOWN_CHARACTER_NAME)
+    {
+      printf ("read error: unknown character name\n");
+    }
+  else if (err->type == FUNCTION_NOT_FOUND_IN_READ)
+    {
+      printf ("read error: function not found\n");
+    }
+  else if (err->type == COMMA_WITHOUT_BACKQUOTE)
+    {
+      printf ("read error: comma can appear only inside a backquoted form\n");
+    }
+  else if (err->type == TOO_MANY_COMMAS)
+    {
+      printf ("read error: number of commas can't exceed number of pending "
+	      "backquotes\n");
+    }
+  else if (err->type == SINGLE_DOT)
+    {
+      printf ("read error: single dot is only allowed inside a list and must "
+	      "be followed by exactly one object\n");
+    }
+  else if (err->type == MULTIPLE_DOTS)
+    {
+      printf ("read error: symbol names made of non-escaped dots only are "
+	      "not allowed\n");
+    }
+  else if (err->type == NO_OBJ_BEFORE_DOT_IN_LIST)
+    {
+      printf ("read error: no object before dot in list\n");
+    }
+  else if (err->type == NO_OBJ_AFTER_DOT_IN_LIST)
+    {
+      printf ("read error: no object follows dot in list\n");
+    }
+  else if (err->type == MULTIPLE_OBJS_AFTER_DOT_IN_LIST)
+    {
+      printf ("read error: more than one object follows dot in list\n");
+    }
+  else if (err->type == MORE_THAN_A_CONSING_DOT)
+    {
+      printf ("read error: more than one consing dot not allowed in list\n");
+    }
+  else if (err->type == TOO_MANY_COLONS)
+    {
+      printf ("read error: more than two consecutive colons cannot appear in a "
+	      "token\n");
+    }
+  else if (err->type == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE)
+    {
+      printf ("read error: a token can't begin with two colons or more\n");
+    }
+  else if (err->type == CANT_END_WITH_PACKAGE_SEPARATOR)
+    {
+      printf ("read error: a token can't end with a package separator\n");
+    }
+  else if (err->type == MORE_THAN_A_PACKAGE_SEPARATOR)
+    {
+      printf ("read error: more than a package separator not allowed in token\n");
+    }
+  else if (err->type == PACKAGE_NOT_FOUND_IN_READ)
+    {
+      printf ("read error: package ");
+      fwrite (err->obj->value_ptr.symbol_name->value,
+	      err->obj->value_ptr.symbol_name->used_size, 1, stdout);
+      printf (" not found\n");
+    }
+  else if (err->type == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE)
+    {
+      printf ("read error: symbol ");
+      fwrite (err->obj->value_ptr.symbol_name->actual_symname,
+	      err->obj->value_ptr.symbol_name->actual_symname_used_s, 1,
+	      stdout);
+      printf (" is not external in package ");
+      fwrite (err->obj->value_ptr.symbol_name->value,
+	      err->obj->value_ptr.symbol_name->used_size, 1, stdout);
+      printf ("\n");
+    }
+  else if (err->type == PACKAGE_MARKER_IN_SHARP_COLON)
+    {
+      printf ("read error: a package marker can't appear in a sharp-colon "
+	      "macro\n");
+    }
+  else if (err->type == GOT_EOF_IN_MIDDLE_OF_OBJECT)
+    {
+      printf ("read error: got end-of-file in the middle of an object\n");
+    }
+  else if (err->type == GOT_EOF)
+    {
+      printf ("read error: got end-of-file\n");
+    }
+  else if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
       print_object (err->obj, env, env->c_stdout->value_ptr.stream);
