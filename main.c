@@ -239,6 +239,9 @@ outcome_type
     SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE,
     PACKAGE_MARKER_IN_SHARP_COLON,
 
+    GOT_EOF_IN_MIDDLE_OF_OBJECT,
+    GOT_EOF,
+
 
     EVAL_OK,
     UNBOUND_SYMBOL,
@@ -327,6 +330,8 @@ outcome_type
     || (t) == PACKAGE_NOT_FOUND_IN_READ					\
     || (t) == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE				\
     || (t) == PACKAGE_MARKER_IN_SHARP_COLON				\
+    || (t) == GOT_EOF_IN_MIDDLE_OF_OBJECT				\
+    || (t) == GOT_EOF							\
     || (t) > EVAL_OK)
 
 
