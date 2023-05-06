@@ -5616,14 +5616,7 @@ load_file (const char *filename, struct environment *env,
 
   while (1)
     {
-      if (outcome->multiline_comment_depth)
-	{
-	  free (buf);
-	  fclose (f);
-
-	  return &nil_object;
-	}
-      else if (out == COMPLETE_OBJECT)
+      if (out == COMPLETE_OBJECT)
 	{
 	  res = evaluate_object (obj, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
@@ -5636,12 +5629,10 @@ load_file (const char *filename, struct environment *env,
 	    }
 	  else
 	    {
-	      print_error (outcome, env);
-
 	      free (buf);
 	      fclose (f);
 
-	      return &nil_object;
+	      return NULL;
 	    }
 	}
       else if (out == NO_OBJECT)
@@ -5651,15 +5642,21 @@ load_file (const char *filename, struct environment *env,
 
 	  return &t_object;
 	}
-      else if (IS_READ_OR_EVAL_ERROR (out) || IS_INCOMPLETE_OBJECT (out))
+      else if (IS_READ_OR_EVAL_ERROR (out))
 	{
-	  outcome->type = out;
-	  print_error (outcome, env);
-
 	  free (buf);
 	  fclose (f);
 
-	  return &nil_object;
+	  outcome->type = out;
+	  return NULL;
+	}
+      else if (IS_INCOMPLETE_OBJECT (out))
+	{
+	  free (buf);
+	  fclose (f);
+
+	  outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+	  return NULL;
 	}
     }
 }
