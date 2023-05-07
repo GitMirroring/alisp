@@ -15800,33 +15800,35 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 		 struct stream *str)
 {
   size_t i, sz;
-  char need_escape [] = "().,;'#\"\n\\";
-  int do_need_escape = 0;
+  char need_multiple_escape [] = "().,;'#\"\n";
+  int do_need_multiple_escape = 0;
 
-  for (i = 0, sz = 0; print_escapes && i < len; i++)
+  sz = len;
+
+  for (i = 0; print_escapes && i < len; i++)
     {
-      if (strchr (need_escape, sym [i]) || !sym [i]
-	  || islower ((unsigned char)sym [i]))
+      if ((strchr (need_multiple_escape, sym [i]) || !sym [i]
+	   || isspace ((unsigned char)sym [i])
+	   || islower ((unsigned char)sym [i]))
+	  && !do_need_multiple_escape)
 	{
-	  do_need_escape = 1;
+	  do_need_multiple_escape = 1;
 
 	  if (str->medium == FILE_STREAM)
 	    break;
 
 	  sz += 2;
 	}
-      else
+
+      if (sym [i] == '|' || sym [i] == '\\')
 	sz++;
     }
-
-  if (do_need_escape)
-    sz += 2;
 
   if (str->medium == STRING_STREAM)
     resize_string_allocation (str->string,
 			      str->string->value_ptr.string->used_size + sz);
 
-  if (do_need_escape && write_to_stream (str, "|", 1) < 0)
+  if (do_need_multiple_escape && write_to_stream (str, "|", 1) < 0)
     return -1;
 
   for (i = 0; i < len; i++)
@@ -15839,7 +15841,7 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 	return -1;
     }
 
-  if (do_need_escape && write_to_stream (str, "|", 1) < 0)
+  if (do_need_multiple_escape && write_to_stream (str, "|", 1) < 0)
     return -1;
 
   return 0;
