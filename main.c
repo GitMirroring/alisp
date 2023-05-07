@@ -5586,18 +5586,21 @@ load_file (const char *filename, struct environment *env,
 
   if (fseek (f, 0l, SEEK_END))
     {
+      fclose (f);
       outcome->type = COULD_NOT_SEEK_FILE;
       return NULL;
     }
 
   if ((l = ftell (f)) == -1)
     {
+      fclose (f);
       outcome->type = COULD_NOT_TELL_FILE;
       return NULL;
     }
 
   if (fseek (f, 0l, SEEK_SET))
     {
+      fclose (f);
       outcome->type = COULD_NOT_SEEK_FILE;
       return NULL;
     }
@@ -5606,6 +5609,8 @@ load_file (const char *filename, struct environment *env,
 
   if (!fread (buf, l, 1, f))
     {
+      free (buf);
+      fclose (f);
       outcome->type = ERROR_READING_FILE;
       return NULL;
     }
