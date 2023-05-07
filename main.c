@@ -47,7 +47,9 @@
 #endif
 
 
+
 typedef int fixnum;
+
 
 
 #define CAR(list) (SYMBOL (list) == &nil_object ? &nil_object :	\
@@ -101,6 +103,14 @@ typedef int fixnum;
 					   | TYPE_CHARACTER | TYPE_FILENAME))
 
 
+
+#define CLEAR_READER_STATUS(out)		\
+  do						\
+    {						\
+      (out).multiline_comment_depth = 0;	\
+    } while (0)					\
+
+
 #define CLEAR_MULTIPLE_OR_NO_VALUES(out)	\
   do						\
     {						\
@@ -108,6 +118,7 @@ typedef int fixnum;
       free_object_list ((out).other_values);	\
       (out).other_values = NULL;		\
     } while (0)
+
 
 
 #define increment_refcount(obj) INC_STRONG_REFCOUNT(obj)
@@ -5644,6 +5655,7 @@ load_file (const char *filename, struct environment *env,
 	{
 	  free (buf);
 	  fclose (f);
+	  CLEAR_READER_STATUS (*outcome);
 
 	  return &t_object;
 	}
@@ -5651,6 +5663,7 @@ load_file (const char *filename, struct environment *env,
 	{
 	  free (buf);
 	  fclose (f);
+	  CLEAR_READER_STATUS (*outcome);
 
 	  outcome->type = out;
 	  return NULL;
@@ -5659,6 +5672,7 @@ load_file (const char *filename, struct environment *env,
 	{
 	  free (buf);
 	  fclose (f);
+	  CLEAR_READER_STATUS (*outcome);
 
 	  outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
 	  return NULL;
