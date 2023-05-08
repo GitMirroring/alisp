@@ -91,6 +91,8 @@ make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'123\\ ", "|123 |");
 make_test ("'\\\n ", "|\n|");
 make_test ("'a\\\n ", "|A\n|");
+make_test ("'|aaa\nbb|c", "|aaa\nbbC|");
+make_test ("'|aaa\n:bbb|", "|aaa\n:bbb|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 make_test ("'cl:car", "CAR");
 make_test ("'cl-user::car", "CAR");
