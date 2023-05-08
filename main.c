@@ -108,6 +108,8 @@ typedef int fixnum;
   do						\
     {						\
       (out).multiline_comment_depth = 0;	\
+      (out).single_escape = 0;			\
+      (out).multiple_escape = 0;		\
     } while (0)					\
 
 
@@ -352,6 +354,8 @@ outcome
   enum outcome_type type;
 
   size_t multiline_comment_depth;
+  int single_escape;
+  int multiple_escape;
 
   int no_value;
   struct object_list *other_values;
@@ -946,7 +950,7 @@ enum outcome_type read_string
 
 enum outcome_type read_symbol_name
 (struct object **obj, const char *input, size_t size, const char **symname_end,
- enum readtable_case read_case, int escape_first_char);
+ enum readtable_case read_case, struct outcome *out);
 
 enum outcome_type read_prefix
 (struct object **obj, const char *input, size_t size, int *backts_commas_balance,
@@ -1064,15 +1068,17 @@ struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
 void resize_symbol_name (struct object *symname, size_t value_s,
 			 size_t actual_symname_s);
 
-const char *find_end_of_symbol_name
-(const char *input, size_t size, int found_package_sep, size_t *new_size,
- const char **start_of_package_separator,
- enum package_record_visibility *sym_visibility, size_t *name_length,
- size_t *act_name_length, enum outcome_type *outcome, int escape_first_char);
+const char *find_end_of_symbol_name (const char *input, size_t size,
+				     int found_package_sep, size_t *new_size,
+				     const char **start_of_package_separator,
+				     enum package_record_visibility *sym_visibility,
+				     size_t *name_length,
+				     size_t *act_name_length,
+				     struct outcome *out);
 void copy_symname_with_case_conversion (char *output, const char *input,
 					size_t size,
 					enum readtable_case read_case,
-					int escape_first_char);
+					int single_escape, int multiple_escape);
 
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
@@ -2617,7 +2623,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_SYMBOL_NAME)
     {
-      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, 0);
+      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, outcome);
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 	{
@@ -3101,7 +3107,8 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    }
 	  else
 	    {
-	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, 0);
+	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE,
+				      outcome);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 		{
@@ -3337,26 +3344,23 @@ read_string (struct object **obj, const char *input, size_t size,
 enum outcome_type
 read_symbol_name (struct object **obj, const char *input, size_t size,
 		  const char **symname_end, enum readtable_case read_case,
-		  int escape_first_char)
+		  struct outcome *out)
 {
   struct symbol_name *sym;
   size_t name_l, act_name_l, new_size;
   struct object *ob = *obj;
-  enum outcome_type out = NO_OBJECT;
   const char *start_of_pack_sep;
   enum package_record_visibility visib;
+  int escape_first_ch = out->single_escape, mult_esc = out->multiple_escape;
 
+  out->type = NO_OBJECT;
 
   *symname_end = find_end_of_symbol_name
     (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
-     &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, &out,
-     escape_first_char);
+     &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, out);
 
-  if (IS_READ_OR_EVAL_ERROR (out))
-    return out;
-
-  if (!name_l && !act_name_l)
-    return COMPLETE_OBJECT;
+  if (IS_READ_OR_EVAL_ERROR (out->type))
+    return out->type;
 
   if (!ob)
     {
@@ -3373,12 +3377,12 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   if (sym->packname_present)
     copy_symname_with_case_conversion (sym->actual_symname
 				       + sym->actual_symname_used_s, input, size,
-				       read_case, escape_first_char);
+				       read_case, escape_first_ch, mult_esc);
   else if (start_of_pack_sep)
     {
       copy_symname_with_case_conversion (sym->value + sym->used_size, input,
 					 start_of_pack_sep - input, read_case,
-					 escape_first_char);
+					 escape_first_ch, mult_esc);
       sym->packname_present = 1;
       sym->visibility = visib;
       copy_symname_with_case_conversion (sym->actual_symname
@@ -3386,11 +3390,11 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 					 visib == EXTERNAL_VISIBILITY ?
 					 start_of_pack_sep + 1
 					 : start_of_pack_sep + 2, size,
-					 read_case, 0);
+					 read_case, 0, 0);
     }
   else
     copy_symname_with_case_conversion (sym->value + sym->used_size, input, size,
-				       read_case, escape_first_char);
+				       read_case, escape_first_ch, mult_esc);
 
   sym->used_size += name_l;
   sym->actual_symname_used_s += act_name_l;
@@ -3529,8 +3533,9 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   if (call->dispatch_ch == '\\')
     {
       call->obj = NULL;
+      outcome->single_escape = 1;
       out = read_symbol_name (&call->obj, input+i+1, size-i-1, macro_end,
-			      CASE_UPCASE, 1);
+			      CASE_UPCASE, outcome);
 
       if (call->obj->value_ptr.symbol_name->packname_present)
 	{
@@ -5092,23 +5097,21 @@ resize_symbol_name (struct object *symname, size_t value_s,
 }
 
 
-
 const char *
 find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 			 size_t *new_size,
 			 const char **start_of_package_separator,
 			 enum package_record_visibility *sym_visibility,
 			 size_t *name_length, size_t *act_name_length,
-			 enum outcome_type *outcome, int escape_first_char)
+			 struct outcome *out)
 {
   size_t i = 0;
-  int single_escape = escape_first_char, multiple_escape = 0, just_dots = 1,
-    colons = 0;
+  int just_dots = 1, colons = 0;
   size_t **length;
 
   *start_of_package_separator = NULL;
 
-  *name_length = 0, *act_name_length = 0, *outcome = NO_OBJECT;
+  *name_length = 0, *act_name_length = 0;
 
   length = found_package_sep ? &act_name_length : &name_length;
 
@@ -5118,36 +5121,36 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 	{
 	  just_dots = 0;
 
-	  if (!single_escape)
+	  if (!out->single_escape)
 	    {
-	      single_escape = 1;
+	      out->single_escape = 1;
 	    }
 	  else
 	    {
-	      single_escape = 0;
+	      out->single_escape = 0;
 	      (**length)++;
 	    }
 	}
-      else if (input [i] == '|' && !single_escape)
+      else if (input [i] == '|' && !out->single_escape)
 	{
 	  just_dots = 0;
 
-	  multiple_escape = (multiple_escape ? 0 : 1);
+	  out->multiple_escape = !out->multiple_escape;
 	}
-      else if (input [i] == ':' && !single_escape && !multiple_escape)
+      else if (input [i] == ':' && !out->single_escape && !out->multiple_escape)
 	{
 	  if (found_package_sep
 	      || (*start_of_package_separator
 		  && (input + i > *start_of_package_separator + colons)))
 	    {
-	      *outcome = MORE_THAN_A_PACKAGE_SEPARATOR;
+	      out->type = MORE_THAN_A_PACKAGE_SEPARATOR;
 
 	      return NULL;
 	    }
 
 	  if (colons == 1 && (i == 1))
 	    {
-	      *outcome = CANT_BEGIN_WITH_TWO_COLONS_OR_MORE;
+	      out->type = CANT_BEGIN_WITH_TWO_COLONS_OR_MORE;
 
 	      return NULL;
 	    }
@@ -5163,7 +5166,7 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 
 	  if (colons > 2)
 	    {
-	      *outcome = TOO_MANY_COLONS;
+	      out->type = TOO_MANY_COLONS;
 
 	      return NULL;
 	    }
@@ -5175,15 +5178,15 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
       else
 	{
 	  if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
-	      && !single_escape && !multiple_escape)
+	      && !out->single_escape && !out->multiple_escape)
 	    {
 	      if (just_dots && **length == 1)
-		*outcome = SINGLE_DOT;
+		out->type = SINGLE_DOT;
 	      else if (just_dots && **length)
-		*outcome = MULTIPLE_DOTS;
+		out->type = MULTIPLE_DOTS;
 	      else if (*start_of_package_separator
 		       && (input + i == *start_of_package_separator + colons))
-		*outcome = CANT_END_WITH_PACKAGE_SEPARATOR;
+		out->type = CANT_END_WITH_PACKAGE_SEPARATOR;
 
 	      *new_size = size-i+1;
 	      return input+i-1;
@@ -5193,7 +5196,7 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 	    just_dots = 0;
 
 	  (**length)++;
-	  single_escape = 0;
+	  out->single_escape = 0;
 	}
       i++;
     }
@@ -5205,11 +5208,11 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 void
 copy_symname_with_case_conversion (char *output, const char *input, size_t size,
 				   enum readtable_case read_case,
-				   int escape_first_char)
+				   int single_escape, int multiple_escape)
 {
   size_t i;
-  int j, single_escape = escape_first_char, multiple_escape = 0;
-  
+  int j;
+
   for (i = 0, j = 0; i < size; i++)
     {
       if (input [i] == '\\')
