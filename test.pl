@@ -210,6 +210,7 @@ make_test ("(labels ((a NIL (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a () (b)) (b () (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(macrolet ((w (a) `(write ,a))) (w \"\"))", "\"\"\n\"\"");
 make_test ("(defconstant a 8)", "A");
+make_test ("(defconstant a 8)", "A");
 make_test ("a", "8");
 make_test ("(defparameter b 9)", "B");
 make_test ("(defvar b (0))", "B");
