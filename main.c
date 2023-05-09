@@ -16403,19 +16403,21 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == PACKAGE_NOT_FOUND_IN_READ)
     {
       printf ("read error: package ");
-      fwrite (err->obj->value_ptr.symbol_name->value,
-	      err->obj->value_ptr.symbol_name->used_size, 1, stdout);
+      print_as_symbol (err->obj->value_ptr.package->name,
+		       err->obj->value_ptr.package->name_len, 1,
+		       std_out->value_ptr.stream);
       printf (" not found\n");
     }
   else if (err->type == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE)
     {
       printf ("read error: symbol ");
-      fwrite (err->obj->value_ptr.symbol_name->actual_symname,
-	      err->obj->value_ptr.symbol_name->actual_symname_used_s, 1,
-	      stdout);
+      print_as_symbol (err->obj->value_ptr.symbol_name->actual_symname,
+		       err->obj->value_ptr.symbol_name->actual_symname_used_s, 1,
+		       std_out->value_ptr.stream);
       printf (" is not external in package ");
-      fwrite (err->obj->value_ptr.symbol_name->value,
-	      err->obj->value_ptr.symbol_name->used_size, 1, stdout);
+      print_as_symbol (err->obj->value_ptr.symbol_name->value,
+		       err->obj->value_ptr.symbol_name->used_size, 1,
+		       std_out->value_ptr.stream);
       printf ("\n");
     }
   else if (err->type == PACKAGE_MARKER_IN_SHARP_COLON)
@@ -16434,13 +16436,13 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == UNBOUND_SYMBOL)
     {
       printf ("eval error: symbol ");
-      print_object (err->obj, env, env->c_stdout->value_ptr.stream);
+      print_object (err->obj, env, std_out->value_ptr.stream);
       printf (" not bound to any object\n");
     }
   else if (err->type == UNKNOWN_FUNCTION)
     {
       printf ("eval error: symbol ");
-      print_object (err->obj, env, env->c_stdout->value_ptr.stream);
+      print_object (err->obj, env, std_out->value_ptr.stream);
       printf (" not bound to any function, macro or special operator\n");
     }
   else if (err->type == INVALID_FUNCTION_CALL)
@@ -16642,9 +16644,9 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL)
     {
       printf ("eval error: using package ");
-      write_to_stream (std_out->value_ptr.stream,
-		       err->pack->value_ptr.package->name,
-		       err->pack->value_ptr.package->name_len);
+      print_as_symbol (err->pack->value_ptr.package->name,
+		       err->pack->value_ptr.package->name_len, 1,
+		       std_out->value_ptr.stream);
       printf (" would cause conflict on symbol ");
       print_symbol (err->obj->value_ptr.symbol, env, std_out->value_ptr.stream);
       printf ("\n");
