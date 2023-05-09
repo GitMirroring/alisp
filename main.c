@@ -1741,8 +1741,8 @@ int print_complex (const struct complex *c, struct environment *env,
 		   struct stream *str);
 int print_bytespec (const struct bytespec *bs, struct environment *env,
 		    struct stream *str);
-int print_string (const struct string *st, struct environment *env,
-		  struct stream *str);
+int print_as_string (const char *value, size_t sz, struct environment *env,
+		     struct stream *str);
 int print_character (const char *character, struct environment *env,
 		     struct stream *str);
 int print_filename (const struct filename *fn, struct environment *env,
@@ -15983,8 +15983,8 @@ print_bytespec (const struct bytespec *bs, struct environment *env,
 
 
 int
-print_string (const struct string *st, struct environment *env,
-	      struct stream *str)
+print_as_string (const char *value, size_t sz, struct environment *env,
+		 struct stream *str)
 {
   fixnum i;
   int pesc = is_printer_escaping_enabled (env);
@@ -15992,13 +15992,13 @@ print_string (const struct string *st, struct environment *env,
   if (pesc && write_to_stream (str, "\"", 1) < 0)
     return -1;
 
-  for (i = 0; i < st->used_size; i++)
+  for (i = 0; i < sz; i++)
     {
-      if (pesc && (st->value [i] == '"' || st->value [i] == '\\')
+      if (pesc && (value [i] == '"' || value [i] == '\\')
 	  && write_to_stream (str, "\\", 1) < 0)
 	return -1;
 
-      if (write_to_stream (str, &st->value [i], 1) < 0)
+      if (write_to_stream (str, &value [i], 1) < 0)
 	return -1;
     }
 
@@ -16058,7 +16058,8 @@ print_filename (const struct filename *fn, struct environment *env,
   if (write_to_stream (str, "#P", 2) < 0)
     return -1;
 
-  return print_string (fn->value->value_ptr.string, env, str);
+  return print_as_string (fn->value->value_ptr.string->value,
+			  fn->value->value_ptr.string->used_size, env, str);
 }
 
 
@@ -16258,7 +16259,8 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_BYTESPEC)
 	return print_bytespec (obj->value_ptr.bytespec, env, str);
       else if (obj->type == TYPE_STRING)
-	return print_string (obj->value_ptr.string, env, str);
+	return print_as_string (obj->value_ptr.string->value,
+				obj->value_ptr.string->used_size, env, str);
       else if (obj->type == TYPE_CHARACTER)
 	return print_character (obj->value_ptr.character, env, str);
       else if (obj->type == TYPE_FILENAME)
@@ -16289,10 +16291,10 @@ print_object (const struct object *obj, struct environment *env,
 	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
 	{
-	  if (write_to_stream (str, "#<PACKAGE \"", strlen ("#<PACKAGE \"")) < 0
-	      || write_to_stream (str, obj->value_ptr.package->name,
-				  obj->value_ptr.package->name_len) < 0
-	      || write_to_stream (str, "\">", 2) < 0)
+	  if (write_to_stream (str, "#<PACKAGE ", strlen ("#<PACKAGE ")) < 0
+	      || print_as_string (obj->value_ptr.package->name,
+				  obj->value_ptr.package->name_len, env, str) < 0
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
