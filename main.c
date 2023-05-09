@@ -276,7 +276,9 @@ outcome_type
     INCORRECT_SYNTAX_IN_DEFTYPE,
     INVALID_LAMBDA_LIST,
     CANT_REDEFINE_SPECIAL_OPERATOR,
-    CANT_REDEFINE_CONSTANT,
+    CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE,
+    CANT_REDEFINE_CONSTANT_BY_DIFFERENT_OPERATOR,
+    CANT_MODIFY_CONSTANT,
     CANT_REBIND_CONSTANT,
     CANT_REDEFINE_STANDARD_TYPE,
     TOO_FEW_ARGUMENTS,
@@ -1720,6 +1722,7 @@ int symbol_equals (const struct object *sym, const char *str,
 		   struct environment *env);
 int symbol_is_among (const struct object *sym, struct environment *env, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
+struct object *eql_objects (struct object *obj1, struct object *obj2);
 
 struct object *fresh_line (struct stream *str);
 
@@ -6167,8 +6170,17 @@ define_constant (struct object *sym, struct object *form,
 
   if (sym->value_ptr.symbol->is_const)
     {
-      outcome->type = CANT_REDEFINE_CONSTANT;
-      return NULL;
+      if (eql_objects (val, sym->value_ptr.symbol->value_cell) == &t_object)
+	{
+	  decrement_refcount (val);
+	  increment_refcount (sym);
+	  return sym;
+	}
+      else
+	{
+	  outcome->type = CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE;
+	  return NULL;
+	}
     }
 
   sym->value_ptr.symbol->is_const = 1;
@@ -10143,43 +10155,13 @@ struct object *
 builtin_eql (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  struct object *arg1, *arg2;
-
   if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (IS_SYMBOL (CAR (list)))
-    arg1 = SYMBOL (CAR (list));
-  else
-    arg1 = CAR (list);
-
-  if (IS_SYMBOL (CAR (CDR (list))))
-    arg2 = SYMBOL (CAR (CDR (list)));
-  else
-    arg2 = CAR (CDR (list));
-
-  if (arg1 == arg2)
-    return &t_object;
-
-  if ((IS_RATIONAL (arg1) && IS_RATIONAL (arg2))
-      || (arg1->type == TYPE_FLOAT && arg2->type == TYPE_FLOAT))
-    {
-      if (!compare_two_numbers (arg1, arg2))
-	return &t_object;
-      else
-	return &nil_object;
-    }
-
-  if (arg1->type == TYPE_CHARACTER && arg2->type == TYPE_CHARACTER)
-    {
-      if (!strcmp (arg1->value_ptr.character, arg2->value_ptr.character))
-	return &t_object;
-    }
-
-  return &nil_object;
+  return eql_objects (CAR (list), CAR (CDR (list)));
 }
 
 
@@ -10803,7 +10785,7 @@ accessor_car (struct object *list, struct object *newval,
   if (IS_SYMBOL (CAR (CDR (list)))
       && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
     {
-      outcome->type = CANT_REDEFINE_CONSTANT;
+      outcome->type = CANT_MODIFY_CONSTANT;
       return NULL;
     }
 
@@ -10846,7 +10828,7 @@ accessor_cdr (struct object *list, struct object *newval,
   if (IS_SYMBOL (CAR (CDR (list)))
       && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
     {
-      outcome->type = CANT_REDEFINE_CONSTANT;
+      outcome->type = CANT_MODIFY_CONSTANT;
       return NULL;
     }
 
@@ -14174,7 +14156,7 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
 
   if (s->is_const)
     {
-      outcome->type = CANT_REDEFINE_CONSTANT;
+      outcome->type = CANT_REDEFINE_CONSTANT_BY_DIFFERENT_OPERATOR;
       return NULL;
     }
 
@@ -14390,6 +14372,12 @@ evaluate_defconstant (struct object *list, struct environment *env,
   if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
@@ -15736,6 +15724,37 @@ equal_strings (const struct string *s1, const struct string *s2)
 
 
 struct object *
+eql_objects (struct object *obj1, struct object *obj2)
+{
+  if (IS_SYMBOL (obj1))
+    obj1 = SYMBOL (obj1);
+
+  if (IS_SYMBOL (obj2))
+    obj2 = SYMBOL (obj2);
+
+  if (obj1 == obj2)
+    return &t_object;
+
+  if ((IS_RATIONAL (obj1) && IS_RATIONAL (obj2))
+      || (obj1->type == TYPE_FLOAT && obj2->type == TYPE_FLOAT))
+    {
+      if (!compare_two_numbers (obj1, obj2))
+	return &t_object;
+      else
+	return &nil_object;
+    }
+
+  if (obj1->type == TYPE_CHARACTER && obj2->type == TYPE_CHARACTER)
+    {
+      if (!strcmp (obj1->value_ptr.character, obj2->value_ptr.character))
+	return &t_object;
+    }
+
+  return &nil_object;
+}
+
+
+struct object *
 fresh_line (struct stream *str)
 {
   if (str->dirty_line)
@@ -16535,9 +16554,19 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: redefining special operators is not allowed\n");
     }
-  else if (err->type == CANT_REDEFINE_CONSTANT)
+  else if (err->type == CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE)
     {
-      printf ("eval error: redefining constants is not allowed\n");
+      printf ("eval error: redefining constants to a non-eql value is not "
+	      "allowed\n");
+    }
+  else if (err->type == CANT_REDEFINE_CONSTANT_BY_DIFFERENT_OPERATOR)
+    {
+      printf ("eval error: redefining constants by a different operator is not "
+	      "allowed\n");
+    }
+  else if (err->type == CANT_MODIFY_CONSTANT)
+    {
+      printf ("eval error: modifying constants is not allowed\n");
     }
   else if (err->type == CANT_REBIND_CONSTANT)
     {
