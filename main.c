@@ -5671,6 +5671,25 @@ load_file (const char *filename, struct environment *env,
 	  outcome->type = out;
 	  return NULL;
 	}
+      else if (out == INCOMPLETE_SYMBOL_NAME && !outcome->single_escape
+	       && !outcome->multiple_escape)
+	{
+	  if (!intern_symbol_name (skip_prefix (obj, NULL, NULL, NULL, NULL,
+						NULL),
+						env, &out))
+	    {
+	      free (buf);
+	      fclose (f);
+
+	      outcome->type = out;
+	      outcome->obj = skip_prefix (obj, NULL, NULL, NULL, NULL, NULL);
+
+	      return NULL;
+	    }
+
+	  out = COMPLETE_OBJECT;
+	  sz = 0;
+	}
       else if (IS_INCOMPLETE_OBJECT (out))
 	{
 	  free (buf);
