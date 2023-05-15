@@ -16096,29 +16096,39 @@ int
 print_as_symbol (const char *sym, size_t len, int print_escapes,
 		 struct stream *str)
 {
-  size_t i, sz;
+  size_t i, sz, emp;
   char need_multiple_escape [] = "().,;'#\"\n";
   int do_need_multiple_escape = 0;
+  enum object_type t;
+  const char *ne, *te;
 
   sz = len;
 
-  for (i = 0; print_escapes && i < len; i++)
+  if (is_number (sym, len, 10, &t, &ne, &emp, &te))
     {
-      if ((strchr (need_multiple_escape, sym [i]) || !sym [i]
-	   || isspace ((unsigned char)sym [i])
-	   || islower ((unsigned char)sym [i]))
-	  && !do_need_multiple_escape)
+      do_need_multiple_escape = 1;
+      sz += 2;
+    }
+  else
+    {
+      for (i = 0; print_escapes && i < len; i++)
 	{
-	  do_need_multiple_escape = 1;
+	  if ((strchr (need_multiple_escape, sym [i]) || !sym [i]
+	       || isspace ((unsigned char)sym [i])
+	       || islower ((unsigned char)sym [i]))
+	      && !do_need_multiple_escape)
+	    {
+	      do_need_multiple_escape = 1;
 
-	  if (str->medium == FILE_STREAM)
-	    break;
+	      if (str->medium == FILE_STREAM)
+		break;
 
-	  sz += 2;
+	      sz += 2;
+	    }
+
+	  if (sym [i] == '|' || sym [i] == '\\')
+	    sz++;
 	}
-
-      if (sym [i] == '|' || sym [i] == '\\')
-	sz++;
     }
 
   if (str->medium == STRING_STREAM)
