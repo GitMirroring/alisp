@@ -315,6 +315,16 @@ outcome_type
   };
 
 
+
+#define INCOMPLETE_OBJECT(o,emptylist)					\
+  (!(o) ? JUST_PREFIX :							\
+   emptylist ? INCOMPLETE_EMPTY_LIST :					\
+   (o)->type == TYPE_CONS_PAIR ? INCOMPLETE_NONEMPTY_LIST :		\
+   (o)->type == TYPE_STRING ? INCOMPLETE_STRING :			\
+   (o)->type == TYPE_SYMBOL_NAME ? INCOMPLETE_SYMBOL_NAME :		\
+   (o)->type == TYPE_SHARP_MACRO_CALL ? INCOMPLETE_SHARP_MACRO_CALL : 0)
+
+
 #define IS_INCOMPLETE_OBJECT(t) ((t) == JUST_PREFIX			\
 				 || (t) == INCOMPLETE_EMPTY_LIST	\
 				 || (t) == INCOMPLETE_NONEMPTY_LIST	\
@@ -324,30 +334,31 @@ outcome_type
 
 
 #define IS_READ_OR_EVAL_ERROR(t) ((t) == CLOSING_PARENTHESIS		\
-    || (t) == CLOSING_PARENTHESIS_AFTER_PREFIX				\
-    || (t) == INVALID_SHARP_DISPATCH					\
-    || (t) == UNKNOWN_SHARP_DISPATCH					\
-    || (t) == WRONG_OBJECT_TYPE_TO_SHARP_MACRO				\
-    || (t) == UNKNOWN_CHARACTER_NAME					\
-    || (t) == FUNCTION_NOT_FOUND_IN_READ				\
-    || (t) == COMMA_WITHOUT_BACKQUOTE					\
-    || (t) == TOO_MANY_COMMAS						\
-    || (t) == SINGLE_DOT						\
-    || (t) == MULTIPLE_DOTS						\
-    || (t) == NO_OBJ_BEFORE_DOT_IN_LIST					\
-    || (t) == NO_OBJ_AFTER_DOT_IN_LIST					\
-    || (t) == MULTIPLE_OBJS_AFTER_DOT_IN_LIST				\
-    || (t) == MORE_THAN_A_CONSING_DOT					\
-    || (t) == TOO_MANY_COLONS						\
-    || (t) == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE			\
-    || (t) == CANT_END_WITH_PACKAGE_SEPARATOR				\
-    || (t) == MORE_THAN_A_PACKAGE_SEPARATOR				\
-    || (t) == PACKAGE_NOT_FOUND_IN_READ					\
-    || (t) == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE				\
-    || (t) == PACKAGE_MARKER_IN_SHARP_COLON				\
-    || (t) == GOT_EOF_IN_MIDDLE_OF_OBJECT				\
-    || (t) == GOT_EOF							\
-    || (t) > EVAL_OK)
+				  || (t) == CLOSING_PARENTHESIS_AFTER_PREFIX \
+				  || (t) == INVALID_SHARP_DISPATCH	\
+				  || (t) == UNKNOWN_SHARP_DISPATCH	\
+				  || (t) == WRONG_OBJECT_TYPE_TO_SHARP_MACRO \
+				  || (t) == UNKNOWN_CHARACTER_NAME	\
+				  || (t) == FUNCTION_NOT_FOUND_IN_READ	\
+				  || (t) == COMMA_WITHOUT_BACKQUOTE	\
+				  || (t) == TOO_MANY_COMMAS		\
+				  || (t) == SINGLE_DOT			\
+				  || (t) == MULTIPLE_DOTS		\
+				  || (t) == NO_OBJ_BEFORE_DOT_IN_LIST	\
+				  || (t) == NO_OBJ_AFTER_DOT_IN_LIST	\
+				  || (t) == MULTIPLE_OBJS_AFTER_DOT_IN_LIST \
+				  || (t) == MORE_THAN_A_CONSING_DOT	\
+				  || (t) == TOO_MANY_COLONS		\
+				  || (t) == CANT_BEGIN_WITH_TWO_COLONS_OR_MORE \
+				  || (t) == CANT_END_WITH_PACKAGE_SEPARATOR \
+				  || (t) == MORE_THAN_A_PACKAGE_SEPARATOR \
+				  || (t) == PACKAGE_NOT_FOUND_IN_READ	\
+				  || (t) == SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE \
+				  || (t) == PACKAGE_MARKER_IN_SHARP_COLON \
+				  || (t) == GOT_EOF_IN_MIDDLE_OF_OBJECT	\
+				  || (t) == GOT_EOF			\
+				  || (t) > EVAL_OK)
+
 
 
 struct
@@ -904,8 +915,9 @@ char *generate_prompt (struct environment *env);
 
 enum outcome_type read_object_continued
 (struct object **obj, int backts_commas_balance, int is_empty_list,
- const char *input, size_t size, struct environment *env,
- struct outcome *outcome,  const char **obj_begin, const char **obj_end);
+ const char *input, size_t size, FILE *stream, int preserve_whitespace,
+ int ends_with_eof, struct environment *env, struct outcome *outcome,
+ const char **obj_begin, const char **obj_end);
 struct object *complete_object_interactively
 (struct object *obj, int is_empty_list, struct environment *env,
  struct outcome *outcome, const char **input_left, size_t *input_left_size,
@@ -918,14 +930,15 @@ struct object *read_object_interactively
 (struct environment *env, struct outcome *outcome, const char **input_left,
  size_t *input_left_size, char **wholeline);
 
-const char *skip_space_block
-(const char *input, size_t size, size_t *new_size);
-const char *jump_to_end_of_line
-(const char *input, size_t size, size_t *new_size);
-const char *find_multiline_comment_delimiter
-(const char *input, size_t size, size_t *new_size);
-const char *jump_to_end_of_multiline_comment
-(const char *input, size_t size, size_t depth, size_t *depth_or_new_size);
+int next_char (unsigned char *ch, const char **input, size_t *size,
+	       FILE *stream);
+int next_nonspace_char (unsigned char *ch, const char **input, size_t *size,
+			FILE *stream);
+int unget_char (unsigned char ch, const char **input, size_t *size,
+		FILE *stream);
+int jump_to_end_of_line (const char **input, size_t *size, FILE *stream);
+int jump_to_end_of_multiline_comment (const char **input, size_t *size,
+				      FILE *stream, size_t *depth);
 
 struct line_list *append_line_to_list
 (char *line, size_t size, struct line_list *list, int do_copy);
@@ -940,33 +953,38 @@ void free_object_list_structure (struct object_list *list);
 
 enum outcome_type read_object
 (struct object **obj, int backts_commas_balance, const char *input, size_t size,
+ FILE *stream, int preserve_whitespace, int ends_with_eof,
  struct environment *env, struct outcome *outcome, const char **obj_begin,
  const char **obj_end);
 
 enum outcome_type read_list
 (struct object **obj, int backts_commas_balance, const char *input, size_t size,
+ FILE *stream, int preserve_whitespace, int ends_with_eof,
  struct environment *env, struct outcome *outcome, const char **list_end);
 
-enum outcome_type read_string
-(struct object **obj, const char *input, size_t size, const char **string_end);
+enum outcome_type read_string (struct object **obj, const char *input,
+			       size_t size, FILE *stream,
+			       const char **string_end);
 
 enum outcome_type read_symbol_name
-(struct object **obj, const char *input, size_t size, const char **symname_end,
+(struct object **obj, const char *input, size_t size, int got_eof,
+ int preserve_whitespace, const char **symname_end,
  enum readtable_case read_case, struct outcome *out);
 
 enum outcome_type read_prefix
-(struct object **obj, const char *input, size_t size, int *backts_commas_balance,
- struct object **last, const char **prefix_end);
+(struct object **obj, const char *input, size_t size, FILE *stream,
+ int *backts_commas_balance, struct object **last, const char **prefix_end);
 
 enum outcome_type read_sharp_macro_call
-(struct object **obj, const char *input, size_t size, struct environment *env,
+(struct object **obj, const char *input, size_t size, FILE *stream,
+ int preserve_whitespace, int ends_with_eof, struct environment *env,
  struct outcome *outcome, const char **macro_end);
 struct object *call_sharp_macro
 (struct sharp_macro_call *macro_call, struct environment *env,
  struct outcome *outcome);
 
-enum element find_next_element
-(const char *input, size_t size, const char **elem_begin);
+char *accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
+			int *token_length, struct outcome *out);
 
 int is_number (const char *token, size_t size, int radix,
 	       enum object_type *numtype, const char **number_end,
@@ -995,7 +1013,7 @@ void *realloc_and_check (void *ptr, size_t size);
 void *calloc_and_check (size_t nmemb, size_t size);
 
 struct object *alloc_object (void);
-struct object *alloc_prefix (enum element type);
+struct object *alloc_prefix (unsigned char pr);
 struct object *alloc_empty_cons_pair (void);
 struct object *alloc_empty_list (size_t sz);
 struct object *alloc_function (void);
@@ -1060,9 +1078,9 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (fixnum size);
-struct object *create_string_from_char_vector (char *str, fixnum size,
-					       int copy_vector);
-struct object *create_string_from_c_string (char *str);
+struct object *create_string_copying_char_vector (const char *str, fixnum size);
+struct object *create_string_with_char_vector (char *str, fixnum size);
+struct object *create_string_copying_c_string (char *str);
 void resize_string_allocation (struct object *string, fixnum size);
 char *copy_string_to_c_string (struct string *str);
 
@@ -1071,7 +1089,9 @@ void resize_symbol_name (struct object *symname, size_t value_s,
 			 size_t actual_symname_s);
 
 const char *find_end_of_symbol_name (const char *input, size_t size,
-				     int found_package_sep, size_t *new_size,
+				     int preserve_whitespace,
+				     int already_begun, int found_package_sep,
+				     size_t *new_size,
 				     const char **start_of_package_separator,
 				     enum package_record_visibility *sym_visibility,
 				     size_t *name_length,
@@ -1171,9 +1191,7 @@ struct object *define_variable (char *name, struct object *value,
 
 struct object *skip_prefix
 (struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
- struct object **last_prefix, struct object **last_comma,
- struct object **before_last_comma);
-struct object *append_prefix (struct object *obj, enum element type);
+ struct object **last_prefix);
 
 struct object *nth (unsigned int ind, struct object *list);
 struct object *nthcdr (unsigned int ind, struct object *list);
@@ -1186,7 +1204,7 @@ int is_dotted_or_circular_list (struct object *list, int *is_circular);
 int is_proper_list (struct object *list);
 
 struct object *copy_prefix (const struct object *begin, const struct object *end,
-			    struct object **last_prefix, int refcount);
+			    struct object **last_prefix);
 struct object *copy_list_structure (struct object *list,
 				    const struct object *prefix, int num_conses,
 				    struct object **last_cell);
@@ -1372,6 +1390,8 @@ struct object *builtin_last
 struct object *builtin_read_line
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_read_preserving_whitespace
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_eval
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -1896,7 +1916,7 @@ main (int argc, char *argv [])
   for (i = 0; i < argc; i++)
     {
       al_argv->value_ptr.array->value [i] =
-	create_string_from_c_string (argv [i]);
+	create_string_copying_c_string (argv [i]);
     }
 
   define_variable ("AL-ARGV", al_argv, &env);
@@ -1916,7 +1936,7 @@ main (int argc, char *argv [])
       obj = read_object_interactively (&env, &eval_out, &input_left,
 				       &input_left_s, &wholel);
 
-      while (obj && input_left && input_left_s > 0)
+      while (obj)
 	{
 	  result = evaluate_object (obj, &env, &eval_out);
 
@@ -1961,10 +1981,13 @@ main (int argc, char *argv [])
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
 
-	  obj = read_object_interactively_continued (input_left, input_left_s,
-						     &env, &eval_out,
-						     &input_left,
-						     &input_left_s, &wholel);
+	  if (input_left && input_left_s > 0)
+	    obj = read_object_interactively_continued (input_left, input_left_s,
+						       &env, &eval_out,
+						       &input_left,
+						       &input_left_s, &wholel);
+	  else
+	    obj = NULL;
 	}
     }
 
@@ -2179,6 +2202,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
+		    builtin_read_preserving_whitespace, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
@@ -2570,51 +2596,49 @@ generate_prompt (struct environment *env)
 enum outcome_type
 read_object_continued (struct object **obj, int backts_commas_balance,
 		       int is_empty_list, const char *input, size_t size,
-		       struct environment *env, struct outcome *outcome,
-		       const char **obj_begin, const char **obj_end)
+		       FILE *stream, int preserve_whitespace,
+		       int ends_with_eof, struct environment *env,
+		       struct outcome *outcome,  const char **obj_begin,
+		       const char **obj_end)
 {
   enum outcome_type out;
-  int bts, cs;
-  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref, NULL,
-					       NULL);
+  int bts, cs, tokensize, tokenlength;
+  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref);
   struct object *l, *call;
+  char *token;
 
   backts_commas_balance += (bts - cs);
 
   if (outcome->multiline_comment_depth)
     {
-      input = jump_to_end_of_multiline_comment (input, size,
-						outcome->multiline_comment_depth,
-						&outcome->multiline_comment_depth);
-
-      if (!input)
-	return NO_OBJECT;
-
-      input++;
-      size = outcome->multiline_comment_depth-1;
-      outcome->multiline_comment_depth = 0;
+      if (!jump_to_end_of_multiline_comment (&input, &size, stream,
+					     &outcome->multiline_comment_depth))
+	return INCOMPLETE_OBJECT (ob, is_empty_list);
     }
 
   if (is_empty_list)
     {
       l = NULL;
 
-      out = read_list (&l, backts_commas_balance, input, size, env, outcome,
+      out = read_list (&l, backts_commas_balance, input, size, stream,
+		       preserve_whitespace, ends_with_eof, env, outcome,
 		       obj_end);
 
       ob = l;
     }
   else if (!ob)
     {
-      out = read_object (&ob, backts_commas_balance, input, size, env,
-			 outcome, obj_begin, obj_end);
+      out = read_object (&ob, backts_commas_balance, input, size, stream,
+			 preserve_whitespace, ends_with_eof, env, outcome,
+			 obj_begin, obj_end);
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
     }
   else if (ob->type == TYPE_CONS_PAIR)
     {
-      out = read_list (&ob, backts_commas_balance, input, size, env, outcome,
+      out = read_list (&ob, backts_commas_balance, input, size, stream,
+		       preserve_whitespace, ends_with_eof, env, outcome,
 		       obj_end);
 
       if (out == INCOMPLETE_EMPTY_LIST)
@@ -2622,11 +2646,26 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_STRING)
     {
-      out = read_string (&ob, input, size, obj_end);
+      out = read_string (&ob, input, size, stream, obj_end);
     }
   else if (ob->type == TYPE_SYMBOL_NAME)
     {
-      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE, outcome);
+      if (!input)
+	token = accumulate_token (stream, preserve_whitespace, &tokensize,
+				  &tokenlength, outcome);
+      else
+	tokenlength = size;
+
+      if ((!input || ends_with_eof)
+	  && (outcome->single_escape || outcome->multiple_escape))
+	{
+	  free (token);
+	  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+	}
+
+      out = read_symbol_name (&ob, input ? input : token, tokenlength,
+			      input == NULL, preserve_whitespace, obj_end,
+			      CASE_UPCASE, outcome);
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 	{
@@ -2636,7 +2675,8 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
     {
-      out = read_sharp_macro_call (&ob, input, size, env, outcome, obj_end);
+      out = read_sharp_macro_call (&ob, input, size, stream, preserve_whitespace,
+				   ends_with_eof, env, outcome, obj_end);
 
       if (out == COMPLETE_OBJECT)
 	{
@@ -2675,8 +2715,8 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   line = read_line_interactively ("> ");
   len = strlen (line);
   
-  read_out = read_object_continued (&obj, 0, is_empty_list, line, len, env,
-				    outcome, &begin, &end);
+  read_out = read_object_continued (&obj, 0, is_empty_list, line, len, NULL, 0,
+				    0, env, outcome, &begin, &end);
 
   while (IS_INCOMPLETE_OBJECT (read_out) || IS_READ_OR_EVAL_ERROR (read_out)
 	 || outcome->multiline_comment_depth)
@@ -2692,12 +2732,10 @@ complete_object_interactively (struct object *obj, int is_empty_list,
       line = read_line_interactively ("> ");
       len = strlen (line);
 
-      if (read_out == INCOMPLETE_EMPTY_LIST)
-	read_out = read_object_continued (&obj, 0, 1, line, len, env, outcome,
-					  &begin, &end);
-      else
-	read_out = read_object_continued (&obj, 0, 0, line, len, env, outcome,
-					  &begin, &end);
+      read_out = read_object_continued (&obj, 0,
+					read_out == INCOMPLETE_EMPTY_LIST, line,
+					len, NULL, 0, 0, env, outcome, &begin,
+					&end);
     }
 
   *input_left = end + 1;
@@ -2719,8 +2757,8 @@ read_object_interactively_continued (const char *input, size_t input_size,
   struct object *obj = NULL;
   const char *begin, *end;
 
-  read_out = read_object (&obj, 0, input, input_size, env, outcome, &begin,
-			  &end);
+  read_out = read_object (&obj, 0, input, input_size, NULL, 0, 0, env, outcome,
+			  &begin, &end);
   
   if (read_out == COMPLETE_OBJECT && !outcome->multiline_comment_depth)
     {
@@ -2743,14 +2781,13 @@ read_object_interactively_continued (const char *input, size_t input_size,
 
       return NULL;
     }
-  else if (read_out == INCOMPLETE_EMPTY_LIST)
+  else
     {
-      return complete_object_interactively (obj, 1, env, outcome, input_left,
+      return complete_object_interactively (obj,
+					    read_out == INCOMPLETE_EMPTY_LIST,
+					    env, outcome, input_left,
 					    input_left_size, wholeline);
     }
-  else
-    return complete_object_interactively (obj, 0, env, outcome, input_left,
-					  input_left_size, wholeline);
 }
 
 
@@ -2775,101 +2812,111 @@ read_object_interactively (struct environment *env, struct outcome *outcome,
 }
 
 
-const char *
-skip_space_block (const char *input, size_t size, size_t *new_size)
+int
+next_char (unsigned char *ch, const char **input, size_t *size, FILE *stream)
 {
-  size_t i;
+  int c;
 
-  for (i = 0; i < size; i++)
+  if (*input)
     {
-      if (!isspace (input [i]))
+      if (!*size)
+	return 0;
+
+      (*input)++;
+      (*size)--;
+
+      *ch = *(*input-1);
+      return 1;
+    }
+  else
+    {
+      c = fgetc (stream);
+
+      if (c == EOF)
+	return 0;
+
+      *ch = c;
+      return 1;
+    }
+}
+
+
+int
+next_nonspace_char (unsigned char *ch, const char **input, size_t *size,
+		    FILE *stream)
+{
+  while (next_char (ch, input, size, stream))
+    {
+      if (!isspace ((unsigned char)*ch))
 	{
-	  *new_size = size-i;
-	  return input+i;
+	  return 1;
 	}
     }
-  
-  return NULL;
+
+  return 0;
 }
 
 
-const char *
-jump_to_end_of_line (const char *input, size_t size, size_t *new_size)
+int
+unget_char (unsigned char ch, const char **input, size_t *size, FILE *stream)
 {
-  const char *eol;
-  
-  if (!size)
-    return NULL;
-  
-  eol =  memmem (input, size, "\n", 1);
-  
-  if (!eol)
-    return NULL;
-
-  *new_size = size - (sizeof (char) * (eol - input));
-
-  return eol;
-}
-
-
-const char *
-find_multiline_comment_delimiter (const char *input, size_t size,
-				  size_t *new_size)
-{
-  const char *comm_begin, *comm_end, *delim;
-
-  if (!size)
-    return NULL;
-  
-  comm_begin = memmem (input, size, "#|", 2);
-  comm_end = memmem (input, size, "|#", 2);
-  
-  if (comm_begin && comm_end)
+  if (*input)
     {
-      if (comm_begin < comm_end)
-	delim = comm_begin;
-      else
-	delim =  comm_end;
+      (*input)--;
+      (*size)++;
+      return 1;
     }
-  else if (comm_begin)
-    delim = comm_begin;
-  else if (comm_end)
-    delim = comm_end;
   else
-    return NULL;
-
-  *new_size = size - (sizeof (char) * (delim - input));
-  
-  return delim;
+    {
+      ungetc (ch, stream);
+      return 1;
+    }
 }
 
 
-const char *
-jump_to_end_of_multiline_comment (const char *input, size_t size, size_t depth,
-				  size_t *depth_or_new_size)
+int
+jump_to_end_of_line (const char **input, size_t *size, FILE *stream)
 {
-  if (!size)
-    return NULL;
+  unsigned char ch;
 
-  while (depth && (input = find_multiline_comment_delimiter (input, size,
-							     &size)))
+  while (next_char (&ch, input, size, stream))
     {
-      if (*input == '#')
-	depth++;
-      else
-	depth--;
-
-      input += 2, size -= 2;
+      if (ch == '\n')
+	{
+	  return 1;
+	}
     }
 
-  if (!depth)
+  return 0;
+}
+
+
+int
+jump_to_end_of_multiline_comment (const char **input, size_t *size, FILE *stream,
+				  size_t *depth)
+{
+  unsigned char ch, ch2;
+
+  while (next_char (&ch, input, size, stream))
     {
-      *depth_or_new_size = size+1;
-      return input-1;
+      if (ch == '#' || ch == '|')
+	{
+	  if (!next_char (&ch2, input, size, stream))
+	    return 0;
+
+	  if (ch == '#' && ch2 == '|')
+	    (*depth)++;
+	  else if (ch == '|' && ch2 == '#')
+	    (*depth)--;
+	  else
+	    unget_char (ch2, input, size, stream);
+
+	  if (!*depth)
+	    return 1;
+	}
     }
 
-  *depth_or_new_size = depth;
-  return NULL;
+  return 0;
 }
 
 
@@ -3012,106 +3059,148 @@ free_object_list_structure (struct object_list *list)
 
 enum outcome_type
 read_object (struct object **obj, int backts_commas_balance, const char *input,
-	     size_t size, struct environment *env, struct outcome *outcome,
+	     size_t size, FILE *stream, int preserve_whitespace,
+	     int ends_with_eof, struct environment *env, struct outcome *outcome,
 	     const char **obj_begin, const char **obj_end)
 {
-  int found_prefix = 0;
+  int found_prefix = 0, tokensize, tokenlength;
   struct object *last_pref, *ob = NULL, *call;
   enum object_type numtype;
   enum outcome_type out = NO_OBJECT;
   const char *num_end;
+  char *token;
   size_t exp_mark_pos;
+  unsigned char ch;
 
-  input = skip_space_block (input, size, &size);
 
-  if (!input)
+  if (!next_nonspace_char (&ch, &input, &size, stream))
     return NO_OBJECT;
 
   while (1)
     {
-      if (*input == ';')
+      if (ch == ';')
 	{
-	  input = jump_to_end_of_line (input, size, &size);
+	  if (!jump_to_end_of_line (&input, &size, stream))
+	    break;
 	}
-      else if (*input == '#' && size > 1 && *(input+1) == '|')
+      else if (ch == '#')
 	{
-	  if (!(input = jump_to_end_of_multiline_comment (input+2, size-2, 1,
-							  &outcome->
-							  multiline_comment_depth)))
-	    return NO_OBJECT;
+	  if (!next_char (&ch, &input, &size, stream))
+	    break;
+
+	  if (ch == '|')
+	    {
+	      outcome->multiline_comment_depth = 1;
+
+	      if (!jump_to_end_of_multiline_comment (&input, &size, stream,
+						     &outcome->
+						     multiline_comment_depth))
+		break;
+	    }
 	  else
 	    {
-	      size = outcome->multiline_comment_depth;
-	      outcome->multiline_comment_depth = 0;
+	      unget_char (ch, &input, &size, stream);
+
+	      if (input)
+		*obj_begin = input;
+
+	      out = read_sharp_macro_call (&ob, input, size, stream,
+					   preserve_whitespace,
+					   ends_with_eof, env, outcome, obj_end);
+
+	      if (out == COMPLETE_OBJECT)
+		{
+		  call = ob;
+		  ob = call_sharp_macro (call->value_ptr.sharp_macro_call, env,
+					 outcome);
+		  free_sharp_macro_call (call);
+
+		  if (!ob)
+		    {
+		      return outcome->type;
+		    }
+		}
+
+	      break;
 	    }
 	}
-      else if (*input == '\'' || *input == '`' || *input == ',')
+      else if (ch == '\'' || ch == '`' || ch == ',')
  	{
-	  out = read_prefix (obj, input, size, &backts_commas_balance,
+	  unget_char (ch, &input, &size, stream);
+
+	  out = read_prefix (obj, input, size, stream, &backts_commas_balance,
 			     &last_pref, obj_end);
 
 	  if (out == TOO_MANY_COMMAS)
 	    return out;
 
-	  size = size - (*obj_end - input);
-	  input = *obj_end;
+	  if (input)
+	    {
+	      size = size - (*obj_end - input);
+	      input = *obj_end;
+	    }
+
 	  found_prefix = 1;
 	}
-      else if (*input == ')')
+      else if (ch == ')')
 	{
-	  *obj_end = input;
+	  if (input)
+	    *obj_end = input-1;
+
 	  return found_prefix ? CLOSING_PARENTHESIS_AFTER_PREFIX :
 	    CLOSING_PARENTHESIS;
 	}
-      else if (*input == '(')
+      else if (ch == '(')
 	{
-	  *obj_begin = input;
-	  out = read_list (&ob, backts_commas_balance, input+1, size-1, env,
-			   outcome, obj_end);
+	  if (input)
+	    *obj_begin = input;
+
+	  out = read_list (&ob, backts_commas_balance, input, size, stream,
+			   preserve_whitespace, ends_with_eof, env, outcome,
+			   obj_end);
 	  break;
 	}
-      else if (*input == '"')
+      else if (ch == '"')
 	{
-	  *obj_begin = input;
-	  out = read_string (&ob, input+1, size-1, obj_end);
-	  break;
-	}
-      else if (*input == '#')
-	{
-	  *obj_begin = input;
-	  out = read_sharp_macro_call (&ob, input+1, size-1, env, outcome,
-				       obj_end);
+	  if (input)
+	    *obj_begin = input;
 
-	  if (out == COMPLETE_OBJECT)
-	    {
-	      call = ob;
-	      ob = call_sharp_macro (call->value_ptr.sharp_macro_call, env,
-				     outcome);
-	      free_sharp_macro_call (call);
-
-	      if (!ob)
-		{
-		  return outcome->type;
-		}
-	    }
-
+	  out = read_string (&ob, input, size, stream, obj_end);
 	  break;
 	}
       else
 	{
-	  *obj_begin = input;
-	  
-	  if (is_number (input, size, 10, &numtype, &num_end, &exp_mark_pos,
-			 obj_end))
+	  unget_char (ch, &input, &size, stream);
+
+	  if (input)
+	    *obj_begin = input;
+
+	  if (!input)
+	    token = accumulate_token (stream, preserve_whitespace, &tokensize,
+				      &tokenlength, outcome);
+	  else
+	    tokenlength = size;
+
+	  if (is_number (input ? input : token, tokenlength, 10, &numtype,
+			 &num_end, &exp_mark_pos, obj_end))
 	    {
-	      ob = create_number (input, num_end - input + 1, exp_mark_pos, 10,
-				  numtype);
+	      ob = create_number (input ? input : token, num_end
+				  - (input ? input : token) + 1,
+				  exp_mark_pos, 10, numtype);
 	      out = COMPLETE_OBJECT;
 	    }
 	  else
 	    {
-	      out = read_symbol_name (&ob, input, size, obj_end, CASE_UPCASE,
-				      outcome);
+	      if ((!input || ends_with_eof)
+		  && (outcome->single_escape || outcome->multiple_escape))
+		{
+		  free (token);
+		  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+		}
+
+	      out = read_symbol_name (&ob, input ? input : token, tokenlength,
+				      input == NULL, preserve_whitespace,
+				      obj_end, CASE_UPCASE, outcome);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 		{
@@ -3123,9 +3212,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	  break;
 	}
 
-      input = skip_space_block (++input, --size, &size);
-
-      if (!input)
+      if (!next_nonspace_char (&ch, &input, &size, stream))
 	return found_prefix ? JUST_PREFIX : NO_OBJECT;
     }
 
@@ -3140,11 +3227,12 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 enum outcome_type
 read_list (struct object **obj, int backts_commas_balance, const char *input,
-	   size_t size, struct environment *env, struct outcome *outcome,
-	   const char **list_end)
+	   size_t size, FILE *stream, int preserve_whitespace,
+	   int ends_with_eof, struct environment *env,
+	   struct outcome *outcome, const char **list_end)
 {
   struct object *last_cons = *obj, *car = NULL, *ob = *obj, *cons;
-  const char *obj_beg, *obj_end = input;
+  const char *obj_beg, *obj_end = NULL;
   enum outcome_type out;
 
 
@@ -3156,8 +3244,9 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	  out = read_object_continued (ob->value_ptr.cons_pair->filling_car
 				       ? &ob->value_ptr.cons_pair->car
 				       : &ob->value_ptr.cons_pair->cdr,
-				       backts_commas_balance, 0, input,
-				       size, env, outcome, &obj_beg,
+				       backts_commas_balance, 0, input, size,
+				       stream, preserve_whitespace,
+				       ends_with_eof, env, outcome, &obj_beg,
 				       &obj_end);
 
 	  if (out == COMPLETE_OBJECT)
@@ -3165,8 +3254,6 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	      ob->value_ptr.cons_pair->filling_cdr = 0;
 	  else if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
 	    return out;
-
-	  obj_end++;
 	}
       else if (ob->value_ptr.cons_pair->empty_list_in_car
 	       || ob->value_ptr.cons_pair->empty_list_in_cdr)
@@ -3174,8 +3261,9 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	  out = read_object_continued (ob->value_ptr.cons_pair->empty_list_in_car
 				       ? &ob->value_ptr.cons_pair->car
 				       : &ob->value_ptr.cons_pair->cdr,
-				       backts_commas_balance, 1, input,
-				       size, env, outcome, &obj_beg,
+				       backts_commas_balance, 1, input, size,
+				       stream, preserve_whitespace,
+				       ends_with_eof, env, outcome, &obj_beg,
 				       &obj_end);
 
 	  if (out == COMPLETE_OBJECT)
@@ -3194,16 +3282,21 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
 	    return out;
-
-	  obj_end++;
 	}
 
       last_cons = ob;
-      ob = ob->value_ptr.cons_pair->cdr;      
+      ob = ob->value_ptr.cons_pair->cdr;
     }
 
-  out = read_object (&car, backts_commas_balance, obj_end,
-		     size - (obj_end - input), env, outcome, &obj_beg, &obj_end);
+  if (input && obj_end)
+    {
+      size -= obj_end - input + 1;
+      input = obj_end + 1;
+    }
+
+  out = read_object (&car, backts_commas_balance, input, size, stream,
+		     preserve_whitespace, ends_with_eof, env, outcome,
+		     &obj_beg, &obj_end);
 
   if (out == NO_OBJECT && !last_cons)
     return INCOMPLETE_EMPTY_LIST;
@@ -3279,13 +3372,12 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	    }
 	}
 
-      if (obj_end == input + size)
-	break;
-
       car = NULL;
-      out = read_object (&car, backts_commas_balance, obj_end + 1,
-			 size - (obj_end + 1 - input), env, outcome, &obj_beg,
-			 &obj_end);
+
+      out = read_object (&car, backts_commas_balance, input ? obj_end + 1 : NULL,
+			 size - (obj_end + 1 - input), stream,
+			 preserve_whitespace, ends_with_eof, env, outcome,
+			 &obj_beg, &obj_end);
     }
 
   if (out == INCOMPLETE_EMPTY_LIST)
@@ -3309,36 +3401,80 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 
 enum outcome_type
-read_string (struct object **obj, const char *input, size_t size,
+read_string (struct object **obj, const char *input, size_t size, FILE *stream,
 	     const char **string_end)
 {
-  size_t length, new_size;
+  size_t length, new_size, incr = 16;
   struct string *str;
-  enum outcome_type out = COMPLETE_OBJECT;
-  struct object *ob = *obj;
+  enum outcome_type out = INCOMPLETE_STRING;
+  int ch, quote = 0;
 
-
-  *string_end = find_end_of_string (input, size, &new_size, &length);
-
-  if (!*string_end)
-    out = INCOMPLETE_STRING;
-
-  if (!ob)
+  if (input)
     {
-      ob = alloc_string (length);
-      *obj = ob;
+      *string_end = find_end_of_string (input, size, &new_size, &length);
+
+      if (*string_end)
+	out = COMPLETE_OBJECT;
+
+      if (!*obj)
+	{
+	  *obj = alloc_string (length);
+	}
+      else
+	resize_string_allocation (*obj, (*obj)->value_ptr.string->used_size
+				  + length);
+
+      if (!length)
+	return COMPLETE_OBJECT;
+
+      str = (*obj)->value_ptr.string;
+
+      normalize_string (str->value + str->used_size, input, size);
+
+      str->used_size += length;
     }
   else
-    resize_string_allocation (ob, ob->value_ptr.string->used_size + length);
+    {
+      if (!*obj)
+	{
+	  *obj = alloc_string (incr);
+	}
 
-  if (!length)
-    return COMPLETE_OBJECT;
+      str = (*obj)->value_ptr.string;
 
-  str = ob->value_ptr.string;
+      ch = fgetc (stream);
 
-  normalize_string (str->value + str->used_size, input, size);
+      while (1)
+	{
+	  if (ch == EOF)
+	    return INCOMPLETE_STRING;
 
-  str->used_size += length;
+	  if (ch == '\\' && !quote)
+	    {
+	      quote = 1;
+	    }
+	  else if (ch == '"' && !quote)
+	    {
+	      return COMPLETE_OBJECT;
+	    }
+	  else
+	    {
+	      if (str->used_size == str->alloc_size)
+		{
+		  incr <<= 1;
+		  resize_string_allocation (*obj,
+					    (*obj)->value_ptr.string->used_size
+					    + incr);
+		}
+
+	      str->value [str->used_size++] = ch;
+
+	      quote = 0;
+	    }
+
+	  ch = fgetc (stream);
+	}
+    }
 
   return out;
 }
@@ -3346,7 +3482,8 @@ read_string (struct object **obj, const char *input, size_t size,
 
 enum outcome_type
 read_symbol_name (struct object **obj, const char *input, size_t size,
-		  const char **symname_end, enum readtable_case read_case,
+		  int got_eof, int preserve_whitespace, const char **symname_end,
+		  enum readtable_case read_case,
 		  struct outcome *out)
 {
   struct symbol_name *sym;
@@ -3359,7 +3496,8 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   out->type = NO_OBJECT;
 
   *symname_end = find_end_of_symbol_name
-    (input, size, ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
+    (input, size, preserve_whitespace, ob != NULL,
+     ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
      &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, out);
 
   if (IS_READ_OR_EVAL_ERROR (out->type))
@@ -3402,7 +3540,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   sym->used_size += name_l;
   sym->actual_symname_used_s += act_name_l;
 
-  if (!*symname_end)
+  if (!*symname_end && !got_eof)
     return INCOMPLETE_SYMBOL_NAME;
   else
     return COMPLETE_OBJECT;
@@ -3410,79 +3548,83 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 
 
 enum outcome_type
-read_prefix (struct object **obj, const char *input, size_t size,
+read_prefix (struct object **obj, const char *input, size_t size, FILE *stream,
 	     int *backts_commas_balance, struct object **last,
 	     const char **prefix_end)
 {
-  const char *n = input;
-  enum element el;
   int num_backts, num_commas;
   int found_comma = 0;
+  unsigned char ch;
 
-  if (!size)
-    return NO_OBJECT;
-
-  skip_prefix (*obj, &num_backts, &num_commas, last, NULL, NULL);
+  skip_prefix (*obj, &num_backts, &num_commas, last);
 
   *backts_commas_balance += (num_backts - num_commas);
 
   if (*backts_commas_balance < 0)
     return TOO_MANY_COMMAS;
 
-  el = find_next_element (input, size, &n);
+  if (!next_nonspace_char (&ch, &input, &size, stream))
+    return JUST_PREFIX;
 
-  while (el == QUOTE || el == BACKQUOTE || el == COMMA || el == AT || el == DOT)
+  while (ch == '\'' || ch == '`' || ch == ',' || ch == '@' || ch == '.')
     {
-      if ((el == AT || el == DOT) && !found_comma)
-	return JUST_PREFIX;
+      if ((ch == '@' || ch == '.') && !found_comma)
+	{
+	  unget_char (ch, &input, &size, stream);
+	  return JUST_PREFIX;
+	}
 
-      *prefix_end = n;
+      if (input)
+	*prefix_end = input;
 
       if (!*last)
-	*obj = *last = alloc_prefix (el);
+	*obj = *last = alloc_prefix (ch);
       else
-	*last = (*last)->value_ptr.next = alloc_prefix (el);
+	*last = (*last)->value_ptr.next = alloc_prefix (ch);
 
-      if (el == BACKQUOTE)
+      if (ch == '`')
 	(*backts_commas_balance)++;
-      else if (el == COMMA)
+      else if (ch == ',')
 	(*backts_commas_balance)--;
 
       if (*backts_commas_balance < 0)
 	return TOO_MANY_COMMAS;
 
-      if (el == COMMA)
+      if (ch == ',')
 	found_comma = 1;
       else
 	found_comma = 0;
 
-      el = find_next_element (n+1, size - (n + 1 - input), &n);
+      if (!next_nonspace_char (&ch, &input, &size, stream))
+	return JUST_PREFIX;
     }
 
+  unget_char (ch, &input, &size, stream);
   return JUST_PREFIX;
 }
 
 
 enum outcome_type
 read_sharp_macro_call (struct object **obj, const char *input, size_t size,
+		       FILE *stream, int preserve_whitespace, int ends_with_eof,
 		       struct environment *env, struct outcome *outcome,
 		       const char **macro_end)
 {
-  int arg;
-  size_t i = 0;
+  int arg, tokenlength, tokensize;
   const char *obj_b;
+  char *token;
   struct sharp_macro_call *call;
   enum outcome_type out;
-
-  if (!size)
-    return NO_OBJECT;
+  unsigned char ch;
 
   if (*obj)
     {
       call = (*obj)->value_ptr.sharp_macro_call;
 
       out = read_object_continued (&call->obj, 0, call->is_empty_list, input,
-				   size, env, outcome, &obj_b, macro_end);
+				   size, stream, preserve_whitespace,
+				   ends_with_eof, env, outcome, &obj_b,
+				   macro_end);
 
       if (out == INCOMPLETE_EMPTY_LIST)
 	call->is_empty_list = 1;
@@ -3505,23 +3647,26 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
   call = (*obj)->value_ptr.sharp_macro_call;
 
-  if (isdigit (input [i]))
-    arg = input [i++] - '0';
+  next_char (&ch, &input, &size, stream);
+
+  if (isdigit (ch))
+    {
+      arg = ch - '0';
+      next_char (&ch, &input, &size, stream);
+    }
   else
     arg = -1;
 
-  while (i < size && isdigit (input [i]))
+  while (isdigit (ch))
     {
       arg *= 10;
-      arg += input [i++] - '0';
+      arg += ch - '0';
+      next_char (&ch, &input, &size, stream);
     }
 
   call->arg = arg;
 
-  if (i < size)
-    call->dispatch_ch = input [i];
-  else
-    return NO_OBJECT;
+  call->dispatch_ch = ch;
 
   if (strchr ("\b\t\n\r\f <)", call->dispatch_ch))
     {
@@ -3536,8 +3681,28 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   if (call->dispatch_ch == '\\')
     {
       call->obj = NULL;
+
+      if (!input)
+	{
+	  outcome->single_escape = 1;
+	  token = accumulate_token (stream, preserve_whitespace, &tokensize,
+				    &tokenlength, outcome);
+	}
+      else
+	{
+	  tokenlength = size;
+	}
+
+      if ((!input || ends_with_eof)
+	  && (outcome->single_escape || outcome->multiple_escape))
+	{
+	  free (token);
+	  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+	}
+
       outcome->single_escape = 1;
-      out = read_symbol_name (&call->obj, input+i+1, size-i-1, macro_end,
+      out = read_symbol_name (&call->obj, input ? input : token, tokenlength,
+			      input == NULL, preserve_whitespace, macro_end,
 			      CASE_UPCASE, outcome);
 
       if (call->obj->value_ptr.symbol_name->packname_present)
@@ -3553,8 +3718,8 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   else if (call->dispatch_ch == '(')
     {
       call->obj = NULL;
-      out = read_list (&call->obj, 0, input+i+1, size-i-1, env, outcome,
-		       macro_end);
+      out = read_list (&call->obj, 0, input, size, stream, preserve_whitespace,
+		       ends_with_eof, env, outcome, macro_end);
 
       if (out == INCOMPLETE_EMPTY_LIST)
 	call->is_empty_list = 1;
@@ -3566,8 +3731,8 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     }
 
   call->obj = NULL;
-  out = read_object (&call->obj, 0, input+i+1, size-i-1, env, outcome, &obj_b,
-		     macro_end);
+  out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
+		     ends_with_eof, env, outcome, &obj_b, macro_end);
 
   if (out == INCOMPLETE_EMPTY_LIST)
     call->is_empty_list = 1;
@@ -3692,47 +3857,52 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 }
 
 
-enum element
-find_next_element (const char *input, size_t size, const char **elem_begin)
+char *
+accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
+		  int *token_length, struct outcome *out)
 {
-  input = skip_space_block (input, size, &size);
+  unsigned char ch;
+  char *outbuf;
 
-  if (!input)
-    return NONE;
+  *token_size = 16;
+  outbuf = malloc_and_check (*token_size);
+  *token_length = 0;
 
-  *elem_begin = input;
-  
-  switch (*input)
+  while ((ch = fgetc (stream)) != EOF)
     {
-    case '(':
-      return BEGIN_LIST;
-    case ')':
-      return END_LIST;
-    case '"':
-      return STRING_DELIMITER;
-    case '\'':
-      return QUOTE;
-    case '`':
-      return BACKQUOTE;
-    case ',':
-      return COMMA;
-    case '@':
-      return AT;
-    case ';':
-      return SEMICOLON;
-    case '.':
-      return DOT;
-    case '#':
-      if (size > 1 && *(++input) == '|')
-	return BEGIN_MULTILINE_COMMENT;
+      if (ch == '\\')
+	{
+	  out->single_escape = !out->single_escape;
+	}
+      else if (ch == '|' && !out->single_escape)
+	{
+	  out->multiple_escape = !out->multiple_escape;
+	}
       else
-	return SHARP;
-    case '|':
-      return VERTICAL_BAR;
-    case '\\':
-    default:
-      return TOKEN;
+	{
+	  if ((isspace ((unsigned char)ch)
+	       || strchr (TERMINATING_MACRO_CHARS, ch))
+	      && !out->single_escape && !out->multiple_escape)
+	    {
+	      if (preserve_whitespace || strchr (TERMINATING_MACRO_CHARS, ch))
+		ungetc (ch, stream);
+
+	      return outbuf;
+	    }
+
+	  out->single_escape = 0;
+	}
+
+      if (*token_length == *token_size)
+	{
+	  *token_size <<= 1;
+	  outbuf = realloc_and_check (outbuf, *token_size);
+	}
+
+      outbuf [(*token_length)++] = ch;
     }
+
+  return outbuf;
 }
 
 
@@ -3816,7 +3986,8 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
 		}
 	    }
 	}
-      else if (isspace (token [i]) || strchr (TERMINATING_MACRO_CHARS, token [i]))
+      else if (isspace ((unsigned char)token [i])
+	       || strchr (TERMINATING_MACRO_CHARS, token [i]))
 	break;
       else
 	return 0;
@@ -3845,8 +4016,7 @@ is_number (const char *token, size_t size, int radix, enum object_type *numtype,
     }
   else
     *number_end = *token_end = token + i - 1;
-  
-  
+
   return 1;
 }
 
@@ -3881,12 +4051,12 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
 {
   struct object *obj = alloc_object ();
   char *buf = malloc_and_check (size + 1);
-  
+
   obj->type = numtype;
-  
+
   memcpy (buf, token, size);
   buf [size] = 0;
-  
+
   if (numtype == TYPE_BIGNUM)
     {
       mpz_init (obj->value_ptr.integer);
@@ -3909,7 +4079,7 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
     }
 
   free (buf);
-  
+
   return obj;
 }
 
@@ -4003,7 +4173,7 @@ copy_token_to_buffer (const char *input, size_t size)
       else if (input [i] == '|')
 	multiple_esc = multiple_esc ? 0 : 1;
       else if (!single_esc && !multiple_esc
-	       && (isspace (input [i])
+	       && (isspace ((unsigned char)input [i])
 		   || strchr (TERMINATING_MACRO_CHARS, input [i])))
 	break;
     }
@@ -4131,31 +4301,31 @@ alloc_object (void)
 
 
 struct object *
-alloc_prefix (enum element type)
+alloc_prefix (unsigned char pr)
 {
   struct object *obj = alloc_object ();
 
-  switch (type)
+  switch (pr)
     {
-    case QUOTE:
+    case '\'':
       obj->type = TYPE_QUOTE;
       break;
-    case BACKQUOTE:
+    case '`':
       obj->type = TYPE_BACKQUOTE;
       break;
-    case COMMA:
+    case ',':
       obj->type = TYPE_COMMA;
       break;
-    case AT:
+    case '@':
       obj->type = TYPE_AT;
       break;
-    case DOT:
+    case '.':
       obj->type = TYPE_DOT;
       break;
     default:
       break;
     }
-	
+
   obj->value_ptr.next = NULL;
 
   return obj;
@@ -4987,27 +5157,15 @@ alloc_string (fixnum size)
 
 
 struct object *
-create_string_from_char_vector (char *str, fixnum size, int copy_vector)
+create_string_copying_char_vector (const char *str, fixnum size)
 {
   fixnum i;
   struct object *ret;
 
-  if (copy_vector)
-    {
-      ret = alloc_string (size);
+  ret = alloc_string (size);
 
-      for (i = 0; i < size; i++)
-	ret->value_ptr.string->value [i] = str [i];
-    }
-  else
-    {
-      ret = alloc_object ();
-      ret->type = TYPE_STRING;
-      ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
-
-      ret->value_ptr.string->value = str;
-      ret->value_ptr.string->alloc_size = size;
-    }
+  for (i = 0; i < size; i++)
+    ret->value_ptr.string->value [i] = str [i];
 
   ret->value_ptr.string->used_size = size;
 
@@ -5016,9 +5174,27 @@ create_string_from_char_vector (char *str, fixnum size, int copy_vector)
 
 
 struct object *
-create_string_from_c_string (char *str)
+create_string_with_char_vector (char *str, fixnum size)
 {
-  return create_string_from_char_vector (str, strlen (str), 1);
+  struct object *ret;
+
+  ret = alloc_object ();
+  ret->type = TYPE_STRING;
+  ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
+
+  ret->value_ptr.string->value = str;
+  ret->value_ptr.string->alloc_size = size;
+
+  ret->value_ptr.string->used_size = size;
+
+  return ret;
+}
+
+
+struct object *
+create_string_copying_c_string (char *str)
+{
+  return create_string_copying_char_vector (str, strlen (str));
 }
 
 
@@ -5101,7 +5277,8 @@ resize_symbol_name (struct object *symname, size_t value_s,
 
 
 const char *
-find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
+find_end_of_symbol_name (const char *input, size_t size, int preserve_whitespace,
+			 int already_begun, int found_package_sep,
 			 size_t *new_size,
 			 const char **start_of_package_separator,
 			 enum package_record_visibility *sym_visibility,
@@ -5183,16 +5360,18 @@ find_end_of_symbol_name (const char *input, size_t size, int found_package_sep,
 	  if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
 	      && !out->single_escape && !out->multiple_escape)
 	    {
-	      if (just_dots && **length == 1)
+	      if (!already_begun && just_dots && **length == 1)
 		out->type = SINGLE_DOT;
-	      else if (just_dots && **length)
+	      else if (!already_begun && just_dots && **length)
 		out->type = MULTIPLE_DOTS;
 	      else if (*start_of_package_separator
 		       && (input + i == *start_of_package_separator + colons))
 		out->type = CANT_END_WITH_PACKAGE_SEPARATOR;
 
-	      *new_size = size-i+1;
-	      return input+i-1;
+	      *new_size = size - i + (!isspace (input [i])
+				      || !!preserve_whitespace);
+	      return input + i - (!isspace (input [i])
+				  || !!preserve_whitespace);
 	    }
 
 	  if (input [i] != '.')
@@ -5234,7 +5413,8 @@ copy_symname_with_case_conversion (char *output, const char *input, size_t size,
 	{
 	  multiple_escape = (multiple_escape ? 0 : 1);
 	}
-      else if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
+      else if ((isspace ((unsigned char)input [i])
+		|| strchr (TERMINATING_MACRO_CHARS, input [i]))
 	       && !single_escape && !multiple_escape)
 	{
 	  break;
@@ -5632,7 +5812,7 @@ load_file (const char *filename, struct environment *env,
       return NULL;
     }
 
-  out = read_object (&obj, 0, buf, l, env, outcome, &obj_b, &obj_e);
+  out = read_object (&obj, 0, buf, l, NULL, 0, 1, env, outcome, &obj_b, &obj_e);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
 
@@ -5645,7 +5825,8 @@ load_file (const char *filename, struct environment *env,
 
 	  if (res)
 	    {
-	      out = read_object (&obj, 0, in, sz, env, outcome, &obj_b, &obj_e);
+	      out = read_object (&obj, 0, in, sz, NULL, 0, 1, env, outcome,
+				 &obj_b, &obj_e);
 	      sz = sz - (obj_e + 1 - in);
 	      in = obj_e + 1;
 	    }
@@ -5673,25 +5854,6 @@ load_file (const char *filename, struct environment *env,
 
 	  outcome->type = out;
 	  return NULL;
-	}
-      else if (out == INCOMPLETE_SYMBOL_NAME && !outcome->single_escape
-	       && !outcome->multiple_escape)
-	{
-	  if (!intern_symbol_name (skip_prefix (obj, NULL, NULL, NULL, NULL,
-						NULL),
-						env, &out))
-	    {
-	      free (buf);
-	      fclose (f);
-
-	      outcome->type = out;
-	      outcome->obj = skip_prefix (obj, NULL, NULL, NULL, NULL, NULL);
-
-	      return NULL;
-	    }
-
-	  out = COMPLETE_OBJECT;
-	  sz = 0;
 	}
       else if (IS_INCOMPLETE_OBJECT (out))
 	{
@@ -6249,8 +6411,7 @@ define_variable (char *name, struct object *value, struct environment *env)
 
 struct object *
 skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
-	     int *num_commas, struct object **last_prefix,
-	     struct object **last_comma, struct object **before_last_comma)
+	     int *num_commas, struct object **last_prefix)
 {
   int num_backticks = 0;
 
@@ -6260,10 +6421,6 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
     *num_backticks_before_last_comma = 0;
   if (num_commas)
     *num_commas = 0;
-  if (last_comma)
-    *last_comma = NULL;
-  if (before_last_comma)
-    *before_last_comma = NULL;
 
   while (prefix &&
 	 (prefix->type == TYPE_QUOTE
@@ -6284,13 +6441,6 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
 	    *num_backticks_before_last_comma = num_backticks;
 	}
 
-      if (last_comma && prefix->type == TYPE_COMMA)
-	*last_comma = prefix;
-
-      if (before_last_comma && prefix->value_ptr.next
-	  && prefix->value_ptr.next->type == TYPE_COMMA)
-	*before_last_comma = prefix;
-
       prefix = prefix->value_ptr.next;
     }
 
@@ -6298,37 +6448,6 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
     *num_backticks_before_last_comma = num_backticks;
 
   return prefix;
-}
-
-
-struct object *
-append_prefix (struct object *obj, enum element type)
-{
-  struct object *prev, *curr;
-  
-  if (!obj)
-    return alloc_prefix (type);
-
-  prev = curr = obj;
-  
-  if (curr->type == TYPE_QUOTE
-      || curr->type == TYPE_BACKQUOTE
-      || curr->type == TYPE_COMMA)
-    curr = curr->value_ptr.next;
-
-  while (curr &&
-	 (curr->type == TYPE_QUOTE
-	  || curr->type == TYPE_BACKQUOTE
-	  || curr->type == TYPE_COMMA))
-    {
-      prev = curr;
-      curr = curr->value_ptr.next;
-    }
-  
-  prev->value_ptr.next = alloc_prefix (type);
-  prev->value_ptr.next->value_ptr.next = curr;
-  
-  return obj;
 }
 
 
@@ -6486,20 +6605,18 @@ is_proper_list (struct object *list)
 
 struct object *
 copy_prefix (const struct object *begin, const struct object *end,
-	     struct object **last_prefix, int refcount)
+	     struct object **last_prefix)
 {
   struct object *out = NULL, *pr = NULL, *tmp;
 
   while (begin && begin != end)
     {
-      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? QUOTE :
-			  begin->type == TYPE_BACKQUOTE ? BACKQUOTE :
-			  begin->type == TYPE_COMMA ? COMMA :
-			  begin->type == TYPE_AT ? AT :
-			  begin->type == TYPE_DOT ? DOT
+      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? '\'' :
+			  begin->type == TYPE_BACKQUOTE ? '`' :
+			  begin->type == TYPE_COMMA ? ',' :
+			  begin->type == TYPE_AT ? '@' :
+			  begin->type == TYPE_DOT ? '.'
 			  : NONE);
-
-      /*tmp->refcount = refcount;*/
 
       if (pr)
 	pr->value_ptr.next = tmp;
@@ -6511,13 +6628,11 @@ copy_prefix (const struct object *begin, const struct object *end,
 
   if (begin)
     {
-      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? QUOTE :
-			  begin->type == TYPE_BACKQUOTE ? BACKQUOTE :
-			  begin->type == TYPE_COMMA ? COMMA :
-			  begin->type == TYPE_AT ? AT :
-			  begin->type == TYPE_DOT ? DOT : NONE);
-
-      /*tmp->refcount = refcount;*/
+      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? '\'' :
+			  begin->type == TYPE_BACKQUOTE ? '`' :
+			  begin->type == TYPE_COMMA ? ',' :
+			  begin->type == TYPE_AT ? '@' :
+			  begin->type == TYPE_DOT ? '.' : NONE);
     }
 
   if (pr)
@@ -6558,8 +6673,7 @@ copy_list_structure (struct object *list, const struct object *prefix,
 
       if (prefix)
 	{
-	  cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref,
-							0);
+	  cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref);
 	  add_reference (cons, CAR (cons), 0);
 	  decrement_refcount (CAR (cons));
 
@@ -7616,7 +7730,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	  return form;
 	}
 
-      retform = alloc_prefix (BACKQUOTE);
+      retform = alloc_prefix ('`');
       retform->value_ptr.next = ret;
       set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
       !forbid_splicing ? *last_pref = retform : NULL;
@@ -7683,7 +7797,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	      return form;
 	    }
 
-	  retform = alloc_prefix (COMMA);
+	  retform = alloc_prefix (',');
 	  retform->value_ptr.next = ret;
 	  set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
 	  !forbid_splicing ? *last_pref = retform : NULL;
@@ -7770,7 +7884,6 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  alloc_empty_cons_pair ();
 
 		      retcons->value_ptr.cons_pair->car = ret;
-		      /*increment_refcount_by (retcons, refc - 1, NULL);*/
 		    }
 		  else
 		    retcons->value_ptr.cons_pair->cdr = ret;
@@ -7795,8 +7908,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			    {
 			      tmp = CAR (retcons);
 			      retcons->value_ptr.cons_pair->car =
-				copy_prefix (ret, lastpr, &lp, 0);
-					     /*retcons->refcount);*/
+				copy_prefix (ret, lastpr, &lp);
 			      lp->value_ptr.next = tmp;
 
 			      if (SYMBOL (CDR (retcons)) == &nil_object)
@@ -7807,8 +7919,6 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			}
 		      else if (ret->type == TYPE_CONS_PAIR)
 			retcons = last_cons_pair (ret);
-
-		      /*refc = retcons->refcount;*/
 		    }
 		  else
 		    {
@@ -7825,8 +7935,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  if (lastpr)
 			    {
 			      retcons->value_ptr.cons_pair->car =
-				copy_prefix (ret, lastpr, &lp, 0);
-			      /*retcons->refcount);*/
+				copy_prefix (ret, lastpr, &lp);
 			      lp->value_ptr.next = CAR (cons);
 			    }
 			  else
@@ -9502,7 +9611,7 @@ builtin_read_line (struct object *list, struct environment *env,
 	  ch = getc (s->file);
 	}
 
-      ret = create_string_from_char_vector (in, i, 0);
+      ret = create_string_with_char_vector (in, i);
       ret->value_ptr.string->alloc_size = sz;
     }
   else if (s->medium == STRING_STREAM)
@@ -9533,9 +9642,9 @@ builtin_read_line (struct object *list, struct environment *env,
 	  increment_refcount (ret);
 	  delete_reference (str, s->string, 0);
 
-	  s->string = create_string_from_char_vector
+	  s->string = create_string_copying_char_vector
 	    (ret->value_ptr.string->value+i+1,
-	     ret->value_ptr.string->used_size-i-1, 1);
+	     ret->value_ptr.string->used_size-i-1);
 	  resize_string_allocation (ret, i);
 
 	  add_reference (str, s->string, 0);
@@ -9546,6 +9655,134 @@ builtin_read_line (struct object *list, struct environment *env,
     prepend_object_to_obj_list (&t_object, &outcome->other_values);
   else
     prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+
+  return ret;
+}
+
+
+struct object *
+builtin_read (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct stream *s;
+  struct object *str, *ret = NULL;
+  enum outcome_type out;
+  const char *objbeg, *objend;
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 1 && CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1)
+    str = CAR (list);
+  else
+    str = inspect_variable (env->std_in_sym, env);
+
+  s = str->value_ptr.stream;
+
+  out = read_object (&ret, 0, s->medium == STRING_STREAM
+		     ? s->string->value_ptr.string->value : NULL,
+		     s->medium == STRING_STREAM
+		     ? s->string->value_ptr.string->used_size : 0,
+		     s->medium == FILE_STREAM ? s->file : NULL, 0, 1, env,
+		     outcome, &objbeg, &objend);
+
+  if (IS_INCOMPLETE_OBJECT (out))
+    {
+      outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+      return NULL;
+    }
+
+  if (out == NO_OBJECT)
+    {
+      outcome->type = GOT_EOF;
+      return NULL;
+    }
+
+  if (s->medium == STRING_STREAM)
+    {
+      s->string =
+	create_string_copying_char_vector (objend + 1,
+					   s->string->value_ptr.string->used_size -
+					   (objend
+					    - s->string->value_ptr.string->value
+					    + 1));
+
+      add_reference (str, s->string, 0);
+    }
+
+  return ret;
+}
+
+
+struct object *
+builtin_read_preserving_whitespace (struct object *list, struct environment *env,
+				    struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct stream *s;
+  struct object *str, *ret = NULL;
+  enum outcome_type out;
+  const char *objbeg, *objend;
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 1 && CAR (list)->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1)
+    str = CAR (list);
+  else
+    str = inspect_variable (env->std_in_sym, env);
+
+  s = str->value_ptr.stream;
+
+  out = read_object (&ret, 0, s->medium == STRING_STREAM
+		     ? s->string->value_ptr.string->value : NULL,
+		     s->medium == STRING_STREAM
+		     ? s->string->value_ptr.string->used_size : 0,
+		     s->medium == FILE_STREAM ? s->file : NULL, 1, 1, env,
+		     outcome, &objbeg, &objend);
+
+  if (IS_INCOMPLETE_OBJECT (out))
+    {
+      outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+      return NULL;
+    }
+
+  if (out == NO_OBJECT)
+    {
+      outcome->type = GOT_EOF;
+      return NULL;
+    }
+
+  if (s->medium == STRING_STREAM)
+    {
+      s->string =
+	create_string_copying_char_vector (objend + 1,
+					   s->string->value_ptr.string->used_size -
+					   (objend
+					    - s->string->value_ptr.string->value
+					    + 1));
+
+      add_reference (str, s->string, 0);
+    }
 
   return ret;
 }
@@ -12417,7 +12654,7 @@ builtin_symbol_name (struct object *list, struct environment *env,
 
   s = SYMBOL (CAR (list))->value_ptr.symbol;
 
-  return create_string_from_char_vector (s->name, s->name_len, 1);
+  return create_string_copying_char_vector (s->name, s->name_len);
 }
 
 
@@ -12495,7 +12732,7 @@ builtin_string (struct object *list, struct environment *env,
     {
       s = SYMBOL (CAR (list))->value_ptr.symbol;
 
-      return create_string_from_char_vector (s->name, s->name_len, 1);
+      return create_string_copying_char_vector (s->name, s->name_len);
     }
   else if (CAR (list)->type == TYPE_CHARACTER)
     {
@@ -12806,8 +13043,8 @@ builtin_package_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_string_from_char_vector (pack->value_ptr.package->name,
-					 pack->value_ptr.package->name_len, 1);
+  return create_string_copying_char_vector (pack->value_ptr.package->name,
+					    pack->value_ptr.package->name_len);
 }
 
 
@@ -12848,7 +13085,7 @@ builtin_package_nicknames (struct object *list, struct environment *env,
 	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
       cons->value_ptr.cons_pair->car =
-	create_string_from_char_vector (n->name, n->name_len, 1);
+	create_string_copying_char_vector (n->name, n->name_len);
 
       n = n->next;
     }
@@ -13682,7 +13919,7 @@ builtin_lisp_implementation_type (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_string_from_c_string ("alisp");
+  return create_string_copying_c_string ("alisp");
 }
 
 
@@ -13698,7 +13935,7 @@ builtin_lisp_implementation_version (struct object *list,
       return NULL;
     }
 
-  return create_string_from_c_string (PACKAGE_VERSION);
+  return create_string_copying_c_string (PACKAGE_VERSION);
 }
 
 
