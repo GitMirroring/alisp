@@ -65,8 +65,10 @@ make_test ("'(\n" .
 	   ")\n" .
 	   ")", "(NIL)");
 make_test ("\"\"", "\"\"");
+make_test ("\"\" \"\" \"\"", "\"\"\n\"\"\n\"\"");
 make_test ("` ( ; asd\n" .
            " \"\")", "(\"\")");
+make_test ("`';\na", "'A");
 make_test ("#|\n" .
 	   "|# \"\"", "\"\"");
 make_test ("#|\n" .
@@ -88,10 +90,15 @@ make_test ("'(1 . (\n" .
 	   "2))", "(1 2)");
 make_test ("'( \"\" #||# )", "(\"\")");
 make_test ("'asd\\f|gh|j", "|ASDfghJ|");
+make_test ("'\\\\", "\\\\");
+make_test ("'\\123", "|123|");
 make_test ("'123\\ ", "|123 |");
+make_test ("'\\.", "|.|");
+make_test ("'\\..", "|..|");
 make_test ("'\\\n ", "|\n|");
 make_test ("'a\\\n ", "|A\n|");
 make_test ("'|aaa\nbb|c", "|aaa\nbbC|");
+make_test ("'a\\\n..", "|A\n..|");
 make_test ("'|aaa\n:bbb|", "|aaa\n:bbb|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 make_test ("'cl:car", "CAR");
@@ -506,9 +513,40 @@ make_test ("(gethash 'k tbl)", "NIL\nNIL");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "NIL");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
+make_test ("(read-line)\nabc", "\"abc\"\nNIL", 1);
 make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
 make_test ("(read-line (make-string-input-stream \"hello world\n" .
 	   "\"))", "\"hello world\"\nNIL");
+make_test ("(read)\n\"hello\"\"world\" 12 `(1 2 3) #\\c aa  ", "\"hello\"", 1);
+make_test ("(read)", "\"world\"");
+make_test ("(read)", "12");
+make_test ("(read)", "`(1 2 3)");
+make_test ("(read)", "#\\c");
+make_test ("(read)", "AA");
+make_test ("(read-line)", "\" \"\nNIL");
+make_test ("(defparameter inp (make-string-input-stream \"\\\"hello\\\"\\\"world\\\" 12 `(1 2 3) #\\\\c aa  \"))", "INP");
+make_test ("(read inp)", "\"hello\"");
+make_test ("(read inp)", "\"world\"");
+make_test ("(read inp)", "12");
+make_test ("(read inp)", "`(1 2 3)");
+make_test ("(read inp)", "#\\c");
+make_test ("(read inp)", "AA");
+make_test ("(read-line inp)", "\" \"\nT");
+make_test ("(read-preserving-whitespace)\n\"hello\"\"world\" 12 `(1 2 3) #\\c aa  ", "\"hello\"", 1);
+make_test ("(read-preserving-whitespace)", "\"world\"");
+make_test ("(read-preserving-whitespace)", "12");
+make_test ("(read-preserving-whitespace)", "`(1 2 3)");
+make_test ("(read-preserving-whitespace)", "#\\c");
+make_test ("(read-preserving-whitespace)", "AA");
+make_test ("(read-line)", "\"  \"\nNIL");
+make_test ("(defparameter inp2 (make-string-input-stream \"\\\"hello\\\"\\\"world\\\" 12 `(1 2 3) #\\\\c aa  \"))", "INP2");
+make_test ("(read-preserving-whitespace inp2)", "\"hello\"");
+make_test ("(read-preserving-whitespace inp2)", "\"world\"");
+make_test ("(read-preserving-whitespace inp2)", "12");
+make_test ("(read-preserving-whitespace inp2)", "`(1 2 3)");
+make_test ("(read-preserving-whitespace inp2)", "#\\c");
+make_test ("(read-preserving-whitespace inp2)", "AA");
+make_test ("(read-line inp2)", "\"  \"\nT");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
 make_test ("(let ((var 12)) (eval 'var))", "10");
@@ -828,6 +866,18 @@ waitpid ($pid, 0);
 
 sub make_test
 {
+    my $skip_only_first_line;
+    my $i = 0;
+
+    if (not defined ($_[2]))
+    {
+	$skip_only_first_line = 0;
+    }
+    else
+    {
+	$skip_only_first_line = $_[2];
+    }
+
     print $_[0] . " -> ";
 
     my $in = $_[0] . "\n";
@@ -838,7 +888,12 @@ sub make_test
     {
 	print $al_in $l . "\n";
 
-	<$al_out>;
+	if ($i == 0 or $skip_only_first_line == 0)
+	{
+	    <$al_out>;
+	}
+
+	$i++;
     }
 
     my @expected_outlines = split("\n", $_[1]);
@@ -847,7 +902,7 @@ sub make_test
 
     my $out;
 
-    for (my $i = 0; $i < scalar (@expected_outlines); $i++)
+    for ($i = 0; $i < scalar (@expected_outlines); $i++)
     {
 	$out = <$al_out>;
 
