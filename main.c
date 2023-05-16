@@ -3649,7 +3649,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
   next_char (&ch, &input, &size, stream);
 
-  if (isdigit (ch))
+  if (isdigit ((unsigned char)ch))
     {
       arg = ch - '0';
       next_char (&ch, &input, &size, stream);
@@ -3657,7 +3657,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   else
     arg = -1;
 
-  while (isdigit (ch))
+  while (isdigit ((unsigned char)ch))
     {
       arg *= 10;
       arg += ch - '0';
