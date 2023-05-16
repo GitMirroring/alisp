@@ -1022,8 +1022,8 @@ struct package_record **alloc_empty_symtable (size_t table_size);
 struct object *create_package (char *name, int name_len);
 struct object *create_package_from_c_strings (char *name, ...);
 void free_name_list (struct name_list *list);
-struct package_record *inspect_accessible_symbol (struct object *sym,
-						  struct object *pack,
+struct package_record *inspect_accessible_symbol (const struct object *sym,
+						  const struct object *pack,
 						  int *is_present);
 struct package_record *inspect_accessible_symbol_by_name (char *name, size_t len,
 							  struct object *pack,
@@ -1032,9 +1032,10 @@ struct object *inspect_package_by_designator (struct object *des,
 					      struct environment *env);
 struct object *find_package (const char *name, size_t len,
 			     struct environment *env);
-struct package_record *find_package_entry (struct object *symbol,
+struct package_record *find_package_entry (const struct object *symbol,
 					   struct package_record **symtable,
 					   struct package_record **prev);
+int is_external_in_home_package (const struct object *sym);
 int import_symbol (struct object *sym, struct object *pack,
 		   struct package_record **rec);
 int use_package (struct object *used, struct object *pack,
@@ -1754,7 +1755,7 @@ int print_as_symbol (const char *sym, size_t len, int print_escapes,
 		     struct stream *str);
 int print_symbol_name (const struct symbol_name *sym, struct environment *env,
 		       struct stream *str);
-int print_symbol (const struct symbol *sym, struct environment *env,
+int print_symbol (const struct object *sym, struct environment *env,
 		  struct stream *str);
 int print_bignum (const mpz_t z, struct environment *env, struct stream *str);
 int print_floating (const mpf_t f, struct environment *env, struct stream *str);
@@ -4518,7 +4519,7 @@ free_name_list (struct name_list *list)
 
 
 struct package_record *
-inspect_accessible_symbol (struct object *sym, struct object *pack,
+inspect_accessible_symbol (const struct object *sym, const struct object *pack,
 			   int *is_present)
 {
   int ind = hash_char_vector (sym->value_ptr.symbol->name,
@@ -4668,7 +4669,8 @@ find_package (const char *name, size_t len, struct environment *env)
 
 
 struct package_record *
-find_package_entry (struct object *symbol, struct package_record **symtable,
+find_package_entry (const struct object *symbol,
+		    struct package_record **symtable,
 		    struct package_record **prev)
 {
   struct package_record *c = symtable [hash_symbol (symbol, SYMTABLE_SIZE)];
@@ -4682,6 +4684,18 @@ find_package_entry (struct object *symbol, struct package_record **symtable,
     }
 
   return c;
+}
+
+
+int
+is_external_in_home_package (const struct object *sym)
+{
+  struct package_record *prev,
+    *entry = find_package_entry (sym,
+				 sym->value_ptr.symbol->home_package->
+				 value_ptr.package->symtable, &prev);
+
+  return entry->visibility == EXTERNAL_VISIBILITY;
 }
 
 
@@ -6007,7 +6021,7 @@ unintern_symbol (struct object *sym)
 
   free (entry);
 
-  s->value_ptr.symbol->home_package = NULL;
+  s->value_ptr.symbol->home_package = &nil_object;
 }
 
 
@@ -12482,6 +12496,7 @@ builtin_make_symbol (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
   struct string *s;
+  struct object *ret;
 
   if (list_length (list) != 1)
     {
@@ -12498,7 +12513,11 @@ builtin_make_symbol (struct object *list, struct environment *env,
 
   s = CAR (list)->value_ptr.string;
 
-  return create_symbol (s->value, s->used_size, 1);
+  ret = create_symbol (s->value, s->used_size, 1);
+
+  ret->value_ptr.symbol->home_package = &nil_object;
+
+  return ret;
 }
 
 
@@ -16161,7 +16180,7 @@ print_symbol_name (const struct symbol_name *sym, struct environment *env,
   int pesc = is_printer_escaping_enabled (env);
 
   if (sym->sym->value_ptr.symbol->home_package)
-    return print_symbol (sym->sym->value_ptr.symbol, env, str);
+    return print_symbol (sym->sym, env, str);
   else
     {
       if (pesc && write_to_stream (str, "#:", 2) < 0)
@@ -16173,21 +16192,35 @@ print_symbol_name (const struct symbol_name *sym, struct environment *env,
 
 
 int
-print_symbol (const struct symbol *sym, struct environment *env,
+print_symbol (const struct object *sym, struct environment *env,
 	      struct stream *str)
 {
-  int pesc = is_printer_escaping_enabled (env);
+  int pesc = is_printer_escaping_enabled (env), ispres;
+  struct object *pack = inspect_variable (env->package_sym, env),
+    *home = sym->value_ptr.symbol->home_package;
 
-  if (!sym->home_package)
+  if (home == &nil_object)
     {
       if (pesc && write_to_stream (str, "#:", 2) < 0)
 	return -1;
     }
-  else if (sym->home_package == env->keyword_package
-	   && write_to_stream (str, ":", 1) < 0)
+  else if (home == env->keyword_package && write_to_stream (str, ":", 1) < 0)
     return -1;
 
-  return print_as_symbol (sym->name, sym->name_len, pesc, str);
+  if (home != &nil_object && home != env->keyword_package
+      && !inspect_accessible_symbol (sym, pack, &ispres))
+    {
+      print_as_symbol (home->value_ptr.package->name,
+		       home->value_ptr.package->name_len, pesc, str);
+
+      if (is_external_in_home_package (sym))
+	write_to_stream (str, ":", 1);
+      else
+	write_to_stream (str, "::", 2);
+    }
+
+  return print_as_symbol (sym->value_ptr.symbol->name,
+			  sym->value_ptr.symbol->name_len, pesc, str);
 }
 
 
@@ -16435,8 +16468,7 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 
       if (obj->value_ptr.function->name)
 	{
-	  if (print_symbol (obj->value_ptr.function->name->value_ptr.symbol, env,
-			    str) < 0)
+	  if (print_symbol (obj->value_ptr.function->name, env, str) < 0)
 	    return -1;
 	}
       else if (write_to_stream (str, "?", 1) < 0)
@@ -16464,8 +16496,7 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 
       if (obj->value_ptr.macro->name)
 	{
-	  if (print_symbol (obj->value_ptr.macro->name->value_ptr.symbol, env,
-			    str) < 0)
+	  if (print_symbol (obj->value_ptr.macro->name, env, str) < 0)
 	    return -1;
 	}
       else if (write_to_stream (str, "?", 1) < 0)
@@ -16522,9 +16553,7 @@ print_object (const struct object *obj, struct environment *env,
     {
       str->dirty_line = 1;
 
-      if (SYMBOL (obj) == &nil_object)
-	return write_to_stream (str, "NIL", strlen ("NIL"));
-      else if (obj->type == TYPE_BIGNUM)
+      if (obj->type == TYPE_BIGNUM)
 	return print_bignum (obj->value_ptr.integer, env, str);
       else if (obj->type == TYPE_FIXNUM)
 	return write_long_to_stream (str, *obj->value_ptr.fixnum);
@@ -16552,7 +16581,7 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_SYMBOL_NAME)
 	return print_symbol_name (obj->value_ptr.symbol_name, env, str);
       else if (obj->type == TYPE_SYMBOL)
-	return print_symbol (obj->value_ptr.symbol, env, str);
+	return print_symbol (obj, env, str);
       else if (obj->type == TYPE_CONS_PAIR)
 	return print_list (obj->value_ptr.cons_pair, env, str);
       else if (obj->type == TYPE_ARRAY)
@@ -16942,7 +16971,7 @@ print_error (struct outcome *err, struct environment *env)
 		       err->pack->value_ptr.package->name_len, 1,
 		       std_out->value_ptr.stream);
       printf (" would cause conflict on symbol ");
-      print_symbol (err->obj->value_ptr.symbol, env, std_out->value_ptr.stream);
+      print_symbol (err->obj, env, std_out->value_ptr.stream);
       printf ("\n");
     }
   else if (err->type == PACKAGE_IS_NOT_IN_USE)
@@ -17350,7 +17379,7 @@ free_symbol (struct object *obj)
   delete_reference (obj, s->value_cell, 0);
   delete_reference (obj, s->function_cell, 1);
 
-  if (p)
+  if (p != &nil_object)
     unintern_symbol (obj);
 
   free (s->name);
