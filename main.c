@@ -52,12 +52,10 @@ typedef int fixnum;
 
 
 
-#define CAR(list) (SYMBOL (list) == &nil_object ? &nil_object :	\
-		   (list)->value_ptr.cons_pair->car)
+#define CAR(list) ((list)->value_ptr.cons_pair->car)
 
-#define CDR(list) (SYMBOL (list) == &nil_object ? &nil_object :		\
-		   (list)->value_ptr.cons_pair->cdr ?			\
-		   (list)->value_ptr.cons_pair->cdr : &nil_object)
+#define CDR(list) ((list)->value_ptr.cons_pair->cdr)
+
 
 #define IS_SEQUENCE(s) (SYMBOL (s) == &nil_object || (s)->type == TYPE_CONS_PAIR \
 			|| (s)->type == TYPE_STRING			\
@@ -7169,7 +7167,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
   if (block_name)
     env->blocks = add_block (block_name, env->blocks);
 
-  do
+  while (SYMBOL (body) != &nil_object)
     {
       decrement_refcount (res);
 
@@ -7220,7 +7218,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
       else
 	body = CDR (body);
 
-    } while (SYMBOL (body) != &nil_object);
+    }
 
  cleanup_and_leave:
   if (tags)
@@ -10782,8 +10780,9 @@ builtin_mapcar (struct object *list, struct environment *env,
 
       if (!finished)
 	{
-	  retcons = retcons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  retcons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 	  set_reference_strength_factor (retcons, 1, CDR (retcons), 0, 0, 0);
+	  retcons = CDR (retcons);
 	}
     }
 
