@@ -9712,6 +9712,12 @@ builtin_read (struct object *list, struct environment *env,
 		     s->medium == FILE_STREAM ? s->file : NULL, 0, 1, env,
 		     outcome, &objbeg, &objend);
 
+  if (IS_READ_OR_EVAL_ERROR (out))
+    {
+      outcome->type = out;
+      return NULL;
+    }
+
   if (IS_INCOMPLETE_OBJECT (out))
     {
       outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
@@ -9775,6 +9781,12 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 		     ? s->string->value_ptr.string->used_size : 0,
 		     s->medium == FILE_STREAM ? s->file : NULL, 1, 1, env,
 		     outcome, &objbeg, &objend);
+
+  if (IS_READ_OR_EVAL_ERROR (out))
+    {
+      outcome->type = out;
+      return NULL;
+    }
 
   if (IS_INCOMPLETE_OBJECT (out))
     {
