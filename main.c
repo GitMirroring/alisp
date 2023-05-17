@@ -16776,8 +16776,7 @@ print_error (struct outcome *err, struct environment *env)
     }
   else if (err->type == INVALID_FUNCTION_CALL)
     {
-      printf ("eval error: not a function form, a macro form or a special "
-	      "form\n");
+      printf ("eval error: not a special, macro or function form\n");
     }
   else if (err->type == UNKNOWN_KEYWORD_ARGUMENT)
     {
