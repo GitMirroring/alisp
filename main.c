@@ -1088,7 +1088,7 @@ void resize_symbol_name (struct object *symname, size_t value_s,
 			 size_t actual_symname_s);
 
 const char *find_end_of_symbol_name (const char *input, size_t size,
-				     int preserve_whitespace,
+				     int ends_with_eof, int preserve_whitespace,
 				     int already_begun, int found_package_sep,
 				     size_t *new_size,
 				     const char **start_of_package_separator,
@@ -3198,8 +3198,9 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 		}
 
 	      out = read_symbol_name (&ob, input ? input : token, tokenlength,
-				      input == NULL, preserve_whitespace,
-				      obj_end, CASE_UPCASE, outcome);
+				      input == NULL || ends_with_eof,
+				      preserve_whitespace, obj_end, CASE_UPCASE,
+				      outcome);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 		{
@@ -3495,7 +3496,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   out->type = NO_OBJECT;
 
   *symname_end = find_end_of_symbol_name
-    (input, size, preserve_whitespace, ob != NULL,
+    (input, size, got_eof, preserve_whitespace, ob != NULL,
      ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
      &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, out);
 
@@ -3539,7 +3540,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   sym->used_size += name_l;
   sym->actual_symname_used_s += act_name_l;
 
-  if (!*symname_end && !got_eof)
+  if (!*symname_end)
     return INCOMPLETE_SYMBOL_NAME;
   else
     return COMPLETE_OBJECT;
@@ -5289,9 +5290,9 @@ resize_symbol_name (struct object *symname, size_t value_s,
 
 
 const char *
-find_end_of_symbol_name (const char *input, size_t size, int preserve_whitespace,
-			 int already_begun, int found_package_sep,
-			 size_t *new_size,
+find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
+			 int preserve_whitespace, int already_begun,
+			 int found_package_sep, size_t *new_size,
 			 const char **start_of_package_separator,
 			 enum package_record_visibility *sym_visibility,
 			 size_t *name_length, size_t *act_name_length,
@@ -5394,6 +5395,9 @@ find_end_of_symbol_name (const char *input, size_t size, int preserve_whitespace
 	}
       i++;
     }
+
+  if (ends_with_eof)
+    return input+size-1;
 
   return NULL;
 }
