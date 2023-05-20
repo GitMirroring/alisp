@@ -212,6 +212,8 @@ make_test ("(nconc (list 'a 'b 'c) 'd)", "(A B C . D)");
 make_test ("(nconc (list 'a 'b 'c) NIL (list 'd 'e) NIL 'f)", "(A B C D E . F)");
 make_test ("(let ((a 2)) a)", "2");
 make_test ("(let ((x 0)) x x x)", "0");
+make_test ("(let ((a)) a)", "NIL");
+make_test ("(let* ((a)) a)", "NIL");
 make_test ("(flet ((a () (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a NIL (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a () (b)) (b () (write \"\"))) (a))", "\"\"\n\"\"");
