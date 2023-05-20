@@ -14006,6 +14006,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 			      struct outcome *outcome)
 {
   struct object *sym, *val;
+  int l;
 
   if (form->type == TYPE_SYMBOL_NAME || form->type == TYPE_SYMBOL)
     {
@@ -14014,9 +14015,9 @@ create_binding_from_let_form (struct object *form, struct environment *env,
     }
   else if (form->type == TYPE_CONS_PAIR)
     {
-      if (list_length (form) != 2
-	  || (CAR (form)->type != TYPE_SYMBOL_NAME
-	      && CAR (form)->type != TYPE_SYMBOL))
+      l = list_length (form);
+
+      if (l > 2 || !IS_SYMBOL (CAR (form)))
 	{
 	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
@@ -14030,11 +14031,18 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 	  return NULL;
 	}
 
-      val = evaluate_object (CAR (CDR (form)), env, outcome);
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+      if (l == 1)
+	{
+	  val = &nil_object;
+	}
+      else
+	{
+	  val = evaluate_object (CAR (CDR (form)), env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      if (!val)
-	return NULL;
+	  if (!val)
+	    return NULL;
+	}
     }
   else
     {
