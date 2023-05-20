@@ -14135,7 +14135,11 @@ evaluate_let_star (struct object *list, struct environment *env,
       bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
 
       if (!bin)
-	return NULL;
+	{
+	  env->vars = remove_bindings (env->vars, bin_num);
+	  env->lex_env_vars_boundary -= bin_num;
+	  return NULL;
+	}
 
       env->vars = add_binding (bin, env->vars);
       env->lex_env_vars_boundary++, bin_num++;
