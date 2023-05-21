@@ -15212,6 +15212,7 @@ evaluate_tagbody (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
   struct object *ret = evaluate_body (list, 1, NULL, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!ret)
     return NULL;
