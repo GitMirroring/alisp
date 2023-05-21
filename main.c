@@ -1017,6 +1017,7 @@ struct object *alloc_empty_list (size_t sz);
 struct object *alloc_function (void);
 struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
+struct object_list *alloc_empty_object_list (size_t sz);
 
 struct package_record **alloc_empty_symtable (size_t table_size);
 struct object *create_package (char *name, int name_len);
@@ -1438,6 +1439,10 @@ struct object *builtin_not
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_concatenate
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_do
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_do_star
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_dotimes
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_dolist
@@ -1645,7 +1650,8 @@ struct object *builtin_software_version (struct object *list,
 					 struct outcome *outcome);
 
 struct binding *create_binding_from_let_form
-(struct object *form, struct environment *env, struct outcome *outcome);
+(struct object *form, struct environment *env, struct outcome *outcome,
+ int allow_three_elements);
 struct object *evaluate_let
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_let_star
@@ -1669,8 +1675,9 @@ struct object *inspect_variable_from_c_string (const char *var,
 					       struct environment *env);
 struct object *inspect_variable (struct object *sym, struct environment *env);
 
-struct object *set_value (struct object *sym, struct object *valueform,
-			  struct environment *env, struct outcome *outcome);
+struct object *set_value (struct object *sym, struct object *value,
+			  int eval_value, struct environment *env,
+			  struct outcome *outcome);
 
 struct object *evaluate_quote
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2243,6 +2250,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("DO", env, builtin_do, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DO*", env, builtin_do_star, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, NULL, 0);
@@ -4425,6 +4434,28 @@ alloc_bytespec (void)
   mpz_init (bs->pos);
 
   return obj;
+}
+
+
+struct object_list *
+alloc_empty_object_list (size_t sz)
+{
+  struct object_list *ret = NULL, *last;
+
+  while (sz)
+    {
+      if (ret)
+	last = last->next = malloc_and_check (sizeof (*ret));
+      else
+	last = ret = malloc_and_check (sizeof (*ret));
+
+      sz--;
+    }
+
+  if (ret)
+    last->next = NULL;
+
+  return ret;
 }
 
 
@@ -10506,6 +10537,244 @@ builtin_concatenate (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_do (struct object *list, struct environment *env,
+	    struct outcome *outcome)
+{
+  int l = list_length (list), bin_num = 0;
+  struct object *bind_forms, *test_form, *testres, *body, *bodyres, *ret, *res;
+  struct object_list *incr = NULL, *lastincr;
+  struct binding *bins = NULL, *bin;
+
+  if (l < 2 || !IS_LIST (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  env->blocks = add_block (&nil_object, env->blocks);
+
+  bind_forms = CAR (list);
+
+  while (SYMBOL (bind_forms) != &nil_object)
+    {
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, 1);
+
+      if (!bin)
+	{
+	  ret = NULL;
+	  env->vars = chain_bindings (bins, env->vars, NULL);
+	  goto cleanup_and_leave;
+	}
+
+      bins = add_binding (bin, bins);
+      bin_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  env->vars = chain_bindings (bins, env->vars, NULL);
+
+  env->lex_env_vars_boundary += bin_num;
+
+  test_form = CAR (CAR (CDR (list)));
+
+  testres = evaluate_object (test_form, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!testres)
+    {
+      ret = NULL;
+      goto cleanup_and_leave;
+    }
+
+  body = CDR (CDR (list));
+
+  incr = alloc_empty_object_list (bin_num);
+
+  while (SYMBOL (testres) == &nil_object)
+    {
+      bodyres = evaluate_body (body, 1, NULL, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!bodyres)
+	{
+	  ret = NULL;
+	  goto cleanup_and_leave;
+	}
+
+      decrement_refcount (bodyres);
+
+      bind_forms = CAR (list);
+      lastincr = incr;
+
+      while (SYMBOL (bind_forms) != &nil_object)
+	{
+	  if (list_length (CAR (bind_forms)) == 3)
+	    {
+	      res = evaluate_object (CAR (CDR (CDR (CAR (bind_forms)))), env,
+				     outcome);
+
+	      if (!res)
+		{
+		  ret = NULL;
+		  goto cleanup_and_leave;
+		}
+	    }
+	  else
+	    res = NULL;
+
+	  lastincr->obj = res;
+
+	  bind_forms = CDR (bind_forms);
+	  lastincr = lastincr->next;
+	}
+
+      bind_forms = CAR (list);
+      lastincr = incr;
+
+      while (SYMBOL (bind_forms) != &nil_object)
+	{
+	  if (lastincr->obj)
+	    set_value (SYMBOL (CAR (CAR (bind_forms))), lastincr->obj, 0, env,
+		       outcome);
+
+	  bind_forms = CDR (bind_forms);
+	  lastincr = lastincr->next;
+	}
+
+      decrement_refcount (testres);
+
+      testres = evaluate_object (test_form, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!testres)
+	{
+	  ret = NULL;
+	  goto cleanup_and_leave;
+	}
+    }
+
+  ret = evaluate_body (CDR (CAR (CDR (list))), 0, NULL, env, outcome);
+
+ cleanup_and_leave:
+  env->vars = remove_bindings (env->vars, bin_num);
+
+  env->lex_env_vars_boundary -= bin_num;
+
+  env->blocks = remove_block (env->blocks);
+
+  free_object_list_structure (incr);
+
+  return ret;
+}
+
+
+struct object *
+builtin_do_star (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  int l = list_length (list), bin_num = 0;
+  struct object *bind_forms, *test_form, *testres, *body, *bodyres, *ret, *res;
+  struct binding *bin;
+
+  if (l < 2 || !IS_LIST (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  env->blocks = add_block (&nil_object, env->blocks);
+
+  bind_forms = CAR (list);
+
+  while (SYMBOL (bind_forms) != &nil_object)
+    {
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, 1);
+
+      if (!bin)
+	{
+	  ret = NULL;
+	  goto cleanup_and_leave;
+	}
+
+      env->vars = add_binding (bin, env->vars);
+      env->lex_env_vars_boundary++, bin_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  test_form = CAR (CAR (CDR (list)));
+
+  testres = evaluate_object (test_form, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!testres)
+    {
+      ret = NULL;
+      goto cleanup_and_leave;
+    }
+
+  body = CDR (CDR (list));
+
+  while (SYMBOL (testres) == &nil_object)
+    {
+      bodyres = evaluate_body (body, 1, NULL, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!bodyres)
+	{
+	  ret = NULL;
+	  goto cleanup_and_leave;
+	}
+
+      decrement_refcount (bodyres);
+
+      bind_forms = CAR (list);
+
+      while (SYMBOL (bind_forms) != &nil_object)
+	{
+	  if (list_length (CAR (bind_forms)) == 3)
+	    {
+	      res = set_value (SYMBOL (CAR (CAR (bind_forms))),
+			       CAR (CDR (CDR (CAR (bind_forms)))), 1, env,
+			       outcome);
+
+	      if (!res)
+		{
+		  ret = NULL;
+		  goto cleanup_and_leave;
+		}
+	    }
+
+	  bind_forms = CDR (bind_forms);
+	}
+
+      decrement_refcount (testres);
+
+      testres = evaluate_object (test_form, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!testres)
+	{
+	  ret = NULL;
+	  goto cleanup_and_leave;
+	}
+    }
+
+  ret = evaluate_body (CDR (CAR (CDR (list))), 0, NULL, env, outcome);
+
+ cleanup_and_leave:
+  env->vars = remove_bindings (env->vars, bin_num);
+
+  env->lex_env_vars_boundary -= bin_num;
+
+  env->blocks = remove_block (env->blocks);
+
+  return ret;
+}
+
+
+struct object *
 builtin_dotimes (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
@@ -13488,7 +13757,7 @@ builtin_in_package (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return set_value (env->package_sym, pack, env, outcome);
+  return set_value (env->package_sym, pack, 1, env, outcome);
 }
 
 
@@ -14003,7 +14272,7 @@ builtin_software_version (struct object *list, struct environment *env,
 
 struct binding *
 create_binding_from_let_form (struct object *form, struct environment *env,
-			      struct outcome *outcome)
+			      struct outcome *outcome, int allow_three_elements)
 {
   struct object *sym, *val;
   int l;
@@ -14017,7 +14286,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
     {
       l = list_length (form);
 
-      if (l > 2 || !IS_SYMBOL (CAR (form)))
+      if (l > (allow_three_elements ? 3 : 2) || !IS_SYMBOL (CAR (form)))
 	{
 	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
@@ -14087,7 +14356,7 @@ evaluate_let (struct object *list, struct environment *env,
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
-      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, 0);
 
       if (!bin)
 	return NULL;
@@ -14132,7 +14401,7 @@ evaluate_let_star (struct object *list, struct environment *env,
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
-      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome);
+      bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, 0);
 
       if (!bin)
 	{
@@ -14430,8 +14699,8 @@ inspect_variable (struct object *sym, struct environment *env)
 
 
 struct object *
-set_value (struct object *sym, struct object *valueform, struct environment *env,
-	   struct outcome *outcome)
+set_value (struct object *sym, struct object *value, int eval_value,
+	   struct environment *env, struct outcome *outcome)
 {
   struct symbol *s = sym->value_ptr.symbol;
   struct object *val;
@@ -14443,11 +14712,16 @@ set_value (struct object *sym, struct object *valueform, struct environment *env
       return NULL;
     }
 
-  val = evaluate_object (valueform, env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+  if (eval_value)
+    {
+      val = evaluate_object (value, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-  if (!val)
-    return NULL;
+      if (!val)
+	return NULL;
+    }
+  else
+    val = value;
 
   if (s->is_parameter || s->is_special)
     {
@@ -14868,7 +15142,7 @@ evaluate_setq (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = set_value (SYMBOL (CAR (list)), CAR (CDR (list)), env, outcome);
+      ret = set_value (SYMBOL (CAR (list)), CAR (CDR (list)), 1, env, outcome);
 
       if (!ret)
 	return NULL;
@@ -14898,7 +15172,7 @@ evaluate_setf (struct object *list, struct environment *env,
     {
       if (IS_SYMBOL (CAR (list)))
 	{
-	  val = set_value (SYMBOL (CAR (list)), nth (1, list), env, outcome);
+	  val = set_value (SYMBOL (CAR (list)), nth (1, list), 1, env, outcome);
 
 	  if (!val)
 	    return NULL;
