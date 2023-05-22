@@ -21,7 +21,7 @@ If you have a cloned git repository and the last commit is not a
 versioned release, you can execute set-version-from-git.sh to set a
 meaningful alisp version in the relevant line of configure.ac.
 
-To build from git, start with
+To build from a git snapshot, start with
 
   $ autoreconf -i
 
@@ -31,7 +31,7 @@ To build from git, start with
 
 configure only admits --with[out]-readline as options, to build with
 line editing or not; also note that the test suite will not work
-without readline, for some reason.  Then
+without readline, for some reasons.  Then
 
   $ make
 
@@ -44,7 +44,7 @@ A lisp file named cl.lisp contains many standard definitions.  By
 default, this file gets loaded at startup from the current directory,
 unless you pass -q or --dont-load-cl.  To load the file manually, run
 
-  al> (load "cl.lisp")
+  [CL-USER]> (load "cl.lisp")
 
 at the al prompt.
 
@@ -82,5 +82,17 @@ car.
 
 
 
+__Readline history__
 
-You can reach me at andrea.monaco@autistici.org.
+al saves immediately each line to the history file, instead of saving the whole
+history at program termination.  That's a design choice, so that I have the last
+lines available after crashes.
+
+The history file al_history can get quite big; if you delete it, test.pl and
+meta_test.pl will get much faster.
+
+
+
+
+You can reach me at andrea.monaco@autistici.org.  Send any suggestion and bug
+report that you wish, but please note that I don't take patches.
