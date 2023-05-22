@@ -153,6 +153,7 @@ make_test ("#\\Newline", "#\\Newline");
 make_test ("#.\"\"", "\"\"");
 make_test ("#. (+ 1 2)", "3");
 make_test ("#p\".\"", "#P\".\"");
+make_test ("#(a b c)", "#(A B C)");
 make_test ("#(1 2 3)", "#(1 2 3)");
 make_test ("#(1 2\n" .
 	   "3)", "#(1 2 3)");
