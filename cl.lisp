@@ -159,18 +159,22 @@
 
 
 (defmacro and (&rest forms)
-  `(if ,(not forms)
-       t
-       (if ,(car forms)
-	   (and ,@(cdr forms)))))
+  `(let ((val ,(car forms)))
+     (if ,(not forms)
+         t
+         (if val
+             (if ,(not (cdr forms))
+                 val
+                 (and ,@(cdr forms)))))))
 
 
 (defmacro or (&rest forms)
-  `(if ,(not forms)
+  `(let ((val ,(car forms)))
+     (if ,(not forms)
        nil
-       (if ,(car forms)
-	   t
-	   (or ,@(cdr forms)))))
+       (if val
+           val
+           (or ,@(cdr forms))))))
 
 
 (defmacro cond (&body body)
