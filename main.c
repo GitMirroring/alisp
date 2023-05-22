@@ -10564,7 +10564,14 @@ builtin_do (struct object *list, struct environment *env,
 
       if (!bin)
 	{
-	  ret = NULL;
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      ret = outcome->return_value;
+	    }
+	  else
+	    ret = NULL;
+
 	  env->vars = chain_bindings (bins, env->vars, NULL);
 	  goto cleanup_and_leave;
 	}
@@ -10586,7 +10593,14 @@ builtin_do (struct object *list, struct environment *env,
 
   if (!testres)
     {
-      ret = NULL;
+      if (outcome->block_to_leave == &nil_object)
+	{
+	  outcome->block_to_leave = NULL;
+	  ret = outcome->return_value;
+	}
+      else
+	ret = NULL;
+
       goto cleanup_and_leave;
     }
 
@@ -10601,7 +10615,14 @@ builtin_do (struct object *list, struct environment *env,
 
       if (!bodyres)
 	{
-	  ret = NULL;
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      ret = outcome->return_value;
+	    }
+	  else
+	    ret = NULL;
+
 	  goto cleanup_and_leave;
 	}
 
@@ -10619,7 +10640,14 @@ builtin_do (struct object *list, struct environment *env,
 
 	      if (!res)
 		{
-		  ret = NULL;
+		  if (outcome->block_to_leave == &nil_object)
+		    {
+		      outcome->block_to_leave = NULL;
+		      ret = outcome->return_value;
+		    }
+		  else
+		    ret = NULL;
+
 		  goto cleanup_and_leave;
 		}
 	    }
@@ -10652,12 +10680,25 @@ builtin_do (struct object *list, struct environment *env,
 
       if (!testres)
 	{
-	  ret = NULL;
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      ret = outcome->return_value;
+	    }
+	  else
+	    ret = NULL;
+
 	  goto cleanup_and_leave;
 	}
     }
 
   ret = evaluate_body (CDR (CAR (CDR (list))), 0, NULL, env, outcome);
+
+  if (!ret && outcome->block_to_leave == &nil_object)
+    {
+      outcome->block_to_leave = NULL;
+      ret = outcome->return_value;
+    }
 
  cleanup_and_leave:
   env->vars = remove_bindings (env->vars, bin_num);
@@ -10696,7 +10737,14 @@ builtin_do_star (struct object *list, struct environment *env,
 
       if (!bin)
 	{
-	  ret = NULL;
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      ret = outcome->return_value;
+	    }
+	  else
+	    ret = NULL;
+
 	  goto cleanup_and_leave;
 	}
 
@@ -10713,7 +10761,14 @@ builtin_do_star (struct object *list, struct environment *env,
 
   if (!testres)
     {
-      ret = NULL;
+      if (outcome->block_to_leave == &nil_object)
+	{
+	  outcome->block_to_leave = NULL;
+	  ret = outcome->return_value;
+	}
+      else
+	ret = NULL;
+
       goto cleanup_and_leave;
     }
 
@@ -10726,7 +10781,14 @@ builtin_do_star (struct object *list, struct environment *env,
 
       if (!bodyres)
 	{
-	  ret = NULL;
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      ret = outcome->return_value;
+	    }
+	  else
+	    ret = NULL;
+
 	  goto cleanup_and_leave;
 	}
 
@@ -10744,7 +10806,14 @@ builtin_do_star (struct object *list, struct environment *env,
 
 	      if (!res)
 		{
-		  ret = NULL;
+		  if (outcome->block_to_leave == &nil_object)
+		    {
+		      outcome->block_to_leave = NULL;
+		      ret = outcome->return_value;
+		    }
+		  else
+		    ret = NULL;
+
 		  goto cleanup_and_leave;
 		}
 	    }
@@ -10759,12 +10828,25 @@ builtin_do_star (struct object *list, struct environment *env,
 
       if (!testres)
 	{
-	  ret = NULL;
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      ret = outcome->return_value;
+	    }
+	  else
+	    ret = NULL;
+
 	  goto cleanup_and_leave;
 	}
     }
 
   ret = evaluate_body (CDR (CAR (CDR (list))), 0, NULL, env, outcome);
+
+  if (!ret && outcome->block_to_leave == &nil_object)
+    {
+      outcome->block_to_leave = NULL;
+      ret = outcome->return_value;
+    }
 
  cleanup_and_leave:
   env->vars = remove_bindings (env->vars, bin_num);
