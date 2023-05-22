@@ -1703,6 +1703,8 @@ struct object *evaluate_defmacro
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_psetq
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_function
@@ -2308,6 +2310,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFUN", env, evaluate_defun, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, NULL, 0);
   add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("PSETQ", env, evaluate_psetq, TYPE_MACRO, NULL, 0);
   add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, NULL, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, NULL, 0);
@@ -15152,6 +15155,57 @@ evaluate_setq (struct object *list, struct environment *env,
 
   increment_refcount (ret);
   return ret;
+}
+
+
+struct object *
+evaluate_psetq (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *cons = list;
+  int l = list_length (list);
+  struct object_list *ls, *last;
+
+  if (l % 2)
+    {
+      outcome->type = ODD_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  last = ls = alloc_empty_object_list (l / 2);
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (cons)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      last->obj = evaluate_object (CAR (CDR (cons)), env, outcome);
+
+      if (!last->obj)
+	return NULL;
+
+      cons = CDR (CDR (cons));
+      last = last->next;
+    }
+
+  cons = list;
+  last = ls;
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      set_value (SYMBOL (CAR (cons)), last->obj, 0, env, outcome);
+
+      cons = CDR (CDR (cons));
+      last = last->next;
+    }
+
+  free_object_list_structure (ls);
+
+  return &nil_object;
 }
 
 
