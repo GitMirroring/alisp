@@ -14741,16 +14741,7 @@ set_value (struct object *sym, struct object *value, int eval_value,
 	{
 	  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
 
-	  if (b)
-	    {
-	      b->obj = val;
-	    }
-	  else
-	    {
-	      env->vars = add_binding (create_binding (sym, val,
-						       DYNAMIC_BINDING, 1),
-				       env->vars);
-	    }
+	  b->obj = val;
 	}
     }
   else
