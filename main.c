@@ -7764,26 +7764,31 @@ apply_backquote (struct object *form, int backts_commas_balance,
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
       return ret;
     }
-  else if (form->type == TYPE_BACKQUOTE)
+  else if (form->type == TYPE_BACKQUOTE || form->type == TYPE_QUOTE)
     {
-      ret = apply_backquote (form->value_ptr.next, backts_commas_balance + 1,
-			     env, outcome, forbid_splicing, do_splice, last_pref);
+      ret = apply_backquote (form->value_ptr.next, backts_commas_balance
+			     + (form->type == TYPE_BACKQUOTE), env, outcome,
+			     forbid_splicing, do_splice, last_pref);
 
       if (!ret)
 	return NULL;
 
       if (ret == form->value_ptr.next)
 	{
-	  !forbid_splicing ? *last_pref = ret : NULL;
+	  if (form->type == TYPE_BACKQUOTE && !forbid_splicing)
+	    *last_pref = ret;
+
 	  increment_refcount (form);
 	  decrement_refcount (form->value_ptr.next);
 	  return form;
 	}
 
-      retform = alloc_prefix ('`');
+      retform = alloc_prefix (form->type == TYPE_BACKQUOTE ? '`' : '\'');
       retform->value_ptr.next = ret;
       set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
-      !forbid_splicing ? *last_pref = retform : NULL;
+
+      if (form->type == TYPE_BACKQUOTE && !forbid_splicing)
+	*last_pref = ret;
 
       return retform;
     }
