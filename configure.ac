@@ -19,7 +19,7 @@
 
 
 AC_PREREQ([2.69])
-AC_INIT([al], [0.93], [andrea.monaco@autistici.org])
+AC_INIT([al], [0.94], [andrea.monaco@autistici.org])
 
 AM_INIT_AUTOMAKE([-Wall -Werror foreign])
 
