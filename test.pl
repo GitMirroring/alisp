@@ -492,6 +492,8 @@ make_test ("(list-length '(0 1 2 3))", "4");
 make_test ("(make-array 4)", "#(NIL NIL NIL NIL)");
 make_test ("(make-array '(1 2 3))", "#<ARRAY, RANK 3>");
 make_test ("(make-array nil)", "#<ARRAY, RANK 0>");
+make_test ("(vector)", "#()");
+make_test ("(vector 'a 'b \"\")", "#(A B \"\")");
 make_test ("(array-has-fill-pointer-p \"aaa\")", "NIL");
 make_test ("(array-rank #())", "1");
 make_test ("(array-rank (make-array nil))", "0");
