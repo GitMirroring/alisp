@@ -118,6 +118,7 @@ make_test ("``(a ,,(+ 1 2) ,(+ 3 4))", "`(A ,3 ,(+ 3 4))");
 make_test ("``(a ,(+ ,1 2))", "`(A ,(+ 1 2))");
 make_test ("`(,1 . ,2)", "(1 . 2)");
 make_test ("`(,1 ,2 . ,3)", "(1 2 . 3)");
+make_test ("`',(car ())", "'NIL");
 make_test ("`(if ``(progn ,,1))", "(IF ``(PROGN ,,1))");
 make_test ("'@", "@");
 make_test ("`(,@())", "NIL");
