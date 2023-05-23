@@ -159,21 +159,23 @@
 
 
 (defmacro and (&rest forms)
-  `(let ((val ,(car forms)))
+  `(let ((val (multiple-value-list ,(car forms))))
      (if ,(not forms)
          t
-         (if val
+         (if (car val)
              (if ,(not (cdr forms))
-                 val
+                 (values-list val)
                  (and ,@(cdr forms)))))))
 
 
 (defmacro or (&rest forms)
-  `(let ((val ,(car forms)))
+  `(let ((val (multiple-value-list ,(car forms))))
      (if ,(not forms)
        nil
-       (if val
-           val
+       (if (car val)
+	   (if ,(not (cdr forms))
+               (values-list val)
+	       (car val))
            (or ,@(cdr forms))))))
 
 
