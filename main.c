@@ -1367,6 +1367,8 @@ struct object *builtin_fill_pointer
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_array
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_vector
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_array_has_fill_pointer_p
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_array_dimensions
@@ -2191,6 +2193,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("VECTOR", env, builtin_vector, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-HAS-FILL-POINTER-P", env,
 		    builtin_array_has_fill_pointer_p, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
@@ -5608,7 +5611,10 @@ create_vector_from_list (struct object *list)
   vec->reference_strength_factor = malloc_and_check (sz->size * sizeof (int));
 
   for (i = 0; i < sz->size; i++)
-    vec->value [i] = nth (i, list);
+    {
+      vec->value [i] = nth (i, list);
+      add_reference (obj, vec->value [i], i);
+    }
 
   obj->type = TYPE_ARRAY;
   obj->value_ptr.array = vec;
@@ -9228,6 +9234,14 @@ builtin_make_array (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_vector (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  return create_vector_from_list (list);
 }
 
 
