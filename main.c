@@ -6999,9 +6999,13 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
       if (IS_SYMBOL (car) && (car = SYMBOL (car))
 	  && (car == env->amp_optional_sym || car == env->amp_rest_sym
-	      || car == env->amp_body_sym || car == env->amp_key_sym
-	      || car == env->amp_allow_other_keys_sym
-	      || car == env->amp_aux_sym))
+	      || car == env->amp_body_sym || car == env->amp_key_sym))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+      else if (IS_SYMBOL (car) && (car == env->amp_allow_other_keys_sym
+				   || car == env->amp_aux_sym))
 	{
 	  break;
 	}
