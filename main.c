@@ -17283,7 +17283,8 @@ print_error (struct outcome *err, struct environment *env)
     }
   else if (err->type == UNKNOWN_KEYWORD_ARGUMENT)
     {
-      printf ("eval error: unknown keyword argument in function call\n");
+      printf ("eval error: unknown keyword argument in function or macro "
+	      "call\n");
     }
   else if (err->type == ODD_NUMBER_OF_ARGUMENTS)
     {
