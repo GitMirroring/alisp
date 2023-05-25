@@ -17326,11 +17326,11 @@ print_error (struct outcome *err, struct environment *env)
     }
   else if (err->type == TOO_FEW_ARGUMENTS)
     {
-      printf ("eval error: too few arguments to function call\n");
+      printf ("eval error: too few arguments to function or macro call\n");
     }
   else if (err->type == TOO_MANY_ARGUMENTS)
     {
-      printf ("eval error: too many arguments to function call\n");
+      printf ("eval error: too many arguments to function or macro call\n");
     }
   else if (err->type == WRONG_TYPE_OF_ARGUMENT)
     {
