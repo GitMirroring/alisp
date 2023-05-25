@@ -491,6 +491,7 @@ symbol
 		       struct environment *env, struct outcome *outcome);
   struct binding *type_lex_vars, *type_lex_funcs;
   struct parameter *type_lambda_list;
+  int type_allow_other_keys;
   struct object *typespec;
   struct object_list *parent_types;
 
@@ -1227,15 +1228,17 @@ struct parameter *parse_keyword_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct outcome *outcome);
 struct parameter *parse_lambda_list (struct object *obj, struct environment *env,
-				     struct outcome *outcome);
+				     struct outcome *outcome,
+				     int *allow_other_keys);
 
 struct object *evaluate_body
 (struct object *body, int is_tagbody, struct object *block_name,
  struct environment *env, struct outcome *outcome);
 int parse_argument_list (struct object *arglist, struct parameter *par,
-			 int eval_args, int is_macro, struct binding *lex_vars,
-			 struct binding *lex_funcs, struct environment *env,
-			 struct outcome *outcome, int *argsnum, int *closnum);
+			 int eval_args, int is_macro, int allow_other_keys,
+			 struct binding *lex_vars, struct binding *lex_funcs,
+			 struct environment *env, struct outcome *outcome,
+			 int *argsnum, int *closnum);
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int is_macro,
  struct environment *env, struct outcome *outcome);
@@ -1832,13 +1835,13 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, NULL,
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 0, NULL,
   NULL, NULL, 1};
 
 struct object nil_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, NULL, NULL,
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 0, NULL, NULL,
   NULL, 1};
 
 struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
@@ -5118,7 +5121,8 @@ create_function (struct object *lambda_list, struct object *body,
   struct function *f = fun->value_ptr.function;
 
   outcome->type = EVAL_OK;
-  f->lambda_list = parse_lambda_list (lambda_list, env, outcome);
+  f->lambda_list = parse_lambda_list (lambda_list, env, outcome,
+				      &f->allow_other_keys);
 
   if (outcome->type == INVALID_LAMBDA_LIST)
     {
@@ -7131,10 +7135,13 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 struct parameter *
 parse_lambda_list (struct object *obj, struct environment *env,
-		   struct outcome *outcome)
+		   struct outcome *outcome, int *allow_other_keys)
 {
   struct parameter *first = NULL, *last = NULL;
   struct object *car;
+  int found_amp_key = 0;
+
+  *allow_other_keys = 0;
 
   if (SYMBOL (obj) == &nil_object)
     {
@@ -7191,6 +7198,8 @@ parse_lambda_list (struct object *obj, struct environment *env,
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_key_sym)
     {
+      found_amp_key = 1;
+
       if (first)
 	last->next =
 	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
@@ -7200,6 +7209,20 @@ parse_lambda_list (struct object *obj, struct environment *env,
 
       if (outcome->type != EVAL_OK)
 	return NULL;
+    }
+
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_allow_other_keys_sym)
+    {
+      if (!found_amp_key)
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *allow_other_keys = 1;
+
+      obj = CDR (obj);
     }
 
   if (SYMBOL (obj) != &nil_object)
@@ -7301,9 +7324,10 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 
 int
 parse_argument_list (struct object *arglist, struct parameter *par,
-		     int eval_args, int is_macro, struct binding *lex_vars,
-		     struct binding *lex_funcs, struct environment *env,
-		     struct outcome *outcome, int *argsnum, int *closnum)
+		     int eval_args, int is_macro, int allow_other_keys,
+		     struct binding *lex_vars, struct binding *lex_funcs,
+		     struct environment *env, struct outcome *outcome,
+		     int *argsnum, int *closnum)
 {
   struct parameter *findk;
   struct binding *bins = NULL;
@@ -7356,7 +7380,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
     }
 
   if (SYMBOL (arglist) != &nil_object
-      && (!par || (par && par->type != REST_PARAM && par->type != KEYWORD_PARAM)))
+      && (!par || (par && par->type != REST_PARAM && par->type != KEYWORD_PARAM))
+      && !allow_other_keys)
     {
       env->vars = chain_bindings (bins, env->vars, NULL);
       outcome->type = TOO_MANY_ARGUMENTS;
@@ -7451,6 +7476,20 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!findk || findk->type != KEYWORD_PARAM)
 	    {
+	      if (allow_other_keys)
+		{
+		  args = CDR (args);
+
+		  if (SYMBOL (args) == &nil_object)
+		    {
+		      env->vars = chain_bindings (bins, env->vars, NULL);
+		      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+		      return 0;
+		    }
+
+		  args = CDR (args);
+		  continue;
+		}
 	      env->vars = chain_bindings (bins, env->vars, NULL);
 	      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
 	      return 0;
@@ -7564,6 +7603,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
 			   eval_args, is_macro,
+			   func->value_ptr.function->allow_other_keys,
 			   func->value_ptr.function->lex_vars,
 			   func->value_ptr.function->lex_funcs, env, outcome,
 			   &argsnum, &closnum))
@@ -15638,7 +15678,8 @@ evaluate_deftype (struct object *list, struct environment *env,
 
   outcome->type = EVAL_OK;
   typename->value_ptr.symbol->type_lambda_list =
-    parse_lambda_list (CAR (CDR (list)), env, outcome);
+    parse_lambda_list (CAR (CDR (list)), env, outcome,
+		       &typename->value_ptr.symbol->type_allow_other_keys);
 
   if (outcome->type == INVALID_LAMBDA_LIST)
     return NULL;
