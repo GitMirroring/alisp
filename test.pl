@@ -316,7 +316,7 @@ make_test ("(fun 0 1 :k 2)", "(:K 2)");
 make_test ("(defun f (&key &allow-other-keys))", "F");
 make_test ("(f :a 0)", "NIL");
 make_test ("(defun f (&key x &allow-other-keys) x)", "F");
-make_test ("(f :x 0)", "0");
+make_test ("(f :x 0 :y 1)", "0");
 make_test ("(f)", "NIL");
 make_test ("(let ((x 0)) (defun inc () (setf x (+ x 1))))", "INC");
 make_test ("(inc)", "1");
