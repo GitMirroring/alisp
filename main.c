@@ -1232,6 +1232,10 @@ struct parameter *parse_lambda_list (struct object *obj, struct environment *env
 struct object *evaluate_body
 (struct object *body, int is_tagbody, struct object *block_name,
  struct environment *env, struct outcome *outcome);
+int parse_argument_list (struct object *arglist, struct parameter *par,
+			 int eval_args, int is_macro, struct binding *lex_vars,
+			 struct binding *lex_funcs, struct environment *env,
+			 struct outcome *outcome, int *argsnum, int *closnum);
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int is_macro,
  struct environment *env, struct outcome *outcome);
@@ -7291,36 +7295,18 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 }
 
 
-struct object *
-call_function (struct object *func, struct object *arglist, int eval_args,
-	       int is_macro, struct environment *env,
-	       struct outcome *outcome)
+int
+parse_argument_list (struct object *arglist, struct parameter *par,
+		     int eval_args, int is_macro, struct binding *lex_vars,
+		     struct binding *lex_funcs, struct environment *env,
+		     struct outcome *outcome, int *argsnum, int *closnum)
 {
-  struct parameter *par = func->value_ptr.function->lambda_list, *findk;
-  struct binding *bins = NULL, *b;
-  struct object *val, *ret, *ret2, *args = NULL;
-  int argsnum = 0, closnum = 0, prev_lex_bin_num = env->lex_env_vars_boundary,
-    rest_found = 0;
+  struct parameter *findk;
+  struct binding *bins = NULL;
+  struct object *val, *args = NULL;
+  int rest_found = 0;
 
-  if (func->value_ptr.function->builtin_form)
-    {
-      if (eval_args)
-	{
-	  args = evaluate_through_list (arglist, env, outcome);
-
-	  if (!args)
-	    return NULL;
-	}
-      else
-	args = arglist;
-
-      ret = func->value_ptr.function->builtin_form (args, env, outcome);
-
-      if (eval_args)
-	decrement_refcount (args);
-
-      return ret;
-    }
+  *argsnum = 0, *closnum = 0;
 
   while (SYMBOL (arglist) != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -7332,8 +7318,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  if (!val)
 	    {
-	      ret = NULL;
-	      goto clean_lex_env;
+	      env->vars = chain_bindings (bins, env->vars, NULL);
+	      return 0;
 	    }
 	}
       else
@@ -7344,13 +7330,13 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       bins = bind_variable (par->name, val, bins);
 
-      argsnum++;
+      (*argsnum)++;
 
       if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	{
 	  bins = bind_variable (par->supplied_p_param, &t_object, bins);
 
-	  argsnum++;
+	  (*argsnum)++;
 	}
 
       par = par->next;
@@ -7360,17 +7346,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (par && par->type == REQUIRED_PARAM)
     {
+      env->vars = chain_bindings (bins, env->vars, NULL);
       outcome->type = TOO_FEW_ARGUMENTS;
-      ret = NULL;
-      goto clean_lex_env;
+      return 0;
     }
 
   if (SYMBOL (arglist) != &nil_object
       && (!par || (par && par->type != REST_PARAM && par->type != KEYWORD_PARAM)))
     {
+      env->vars = chain_bindings (bins, env->vars, NULL);
       outcome->type = TOO_MANY_ARGUMENTS;
-      ret = NULL;
-      goto clean_lex_env;
+      return 0;
     }
 
   while (par && par->type == OPTIONAL_PARAM)
@@ -7382,26 +7368,25 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  if (!val)
 	    {
-	      ret = NULL;
-	      goto clean_lex_env;
+	      return 0;
 	    }
 
 	  bins = bind_variable (par->name, val, bins);
 
-	  argsnum++;
+	  (*argsnum)++;
 	}
       else
 	{
 	  bins = bind_variable (par->name, &nil_object, bins);
 
-	  argsnum++;
+	  (*argsnum)++;
 	}
 
       if (par->supplied_p_param)
 	{
 	  bins = bind_variable (par->supplied_p_param, &nil_object, bins);
 
-	  argsnum++;
+	  (*argsnum)++;
 	}
 
       par = par->next;
@@ -7415,8 +7400,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  if (!args)
 	    {
-	      ret = NULL;
-	      goto clean_lex_env;
+	      env->vars = chain_bindings (bins, env->vars, NULL);
+	      return 0;
 	    }
 	}
       else
@@ -7430,7 +7415,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       bins = bind_variable (par->name, args, bins);
 
-      argsnum++;
+      (*argsnum)++;
 
       par = par->next;
 
@@ -7462,25 +7447,25 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  if (!findk || findk->type != KEYWORD_PARAM)
 	    {
+	      env->vars = chain_bindings (bins, env->vars, NULL);
 	      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	      ret = NULL;
-	      goto clean_lex_env;
+	      return 0;
 	    }
 
 	  args = CDR (args);
 
 	  if (SYMBOL (args) == &nil_object)
 	    {
+	      env->vars = chain_bindings (bins, env->vars, NULL);
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
-	      ret = NULL;
-	      goto clean_lex_env;
+	      return 0;
 	    }
 
 	  increment_refcount (CAR (args));
 
 	  bins = bind_variable (findk->name, CAR (args), bins);
 	  findk->key_passed = 1;
-	  argsnum++;
+	  (*argsnum)++;
 
 	  args = CDR (args);
 	}
@@ -7498,27 +7483,27 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 		  if (!val)
 		    {
-		      ret = NULL;
-		      goto clean_lex_env;
+		      env->vars = chain_bindings (bins, env->vars, NULL);
+		      return 0;
 		    }
 		}
 	      else
 		val = &nil_object;
 
 	      bins = bind_variable (findk->name, val, bins);
-	      argsnum++;
+	      (*argsnum)++;
 
 	      if (findk->supplied_p_param)
 		{
 		  bins = bind_variable (findk->supplied_p_param, &nil_object,
 					bins);
-		  argsnum++;
+		  (*argsnum)++;
 		}
 	    }
 	  else if (findk->supplied_p_param)
 	    {
 	      bins = bind_variable (findk->supplied_p_param, &t_object, bins);
-	      argsnum++;
+	      (*argsnum)++;
 	    }
 
 	  findk = findk->next;
@@ -7529,30 +7514,73 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     decrement_refcount (args);
 
   env->vars = chain_bindings (bins, env->vars, NULL);
-  bins = NULL;
 
   if (is_macro)
-    env->lex_env_vars_boundary += argsnum;
+    env->lex_env_vars_boundary += (*argsnum);
   else
-    env->lex_env_vars_boundary = argsnum;
+    env->lex_env_vars_boundary = (*argsnum);
 
-  env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
-			      &closnum);
-  env->lex_env_vars_boundary += closnum;
+  env->vars = chain_bindings (lex_vars, env->vars, closnum);
+  env->lex_env_vars_boundary += *closnum;
 
-  ret = evaluate_body (func->value_ptr.function->body, 0,
-		       func->value_ptr.function->name, env, outcome);
+  return 1;
+}
 
-  if (ret && is_macro)
+
+struct object *
+call_function (struct object *func, struct object *arglist, int eval_args,
+	       int is_macro, struct environment *env,
+	       struct outcome *outcome)
+{
+  struct binding *b;
+  struct object *ret, *ret2, *args = NULL;
+  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+
+
+  if (func->value_ptr.function->builtin_form)
     {
-      ret2 = evaluate_object (ret, env, outcome);
+      if (eval_args)
+	{
+	  args = evaluate_through_list (arglist, env, outcome);
 
-      decrement_refcount (ret);
+	  if (!args)
+	    return NULL;
+	}
+      else
+	args = arglist;
 
-      ret = ret2;
+      ret = func->value_ptr.function->builtin_form (args, env, outcome);
+
+      if (eval_args)
+	decrement_refcount (args);
+
+      return ret;
     }
 
- clean_lex_env:
+
+  if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
+			   eval_args, is_macro,
+			   func->value_ptr.function->lex_vars,
+			   func->value_ptr.function->lex_funcs, env, outcome,
+			   &argsnum, &closnum))
+    {
+      ret = evaluate_body (func->value_ptr.function->body, 0,
+			   func->value_ptr.function->name, env, outcome);
+
+      if (ret && is_macro)
+	{
+	  ret2 = evaluate_object (ret, env, outcome);
+
+	  decrement_refcount (ret);
+
+	  ret = ret2;
+	}
+    }
+  else
+    {
+      ret = NULL;
+    }
+
   for (; closnum; closnum--)
     {
       b = env->vars;
@@ -7563,10 +7591,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	b->next = NULL;
     }
 
-  if (!bins)
-    env->vars = remove_bindings (env->vars, argsnum);
-  else
-    remove_bindings (bins, argsnum);
+  env->vars = remove_bindings (env->vars, argsnum);
 
   env->lex_env_vars_boundary = prev_lex_bin_num;
 
