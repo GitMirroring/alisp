@@ -344,6 +344,7 @@ make_test ("(1- .5)", "-0.5");
 make_test ("(byte 20 100)", "#<BYTE-SPECIFIER size 20 position 100>");
 make_test ("(byte-size (byte 20 100))", "20");
 make_test ("(byte-position (byte 20 100))", "100");
+
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep () 'atom)", "T");
 make_test ("(typep (cons 1 2) 'atom)", "NIL");
@@ -383,6 +384,7 @@ make_test ("(typep (open #p\"README\") 'stream)", "T");
 make_test ("(typep (open #p\"README\") 'file-stream)", "T");
 make_test ("(typep (make-string-input-stream \"hello\") 'string-stream)", "T");
 make_test ("(deftype not-integer () `(not integer))", "NOT-INTEGER");
+
 make_test ("(make-string 3)", "\"\0\0\0\"");
 make_test ("(make-symbol \"aaa\")", "#:|aaa|");
 make_test ("(boundp 'b)", "T");
@@ -740,6 +742,28 @@ make_test ("(count #\\a \"abcabc\")", "2");
 make_test ("(count 2 '(1 2 3))", "1");
 make_test ("(count-if #'upper-case-p \"aAbBcCdD\")", "4");
 make_test ("(count-if-not #'evenp #(0 1 2))", "1");
+
+make_test ("#+common-lisp \"\" \"\"", "\"\"\n\"\"");
+make_test ("#-common-lisp \"\" \"\"", "\"\"");
+make_test ("#+(and common-lisp foo) \"\" \"\"", "\"\"");
+make_test ("#+(or common-lisp foo) \"\" \"\"", "\"\"\n\"\"");
+make_test ("#-(not common-lisp) \"\" \"\"", "\"\"\n\"\"");
+make_test ("#+common-lisp 'x", "X");
+make_test ("#+common-lisp 0", "0");
+make_test ("#-common-lisp 0 0", "0");
+make_test ("#-common-lisp 'aaa 'bbb", "BBB");
+make_test ("#+common-lisp '(1 2 3) \"\"", "(1 2 3)\n\"\"");
+make_test ("#+foo '(1 2 3) \"\"", "\"\"");
+make_test ("#+foo '((1 2) 3) 0", "0");
+make_test ("#+(and\ncommon-lisp) 0 0", "0\n0");
+make_test ("#-(\nand common-lisp) 0 0", "0");
+make_test ("#+\n(and common-lisp) 0 0", "0\n0");
+make_test ("#+common-lisp (\n)", "NIL");
+make_test ("#+common-lisp '(1\n2)", "(1 2)");
+make_test ("#-common-lisp (\n) 0", "0");
+make_test ("#+foo \"aaa\nbbb\" 0", "0");
+make_test ("#+foo (1\n2 (3)) 0", "0");
+
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package *package*)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package \"CL\")", "#<PACKAGE \"COMMON-LISP\">");
@@ -944,7 +968,7 @@ sub make_test
 
 	if (not defined ($out) and eof ($al_out))
 	{
-	    print "\n\nEOF reached from al, it probably crashed\n";
+	    print "\n\nGot EOF from al, it probably crashed\n";
 
 	    exit;
 	}
