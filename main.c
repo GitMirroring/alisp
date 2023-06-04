@@ -212,6 +212,8 @@ outcome_type
   {
     NO_OBJECT,
 
+    NO_ACTUAL_OBJECT,
+
     COMPLETE_OBJECT,
 
     CLOSING_PARENTHESIS,
@@ -229,6 +231,7 @@ outcome_type
     WRONG_OBJECT_TYPE_TO_SHARP_MACRO,
     UNKNOWN_CHARACTER_NAME,
     FUNCTION_NOT_FOUND_IN_READ,
+    INVALID_FEATURE_TEST,
 
     COMMA_WITHOUT_BACKQUOTE,
     TOO_MANY_COMMAS,
@@ -338,6 +341,7 @@ outcome_type
 				  || (t) == WRONG_OBJECT_TYPE_TO_SHARP_MACRO \
 				  || (t) == UNKNOWN_CHARACTER_NAME	\
 				  || (t) == FUNCTION_NOT_FOUND_IN_READ	\
+				  || (t) == INVALID_FEATURE_TEST	\
 				  || (t) == COMMA_WITHOUT_BACKQUOTE	\
 				  || (t) == TOO_MANY_COMMAS		\
 				  || (t) == SINGLE_DOT			\
@@ -715,6 +719,14 @@ sharp_macro_call
   int arg;
   int dispatch_ch;
 
+  int feat_test_incomplete;
+  int feat_test_is_empty_list;
+  int feat_test_result;
+  struct object *feature_test;
+
+  enum outcome_type obj_type;
+  int list_depth;
+
   int is_empty_list;
   struct object *obj;
 };
@@ -982,6 +994,12 @@ struct object *call_sharp_macro
 (struct sharp_macro_call *macro_call, struct environment *env,
  struct outcome *outcome);
 
+enum outcome_type skip_without_reading
+(enum outcome_type type, int backts_commas_balance, const char *input,
+ size_t size, FILE *stream, int preserve_whitespace, int ends_with_eof,
+ struct environment *env, struct outcome *outc, int *list_depth,
+ const char **obj_begin, const char **obj_end);
+
 char *accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 			int *token_length, struct outcome *out);
 
@@ -1130,11 +1148,11 @@ struct object *create_string_stream (enum stream_direction direction,
 struct object *load_file (const char *filename, struct environment *env,
 			  struct outcome *outcome);
 
-struct object *intern_symbol_from_char_vector (char *name, size_t len,
-					       int do_copy,
-					       enum package_record_visibility vis,
-					       int always_create_if_missing,
-					       struct object *package);
+struct object *intern_symbol_by_char_vector (char *name, size_t len,
+					     int do_copy,
+					     enum package_record_visibility vis,
+					     int always_create_if_missing,
+					     struct object *package);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env,
 				   enum outcome_type *out);
@@ -1255,6 +1273,9 @@ int is_subtype_by_char_vector (const struct object *first, char *second,
 			       struct outcome *outcome);
 int is_subtype (const struct object *first, const struct object *second,
 		struct environment *env, struct outcome *outcome);
+
+int evaluate_feature_test (const struct object *feat_test,
+			   struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_object
 (struct object *obj, struct environment *env, struct outcome *outcome);
@@ -1680,8 +1701,8 @@ struct object *get_dynamic_value (struct object *sym, struct environment *env);
 struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions);
 
-struct object *inspect_variable_from_c_string (const char *var,
-					       struct environment *env);
+struct object *inspect_variable_by_c_string (char *var,
+					     struct environment *env);
 struct object *inspect_variable (struct object *sym, struct environment *env);
 
 struct object *set_value (struct object *sym, struct object *value,
@@ -2169,10 +2190,10 @@ add_standard_definitions (struct environment *env)
     [hash_char_vector ("NIL", sizeof ("NIL"), SYMTABLE_SIZE)] = rec;
 
 
-  env->package_sym = intern_symbol_from_char_vector ("*PACKAGE*",
-						     strlen ("*PACKAGE*"), 1,
-						     EXTERNAL_VISIBILITY, 1,
-						     env->cl_package);
+  env->package_sym = intern_symbol_by_char_vector ("*PACKAGE*",
+						   strlen ("*PACKAGE*"), 1,
+						   EXTERNAL_VISIBILITY, 1,
+						   env->cl_package);
   env->package_sym->value_ptr.symbol->is_parameter = 1;
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
 
@@ -2448,27 +2469,27 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
 
 
-  env->amp_optional_sym = intern_symbol_from_char_vector ("&OPTIONAL",
-							  strlen ("&OPTIONAL"),
-							  1, EXTERNAL_VISIBILITY,
-							  1, env->cl_package);
-  env->amp_rest_sym = intern_symbol_from_char_vector ("&REST", strlen ("&REST"),
-						      1, EXTERNAL_VISIBILITY, 1,
-						      env->cl_package);
-  env->amp_body_sym = intern_symbol_from_char_vector ("&BODY", strlen ("&BODY"),
-						      1, EXTERNAL_VISIBILITY, 1,
-						      env->cl_package);
-  env->amp_key_sym = intern_symbol_from_char_vector ("&KEY", strlen ("&KEY"), 1,
-						     EXTERNAL_VISIBILITY, 1,
-						     env->cl_package);
+  env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
+							strlen ("&OPTIONAL"),
+							1, EXTERNAL_VISIBILITY,
+							1, env->cl_package);
+  env->amp_rest_sym = intern_symbol_by_char_vector ("&REST", strlen ("&REST"),
+						    1, EXTERNAL_VISIBILITY, 1,
+						    env->cl_package);
+  env->amp_body_sym = intern_symbol_by_char_vector ("&BODY", strlen ("&BODY"),
+						    1, EXTERNAL_VISIBILITY, 1,
+						    env->cl_package);
+  env->amp_key_sym = intern_symbol_by_char_vector ("&KEY", strlen ("&KEY"), 1,
+						   EXTERNAL_VISIBILITY, 1,
+						   env->cl_package);
   env->amp_allow_other_keys_sym =
-    intern_symbol_from_char_vector ("&ALLOW-OTHER-KEYS",
-				    strlen ("&ALLOW-OTHER-KEYS"), 1,
-				    EXTERNAL_VISIBILITY, 1, env->cl_package);
-  env->amp_aux_sym = intern_symbol_from_char_vector ("&AUX",
-						     strlen ("&AUX"), 1,
-						     EXTERNAL_VISIBILITY, 1,
-						     env->cl_package);
+    intern_symbol_by_char_vector ("&ALLOW-OTHER-KEYS",
+				  strlen ("&ALLOW-OTHER-KEYS"), 1,
+				  EXTERNAL_VISIBILITY, 1, env->cl_package);
+  env->amp_aux_sym = intern_symbol_by_char_vector ("&AUX",
+						   strlen ("&AUX"), 1,
+						   EXTERNAL_VISIBILITY, 1,
+						   env->cl_package);
 
 
   define_constant_by_name ("MOST-POSITIVE-FIXNUM",
@@ -2763,6 +2784,12 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   *input_left_size = (line + len) - end - 1;
   *wholeline = line;
 
+  if (read_out == NO_ACTUAL_OBJECT)
+    {
+      outcome->type = NO_ACTUAL_OBJECT;
+      return NULL;
+    }
+
   return obj;
 }
 
@@ -2775,18 +2802,28 @@ read_object_interactively_continued (const char *input, size_t input_size,
 				     size_t *input_left_size, char **wholeline)
 {
   enum outcome_type read_out;
-  struct object *obj = NULL;
+  struct object *obj = NULL, *ret;
   const char *begin, *end;
 
+
+ read_again:
   read_out = read_object (&obj, 0, input, input_size, NULL, 0, 0, env, outcome,
 			  &begin, &end);
-  
+
   if (read_out == COMPLETE_OBJECT && !outcome->multiline_comment_depth)
     {
       *input_left = end + 1;
       *input_left_size = (input + input_size) - end - 1;
-      
+
       return obj;
+    }
+  else if (read_out == NO_ACTUAL_OBJECT)
+    {
+      input_size = (input + input_size) - end - 1;
+      input = end + 1;
+      obj = NULL;
+
+      goto read_again;
     }
   else if (read_out == NO_OBJECT && !outcome->multiline_comment_depth)
     {
@@ -2804,10 +2841,21 @@ read_object_interactively_continued (const char *input, size_t input_size,
     }
   else
     {
-      return complete_object_interactively (obj,
-					    read_out == INCOMPLETE_EMPTY_LIST,
-					    env, outcome, input_left,
-					    input_left_size, wholeline);
+      ret = complete_object_interactively (obj,
+					   read_out == INCOMPLETE_EMPTY_LIST,
+					   env, outcome, input_left,
+					   input_left_size, wholeline);
+
+      if (!ret && outcome->type == NO_ACTUAL_OBJECT)
+	{
+	  input = *input_left;
+	  input_size = *input_left_size;
+	  obj = NULL;
+
+	  goto read_again;
+	}
+
+      return ret;
     }
 }
 
@@ -3136,7 +3184,20 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 					 outcome);
 		  free_sharp_macro_call (call);
 
-		  if (!ob)
+		  if (!ob && outcome->type == NO_OBJECT)
+		    {
+		      if (input)
+			{
+			  size = size - (*obj_end - input) - 1;
+			  input = *obj_end + 1;
+			}
+
+		      if (!next_nonspace_char (&ch, &input, &size, stream))
+			return found_prefix ? JUST_PREFIX : NO_OBJECT;
+
+		      continue;
+		    }
+		  else if (!ob)
 		    {
 		      return outcome->type;
 		    }
@@ -3635,6 +3696,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   int arg, tokenlength, tokensize;
   const char *obj_b;
   char *token;
+  struct object *prevpack;
   struct sharp_macro_call *call;
   enum outcome_type out;
   unsigned char ch;
@@ -3642,6 +3704,64 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   if (*obj)
     {
       call = (*obj)->value_ptr.sharp_macro_call;
+
+      if ((call->dispatch_ch == '+' || call->dispatch_ch == '-')
+	  && (call->feat_test_incomplete || call->feat_test_is_empty_list))
+	{
+	  prevpack = inspect_variable (env->package_sym, env);
+	  set_value (env->package_sym, env->keyword_package, 0, env, outcome);
+	  out = read_object_continued (&call->feature_test, 0,
+				       call->feat_test_is_empty_list, input,
+				       size, stream, preserve_whitespace,
+				       ends_with_eof, env, outcome, &obj_b,
+				       macro_end);
+	  set_value (env->package_sym, prevpack, 0, env, outcome);
+
+	  if (IS_READ_OR_EVAL_ERROR (out))
+	    return out;
+
+	  if (input)
+	    {
+	      size = size - (*macro_end - input) - 1;
+	      input = *macro_end + 1;
+	    }
+
+	  if (out == INCOMPLETE_EMPTY_LIST)
+	    {
+	      call->feat_test_is_empty_list = 1;
+	      return INCOMPLETE_SHARP_MACRO_CALL;
+	    }
+
+	  if (IS_INCOMPLETE_OBJECT (out) || out == NO_OBJECT)
+	    {
+	      call->feat_test_incomplete = 1;
+	      return INCOMPLETE_SHARP_MACRO_CALL;
+	    }
+
+	  call->feat_test_incomplete = call->feat_test_is_empty_list = 0;
+
+	  call->feat_test_result = evaluate_feature_test (call->feature_test,
+							  env, outcome);
+
+	  call->obj = NULL;
+	  call->list_depth = 0;
+	  call->obj_type = NO_OBJECT;
+	}
+
+      if ((call->dispatch_ch == '+' || call->dispatch_ch == '-')
+	  && !call->feat_test_incomplete && !call->feat_test_is_empty_list
+	  && (call->feat_test_result != (call->dispatch_ch == '+')))
+	{
+	  out = skip_without_reading (call->obj_type, 0, input, size, stream,
+				      preserve_whitespace, ends_with_eof, env,
+				      outcome, &call->list_depth, &obj_b,
+				      macro_end);
+
+	  if (out == NO_OBJECT || IS_INCOMPLETE_OBJECT (out) || call->list_depth)
+	    out = INCOMPLETE_SHARP_MACRO_CALL;
+
+	  return out;
+	}
 
       out = read_object_continued (&call->obj, 0, call->is_empty_list, input,
 				   size, stream, preserve_whitespace,
@@ -3695,7 +3815,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(:", call->dispatch_ch))
+  if (!strchr ("'\\.pP(:+-", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -3748,6 +3868,78 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
       if (IS_INCOMPLETE_OBJECT (out))
 	return INCOMPLETE_SHARP_MACRO_CALL;
+
+      return out;
+    }
+  else if (call->dispatch_ch == '+' || call->dispatch_ch == '-')
+    {
+      prevpack = inspect_variable (env->package_sym, env);
+
+      set_value (env->package_sym, env->keyword_package, 0, env, outcome);
+
+      call->feature_test = NULL;
+      out = read_object (&call->feature_test, 0, input, size, stream,
+			 preserve_whitespace, ends_with_eof, env, outcome,
+			 &obj_b, macro_end);
+
+      set_value (env->package_sym, prevpack, 0, env, outcome);
+
+      if (IS_READ_OR_EVAL_ERROR (out))
+	return out;
+
+      if (input)
+	{
+	  size = size - (*macro_end - input) - 1;
+	  input = *macro_end + 1;
+	}
+
+      if (out == INCOMPLETE_EMPTY_LIST)
+	{
+	  call->feat_test_is_empty_list = 1;
+	  return INCOMPLETE_SHARP_MACRO_CALL;
+	}
+
+      if (IS_INCOMPLETE_OBJECT (out) || out == NO_OBJECT)
+	{
+	  call->feat_test_incomplete = 1;
+	  return INCOMPLETE_SHARP_MACRO_CALL;
+	}
+
+      call->feat_test_result = evaluate_feature_test (call->feature_test, env,
+						      outcome);
+
+      if (call->feat_test_result < 0)
+	return outcome->type;
+
+      if (call->feat_test_result == (call->dispatch_ch == '+'))
+	{
+	  call->obj = NULL;
+	  out = read_object (&call->obj, 0, input, size, stream,
+			     preserve_whitespace, ends_with_eof, env, outcome,
+			     &obj_b, macro_end);
+
+	  if (out == INCOMPLETE_EMPTY_LIST)
+	    call->is_empty_list = 1;
+	}
+      else
+	{
+	  call->list_depth = 0;
+	  call->obj_type = NO_OBJECT;
+
+	  out = skip_without_reading (NO_OBJECT, 0, input, size, stream,
+				      preserve_whitespace, ends_with_eof, env,
+				      outcome, &call->list_depth, &obj_b,
+				      macro_end);
+
+	  if (IS_INCOMPLETE_OBJECT (out))
+	    call->obj_type = out;
+
+	  if (call->list_depth)
+	    out = INCOMPLETE_SHARP_MACRO_CALL;
+	}
+
+      if (out == NO_OBJECT || IS_INCOMPLETE_OBJECT (out))
+	out = INCOMPLETE_SHARP_MACRO_CALL;
 
       return out;
     }
@@ -3874,8 +4066,210 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 
       return obj;
     }
+  else if (macro_call->dispatch_ch == '+' || macro_call->dispatch_ch == '-')
+    {
+      if (macro_call->feat_test_result == (macro_call->dispatch_ch == '+'))
+	return obj;
+      else
+	{
+	  outcome->type = NO_ACTUAL_OBJECT;
+	  return NULL;
+	}
+    }
 
   return NULL;
+}
+
+
+enum outcome_type
+skip_without_reading (enum outcome_type type, int backts_commas_balance,
+		      const char *input, size_t size, FILE *stream,
+		      int preserve_whitespace, int ends_with_eof,
+		      struct environment *env, struct outcome *outc,
+		      int *list_depth, const char **obj_begin,
+		      const char **obj_end)
+{
+  int found_prefix = 0;
+  enum outcome_type out = NO_OBJECT;
+  unsigned char ch;
+
+
+  if (type == NO_OBJECT)
+    {
+      do
+	{
+	  if (!next_nonspace_char (&ch, &input, &size, stream))
+	    return out;
+
+	  if (ch == ';')
+	    {
+	      if (!jump_to_end_of_line (&input, &size, stream))
+		break;
+	    }
+	  else if (ch == '#')
+	    {
+	      if (!next_char (&ch, &input, &size, stream))
+		break;
+
+	      if (ch == '|')
+		{
+		  outc->multiline_comment_depth = 1;
+
+		  if (!jump_to_end_of_multiline_comment (&input, &size, stream,
+							 &outc->
+							 multiline_comment_depth))
+		    break;
+		}
+	      else
+		{
+		  if (input)
+		    *obj_begin = input;
+
+		  if (ch == '\\')
+		    {
+		      outc->single_escape = 1;
+
+		      out = skip_without_reading (INCOMPLETE_SYMBOL_NAME,
+						  backts_commas_balance,
+						  input, size, stream,
+						  preserve_whitespace,
+						  ends_with_eof, env, outc,
+						  list_depth, obj_begin,
+						  obj_end);
+		    }
+		  else if (ch == '(')
+		    {
+		      (*list_depth)++;
+		    }
+		}
+	    }
+	  else if (ch == '\'' || ch == '`' || ch == ',')
+	    {
+	      found_prefix = 1;
+
+	      while (next_char (&ch, &input, &size, stream))
+		{
+		  if (ch != '\'' && ch != '`' && ch != ',' && ch != '@'
+		      && ch != '.')
+		    {
+		      unget_char (ch, &input, &size, stream);
+
+		      out = skip_without_reading (NO_OBJECT,
+						  backts_commas_balance, input,
+						  size, stream,
+						  preserve_whitespace,
+						  ends_with_eof, env, outc,
+						  list_depth, obj_begin,
+						  obj_end);
+
+		      break;
+		    }
+		}
+	    }
+	  else if (ch == ')')
+	    {
+	      if (input)
+		*obj_end = input-1;
+
+	      if (*list_depth)
+		{
+		  (*list_depth)--;
+
+		  if (!*list_depth)
+		    {
+		      out = COMPLETE_OBJECT;
+		    }
+		}
+	      else
+		{
+		  out = found_prefix ? CLOSING_PARENTHESIS_AFTER_PREFIX :
+		    CLOSING_PARENTHESIS;
+
+		  break;
+		}
+	    }
+	  else if (ch == '(')
+	    {
+	      if (input)
+		*obj_begin = input;
+
+	      (*list_depth)++;
+	    }
+	  else if (ch == '"')
+	    {
+	      if (input)
+		*obj_begin = input;
+
+	      out = skip_without_reading (INCOMPLETE_STRING,
+					  backts_commas_balance, input, size,
+					  stream, preserve_whitespace,
+					  ends_with_eof, env, outc, list_depth,
+					  obj_begin, obj_end);
+	    }
+	  else
+	    {
+	      if (input)
+		*obj_begin = input;
+
+	      out = skip_without_reading (INCOMPLETE_SYMBOL_NAME,
+					  backts_commas_balance, input, size,
+					  stream, preserve_whitespace,
+					  ends_with_eof, env, outc, list_depth,
+					  obj_begin, obj_end);
+	    }
+
+	} while (!IS_READ_OR_EVAL_ERROR (out) && !IS_INCOMPLETE_OBJECT (out)
+		 && *list_depth);
+
+      return out;
+    }
+  else if (type == INCOMPLETE_STRING)
+    {
+      while (next_char (&ch, &input, &size, stream))
+	{
+	  if (ch == '"' && !outc->single_escape)
+	    {
+	      if (input)
+		*obj_end = input - 1;
+
+	      return COMPLETE_OBJECT;
+	    }
+
+	  if (ch == '\\' && !outc->single_escape)
+	    outc->single_escape = 1;
+	  else
+	    outc->single_escape = 0;
+	}
+
+      return INCOMPLETE_STRING;
+    }
+  else if (type == INCOMPLETE_SYMBOL_NAME)
+    {
+      while (next_char (&ch, &input, &size, stream))
+	{
+	  if (ch == '\\')
+	    {
+	      outc->single_escape = !outc->single_escape;
+	    }
+	  else if (ch == '|' && !outc->single_escape)
+	    {
+	      outc->multiple_escape = !outc->multiple_escape;
+	    }
+	  else if ((isspace ((unsigned char)ch)
+		    || strchr (TERMINATING_MACRO_CHARS, (unsigned char)ch))
+		   && !outc->single_escape && !outc->multiple_escape)
+	    {
+	      if (input)
+		*obj_end = input - 2;
+
+	      return COMPLETE_OBJECT;
+	    }
+	}
+
+      return INCOMPLETE_SYMBOL_NAME;
+    }
+
+  return COMPLETE_OBJECT;
 }
 
 
@@ -4427,6 +4821,9 @@ alloc_sharp_macro_call (void)
 
   obj->type = TYPE_SHARP_MACRO_CALL;
   obj->value_ptr.sharp_macro_call = call;
+
+  call->feat_test_incomplete = 0;
+  call->feat_test_is_empty_list = 0;
 
   call->is_empty_list = 0;
 
@@ -5415,7 +5812,8 @@ find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
 	}
       else
 	{
-	  if ((isspace (input [i]) || strchr (TERMINATING_MACRO_CHARS, input [i]))
+	  if ((isspace ((unsigned char)input [i])
+	       || strchr (TERMINATING_MACRO_CHARS, (unsigned char)input [i]))
 	      && !out->single_escape && !out->multiple_escape)
 	    {
 	      if (!already_begun && just_dots && **length == 1)
@@ -5426,9 +5824,9 @@ find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
 		       && (input + i == *start_of_package_separator + colons))
 		out->type = CANT_END_WITH_PACKAGE_SEPARATOR;
 
-	      *new_size = size - i + (!isspace (input [i])
+	      *new_size = size - i + (!isspace ((unsigned char)input [i])
 				      || !!preserve_whitespace);
-	      return input + i - (!isspace (input [i])
+	      return input + i - (!isspace ((unsigned char)input [i])
 				  || !!preserve_whitespace);
 	    }
 
@@ -5933,10 +6331,10 @@ load_file (const char *filename, struct environment *env,
 
 
 struct object *
-intern_symbol_from_char_vector (char *name, size_t len, int do_copy,
-				enum package_record_visibility vis,
-				int always_create_if_missing,
-				struct object *package)
+intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
+			      enum package_record_visibility vis,
+			      int always_create_if_missing,
+			      struct object *package)
 {
   struct object *sym;
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
@@ -6011,10 +6409,10 @@ intern_symbol_name (struct object *symname, struct environment *env,
     {
       if (!s->used_size)
 	{
-	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
-						   s->actual_symname_used_s, 1,
-						   EXTERNAL_VISIBILITY, 1,
-						   env->keyword_package);
+	  s->sym = intern_symbol_by_char_vector (s->actual_symname,
+						 s->actual_symname_used_s, 1,
+						 EXTERNAL_VISIBILITY, 1,
+						 env->keyword_package);
 
 	  s->sym->value_ptr.symbol->is_const = 1;
 	  s->sym->value_ptr.symbol->value_cell = s->sym;
@@ -6032,9 +6430,9 @@ intern_symbol_name (struct object *symname, struct environment *env,
 	}
       else
 	{
-	  s->sym = intern_symbol_from_char_vector (s->actual_symname,
-						   s->actual_symname_used_s, 1,
-						   s->visibility, 0, pack);
+	  s->sym = intern_symbol_by_char_vector (s->actual_symname,
+						 s->actual_symname_used_s, 1,
+						 s->visibility, 0, pack);
 	  if (!s->sym)
 	    {
 	      *out = SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE;
@@ -6048,8 +6446,8 @@ intern_symbol_name (struct object *symname, struct environment *env,
     }
 
   pack = inspect_variable (env->package_sym, env);
-  s->sym = intern_symbol_from_char_vector (s->value, s->used_size, 1,
-					   INTERNAL_VISIBILITY, 0, pack);
+  s->sym = intern_symbol_by_char_vector (s->value, s->used_size, 1,
+					 INTERNAL_VISIBILITY, 0, pack);
   add_reference (symname, s->sym, 0);
 
   return s->sym;
@@ -6327,9 +6725,9 @@ add_builtin_type (char *name, struct environment *env,
   va_list valist;
   char *s;
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       EXTERNAL_VISIBILITY, 1,
-						       pack);
+  struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     pack);
   struct object *par;
 
   va_start (valist, is_standard);
@@ -6340,8 +6738,8 @@ add_builtin_type (char *name, struct environment *env,
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_from_char_vector (s, strlen (s), 1,
-					    EXTERNAL_VISIBILITY, 0, pack);
+      par = intern_symbol_by_char_vector (s, strlen (s), 1,
+					  EXTERNAL_VISIBILITY, 0, pack);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -6361,9 +6759,9 @@ add_builtin_form (char *name, struct environment *env,
 		  int is_special_operator)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       EXTERNAL_VISIBILITY, 1,
-						       pack);
+  struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     pack);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
@@ -6447,9 +6845,9 @@ define_constant_by_name (char *name, struct object *value,
 			 struct environment *env)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       EXTERNAL_VISIBILITY, 1,
-						       pack);
+  struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     pack);
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -6462,9 +6860,9 @@ struct object *
 define_variable (char *name, struct object *value, struct environment *env)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct object *sym = intern_symbol_from_char_vector (name, strlen (name), 1,
-						       EXTERNAL_VISIBILITY, 1,
-						       pack);
+  struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     pack);
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -7017,10 +7415,10 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	{
 	  var = SYMBOL (car);
 
-	  key = intern_symbol_from_char_vector (var->value_ptr.symbol->name,
-						var->value_ptr.symbol->name_len,
-						1, EXTERNAL_VISIBILITY, 1,
-						env->keyword_package);
+	  key = intern_symbol_by_char_vector (var->value_ptr.symbol->name,
+					      var->value_ptr.symbol->name_len,
+					      1, EXTERNAL_VISIBILITY, 1,
+					      env->keyword_package);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -7054,7 +7452,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	    {
 	      var = SYMBOL (caar);
 
-	      key = intern_symbol_from_char_vector
+	      key = intern_symbol_by_char_vector
 		(var->value_ptr.symbol->name, var->value_ptr.symbol->name_len,
 		 1, EXTERNAL_VISIBILITY, 1, env->keyword_package);
 	    }
@@ -7673,9 +8071,9 @@ check_type_by_char_vector (const struct object *obj, char *type,
 			   struct outcome *outcome)
 {
   return check_type (obj,
-		     intern_symbol_from_char_vector (type, strlen (type), 1,
-						     EXTERNAL_VISIBILITY, 0,
-						     env->cl_package),
+		     intern_symbol_by_char_vector (type, strlen (type), 1,
+						   EXTERNAL_VISIBILITY, 0,
+						   env->cl_package),
 		     env, outcome);
 }
 
@@ -7703,9 +8101,9 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 			   struct outcome *outcome)
 {
   return is_subtype (first,
-		     intern_symbol_from_char_vector (second, strlen (second), 1,
-						     EXTERNAL_VISIBILITY, 0,
-						     env->cl_package),
+		     intern_symbol_by_char_vector (second, strlen (second), 1,
+						   EXTERNAL_VISIBILITY, 0,
+						   env->cl_package),
 		     env, outcome);
 }
 
@@ -7750,6 +8148,93 @@ is_subtype (const struct object *first, const struct object *second,
     }
 
   return 0;
+}
+
+
+int
+evaluate_feature_test (const struct object *feat_test,
+		       struct environment *env, struct outcome *outcome)
+{
+  struct object *feat_list;
+  int ret;
+
+  if (IS_SYMBOL (feat_test))
+    {
+      feat_list = inspect_variable_by_c_string ("*FEATURES*", env);
+
+      while (SYMBOL (feat_list) != &nil_object)
+	{
+	  if (SYMBOL (CAR (feat_list)) == SYMBOL (feat_test))
+	    return 1;
+
+	  feat_list = CDR (feat_list);
+	}
+
+      return 0;
+    }
+  else if (feat_test->type == TYPE_CONS_PAIR)
+    {
+      if (symbol_equals (CAR (feat_test), "NOT", env))
+	{
+	  if (list_length (feat_test) != 2)
+	    {
+	      outcome->type = INVALID_FEATURE_TEST;
+	      return -1;
+	    }
+
+	  ret = evaluate_feature_test (CAR (CDR (feat_test)), env, outcome);
+
+	  return (ret < 0) ? ret : !ret;
+	}
+      else if (symbol_equals (CAR (feat_test), "AND", env))
+	{
+	  feat_test = CDR (feat_test);
+
+	  while (SYMBOL (feat_test) != &nil_object)
+	    {
+	      ret = evaluate_feature_test (CAR (feat_test), env, outcome);
+
+	      if (ret < 0)
+		return -1;
+
+	      if (!ret)
+		return 0;
+
+	      feat_test = CDR (feat_test);
+	    }
+
+	  return 1;
+	}
+      else if (symbol_equals (CAR (feat_test), "OR", env))
+	{
+	  feat_test = CDR (feat_test);
+
+	  while (SYMBOL (feat_test) != &nil_object)
+	    {
+	      ret = evaluate_feature_test (CAR (feat_test), env, outcome);
+
+	      if (ret < 0)
+		return -1;
+
+	      if (ret)
+		return 1;
+
+	      feat_test = CDR (feat_test);
+	    }
+
+	  return 0;
+	}
+      else
+	{
+	  outcome->type = INVALID_FEATURE_TEST;
+	  return -1;
+	}
+    }
+  else
+    {
+      outcome->type = INVALID_FEATURE_TEST;
+      return -1;
+    }
 }
 
 
@@ -9585,8 +10070,8 @@ builtin_hash_table_test (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = intern_symbol_from_char_vector ("EQ", strlen ("EQ"), 1,
-					EXTERNAL_VISIBILITY, 1, env->cl_package);
+  ret = intern_symbol_by_char_vector ("EQ", strlen ("EQ"), 1,
+				      EXTERNAL_VISIBILITY, 1, env->cl_package);
   increment_refcount (ret);
 
   return ret;
@@ -14827,23 +15312,15 @@ get_function (struct object *sym, struct environment *env, int only_functions)
 
 
 struct object *
-inspect_variable_from_c_string (const char *var, struct environment *env)
+inspect_variable_by_c_string (char *var, struct environment *env)
 {
-  size_t l = strlen (var);
   struct object *pack = inspect_variable (env->package_sym, env);
-  struct package_record *cur = pack->value_ptr.package->symtable
-    [hash_char_vector (var, strlen (var), SYMTABLE_SIZE)];
+  struct object *sym = intern_symbol_by_char_vector (var, strlen (var), 0,
+						     INTERNAL_VISIBILITY, 0,
+						     pack);
 
-  while (cur)
-    {
-      if (eqmem (cur->sym->value_ptr.symbol->name,
-		 cur->sym->value_ptr.symbol->name_len, var, l))
-	{
-	  return inspect_variable (cur->sym, env);
-	}
-
-      cur = cur->next;
-    }
+  if (sym)
+    return inspect_variable (sym, env);
 
   return NULL;
 }
@@ -17179,6 +17656,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == FUNCTION_NOT_FOUND_IN_READ)
     {
       printf ("read error: function not found\n");
+    }
+  else if (err->type == INVALID_FEATURE_TEST)
+    {
+      printf ("read error: invalid feature test\n");
     }
   else if (err->type == COMMA_WITHOUT_BACKQUOTE)
     {
