@@ -1721,6 +1721,8 @@ struct object *evaluate_values_list
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_multiple_value_list
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_eval_when
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defconstant
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defparameter
@@ -2333,6 +2335,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MULTIPLE-VALUE-LIST", env, evaluate_multiple_value_list,
 		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("EVAL-WHEN", env, evaluate_eval_when, TYPE_MACRO, NULL,
+		    1);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
@@ -15560,6 +15564,63 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
   outcome->other_values = NULL;
 
   return ret;
+}
+
+
+struct object *
+evaluate_eval_when (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct object *cons;
+  int run = 0;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CONS_PAIR)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  cons = CAR (list);
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (cons)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (symbol_equals (CAR (cons), ":EXECUTE", env)
+	  || symbol_equals (CAR (cons), "EVAL", env))
+	{
+	  run = 1;
+	}
+      else if (!symbol_equals (CAR (cons), ":COMPILE-TOPLEVEL", env)
+	       && !symbol_equals (CAR (cons), "COMPILE", env)
+	       && !symbol_equals (CAR (cons), ":LOAD-TOPLEVEL", env)
+	       && !symbol_equals (CAR (cons), "LOAD", env))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      cons = CDR (cons);
+    }
+
+  if (run)
+    {
+      return evaluate_body (CDR (list), 0, NULL, env, outcome);
+    }
+  else
+    {
+      return &nil_object;
+    }
 }
 
 
