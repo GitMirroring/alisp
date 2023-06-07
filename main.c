@@ -131,6 +131,13 @@ typedef int fixnum;
 
 
 
+#define BUILTIN_SYMBOL(sym) \
+  (intern_symbol_by_char_vector ((sym), strlen (sym), 0, EXTERNAL_VISIBILITY, \
+				 0, env->cl_package))
+
+
+
+
 #define ANTILOOP_HASH_T_SIZE 64
 
 
@@ -1585,6 +1592,8 @@ struct object *builtin_byte_position (struct object *list,
 
 struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct outcome *outcome);
+struct object *builtin_type_of (struct object *list, struct environment *env,
+				struct outcome *outcome);
 
 struct object *builtin_make_string (struct object *list, struct environment *env,
 				    struct outcome *outcome);
@@ -2362,6 +2371,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
 		    1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE-SIZE", env, builtin_byte_size, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE-POSITION", env, builtin_byte_position, TYPE_FUNCTION,
@@ -13393,6 +13403,81 @@ builtin_typep (struct object *list, struct environment *env,
     return &t_object;
   else
     return &nil_object;
+}
+
+
+struct object *
+builtin_type_of (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (IS_SYMBOL (CAR (list)))
+    {
+      ret = BUILTIN_SYMBOL ("SYMBOL");
+    }
+  else if (CAR (list)->type == TYPE_STRING)
+    {
+      ret = BUILTIN_SYMBOL ("STRING");
+    }
+  else if (CAR (list)->type == TYPE_CHARACTER)
+    {
+      ret = BUILTIN_SYMBOL ("CHARACTER");
+    }
+  else if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      ret = BUILTIN_SYMBOL ("CONS");
+    }
+  else if (CAR (list)->type == TYPE_BIGNUM)
+    {
+      ret = BUILTIN_SYMBOL ("INTEGER");
+    }
+  else if (CAR (list)->type == TYPE_RATIO)
+    {
+      ret = BUILTIN_SYMBOL ("RATIO");
+    }
+  else if (CAR (list)->type == TYPE_FLOAT)
+    {
+      ret = BUILTIN_SYMBOL ("FLOAT");
+    }
+  else if (CAR (list)->type == TYPE_COMPLEX)
+    {
+      ret = BUILTIN_SYMBOL ("COMPLEX");
+    }
+  else if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      ret = BUILTIN_SYMBOL ("FUNCTION");
+    }
+  else if (CAR (list)->type == TYPE_PACKAGE)
+    {
+      ret = BUILTIN_SYMBOL ("PACKAGE");
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      ret = BUILTIN_SYMBOL ("ARRAY");
+    }
+  else if (CAR (list)->type == TYPE_HASHTABLE)
+    {
+      ret = BUILTIN_SYMBOL ("HASH-TABLE");
+    }
+  else if (CAR (list)->type == TYPE_FILENAME)
+    {
+      ret = BUILTIN_SYMBOL ("PATHNAME");
+    }
+  else if (CAR (list)->type == TYPE_STREAM)
+    {
+      ret = BUILTIN_SYMBOL ("STREAM");
+    }
+
+  increment_refcount (ret);
+  return ret;
 }
 
 
