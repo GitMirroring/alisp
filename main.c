@@ -48,7 +48,19 @@
 
 
 
+#ifdef FIXNUM_IS_INT
+
 typedef int fixnum;
+#define FIXNUM_MIN INT_MIN
+#define FIXNUM_MAX INT_MAX
+
+#else
+
+typedef long fixnum;
+#define FIXNUM_MIN LONG_MIN
+#define FIXNUM_MAX LONG_MAX
+
+#endif
 
 
 
@@ -2507,9 +2519,9 @@ add_standard_definitions (struct environment *env)
 
 
   define_constant_by_name ("MOST-POSITIVE-FIXNUM",
-			   create_integer_from_long (LONG_MAX), env);
+			   create_integer_from_long (FIXNUM_MAX), env);
   define_constant_by_name ("MOST-NEGATIVE-FIXNUM",
-			   create_integer_from_long (LONG_MIN), env);
+			   create_integer_from_long (FIXNUM_MIN), env);
 
   env->std_in_sym = define_variable ("*STANDARD-INPUT*",
 				     create_stream_from_open_file

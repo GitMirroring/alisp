@@ -26,16 +26,22 @@
 
 
 
-;;; the following useless constants are just ridiculously high because there is no actual limit
-(defconstant LAMBDA-PARAMETERS-LIMIT 4294967296)
-(defconstant CALL-ARGUMENTS-LIMIT 4294967296)
-(defconstant MULTIPLE-VALUES-LIMIT 4294967296)
-(defconstant ARRAY-RANK-LIMIT 4294967296)
-(defconstant ARRAY-DIMENSION-LIMIT 4294967296)
-(defconstant ARRAY-TOTAL-SIZE-LIMIT 4294967296)
+;;; the following useless constants are just ridiculously high because lambda
+;;; lists and multiple values use chained lists, so there's no hard limit
+
+(defconstant LAMBDA-PARAMETERS-LIMIT most-positive-fixnum)
+(defconstant CALL-ARGUMENTS-LIMIT most-positive-fixnum)
+(defconstant MULTIPLE-VALUES-LIMIT most-positive-fixnum)
 
 
-(defconstant CHAR-CODE-LIMIT 4294967296)
+
+(defconstant ARRAY-RANK-LIMIT most-positive-fixnum)
+(defconstant ARRAY-DIMENSION-LIMIT most-positive-fixnum)
+(defconstant ARRAY-TOTAL-SIZE-LIMIT most-positive-fixnum)
+
+
+(defconstant CHAR-CODE-LIMIT most-positive-fixnum)
+
 
 
 (defconstant lambda-list-keywords '(&optional &rest &body &key &allow-other-keys))

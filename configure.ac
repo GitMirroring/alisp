@@ -38,9 +38,11 @@ AC_CHECK_HEADERS([stdlib.h string.h locale.h])
 AC_TYPE_SIZE_T
 
 
+
 AC_FUNC_MALLOC
 AC_FUNC_REALLOC
 AC_CHECK_FUNCS([memchr memmem strchr strerror])
+
 
 AC_ARG_WITH([readline],
             [AS_HELP_STRING([--with-readline],
@@ -63,7 +65,19 @@ AS_IF([test "x$with_readline" != xno],
                           fi
 		          ], )])
 
+
 AC_SEARCH_LIBS([__gmpz_init], [gmp], , [AC_MSG_ERROR([GNU mp not found])])
+
+
+
+AC_ARG_VAR(AL_FIXNUM, [whether a fixnum maps to an `int' or a `long' @<:@default=int@:>@])
+
+if test "x$AL_FIXNUM" = x -o "x$AL_FIXNUM" = int; then
+   AC_DEFINE([FIXNUM_IS_INT], [1], [Tells that a fixnum maps to an int])
+else
+   AC_DEFINE([FIXNUM_IS_LONG], [1], [Tells that a fixnum maps to a long])
+fi
+
 
 
 
