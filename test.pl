@@ -881,6 +881,8 @@ make_test ("(complex 1 0)", "1");
 make_test ("(complex 1 0.0)", "#C(1.0 0.0)");
 make_test ("(complex 1.0 1)", "#C(1.0 1.0)");
 make_test ("(complex 1 1.0)", "#C(1.0 1.0)");
+make_test ("#c (0 1)", "#C(0 1)");
+make_test ("#C(1 1.0)", "#C(1.0 1.0)");
 make_test ("(realpart 1)", "1");
 make_test ("(realpart (complex 1 2.0))", "1.0");
 make_test ("(imagpart 1)", "0");
