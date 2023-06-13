@@ -295,6 +295,7 @@ outcome_type
     INCORRECT_SYNTAX_IN_DEFMACRO,
     INCORRECT_SYNTAX_IN_DEFTYPE,
     INVALID_LAMBDA_LIST,
+    CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST,
     CANT_REDEFINE_SPECIAL_OPERATOR,
     CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE,
     CANT_REDEFINE_CONSTANT_BY_DIFFERENT_OPERATOR,
@@ -5547,7 +5548,7 @@ create_function (struct object *lambda_list, struct object *body,
   f->lambda_list = parse_lambda_list (lambda_list, env, outcome,
 				      &f->allow_other_keys);
 
-  if (outcome->type == INVALID_LAMBDA_LIST)
+  if (outcome->type != EVAL_OK)
     {
       free_function_or_macro (fun);
 
@@ -7286,6 +7287,12 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  return NULL;
 	}
 
+      if (SYMBOL (car)->value_ptr.symbol->is_const)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	  return NULL;
+	}
+
       car = SYMBOL (car);
 
       if (car == env->amp_optional_sym || car == env->amp_rest_sym
@@ -7337,6 +7344,12 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	}
       else if (IS_SYMBOL (car))
 	{
+	  if (SYMBOL (car)->value_ptr.symbol->is_const)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return NULL;
+	    }
+
 	  increment_refcount (SYMBOL (car));
 
 	  if (!first)
@@ -7356,6 +7369,12 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  if (!l || l > 3 || !IS_SYMBOL (CAR (car)))
 	    {
 	      outcome->type = INVALID_LAMBDA_LIST;
+	      return NULL;
+	    }
+
+	  if (SYMBOL (CAR (car))->value_ptr.symbol->is_const)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
 	      return NULL;
 	    }
 
@@ -7383,6 +7402,12 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	      if (!IS_SYMBOL (CAR (CDR (CDR (car)))))
 		{
 		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      if (SYMBOL (CAR (CDR (CDR (car))))->value_ptr.symbol->is_const)
+		{
+		  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
 		  return NULL;
 		}
 
@@ -7439,6 +7464,12 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	}
       else if (IS_SYMBOL (car))
 	{
+	  if (SYMBOL (car)->value_ptr.symbol->is_const)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return NULL;
+	    }
+
 	  var = SYMBOL (car);
 
 	  key = intern_symbol_by_char_vector (var->value_ptr.symbol->name,
@@ -7476,6 +7507,12 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	  if (IS_SYMBOL (caar))
 	    {
+	      if (SYMBOL (caar)->value_ptr.symbol->is_const)
+		{
+		  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+		  return NULL;
+		}
+
 	      var = SYMBOL (caar);
 
 	      key = intern_symbol_by_char_vector
@@ -7488,6 +7525,12 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 		  || !IS_SYMBOL (CAR (CDR (caar))))
 		{
 		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      if (SYMBOL (CAR (CDR (caar)))->value_ptr.symbol->is_const)
+		{
+		  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
 		  return NULL;
 		}
 
@@ -7530,6 +7573,12 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	      if (!IS_SYMBOL (CAR (CDR (CDR (car)))))
 		{
 		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      if (SYMBOL (CAR (CDR (CDR (car))))->value_ptr.symbol->is_const)
+		{
+		  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
 		  return NULL;
 		}
 
@@ -7603,6 +7652,12 @@ parse_lambda_list (struct object *obj, struct environment *env,
       if (SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      if (SYMBOL (CAR (CDR (obj)))->value_ptr.symbol->is_const)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
 	  return NULL;
 	}
 
@@ -17982,6 +18037,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INVALID_LAMBDA_LIST)
     {
       printf ("eval error: lambda list is invalid\n");
+    }
+  else if (err->type == CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST)
+    {
+      printf ("eval error: can't use name of constant in a lambda list\n");
     }
   else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
     {
