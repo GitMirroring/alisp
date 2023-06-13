@@ -250,6 +250,7 @@ outcome_type
     WRONG_OBJECT_TYPE_TO_SHARP_MACRO,
     UNKNOWN_CHARACTER_NAME,
     FUNCTION_NOT_FOUND_IN_READ,
+    WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX,
     INVALID_FEATURE_TEST,
 
     COMMA_WITHOUT_BACKQUOTE,
@@ -361,6 +362,7 @@ outcome_type
 				  || (t) == WRONG_OBJECT_TYPE_TO_SHARP_MACRO \
 				  || (t) == UNKNOWN_CHARACTER_NAME	\
 				  || (t) == FUNCTION_NOT_FOUND_IN_READ	\
+				  || (t) == WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX \
 				  || (t) == INVALID_FEATURE_TEST	\
 				  || (t) == COMMA_WITHOUT_BACKQUOTE	\
 				  || (t) == TOO_MANY_COMMAS		\
@@ -1031,6 +1033,8 @@ struct object *create_number (const char *token, size_t size,
 			      size_t exp_marker_pos, int radix,
 			      enum object_type numtype);
 struct object *alloc_complex (void);
+struct object *create_complex (struct object *real, struct object *imag,
+			       struct environment *env, struct outcome *outcome);
 struct object *create_integer_from_long (long num);
 struct object *create_floating_from_double (double d);
 
@@ -3842,7 +3846,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(:+-", call->dispatch_ch))
+  if (!strchr ("'\\.pP(:cC+-", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -3991,6 +3995,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 {
   struct object *obj = macro_call->obj, *fun, *ret;
   struct symbol_name *s;
+  int l;
 
   if (macro_call->dispatch_ch == '\'')
     {
@@ -4092,6 +4097,24 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
       unintern_symbol (obj->value_ptr.symbol_name->sym);
 
       return obj;
+    }
+  else if (macro_call->dispatch_ch == 'c' || macro_call->dispatch_ch == 'C')
+    {
+      if (obj->type != TYPE_CONS_PAIR)
+	{
+	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	  return NULL;
+	}
+
+      l = list_length (obj);
+
+      if (l != 2)
+	{
+	  outcome->type = WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX;
+	  return NULL;
+	}
+
+      return create_complex (CAR (obj), CAR (CDR (obj)), env, outcome);
     }
   else if (macro_call->dispatch_ch == '+' || macro_call->dispatch_ch == '-')
     {
@@ -4534,6 +4557,60 @@ alloc_complex (void)
 
   ret->type = TYPE_COMPLEX;
   ret->value_ptr.complex = malloc_and_check (sizeof (*ret->value_ptr.complex));
+
+  return ret;
+}
+
+
+struct object *
+create_complex (struct object *real, struct object *imag,
+		struct environment *env, struct outcome *outcome)
+{
+  struct object *ret, *r, *i;
+  enum object_type t;
+
+  if (!IS_REAL (real) || (imag && !IS_REAL (imag)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!imag && IS_RATIONAL (real))
+    {
+      increment_refcount (real);
+      return real;
+    }
+
+  if (!imag)
+    {
+      ret = alloc_complex ();
+
+      increment_refcount (real);
+      ret->value_ptr.complex->real = real;
+      ret->value_ptr.complex->imag = create_floating_from_double (0.0);
+
+      return ret;
+    }
+
+  if (IS_RATIONAL (real))
+    {
+      if ((imag->type == TYPE_BIGNUM
+	   && !mpz_sgn (imag->value_ptr.integer))
+	  || (imag->type == TYPE_RATIO
+	      && !mpq_sgn (imag->value_ptr.ratio)))
+	{
+	  increment_refcount (real);
+	  return real;
+	}
+    }
+
+  t = highest_num_type (real->type, imag->type);
+  r = promote_number (real, t);
+  i = promote_number (imag, t);
+
+  ret = alloc_complex ();
+  ret->value_ptr.complex->real = r;
+  ret->value_ptr.complex->imag = i;
 
   return ret;
 }
@@ -13077,8 +13154,6 @@ builtin_complex (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
   int l = list_length (list);
-  struct object *ret, *r, *i;
-  enum object_type t;
 
   if (!l || l > 2)
     {
@@ -13086,50 +13161,8 @@ builtin_complex (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_REAL (CAR (list)) || (l == 2 && !IS_REAL (CAR (CDR (list)))))
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  if (l == 1 && IS_RATIONAL (CAR (list)))
-    {
-      increment_refcount (CAR (list));
-      return CAR (list);
-    }
-
-  if (l == 1)
-    {
-      ret = alloc_complex ();
-
-      increment_refcount (CAR (list));
-      ret->value_ptr.complex->real = CAR (list);
-      ret->value_ptr.complex->imag = create_floating_from_double (0.0);
-
-      return ret;
-    }
-
-  if (IS_RATIONAL (CAR (list)))
-    {
-      if ((CAR (CDR (list))->type == TYPE_BIGNUM
-	   && !mpz_sgn (CAR (CDR (list))->value_ptr.integer))
-	  || (CAR (CDR (list))->type == TYPE_RATIO
-	      && !mpq_sgn (CAR (CDR (list))->value_ptr.ratio)))
-	{
-	  increment_refcount (CAR (list));
-	  return CAR (list);
-	}
-    }
-
-  t = highest_num_type (CAR (list)->type, CAR (CDR (list))->type);
-  r = promote_number (CAR (list), t);
-  i = promote_number (CAR (CDR (list)), t);
-
-  ret = alloc_complex ();
-  ret->value_ptr.complex->real = r;
-  ret->value_ptr.complex->imag = i;
-
-  return ret;
+  return create_complex (CAR (list), l == 2 ? CAR (CDR (list)) : NULL, env,
+			 outcome);
 }
 
 
@@ -17869,6 +17902,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == FUNCTION_NOT_FOUND_IN_READ)
     {
       printf ("read error: function not found\n");
+    }
+  else if (err->type == WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX)
+    {
+      printf ("read error: wrong syntax in sharp macro for complex number\n");
     }
   else if (err->type == INVALID_FEATURE_TEST)
     {
