@@ -1635,6 +1635,9 @@ struct object *builtin_symbol_package (struct object *list,
 struct object *builtin_special_operator_p (struct object *list,
 					   struct environment *env,
 					   struct outcome *outcome);
+struct object *builtin_macroexpand_1 (struct object *list,
+				      struct environment *env,
+				      struct outcome *outcome);
 struct object *builtin_string (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_string_eq (struct object *list, struct environment *env,
@@ -1725,7 +1728,7 @@ struct object *evaluate_macrolet
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 struct object *get_function (struct object *sym, struct environment *env,
-			     int only_functions);
+			     int only_functions, int increment_refc);
 
 struct object *inspect_variable_by_c_string (char *var,
 					     struct environment *env);
@@ -2409,6 +2412,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
@@ -4006,7 +4011,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      fun = get_function (SYMBOL (obj), env, 1);
+      fun = get_function (SYMBOL (obj), env, 1, 1);
 
       if (!fun)
 	outcome->type = FUNCTION_NOT_FOUND_IN_READ;
@@ -13770,7 +13775,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = get_function (SYMBOL (s), env, 0);
+  ret = get_function (SYMBOL (s), env, 0, 1);
 
   if (!ret)
     {
@@ -13855,6 +13860,37 @@ builtin_special_operator_p (struct object *list, struct environment *env,
     return &t_object;
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_macroexpand_1 (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *ret, *ret2, *mac;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list)))
+      && (mac = get_function (CAR (CAR (list)), env, 0, 0))
+      && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
+    {
+      ret = call_function (mac, CDR (CAR (list)), 0, 0, env, outcome);
+      ret2 = &t_object;
+    }
+  else
+    {
+      increment_refcount (CAR (list));
+      ret = CAR (list);
+      ret2 = &nil_object;
+    }
+
+  prepend_object_to_obj_list (ret2, &outcome->other_values);
+  return ret;
 }
 
 
@@ -15478,7 +15514,8 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 
 struct object *
-get_function (struct object *sym, struct environment *env, int only_functions)
+get_function (struct object *sym, struct environment *env, int only_functions,
+	      int increment_refc)
 {
   struct object *f;
   struct binding *bind = find_binding (SYMBOL (sym)->value_ptr.symbol, env->funcs,
@@ -15495,7 +15532,9 @@ get_function (struct object *sym, struct environment *env, int only_functions)
   if (f->type != TYPE_FUNCTION && only_functions)
     return NULL;
 
-  increment_refcount (f);
+  if (increment_refc)
+    increment_refcount (f);
+
   return f;
 }
 
@@ -16171,7 +16210,7 @@ evaluate_function (struct object *list, struct environment *env,
       return NULL;
     }
 
-  f = get_function (SYMBOL (CAR (list)), env, 1);
+  f = get_function (SYMBOL (CAR (list)), env, 1, 1);
 
   if (!f)
     {
@@ -16240,7 +16279,7 @@ evaluate_apply (struct object *list, struct environment *env,
     {
       s = SYMBOL (CAR (list));
 
-      fun = get_function (s, env, 1);
+      fun = get_function (s, env, 1, 0);
 
       if (!fun)
 	{
@@ -16287,7 +16326,7 @@ evaluate_funcall (struct object *list, struct environment *env,
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0);
 
       if (!fun)
 	{
