@@ -15761,6 +15761,9 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
 
   res = evaluate_object (CAR (list), env, outcome);
 
+  if (!res)
+    return NULL;
+
   if (outcome->no_value)
     {
       outcome->no_value = 0;
