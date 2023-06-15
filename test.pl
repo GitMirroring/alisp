@@ -348,6 +348,9 @@ make_test ("(byte 20 100)", "#<BYTE-SPECIFIER size 20 position 100>");
 make_test ("(byte-size (byte 20 100))", "20");
 make_test ("(byte-position (byte 20 100))", "100");
 
+make_test ("(macroexpand-1 '(incf var))", "(SETF VAR (+ VAR 1))\nT");
+make_test ("(macroexpand-1 '(+ 0))", "(+ 0)\nNIL");
+
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep () 'atom)", "T");
 make_test ("(typep (cons 1 2) 'atom)", "NIL");
