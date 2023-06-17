@@ -13880,6 +13880,10 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
       && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
       ret = call_function (mac, CDR (CAR (list)), 0, 0, env, outcome);
+
+      if (!ret)
+	return NULL;
+
       ret2 = &t_object;
     }
   else
