@@ -1750,6 +1750,8 @@ struct object *evaluate_values_list
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_multiple_value_list
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_multiple_value_call
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_eval_when
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defconstant
@@ -2364,6 +2366,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MULTIPLE-VALUE-LIST", env, evaluate_multiple_value_list,
 		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("MULTIPLE-VALUE-CALL", env, evaluate_multiple_value_call,
+		    TYPE_MACRO, NULL, 1);
   add_builtin_form ("EVAL-WHEN", env, evaluate_eval_when, TYPE_MACRO, NULL,
 		    1);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
@@ -15793,6 +15797,93 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
   free_object_list_structure (outcome->other_values);
 
   outcome->other_values = NULL;
+
+  return ret;
+}
+
+
+struct object *
+evaluate_multiple_value_call (struct object *list, struct environment *env,
+			      struct outcome *outcome)
+{
+  struct object *fun, *args = &nil_object, *cons, *res, *ret;
+  struct object_list *l;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  fun = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!fun)
+    return NULL;
+
+  if (fun->type != TYPE_FUNCTION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      res = evaluate_object (CAR (list), env, outcome);
+
+      if (!res)
+	return NULL;
+
+      if (!outcome->no_value)
+	{
+	  if (args == &nil_object)
+	    {
+	      args = cons = alloc_empty_cons_pair ();
+	    }
+	  else
+	    {
+	      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	    }
+
+	  cons->value_ptr.cons_pair->car = res;
+
+	  l = outcome->other_values;
+
+	  while (l)
+	    {
+	      if (args == &nil_object)
+		{
+		  args = cons = alloc_empty_cons_pair ();
+		}
+	      else
+		{
+		  cons = cons->value_ptr.cons_pair->cdr =
+		    alloc_empty_cons_pair ();
+		}
+
+	      cons->value_ptr.cons_pair->car = l->obj;
+
+	      l = l->next;
+	    }
+
+	  free_object_list_structure (outcome->other_values);
+	  outcome->other_values = NULL;
+	}
+      else
+	{
+	  outcome->no_value = 0;
+	}
+
+      list = CDR (list);
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  ret = call_function (fun, args, 1, 0, env, outcome);
+
+  decrement_refcount (args);
 
   return ret;
 }
