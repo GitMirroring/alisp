@@ -8171,15 +8171,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       ret = evaluate_body (func->value_ptr.function->body, 0,
 			   func->value_ptr.function->name, env, outcome);
-
-      if (ret && is_macro)
-	{
-	  ret2 = evaluate_object (ret, env, outcome);
-
-	  decrement_refcount (ret);
-
-	  ret = ret2;
-	}
     }
   else
     {
@@ -8199,6 +8190,15 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   env->vars = remove_bindings (env->vars, argsnum);
 
   env->lex_env_vars_boundary = prev_lex_bin_num;
+
+  if (ret && is_macro)
+    {
+      ret2 = evaluate_object (ret, env, outcome);
+
+      decrement_refcount (ret);
+
+      ret = ret2;
+    }
 
   return ret;
 }
