@@ -539,6 +539,16 @@
 
 
 
+(defun macroexpand (form)
+  (do ((ret (list form t))
+       expp)
+      ((not (cadr ret)) (values (car ret) expp))
+    (setq ret (multiple-value-list (macroexpand-1 (car ret))))
+    (if (and (not expp) (cadr ret))
+	(setq expp t))))
+
+
+
 (defun equal (x y)
   (cond
     ((numberp x) (eql x y))
@@ -674,8 +684,8 @@
 	  nstring-upcase nstring-downcase nstring-capitalize consp listp symbolp
 	  keywordp functionp packagep integerp rationalp floatp complexp
 	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
-	  streamp realp numberp equal equalp fdefinition complement mapc terpri
-	  write-line write-sequence prin1 princ print format))
+	  streamp realp numberp macroexpand equal equalp fdefinition complement
+	  mapc terpri write-line write-sequence prin1 princ print format))
 
 
 
