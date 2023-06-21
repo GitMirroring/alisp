@@ -351,6 +351,11 @@ make_test ("(byte-position (byte 20 100))", "100");
 
 make_test ("(macroexpand-1 '(incf var))", "(SETF VAR (+ VAR 1))\nT");
 make_test ("(macroexpand-1 '(+ 0))", "(+ 0)\nNIL");
+make_test ("(defmacro test2 nil (+ 1 2))", "TEST2");
+make_test ("(defmacro test nil '(test2))", "TEST");
+make_test ("(macroexpand '(test2))", "3\nT");
+make_test ("(macroexpand '(test))", "3\nT");
+make_test ("(macroexpand '(+ 1 2))", "(+ 1 2)\nNIL");
 
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep () 'atom)", "T");
