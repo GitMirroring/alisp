@@ -9399,6 +9399,9 @@ builtin_append (struct object *list, struct environment *env,
     {
       obj = nth (i, list);
 
+      if (SYMBOL (obj) == &nil_object)
+	continue;
+
       if (last)
 	{
 	  last->value_ptr.cons_pair->cdr = copy_list_structure (obj, NULL, -1,
