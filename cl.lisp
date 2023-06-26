@@ -207,6 +207,22 @@
 	     (cond ,@rest)))))
 
 
+(defmacro case (keyf &rest clauses)
+  (let ((keysym (gensym))
+	outsym)
+    `(let ((,keysym ,keyf))
+       ,(dolist (clause clauses (setq outsym (cons 'cond outsym)))
+	  (cond ((or (eq (car clause) t)
+		     (eq (car clause) 'otherwise))
+		 (setq outsym (append outsym `((t (progn ,@(cdr clause)))))))
+		((listp (car clause))
+		 (setq outsym (append outsym `(((member ,keysym ',(car clause))
+						(progn ,@(cdr clause)))))))
+		(t
+		 (setq outsym (append outsym `(((eql ,keysym ',(car clause))
+						(progn ,@(cdr clause))))))))))))
+
+
 (defmacro return (&optional val)
   `(return-from nil (values-list (multiple-value-list ,val))))
 
@@ -674,18 +690,19 @@
 	  caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
 	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
 	  cdadar cdaddr cddaar cddadr cdddar cddddr endp when unless incf decf
-	  and or cond return multiple-value-bind every some notany notevery
-	  member member-if member-if-not find find-if find-if-not assoc assoc-if
-	  assoc-if-not position position-if position-if-not count count-if
-	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  nreverse adjoin fill push pop array-rank array-dimension
-	  array-total-size array-in-bounds-p char string/= char-equal digit-char
-	  digit-char-p char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize consp listp symbolp
-	  keywordp functionp packagep integerp rationalp floatp complexp
-	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
-	  streamp realp numberp macroexpand equal equalp fdefinition complement
-	  mapc terpri write-line write-sequence prin1 princ print format))
+	  and or cond otherwise case return multiple-value-bind every some
+	  notany notevery member member-if member-if-not find find-if
+	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not nreverse adjoin fill push pop
+	  array-rank array-dimension array-total-size array-in-bounds-p char
+	  string/= char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize consp listp symbolp keywordp functionp packagep
+	  integerp rationalp floatp complexp characterp vectorp arrayp sequencep
+	  stringp hash-table-p pathnamep streamp realp numberp macroexpand equal
+	  equalp fdefinition complement mapc terpri write-line write-sequence
+	  prin1 princ print format))
 
 
 
