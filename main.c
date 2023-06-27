@@ -11291,7 +11291,8 @@ builtin_do (struct object *list, struct environment *env,
   struct object_list *incr = NULL, *lastincr;
   struct binding *bins = NULL, *bin;
 
-  if (l < 2 || !IS_LIST (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+  if (l < 2 || !IS_LIST (CAR (list))
+      || CAR (CDR (list))->type != TYPE_CONS_PAIR)
     {
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       return NULL;
@@ -11464,7 +11465,8 @@ builtin_do_star (struct object *list, struct environment *env,
   struct object *bind_forms, *test_form, *testres, *body, *bodyres, *ret, *res;
   struct binding *bin;
 
-  if (l < 2 || !IS_LIST (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+  if (l < 2 || !IS_LIST (CAR (list))
+      || CAR (CDR (list))->type != TYPE_CONS_PAIR)
     {
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       return NULL;
