@@ -660,6 +660,91 @@
   obj)
 
 
+(defmacro loop (&body forms)
+  (let (block-name
+	initially-forms
+	finally-forms
+	do-forms
+	vars var)
+    (do ((forms forms (cdr forms)))
+	((not forms))
+      (let ((form (car forms)))
+	(if (atom form)
+	    (let ((sym (string form)))
+	      (cond
+                 ((string= sym "INITIALLY")
+		 (do ((f (cdr forms)))
+		     ((atom (car f)))
+		   (setq initially-forms (append initially-forms `(,(car f))))
+		   (setq f (cdr f))))
+		((string= sym "FINALLY")
+		 (do ((f (cdr forms)))
+		     ((atom (car f)))
+		   (setq finally-forms (append finally-forms `(,(car f))))
+		   (setq f (cdr f))))
+		((or (string= sym "DO")
+		     (string= sym "DOING"))
+		 (do ((f (cdr forms)))
+		     ((atom (car f)))
+		   (setq do-forms (append do-forms `(,(car f))))
+		   (setq f (cdr f))))
+		((string= sym "NAMED")
+		 (setq block-name (cadr forms))
+		 (setq forms (cdr forms)))
+		((or (string= sym "FOR")
+		     (string= sym "AS"))
+		 (setq forms (cdr forms))
+		 (setq var `(,(car forms) 0 nil 1 1))
+		 (setq vars (append vars `(,var))))
+		((string= sym "FROM")
+		 (setq forms (cdr forms))
+		 (setf (elt var 1) (car forms)))
+		((or (string= sym "DOWNFROM"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 1) (car forms))
+		 (setf (elt var 3) -1))
+		((or (string= sym "UPFROM"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 1) (car forms))
+		 (setf (elt var 3) 1))
+		((or (string= sym "TO"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 2) (car forms)))
+		((or (string= sym "DOWNTO"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 2) (car forms))
+		 (setf (elt var 3) -1))
+		((or (string= sym "UPTO"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 2) (car forms))
+		 (setf (elt var 3) 1))
+		((or (string= sym "BELOW"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 2) (1- (car forms))))
+		((or (string= sym "ABOVE"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 2) (1+ (car forms))))
+		((or (string= sym "BY"))
+		 (setq forms (cdr forms))
+		 (setf (elt var 4) (car forms)))))
+	    (append do-forms `(,form)))))
+    `(block ,block-name
+       (tagbody
+	  (let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) vars)
+	    ,@initially-forms
+	    (do nil
+		((or ,@(mapcar (lambda (x) (if (elt x 2)
+					       (if (= (elt x 3) 1)
+						   `(> ,(elt x 0) ,(elt x 2))
+						   `(< ,(elt x 0) ,(elt x 2)))
+					       nil)) vars)))
+	      ,@do-forms
+	      (progn
+		,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) vars)))
+	    ,@finally-forms
+	    nil)))))
+
+
 (defun format (out fstr &rest args)
   (let (in-spec at-sign colon sign num dirargs)
     (dotimes (i (length fstr))
@@ -702,7 +787,7 @@
 	  integerp rationalp floatp complexp characterp vectorp arrayp sequencep
 	  stringp hash-table-p pathnamep streamp realp numberp macroexpand equal
 	  equalp fdefinition complement mapc terpri write-line write-sequence
-	  prin1 princ print format))
+	  prin1 princ print loop format))
 
 
 
