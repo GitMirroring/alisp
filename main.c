@@ -15884,7 +15884,8 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
       list = CDR (list);
     }
 
-  cons->value_ptr.cons_pair->cdr = &nil_object;
+  if (args != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
 
   ret = call_function (fun, args, 1, 0, env, outcome);
 
