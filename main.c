@@ -8069,11 +8069,14 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	      return 0;
 	    }
 
-	  increment_refcount (CAR (args));
+	  if (!findk->key_passed)
+	    {
+	      increment_refcount (CAR (args));
 
-	  bins = bind_variable (findk->name, CAR (args), bins);
-	  findk->key_passed = 1;
-	  (*argsnum)++;
+	      bins = bind_variable (findk->name, CAR (args), bins);
+	      findk->key_passed = 1;
+	      (*argsnum)++;
+	    }
 
 	  args = CDR (args);
 	}
