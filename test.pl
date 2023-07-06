@@ -306,6 +306,7 @@ make_test ("(defun fun (x &rest y) y)", "FUN");
 make_test ("(fun 5 6 7 8)", "(6 7 8)");
 make_test ("(defun fun2 (&rest r &key x y z) y)", "FUN2");
 make_test ("(fun2 :y 0)", "0");
+make_test ("(fun2 :y 0 :y 1)", "0");
 make_test ("(fun2 :x 0)", "NIL");
 make_test ("(fun2 :z 'tt :y (+ 1 2))", "3");
 make_test ("(fun2)", "NIL");
