@@ -662,6 +662,8 @@
 
 (defmacro loop (&body forms)
   (let (block-name
+	(tagname (gensym))
+	(inner-block-name (gensym))
 	initially-forms
 	finally-forms
 	do-forms
@@ -732,15 +734,19 @@
        (tagbody
 	  (let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) vars)
 	    ,@initially-forms
-	    (do nil
-		((or ,@(mapcar (lambda (x) (if (elt x 2)
-					       (if (= (elt x 3) 1)
-						   `(> ,(elt x 0) ,(elt x 2))
-						   `(< ,(elt x 0) ,(elt x 2)))
-					       nil)) vars)))
-	      ,@do-forms
-	      (progn
-		,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) vars)))
+	    (block ,inner-block-name
+	      (tagbody
+		 ,tagname
+		 (if (or ,@(mapcar (lambda (x) (if (elt x 2)
+						      (if (= (elt x 3) 1)
+							  `(> ,(elt x 0) ,(elt x 2))
+							  `(< ,(elt x 0) ,(elt x 2)))
+						      nil)) vars))
+		     (return-from ,inner-block-name nil))
+		 ,@do-forms
+		 (progn
+		   ,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) vars))
+		 (go ,tagname)))
 	    ,@finally-forms
 	    nil)))))
 
