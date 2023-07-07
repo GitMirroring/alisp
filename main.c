@@ -148,6 +148,9 @@ typedef long fixnum;
 				 0, env->cl_package))
 
 
+#define KEYWORD(name) \
+  (intern_symbol_by_char_vector ((name)+1, strlen (name)-1, 1, \
+				 EXTERNAL_VISIBILITY, 1, env->keyword_package))
 
 
 #define ANTILOOP_HASH_T_SIZE 64
@@ -1615,6 +1618,8 @@ struct object *builtin_type_of (struct object *list, struct environment *env,
 struct object *builtin_make_string (struct object *list, struct environment *env,
 				    struct outcome *outcome);
 
+struct object *builtin_intern (struct object *list, struct environment *env,
+			       struct outcome *outcome);
 struct object *builtin_make_symbol (struct object *list, struct environment *env,
 				    struct outcome *outcome);
 struct object *builtin_boundp (struct object *list, struct environment *env,
@@ -2402,6 +2407,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MAKE-STRING", env, builtin_make_string, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("INTERN", env, builtin_intern, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
@@ -13636,6 +13642,75 @@ builtin_make_string (struct object *list, struct environment *env,
   ret->value_ptr.string->alloc_size = ret->value_ptr.string->used_size = sz;
   ret->value_ptr.string->fill_pointer = -1;
 
+  return ret;
+}
+
+
+struct object *
+builtin_intern (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  int l = list_length (list), ispr;
+  struct object *pack, *ret, *ret2;
+  struct package_record *ent;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+
+  ent = inspect_accessible_symbol_by_name (CAR (list)->value_ptr.string->value,
+					   CAR (list)->value_ptr.string->used_size,
+					   pack, &ispr);
+
+  if (ent)
+    {
+      ret = ent->sym;
+      ret2 = KEYWORD (ispr ?
+		      (ent->visibility == INTERNAL_VISIBILITY ?
+		       ":INTERNAL" : ":EXTERNAL") : ":INHERITED");
+
+      increment_refcount (ret2);
+    }
+  else
+    {
+      ret = intern_symbol_by_char_vector (CAR (list)->value_ptr.string->value,
+					  CAR (list)->value_ptr.string->used_size,
+					  1, pack == env->keyword_package
+					  ? EXTERNAL_VISIBILITY
+					  : INTERNAL_VISIBILITY, 1, pack);
+      ret2 = &nil_object;
+    }
+
+  increment_refcount (ret);
+  prepend_object_to_obj_list (ret2, &outcome->other_values);
   return ret;
 }
 
