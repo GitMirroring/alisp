@@ -415,6 +415,10 @@ make_test ("(type-of *standard-output*)", "STREAM");
 make_test ("(deftype not-integer () `(not integer))", "NOT-INTEGER");
 
 make_test ("(make-string 3)", "\"\0\0\0\"");
+make_test ("(intern \"hi\")", "|hi|\nNIL");
+make_test ("(intern \"hi\")", "|hi|\n:INTERNAL");
+make_test ("(intern \"hi\" 'keyword)", ":|hi|\nNIL");
+make_test ("(intern \"hi\" 'keyword)", ":|hi|\n:EXTERNAL");
 make_test ("(make-symbol \"aaa\")", "#:|aaa|");
 make_test ("(boundp 'b)", "T");
 make_test ("(boundp 'g3)", "NIL");
