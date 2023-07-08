@@ -1183,7 +1183,7 @@ struct object *intern_symbol_by_char_vector (char *name, size_t len,
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env,
 				   enum outcome_type *out);
-void unintern_symbol (struct object *sym);
+int unintern_symbol (struct object *sym, struct object *pack);
 
 struct binding *create_binding (struct object *sym, struct object *obj,
 				enum binding_type type, int inc_refcs);
@@ -1620,6 +1620,8 @@ struct object *builtin_make_string (struct object *list, struct environment *env
 
 struct object *builtin_intern (struct object *list, struct environment *env,
 			       struct outcome *outcome);
+struct object *builtin_unintern (struct object *list, struct environment *env,
+				 struct outcome *outcome);
 struct object *builtin_make_symbol (struct object *list, struct environment *env,
 				    struct outcome *outcome);
 struct object *builtin_boundp (struct object *list, struct environment *env,
@@ -2408,6 +2410,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAKE-STRING", env, builtin_make_string, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("INTERN", env, builtin_intern, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("UNINTERN", env, builtin_unintern, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
@@ -4109,7 +4112,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      unintern_symbol (obj->value_ptr.symbol_name->sym);
+      unintern_symbol (SYMBOL (obj),
+		       SYMBOL (obj)->value_ptr.symbol->home_package);
 
       return obj;
     }
@@ -6573,24 +6577,29 @@ intern_symbol_name (struct object *symname, struct environment *env,
 }
 
 
-void
-unintern_symbol (struct object *sym)
+int
+unintern_symbol (struct object *sym, struct object *pack)
 {
   struct object *s = SYMBOL (sym);
-  struct object *p = s->value_ptr.symbol->home_package;
   struct package_record *prev, *entry;
 
-  entry = find_package_entry (s, p->value_ptr.package->symtable, &prev);
+  entry = find_package_entry (s, pack->value_ptr.package->symtable, &prev);
+
+  if (!entry)
+    return 0;
 
   if (prev)
     prev->next = entry->next;
   else
-    p->value_ptr.package->symtable [hash_symbol (sym, SYMTABLE_SIZE)] =
+    pack->value_ptr.package->symtable [hash_symbol (sym, SYMTABLE_SIZE)] =
       entry->next;
 
   free (entry);
 
-  s->value_ptr.symbol->home_package = &nil_object;
+  if (pack == s->value_ptr.symbol->home_package)
+    s->value_ptr.symbol->home_package = &nil_object;
+
+  return 1;
 }
 
 
@@ -13716,6 +13725,53 @@ builtin_intern (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_unintern (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  int l = list_length (list), ret;
+  struct object *pack;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+
+  ret = unintern_symbol (SYMBOL (CAR (list)), pack);
+
+  decrement_refcount (SYMBOL (CAR (list)));
+
+  return ret ? &t_object : &nil_object;
+}
+
+
+struct object *
 builtin_make_symbol (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
@@ -18855,7 +18911,7 @@ free_symbol (struct object *obj)
   delete_reference (obj, s->function_cell, 1);
 
   if (p != &nil_object)
-    unintern_symbol (obj);
+    unintern_symbol (obj, p);
 
   free (s->name);
   free (s);
