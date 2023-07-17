@@ -489,6 +489,25 @@
   str)
 
 
+(defun string-left-trim (charbag s)
+  (let ((str (string s)))
+    (dotimes (i (length str) (subseq str 0 0))
+      (if (not (position (aref str i) charbag))
+	  (return-from string-left-trim (subseq str i))))))
+
+
+(defun string-right-trim (charbag s)
+  (let* ((str (string s))
+	 (len (length str)))
+    (dotimes (i len (subseq str 0 0))
+      (if (not (position (aref str (- len i 1)) charbag))
+	  (return-from string-right-trim (subseq str 0 (- len i)))))))
+
+
+(defun string-trim (charbag s)
+  (string-left-trim charbag (string-right-trim charbag s)))
+
+
 
 (defun consp (obj)
   (typep obj 'cons))
@@ -789,11 +808,12 @@
 	  array-rank array-dimension array-total-size array-in-bounds-p char
 	  string/= char-equal digit-char digit-char-p char-int string-upcase
 	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize consp listp symbolp keywordp functionp packagep
-	  integerp rationalp floatp complexp characterp vectorp arrayp sequencep
-	  stringp hash-table-p pathnamep streamp realp numberp macroexpand equal
-	  equalp fdefinition complement mapc terpri write-line write-sequence
-	  prin1 princ print loop format))
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  consp listp symbolp keywordp functionp packagep integerp rationalp
+	  floatp complexp characterp vectorp arrayp sequencep stringp
+	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
+	  fdefinition complement mapc terpri write-line write-sequence prin1
+	  princ print loop format))
 
 
 
