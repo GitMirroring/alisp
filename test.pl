@@ -660,9 +660,9 @@ make_test ("(format t \"aaa~%~%\")", "aaa\n\nNIL");
 make_test ("(format t \"aa~&~&bb\")", "aa\nbb\nNIL");
 make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))",
 	   "the number is 10 and the list is (1 2 3)\nNIL");
-make_test ("(defparameter str (open \"writetest\" :direction :output))", "STR");
+make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
 make_test ("(write \"hello\" :stream str)", "\"hello\"");
-make_test ("(write #\\a :stream str)", "#\\a");
+make_test ("(write #\\a :stream str :stream *standard-input*)", "#\\a");
 make_test ("(write 1 :stream str)", "1");
 make_test ("(write 1/2 :stream str)", "1/2");
 make_test ("(write 0.1 :stream str)", "0.1");
