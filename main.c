@@ -312,6 +312,7 @@ outcome_type
     WRONG_TYPE_OF_ARGUMENT,
     WRONG_NUMBER_OF_AXIS,
     OUT_OF_BOUND_INDEX,
+    DECREASING_INTERVAL_NOT_MEANINGFUL,
     INVALID_SIZE,
     COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
@@ -1414,6 +1415,8 @@ struct object *builtin_aref
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_row_major_aref
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_subseq
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_list_length
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_length
@@ -2256,6 +2259,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, accessor_aref, 0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("SUBSEQ", env, builtin_subseq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
@@ -9807,6 +9811,160 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 
   increment_refcount (CAR (list)->value_ptr.array->value [ind]);
   return CAR (list)->value_ptr.array->value [ind];
+}
+
+
+struct object *
+builtin_subseq (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  int l = list_length (list);
+  fixnum i, beg, end, len;
+  struct object *ret, *cons;
+
+  if (l != 2 && l != 3)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SEQUENCE (CAR (list)) || CAR (CDR (list))->type != TYPE_BIGNUM
+      || (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && CAR (CDR (CDR (list)))->type != TYPE_BIGNUM))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      if (mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0
+	  || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer,
+			 CAR (list)->value_ptr.string->used_size) > 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && mpz_cmp (CAR (CDR (list))->value_ptr.integer,
+		      CAR (CDR (CDR (list)))->value_ptr.integer) > 0)
+	{
+	  outcome->type = DECREASING_INTERVAL_NOT_MEANINGFUL;
+	  return NULL;
+	}
+
+      if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && mpz_cmp_si (CAR (CDR (CDR (list)))->value_ptr.integer,
+			 CAR (list)->value_ptr.string->used_size) > 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      beg = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+      end = (l == 2 || SYMBOL (CAR (CDR (CDR (list)))) == &nil_object)
+	? CAR (list)->value_ptr.string->used_size
+	: mpz_get_si (CAR (CDR (CDR (list)))->value_ptr.integer);
+
+      ret = alloc_string (end-beg);
+      ret->value_ptr.string->used_size = end-beg;
+
+      for (i = 0; i<end-beg; i++)
+	{
+	  ret->value_ptr.string->value [i] =
+	    CAR (list)->value_ptr.string->value [beg+i];
+	}
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      if (mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0
+	  || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer,
+			 CAR (list)->value_ptr.array->alloc_size->size) > 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && mpz_cmp (CAR (CDR (list))->value_ptr.integer,
+		      CAR (CDR (CDR (list)))->value_ptr.integer) > 0)
+	{
+	  outcome->type = DECREASING_INTERVAL_NOT_MEANINGFUL;
+	  return NULL;
+	}
+
+      if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && mpz_cmp_si (CAR (CDR (CDR (list)))->value_ptr.integer,
+			 CAR (list)->value_ptr.array->alloc_size->size) > 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      beg = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+      end = (l == 2 || SYMBOL (CAR (CDR (CDR (list)))) == &nil_object)
+	? CAR (list)->value_ptr.array->alloc_size->size
+	: mpz_get_si (CAR (CDR (CDR (list)))->value_ptr.integer);
+
+      ret = alloc_vector (end-beg, 0, 0);
+
+      for (i = 0; i<end-beg; i++)
+	{
+	  ret->value_ptr.array->value [i] =
+	    CAR (list)->value_ptr.array->value [beg+i];
+
+	  add_reference (ret, ret->value_ptr.array->value [i], i);
+	}
+    }
+  else
+    {
+      if (SYMBOL (CAR (list)) == &nil_object)
+	len = 0;
+      else
+	len = list_length (CAR (list));
+
+      if (mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0
+	  || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, len) > 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && mpz_cmp (CAR (CDR (list))->value_ptr.integer,
+		      CAR (CDR (CDR (list)))->value_ptr.integer) > 0)
+	{
+	  outcome->type = DECREASING_INTERVAL_NOT_MEANINGFUL;
+	  return NULL;
+	}
+
+      if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+	  && mpz_cmp_si (CAR (CDR (CDR (list)))->value_ptr.integer, len) > 0)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      beg = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+      end = (l == 2 || SYMBOL (CAR (CDR (CDR (list)))) == &nil_object) ? len
+	: mpz_get_si (CAR (CDR (CDR (list)))->value_ptr.integer);
+
+      if (end == beg)
+	ret = &nil_object;
+      else
+	cons = ret = alloc_empty_list (end-beg);
+
+      for (; beg<end; beg++)
+	{
+	  cons->value_ptr.cons_pair->car = nth (beg, CAR (list));
+	  add_reference (cons, cons->value_ptr.cons_pair->car, 0);
+
+	  cons = CDR (cons);
+	}
+    }
+
+  return ret;
 }
 
 
@@ -18469,6 +18627,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == OUT_OF_BOUND_INDEX)
     {
       printf ("eval error: out-of-bound index\n");
+    }
+  else if (err->type == DECREASING_INTERVAL_NOT_MEANINGFUL)
+    {
+      printf ("eval error: a decreasing interval is not meaningful\n");
     }
   else if (err->type == INVALID_SIZE)
     {
