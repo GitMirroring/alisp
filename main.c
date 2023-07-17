@@ -10824,7 +10824,10 @@ builtin_write (struct object *list, struct environment *env,
 	    }
 
 	  if (CAR (CDR (list))->type == TYPE_STREAM)
-	    str = CAR (CDR (list));
+	    {
+	      if (!str)
+		str = CAR (CDR (list));
+	    }
 	  else
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -11013,7 +11016,7 @@ struct object *
 builtin_open (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
-  enum stream_direction dir = INPUT_STREAM;
+  enum stream_direction dir = NO_DIRECTION;
   struct string *ns;
 
   if (!list_length (list))
@@ -11044,11 +11047,20 @@ builtin_open (struct object *list, struct environment *env,
 	    }
 
 	  if (symbol_equals (CAR (CDR (list)), ":INPUT", env))
-	    dir = INPUT_STREAM;
+	    {
+	      if (!dir)
+		dir = INPUT_STREAM;
+	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":OUTPUT", env))
-	    dir = OUTPUT_STREAM;
+	    {
+	      if (!dir)
+		dir = OUTPUT_STREAM;
+	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":IO", env))
-	    dir = BIDIRECTIONAL_STREAM;
+	    {
+	      if (!dir)
+		dir = BIDIRECTIONAL_STREAM;
+	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":PROBE", env))
 	    ;
 	  else
@@ -11067,6 +11079,9 @@ builtin_open (struct object *list, struct environment *env,
 
       list = CDR (list);
     }
+
+  if (!dir)
+    dir = INPUT_STREAM;
 
   return create_file_stream (BINARY_STREAM, dir, ns, outcome);
 }
