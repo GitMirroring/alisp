@@ -854,6 +854,7 @@ make_test ("(package-used-by-list (symbol-package 'if))", "(#<PACKAGE \"COMMON-L
 make_test ("(list-all-packages)", "(#<PACKAGE \"COMMON-LISP-USER\"> #<PACKAGE \"COMMON-LISP\"> #<PACKAGE \"KEYWORD\">)");
 make_test ("(make-package \"test\")", "#<PACKAGE \"test\">");
 make_test ("(list-all-packages)", "(#<PACKAGE \"test\"> #<PACKAGE \"COMMON-LISP-USER\"> #<PACKAGE \"COMMON-LISP\"> #<PACKAGE \"KEYWORD\">)");
+make_test ("(rename-package \"test\" \"test\")", "#<PACKAGE \"test\">");
 make_test ("(rename-package \"test\" \"TEST\" '(nick1 #\\n \"nick3\"))", "#<PACKAGE \"TEST\">");
 make_test ("(list-all-packages)", "(#<PACKAGE \"TEST\"> #<PACKAGE \"COMMON-LISP-USER\"> #<PACKAGE \"COMMON-LISP\"> #<PACKAGE \"KEYWORD\">)");
 make_test ("(package-nicknames \"TEST\")", "(\"NICK1\" \"n\" \"nick3\")");
