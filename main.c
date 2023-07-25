@@ -14676,7 +14676,7 @@ builtin_rename_package (struct object *list, struct environment *env,
 			struct outcome *outcome)
 {
   int l = list_length (list), len;
-  struct object *cons, *pack;
+  struct object *cons, *pack, *dbl;
   struct package *p;
   struct name_list *nicks;
   char *name;
@@ -14688,24 +14688,32 @@ builtin_rename_package (struct object *list, struct environment *env,
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list))
-      || !IS_PACKAGE_DESIGNATOR (CAR (CDR (list)))
-      || !IS_LIST (CAR (CDR (CDR (list)))))
+      || !IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  cons = CAR (CDR (CDR (list)));
-
-  while (SYMBOL (cons) != &nil_object)
+  if (l == 3)
     {
-      if (!IS_STRING_DESIGNATOR (CAR (cons)))
+      if (!IS_LIST (CAR (CDR (CDR (list)))))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
-      cons = CDR (cons);
+      cons = CAR (CDR (CDR (list)));
+
+      while (SYMBOL (cons) != &nil_object)
+	{
+	  if (!IS_STRING_DESIGNATOR (CAR (cons)))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  cons = CDR (cons);
+	}
     }
 
   pack = inspect_package_by_designator (CAR (list), env);
@@ -14737,7 +14745,7 @@ builtin_rename_package (struct object *list, struct environment *env,
       len = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name_len;
     }
 
-  if (find_package (name, len, env))
+  if ((dbl = find_package (name, len, env)) && dbl != pack)
     {
       outcome->type = PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE;
       return NULL;
@@ -14747,56 +14755,59 @@ builtin_rename_package (struct object *list, struct environment *env,
 
   free (p->name);
   free_name_list (p->nicks);
+  p->nicks = NULL;
 
   p->name = malloc_and_check (len);
   memcpy (p->name, name, len);
   p->name_len = len;
 
-  cons = CAR (CDR (CDR (list)));
-  p->nicks = NULL;
-
-  while (SYMBOL (cons) != &nil_object)
+  if (l == 3)
     {
-      if (CAR (cons)->type == TYPE_STRING)
-	{
-	  name = CAR (cons)->value_ptr.string->value;
-	  len = CAR (cons)->value_ptr.string->used_size;
-	}
-      else if (CAR (cons)->type == TYPE_CHARACTER)
-	{
-	  name = CAR (cons)->value_ptr.character;
-	  len = strlen (name);
-	}
-      else
-	{
-	  name = SYMBOL (CAR (cons))->value_ptr.symbol->name;
-	  len = SYMBOL (CAR (cons))->value_ptr.symbol->name_len;
-	}
+      cons = CAR (CDR (CDR (list)));
 
-      if (find_package (name, len, env))
+      while (SYMBOL (cons) != &nil_object)
 	{
+	  if (CAR (cons)->type == TYPE_STRING)
+	    {
+	      name = CAR (cons)->value_ptr.string->value;
+	      len = CAR (cons)->value_ptr.string->used_size;
+	    }
+	  else if (CAR (cons)->type == TYPE_CHARACTER)
+	    {
+	      name = CAR (cons)->value_ptr.character;
+	      len = strlen (name);
+	    }
+	  else
+	    {
+	      name = SYMBOL (CAR (cons))->value_ptr.symbol->name;
+	      len = SYMBOL (CAR (cons))->value_ptr.symbol->name_len;
+	    }
+
+	  if ((dbl = find_package (name, len, env)) && dbl != pack)
+	    {
+	      if (p->nicks)
+		nicks->next = NULL;
+
+	      outcome->type = PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE;
+	      return NULL;
+	    }
+
 	  if (p->nicks)
-	    nicks->next = NULL;
+	    nicks = nicks->next = malloc_and_check (sizeof (*nicks));
+	  else
+	    p->nicks = nicks = malloc_and_check (sizeof (*nicks));
 
-	  outcome->type = PACKAGE_NAME_OR_NICKNAME_ALREADY_IN_USE;
-	  return NULL;
+	  nicks->name = malloc_and_check (len);
+	  memcpy (nicks->name, name, len);
+	  nicks->name_len = len;
+	  nicks->next = NULL;
+
+	  cons = CDR (cons);
 	}
 
       if (p->nicks)
-	nicks = nicks->next = malloc_and_check (sizeof (*nicks));
-      else
-	p->nicks = nicks = malloc_and_check (sizeof (*nicks));
-
-      nicks->name = malloc_and_check (len);
-      memcpy (nicks->name, name, len);
-      nicks->name_len = len;
-      nicks->next = NULL;
-
-      cons = CDR (cons);
+	nicks->next = NULL;
     }
-
-  if (p->nicks)
-    nicks->next = NULL;
 
   return pack;
 }
