@@ -15347,16 +15347,14 @@ builtin_use_package (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_PACKAGE_DESIGNATOR (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
   if (CAR (list)->type == TYPE_CONS_PAIR)
     {
       cons = CAR (list);
       des = CAR (cons);
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      return &t_object;
     }
   else
     des = CAR (list);
@@ -15440,16 +15438,14 @@ builtin_unuse_package (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_PACKAGE_DESIGNATOR (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
   if (CAR (list)->type == TYPE_CONS_PAIR)
     {
       cons = CAR (list);
       des = CAR (cons);
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      return &t_object;
     }
   else
     des = CAR (list);
