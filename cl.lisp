@@ -509,6 +509,28 @@
 
 
 
+(defmacro defpackage (s &rest opts)
+  (let ((name (string s))
+	nicks uses imports exports intern)
+    (dolist (opt opts)
+      (case (car opt)
+	(:nicknames (setq nicks (append nicks (mapcar #'string (cdr opt)))))
+	(:use (setq uses (append uses (mapcar #'find-package (cdr opt)))))
+	(:import-from (setq imports (append imports (list (list (find-package (cadr opt)) (mapcar #'string (cddr opt)))))))
+	(:export (setq exports (append exports (mapcar #'string (cdr opt)))))
+	(:intern (setq intern (append intern (mapcar #'string (cdr opt)))))))
+    `(progn
+       (unless (find-package ,name)
+	 (make-package ,name))
+       (rename-package ,name ,name ',nicks)
+       (use-package ',uses ,name)
+       ,@(mapcar (lambda (l) `(import (list ,@(mapcar (lambda (sm) `(intern ,sm ,(car l))) (cadr l))) ,name)) imports)
+       ,@(mapcar (lambda (sm) `(intern ,sm ,name)) intern)
+       (export (list ,@(mapcar (lambda (st) `(intern ,st ,name)) exports)) ,name)
+       (find-package ,name))))
+
+
+
 (defun consp (obj)
   (typep obj 'cons))
 
@@ -809,8 +831,8 @@
 	  string/= char-equal digit-char digit-char-p char-int string-upcase
 	  string-downcase string-capitalize nstring-upcase nstring-downcase
 	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  consp listp symbolp keywordp functionp packagep integerp rationalp
-	  floatp complexp characterp vectorp arrayp sequencep stringp
+	  defpackage consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp characterp vectorp arrayp sequencep stringp
 	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
 	  fdefinition complement mapc terpri write-line write-sequence prin1
 	  princ print loop format))
