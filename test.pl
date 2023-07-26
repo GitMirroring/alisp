@@ -884,6 +884,11 @@ make_test ("(cl:unuse-package cl:nil \"newtest\")", "COMMON-LISP:T");
 make_test ("(cl:package-use-list cl:*package*)", "COMMON-LISP:NIL");
 make_test ("(car ())", "COMMON-LISP:NIL");
 make_test ("(cl:in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
+make_test ("(defpackage \"aaa\" (:nicknames \"bbb\" |ccc|) (:use cl-user) (:export \"sym\") (:intern \"eee\" \"fff\") (:import-from \"CL\" car caar) (:import-from \"CL-USER\" al-argc))", "#<PACKAGE \"aaa\">");
+make_test ("(package-nicknames \"aaa\")", "(\"bbb\" \"ccc\")");
+make_test ("(package-use-list \"aaa\")", "(#<PACKAGE \"COMMON-LISP-USER\">)");
+make_test ("'|aaa|:|sym|", "|aaa|:|sym|");
+make_test ("(defpackage \"aaa\" (:nicknames \"bbb\" |ccc|) (:use cl-user) (:export \"sym\") (:intern \"eee\" \"fff\") (:import-from \"CL\" car caar) (:import-from \"CL-USER\" al-argc))", "#<PACKAGE \"aaa\">");
 
 
 # arithmetic tests
