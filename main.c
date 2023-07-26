@@ -15075,7 +15075,11 @@ builtin_import (struct object *list, struct environment *env,
   else
     pack = inspect_variable (env->package_sym, env);
 
-  if (IS_SYMBOL (CAR (list)))
+  if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      return &t_object;
+    }
+  else if (IS_SYMBOL (CAR (list)))
     {
       ret = import_symbol (SYMBOL (CAR (list)), pack, NULL);
 
@@ -15152,16 +15156,14 @@ builtin_export (struct object *list, struct environment *env,
   else
     pack = inspect_variable (env->package_sym, env);
 
-  if (!IS_SYMBOL (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
   if (CAR (list)->type == TYPE_CONS_PAIR)
     {
       cons = CAR (list);
       sym = SYMBOL (CAR (cons));
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      return &t_object;
     }
   else
     sym = SYMBOL (CAR (list));
@@ -15257,16 +15259,14 @@ builtin_unexport (struct object *list, struct environment *env,
   else
     pack = inspect_variable (env->package_sym, env);
 
-  if (!IS_SYMBOL (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
   if (CAR (list)->type == TYPE_CONS_PAIR)
     {
       cons = CAR (list);
       sym = SYMBOL (CAR (cons));
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      return &t_object;
     }
   else
     sym = SYMBOL (CAR (list));
