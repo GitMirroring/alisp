@@ -274,6 +274,7 @@ make_test ("(apply #'+ '(1 2))", "3");
 make_test ("(apply #'car '(1 2) ())", "1");
 make_test ("(apply 'car '(1 2) ())", "1");
 make_test ("(apply (lambda (x) (car x)) '(1 2) ())", "1");
+make_test ("(let ((s 0)) (funcall (lambda (s) s) 1))", "1");
 make_test ("(funcall #'+ 1 2 3)", "6");
 make_test ("(funcall 'car '(1 2 3))", "1");
 make_test ("(f)", "NIL");
@@ -756,6 +757,7 @@ make_test ("(dolist (i '(0 1 2 3)) (if (= i 2) (return (values 12 13))) (write i
 make_test ("(mapcar #'car '((1 a) (2 b) (3 c)))", "(1 2 3)");
 make_test ("(mapcar #'abs '(3 -4 2 -5 -6))", "(3 4 2 5 6)");
 make_test ("(mapcar #'cons '(a b c) '(1 2 3))", "((A . 1) (B . 2) (C . 3))");
+make_test ("(let ((s 0)) (write (mapcar (lambda (s) s) '(1 2 3))) s)", "(1 2 3)\n0");
 make_test ("(remove 3 '(1 2 3 4 3 2 1))", "(1 2 4 2 1)");
 make_test ("(remove #\\e \"abcdefg\")", "\"abcdfg\"");
 make_test ("(remove-if #'numberp #(1 2 3))", "#()");
