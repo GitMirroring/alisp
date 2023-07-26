@@ -8147,8 +8147,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (args && !rest_found)
     decrement_refcount (args);
 
-  env->vars = chain_bindings (bins, env->vars, NULL);
-
   if (is_macro)
     env->lex_env_vars_boundary += (*argsnum);
   else
@@ -8156,6 +8154,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
   env->vars = chain_bindings (lex_vars, env->vars, closnum);
   env->lex_env_vars_boundary += *closnum;
+
+  env->vars = chain_bindings (bins, env->vars, NULL);
 
   return 1;
 }
@@ -8207,6 +8207,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       ret = NULL;
     }
 
+  env->vars = remove_bindings (env->vars, argsnum);
+
   for (; closnum; closnum--)
     {
       b = env->vars;
@@ -8216,8 +8218,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (closnum == 1)
 	b->next = NULL;
     }
-
-  env->vars = remove_bindings (env->vars, argsnum);
 
   env->lex_env_vars_boundary = prev_lex_bin_num;
 
