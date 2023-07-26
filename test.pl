@@ -872,9 +872,11 @@ make_test ("(cl:package-use-list cl:*package*)", "(#<PACKAGE \"COMMON-LISP\">)")
 make_test ("(cadr '(0 1))", "1");
 make_test ("(cl:import 'cl:car)", "T");
 make_test ("(cl:import '(cl:car) '|newtest|)", "T");
+make_test ("(cl:export nil \"newtest\")", "T");
 make_test ("(cl:export 'jjj)", "T");
 make_test ("(cl:export '(jjj) cl:*package*)", "T");
 make_test ("'|newtest|:jjj", "JJJ");
+make_test ("(cl:unexport nil \"newtest\")", "T");
 make_test ("(cl:unexport '(jjj) cl:*package*)", "T");
 make_test ("(car ())", "NIL");
 make_test ("(cl:unuse-package 'cl)", "COMMON-LISP:T");
