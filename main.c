@@ -147,6 +147,9 @@ typedef long fixnum;
   (intern_symbol_by_char_vector ((sym), strlen (sym), 0, EXTERNAL_VISIBILITY, \
 				 0, env->cl_package))
 
+#define CREATE_BUILTIN_SYMBOL(sym) \
+  (intern_symbol_by_char_vector ((sym), strlen (sym), 1, EXTERNAL_VISIBILITY, \
+				 1, env->cl_package))
 
 #define KEYWORD(name) \
   (intern_symbol_by_char_vector ((name)+1, strlen (name)-1, 1, \
@@ -214,6 +217,7 @@ go_tag_frame
 enum
 binding_type
   {
+    ANY_BINDING,
     LEXICAL_BINDING,
     DYNAMIC_BINDING
   };
@@ -326,6 +330,9 @@ outcome_type
     INVALID_ACCESSOR,
     FUNCTION_NOT_FOUND_IN_EVAL,
     DECLARE_NOT_ALLOWED_HERE,
+    WRONG_SYNTAX_IN_DECLARE,
+    WRONG_SYNTAX_IN_DECLARATION,
+    UNKNOWN_DECLARATION,
     CANT_DIVIDE_BY_ZERO,
     INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT,
     PACKAGE_NOT_FOUND_IN_EVAL,
@@ -453,6 +460,10 @@ environment
   struct binding *structs;
 
   struct object *c_stdout;
+
+  struct object *declare_sym, *ignorable_sym, *ignore_sym, *inline_sym,
+    *notinline_sym, *optimize_sym, *compilation_speed_sym, *debug_sym,
+    *safety_sym, *space_sym, *speed_sym, *special_sym;
 
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
     *amp_allow_other_keys_sym, *amp_aux_sym;
@@ -1276,6 +1287,11 @@ struct parameter *parse_keyword_parameters
 struct parameter *parse_lambda_list (struct object *obj, struct environment *env,
 				     struct outcome *outcome,
 				     int *allow_other_keys);
+
+int parse_declarations (struct object *body, struct environment *env,
+			int bin_num, struct outcome *outcome,
+			struct object **next);
+void undo_special_declarations (struct object *decl, struct environment *env);
 
 struct object *evaluate_body
 (struct object *body, int is_tagbody, struct object *block_name,
@@ -2563,6 +2579,20 @@ add_standard_definitions (struct environment *env)
 						stdout);
 
   env->std_out_sym = define_variable ("*STANDARD-OUTPUT*", env->c_stdout, env);
+
+  env->declare_sym = CREATE_BUILTIN_SYMBOL ("DECLARE");
+  env->ignorable_sym = CREATE_BUILTIN_SYMBOL ("IGNORABLE");
+  env->ignore_sym = CREATE_BUILTIN_SYMBOL ("IGNORE");
+  env->inline_sym = CREATE_BUILTIN_SYMBOL ("INLINE");
+  env->notinline_sym = CREATE_BUILTIN_SYMBOL ("NOTINLINE");
+  env->optimize_sym = CREATE_BUILTIN_SYMBOL ("OPTIMIZE");
+  env->compilation_speed_sym = CREATE_BUILTIN_SYMBOL ("COMPILATION-SPEED");
+  env->debug_sym = CREATE_BUILTIN_SYMBOL ("DEBUG");
+  env->safety_sym = CREATE_BUILTIN_SYMBOL ("SAFETY");
+  env->space_sym = CREATE_BUILTIN_SYMBOL ("SPACE");
+  env->speed_sym = CREATE_BUILTIN_SYMBOL ("SPEED");
+  env->special_sym = CREATE_BUILTIN_SYMBOL ("SPECIAL");
+
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
 					     env);
@@ -6697,14 +6727,18 @@ struct binding *
 find_binding (struct symbol *sym, struct binding *bins, enum binding_type type,
 	      int bin_num)
 {
-  while (bins && bin_num)
+  while (bins && (type != LEXICAL_BINDING || bin_num))
     {
-      if (bins->sym->value_ptr.symbol == sym && bins->type == type)
-	return bins;
+      if (bins->sym->value_ptr.symbol == sym
+	  && (type == ANY_BINDING || bins->type == type)
+	  && (bins->type == DYNAMIC_BINDING || bin_num))
+	{
+	  return bins;
+	}
 
       bins = bins->next;
 
-      if (bin_num)
+      if (bin_num >= 0)
 	bin_num--;
     }
 
@@ -7823,6 +7857,193 @@ parse_lambda_list (struct object *obj, struct environment *env,
 }
 
 
+int
+parse_declarations (struct object *body, struct environment *env, int bin_num,
+		    struct outcome *outcome, struct object **next)
+{
+  struct object *forms, *form, *decl, *sym;
+  struct binding *vars;
+
+  *next = body;
+
+  while (SYMBOL (*next) != &nil_object)
+    {
+      if (CAR (*next)->type != TYPE_CONS_PAIR
+	  || SYMBOL (CAR (CAR (*next))) != env->declare_sym)
+	return 1;
+
+      forms = CDR (CAR (*next));
+
+      while (forms->type == TYPE_CONS_PAIR)
+	{
+	  if (CAR (forms)->type != TYPE_CONS_PAIR
+	      || !IS_SYMBOL (CAR (CAR (forms))))
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARE;
+	      return 0;
+	    }
+
+	  decl = SYMBOL (CAR (CAR (forms)));
+	  form = CDR (CAR (forms));
+
+	  if (decl == env->ignorable_sym || decl == env->ignore_sym)
+	    {
+	      sym = BUILTIN_SYMBOL ("FUNCTION");
+
+	      while (SYMBOL (form) != &nil_object)
+		{
+		  if (!IS_SYMBOL (CAR (form))
+		      && (CAR (form)->type != TYPE_CONS_PAIR
+			  || list_length (CAR (form)) != 2
+			  || SYMBOL (CAR (CAR (form))) != sym
+			  || !IS_SYMBOL (CAR (CDR (CAR (form))))))
+		    {
+		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+		      return 0;
+		    }
+
+		  form = CDR (form);
+		}
+	    }
+	  else if (decl == env->inline_sym || decl == env->notinline_sym)
+	    {
+	      sym = BUILTIN_SYMBOL ("SETF");
+
+	      while (SYMBOL (form) != &nil_object)
+		{
+		  if (!IS_SYMBOL (CAR (form))
+		      && (CAR (form)->type != TYPE_CONS_PAIR
+			  || list_length (CAR (form)) != 2
+			  || SYMBOL (CAR (CAR (form))) != sym
+			  || !IS_SYMBOL (CAR (CDR (CAR (form))))))
+		    {
+		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+		      return 0;
+		    }
+
+		  form = CDR (form);
+		}
+	    }
+	  else if (decl == env->optimize_sym)
+	    {
+	      while (SYMBOL (form) != &nil_object)
+		{
+		  if (IS_SYMBOL (CAR (form)))
+		    {
+		      sym = SYMBOL (CAR (form));
+
+		      if (sym != env->compilation_speed_sym
+			  && sym != env->debug_sym && sym != env->safety_sym
+			  && sym != env->space_sym && sym != env->speed_sym)
+			{
+			  outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+			  return 0;
+			}
+		    }
+		  else if (CAR (form)->type == TYPE_CONS_PAIR
+			   && list_length (CAR (form)) == 2
+			   && IS_SYMBOL (CAR (CAR (form))))
+		    {
+		      sym = SYMBOL (CAR (CAR (form)));
+
+		      if ((sym != env->compilation_speed_sym
+			  && sym != env->debug_sym && sym != env->safety_sym
+			   && sym != env->space_sym && sym != env->speed_sym)
+			  || CAR (CDR (CAR (form)))->type != TYPE_INTEGER
+			  || mpz_cmp_si (CAR (CDR (CAR (form)))->value_ptr.integer,
+					 0) < 0
+			  || mpz_cmp_si (CAR (CDR (CAR (form)))->value_ptr.integer,
+					 3) > 0)
+			{
+			  outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+			  return 0;
+			}
+		    }
+		  else
+		    {
+		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+		      return 0;
+		    }
+
+		  form = CDR (form);
+		}
+	    }
+	  else if (decl == env->special_sym)
+	    {
+	      while (SYMBOL (form) != &nil_object)
+		{
+		  if (!IS_SYMBOL (CAR (form)))
+		    {
+		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+		      return 0;
+		    }
+
+		  vars = env->vars;
+
+		  for (; bin_num; bin_num--)
+		    {
+		      if (vars->sym == SYMBOL (CAR (form)))
+			{
+			  vars->type = DYNAMIC_BINDING;
+			  break;
+			}
+
+		      vars = vars->next;
+		    }
+
+		  SYMBOL (CAR (form))->value_ptr.symbol->is_special++;
+
+		  form = CDR (form);
+		}
+	    }
+	  else
+	    {
+	      outcome->type = UNKNOWN_DECLARATION;
+	      return 0;
+	    }
+
+	  forms = CDR (forms);
+	}
+
+      *next = CDR (*next);
+    }
+
+  return 1;
+}
+
+
+void
+undo_special_declarations (struct object *decl, struct environment *env)
+{
+  struct object *forms, *vars;
+
+  while (SYMBOL (decl) != &nil_object && CAR (decl)->type == TYPE_CONS_PAIR
+	 && SYMBOL (CAR (CAR (decl))) == env->declare_sym)
+    {
+      forms = CDR (CAR (decl));
+
+      while (forms->type == TYPE_CONS_PAIR)
+	{
+	  if (SYMBOL (CAR (CAR (forms))) == env->special_sym)
+	    {
+	      vars = CDR (CAR (forms));
+
+	      while (SYMBOL (vars) != &nil_object)
+		{
+		  SYMBOL (CAR (vars))->value_ptr.symbol->is_special--;
+
+		  vars = CDR (vars);
+		}
+	    }
+
+	  forms = CDR (forms);
+	}
+
+      decl = CDR (decl);
+    }
+}
+
+
 struct object *
 evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 	       struct environment *env, struct outcome *outcome)
@@ -8452,7 +8673,8 @@ evaluate_object (struct object *obj, struct environment *env,
     {
       sym = SYMBOL (obj);
 
-      if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter)
+      if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter
+	  || sym->value_ptr.symbol->is_special)
 	{
 	  ret = get_dynamic_value (sym, env);
 
@@ -15630,7 +15852,6 @@ evaluate_let (struct object *list, struct environment *env,
     }
 
   bind_forms = CAR (list);
-  body = CDR (list);
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
@@ -15649,8 +15870,17 @@ evaluate_let (struct object *list, struct environment *env,
 
   env->lex_env_vars_boundary += bin_num;
 
+  if (!parse_declarations (CDR (list), env, bin_num, outcome, &body))
+    {
+      res = NULL;
+      goto cleanup_and_leave;
+    }
+
   res = evaluate_body (body, 0, NULL, env, outcome);
 
+  undo_special_declarations (CDR (list), env);
+
+ cleanup_and_leave:
   env->vars = remove_bindings (env->vars, bin_num);
 
   env->lex_env_vars_boundary -= bin_num;
@@ -15675,7 +15905,6 @@ evaluate_let_star (struct object *list, struct environment *env,
     }
 
   bind_forms = CAR (list);
-  body = CDR (list);
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
@@ -15694,7 +15923,16 @@ evaluate_let_star (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
+  if (!parse_declarations (CDR (list), env, bin_num, outcome, &body))
+    {
+      env->vars = remove_bindings (env->vars, bin_num);
+      env->lex_env_vars_boundary -= bin_num;
+      return NULL;
+    }
+
   res = evaluate_body (body, 0, NULL, env, outcome);
+
+  undo_special_declarations (CDR (list), env);
 
   env->vars = remove_bindings (env->vars, bin_num);
 
@@ -15885,23 +16123,27 @@ get_dynamic_value (struct object *sym, struct environment *env)
   struct symbol *s = sym->value_ptr.symbol;
   struct binding *b;
 
-  if (!s->value_dyn_bins_num && !s->value_cell)
-    return NULL;
-
-  if (s->is_const || !s->value_dyn_bins_num)
+  if (s->is_const)
     {
       increment_refcount (s->value_cell);
 
       return s->value_cell;
     }
 
-  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
+  b = find_binding (s, env->vars, ANY_BINDING, env->lex_env_vars_boundary);
 
   if (b)
     {
       increment_refcount (b->obj);
 
       return b->obj;
+    }
+
+  if (s->value_cell)
+    {
+      increment_refcount (s->value_cell);
+
+      return s->value_cell;
     }
 
   return NULL;
@@ -16026,7 +16268,7 @@ set_value (struct object *sym, struct object *value, int eval_value,
       else
 	{
 	  s->value_dyn_bins_num++;
-	  s->is_special = 1;
+	  /*s->is_special++;*/
 	  increment_refcount (sym);
 	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING, 0),
 				   env->vars);
@@ -18706,6 +18948,18 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: DECLARE form only allowed as first in body of "
 	      "certain forms\n");
+    }
+  else if (err->type == WRONG_SYNTAX_IN_DECLARE)
+    {
+      printf ("eval error: wrong syntax in DECLARE\n");
+    }
+  else if (err->type == WRONG_SYNTAX_IN_DECLARATION)
+    {
+      printf ("eval error: wrong syntax in declaration\n");
+    }
+  else if (err->type == UNKNOWN_DECLARATION)
+    {
+      printf ("eval error: unknown declaration\n");
     }
   else if (err->type == CANT_DIVIDE_BY_ZERO)
     {
