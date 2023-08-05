@@ -551,6 +551,10 @@ symbol
   int function_dyn_bins_num;
   struct object *function_cell;
 
+  struct parameter *setf_exp_lambda_list;
+  int setf_exp_allow_other_keys;
+  struct object *setf_exp_body;
+
   struct object *home_package;
 };
 
@@ -1816,6 +1820,8 @@ struct object *evaluate_prog2
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_deftype
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_define_setf_expander
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2418,6 +2424,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PROG1", env, evaluate_prog1, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROG2", env, evaluate_prog2, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFTYPE", env, evaluate_deftype, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFINE-SETF-EXPANDER", env, evaluate_define_setf_expander,
+		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -6101,6 +6109,7 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->value_cell = NULL;
   sym->function_dyn_bins_num = 0;
   sym->function_cell = NULL;
+  sym->setf_exp_body = NULL;
   sym->home_package = NULL;
 
   obj->value_ptr.symbol = sym;
@@ -17184,6 +17193,39 @@ evaluate_deftype (struct object *list, struct environment *env,
 
   increment_refcount (typename);
   return typename;
+}
+
+
+struct object *
+evaluate_define_setf_expander (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  outcome->type = EVAL_OK;
+  SYMBOL (CAR (list))->value_ptr.symbol->setf_exp_lambda_list =
+    parse_lambda_list (CAR (CDR (list)), env, outcome,
+		       &SYMBOL (CAR (list))->value_ptr.symbol->
+		       setf_exp_allow_other_keys);
+
+  if (outcome->type == INVALID_LAMBDA_LIST)
+    return NULL;
+
+  increment_refcount (CDR (CDR (list)));
+  SYMBOL (CAR (list))->value_ptr.symbol->setf_exp_body = CDR (CDR (list));
+
+  increment_refcount (SYMBOL (CAR (list)));
+  return SYMBOL (CAR (list));
 }
 
 
