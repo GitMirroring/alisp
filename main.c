@@ -15418,36 +15418,36 @@ builtin_export (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (rec->visibility == EXTERNAL_VISIBILITY)
-	return &t_object;
-
-      used = pack->value_ptr.package->used_by;
-
-      while (used)
+      if (!pres || rec->visibility == INTERNAL_VISIBILITY)
 	{
-	  if (inspect_accessible_symbol_by_name (sym->value_ptr.symbol->name,
-						 sym->value_ptr.symbol->name_len,
-						 used->obj, &pres2))
+	  used = pack->value_ptr.package->used_by;
+
+	  while (used)
 	    {
-	      outcome->type = EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
-	      return NULL;
+	      if (inspect_accessible_symbol_by_name (sym->value_ptr.symbol->name,
+						     sym->value_ptr.symbol->name_len,
+						     used->obj, &pres2))
+		{
+		  outcome->type = EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
+		  return NULL;
+		}
+
+	      used = used->next;
 	    }
 
-	  used = used->next;
-	}
-
-      if (!pres)
-	{
-	  ret = import_symbol (sym, pack, &rec);
-
-	  if (!ret)
+	  if (!pres)
 	    {
-	      outcome->type = IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
-	      return NULL;
-	    }
-	}
+	      ret = import_symbol (sym, pack, &rec);
 
-      rec->visibility = EXTERNAL_VISIBILITY;
+	      if (!ret)
+		{
+		  outcome->type = IMPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
+		  return NULL;
+		}
+	    }
+
+	  rec->visibility = EXTERNAL_VISIBILITY;
+	}
 
       if (cons)
 	{
