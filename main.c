@@ -324,6 +324,7 @@ outcome_type
     COULD_NOT_SEEK_FILE,
     COULD_NOT_TELL_FILE,
     ERROR_READING_FILE,
+    INVALID_TYPE_SPECIFIER,
     UNKNOWN_TYPE,
     INVALID_GO_TAG,
     TAG_NOT_FOUND,
@@ -469,6 +470,8 @@ environment
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
     *amp_allow_other_keys_sym, *amp_aux_sym;
 
+  struct object *not_sym, *and_sym, *or_sym;
+
   struct object *package_sym, *std_in_sym, *std_out_sym, *print_escape_sym,
     *print_readably_sym;
 };
@@ -531,9 +534,6 @@ symbol
   int is_standard_type;
   int (*builtin_type) (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct outcome *outcome);
-  struct binding *type_lex_vars, *type_lex_funcs;
-  struct parameter *type_lambda_list;
-  int type_allow_other_keys;
   struct object *typespec;
   struct object_list *parent_types;
 
@@ -1308,11 +1308,10 @@ struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int is_macro,
  struct environment *env, struct outcome *outcome);
 
-int check_type (const struct object *obj, const struct object *typespec,
+int check_type (struct object *obj, struct object *typespec,
 		struct environment *env, struct outcome *outcome);
-int check_type_by_char_vector (const struct object *obj, char *type,
-			       struct environment *env,
-			       struct outcome *outcome);
+int check_type_by_char_vector (struct object *obj, char *type,
+			       struct environment *env, struct outcome *outcome);
 int type_starts_with (const struct object *typespec, const char *type,
 		      struct environment *env);
 int is_subtype_by_char_vector (const struct object *first, char *second,
@@ -1924,14 +1923,12 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 0, NULL,
-  NULL, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
 
 struct object nil_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 0, NULL, NULL,
-  NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
 
 struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
@@ -2574,6 +2571,10 @@ add_standard_definitions (struct environment *env)
 						   strlen ("&AUX"), 1,
 						   EXTERNAL_VISIBILITY, 1,
 						   env->cl_package);
+
+  env->not_sym = CREATE_BUILTIN_SYMBOL ("NOT");
+  env->and_sym = CREATE_BUILTIN_SYMBOL ("AND");
+  env->or_sym = CREATE_BUILTIN_SYMBOL ("OR");
 
 
   define_constant_by_name ("MOST-POSITIVE-FIXNUM",
@@ -8468,33 +8469,98 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
 int
-check_type (const struct object *obj, const struct object *typespec,
-	    struct environment *env, struct outcome *outcome)
+check_type (struct object *obj, struct object *typespec, struct environment *env,
+	    struct outcome *outcome)
 {
-  const struct object *car, *sym;
+  struct object *args, *sym, *res;
+  int ret;
 
-  if ((typespec->type == TYPE_CONS_PAIR
-       && (car = CAR (typespec))
-       && car->type & (TYPE_SYMBOL_NAME | TYPE_SYMBOL)
-       && (sym = SYMBOL (car))
-       && sym->value_ptr.symbol->is_type)
-      || (typespec->type & (TYPE_SYMBOL_NAME | TYPE_SYMBOL)
-	  && (sym = SYMBOL (typespec))
-	  && sym->value_ptr.symbol->is_type))
+  if ((typespec->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (typespec)))
+      && !IS_SYMBOL (typespec))
     {
-      return sym->value_ptr.symbol->builtin_type (obj, sym, env, outcome);
+      outcome->type = INVALID_TYPE_SPECIFIER;
+      return -1;
     }
 
-  outcome->type = UNKNOWN_TYPE;
+  if (typespec->type == TYPE_CONS_PAIR)
+    sym = SYMBOL (CAR (typespec));
+  else
+    sym = SYMBOL (typespec);
 
-  return -1;
+  if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->builtin_type)
+    {
+      return sym->value_ptr.symbol->builtin_type (obj,
+						  typespec->type == TYPE_CONS_PAIR
+						  ? CDR (typespec) : &nil_object,
+						  env, outcome);
+    }
+  else
+    {
+      args = (typespec->type == TYPE_CONS_PAIR) ? CDR (typespec) : &nil_object;
+
+      if (sym == env->not_sym)
+	{
+	  if (list_length (args) != 1)
+	    {
+	      outcome->type = INVALID_TYPE_SPECIFIER;
+	      return -1;
+	    }
+
+	  ret = check_type (obj, CAR (args), env, outcome);
+
+	  return (ret == -1 ? ret : !ret);
+	}
+      else if (sym == env->and_sym)
+	{
+	  while (SYMBOL (args) != &nil_object)
+	    {
+	      ret = check_type (obj, CAR (args), env, outcome);
+
+	      if (ret <= 0)
+		return ret;
+
+	      args = CDR (args);
+	    }
+
+	  return 1;
+	}
+      else if (sym == env->or_sym)
+	{
+	  while (SYMBOL (args) != &nil_object)
+	    {
+	      ret = check_type (obj, CAR (args), env, outcome);
+
+	      if (ret)
+		return ret;
+
+	      args = CDR (args);
+	    }
+
+	  return 0;
+	}
+      else if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->typespec)
+	{
+	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, env,
+			       outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!res)
+	    return -1;
+
+	  return check_type (obj, res, env, outcome);
+	}
+      else
+	{
+	  outcome->type = INVALID_TYPE_SPECIFIER;
+	  return -1;
+	}
+    }
 }
 
 
 int
-check_type_by_char_vector (const struct object *obj, char *type,
-			   struct environment *env,
-			   struct outcome *outcome)
+check_type_by_char_vector (struct object *obj, char *type,
+			   struct environment *env, struct outcome *outcome)
 {
   return check_type (obj,
 		     intern_symbol_by_char_vector (type, strlen (type), 1,
@@ -17178,21 +17244,14 @@ evaluate_deftype (struct object *list, struct environment *env,
       return NULL;
     }
 
-  outcome->type = EVAL_OK;
-  typename->value_ptr.symbol->type_lambda_list =
-    parse_lambda_list (CAR (CDR (list)), env, outcome,
-		       &typename->value_ptr.symbol->type_allow_other_keys);
+  typename->value_ptr.symbol->typespec =
+    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1);
 
-  if (outcome->type == INVALID_LAMBDA_LIST)
+  if (!typename->value_ptr.symbol->typespec)
     return NULL;
 
-  clone_lexical_environment (&typename->value_ptr.symbol->type_lex_vars,
-			     &typename->value_ptr.symbol->type_lex_funcs,
-			     env->vars, env->lex_env_vars_boundary,
-			     env->funcs, env->lex_env_funcs_boundary);
-
-  increment_refcount (CDR (CDR (list)));
-  typename->value_ptr.symbol->typespec = CDR (CDR (list));
+  typename->value_ptr.symbol->is_type = 1;
+  typename->value_ptr.symbol->is_standard_type = 0;
 
   increment_refcount (typename);
   return typename;
@@ -18990,6 +19049,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == ERROR_READING_FILE)
     {
       printf ("file error: could not read file\n");
+    }
+  else if (err->type == INVALID_TYPE_SPECIFIER)
+    {
+      printf ("eval error: invalid type specifier\n");
     }
   else if (err->type == UNKNOWN_TYPE)
     {
