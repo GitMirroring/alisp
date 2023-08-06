@@ -890,6 +890,8 @@ make_test ("(cadr '(0 1))", "1");
 make_test ("(cl:import 'cl:car)", "T");
 make_test ("(cl:import '(cl:car) '|newtest|)", "T");
 make_test ("(cl:export nil \"newtest\")", "T");
+make_test ("(cl:export 'cdr)", "T");
+make_test ("'|newtest|:cdr", "CDR");
 make_test ("(cl:export 'jjj)", "T");
 make_test ("(cl:export '(jjj) cl:*package*)", "T");
 make_test ("'|newtest|:jjj", "JJJ");
