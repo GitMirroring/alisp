@@ -310,6 +310,7 @@ outcome_type
     CANT_MODIFY_CONSTANT,
     CANT_REBIND_CONSTANT,
     CANT_REDEFINE_STANDARD_TYPE,
+    NO_SETF_EXPANDER,
     TOO_FEW_ARGUMENTS,
     TOO_MANY_ARGUMENTS,
     WRONG_NUMBER_OF_ARGUMENTS,
@@ -551,9 +552,7 @@ symbol
   int function_dyn_bins_num;
   struct object *function_cell;
 
-  struct parameter *setf_exp_lambda_list;
-  int setf_exp_allow_other_keys;
-  struct object *setf_exp_body;
+  struct object *setf_expander;
 
   struct object *home_package;
 };
@@ -1822,6 +1821,8 @@ struct object *evaluate_deftype
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_define_setf_expander
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_get_setf_expansion
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2426,6 +2427,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFTYPE", env, evaluate_deftype, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFINE-SETF-EXPANDER", env, evaluate_define_setf_expander,
 		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("GET-SETF-EXPANSION", env, builtin_get_setf_expansion,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -6109,7 +6112,7 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->value_cell = NULL;
   sym->function_dyn_bins_num = 0;
   sym->function_cell = NULL;
-  sym->setf_exp_body = NULL;
+  sym->setf_expander = NULL;
   sym->home_package = NULL;
 
   obj->value_ptr.symbol = sym;
@@ -17212,20 +17215,42 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
       return NULL;
     }
 
-  outcome->type = EVAL_OK;
-  SYMBOL (CAR (list))->value_ptr.symbol->setf_exp_lambda_list =
-    parse_lambda_list (CAR (CDR (list)), env, outcome,
-		       &SYMBOL (CAR (list))->value_ptr.symbol->
-		       setf_exp_allow_other_keys);
+  SYMBOL (CAR (list))->value_ptr.symbol->setf_expander =
+    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1);
 
-  if (outcome->type == INVALID_LAMBDA_LIST)
+  if (!SYMBOL (CAR (list))->value_ptr.symbol->setf_expander)
     return NULL;
-
-  increment_refcount (CDR (CDR (list)));
-  SYMBOL (CAR (list))->value_ptr.symbol->setf_exp_body = CDR (CDR (list));
 
   increment_refcount (SYMBOL (CAR (list)));
   return SYMBOL (CAR (list));
+}
+
+
+struct object *
+builtin_get_setf_expansion (struct object *list, struct environment *env,
+			    struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (CAR (list)))
+      || !SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
+    {
+      outcome->type = NO_SETF_EXPANDER;
+      return NULL;
+    }
+
+  return call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
+			setf_expander, CDR (CAR (list)), 0, 0, env, outcome);
 }
 
 
@@ -18913,6 +18938,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == CANT_REDEFINE_STANDARD_TYPE)
     {
       printf ("eval error: redefining standard types is not allowed\n");
+    }
+  else if (err->type == NO_SETF_EXPANDER)
+    {
+      printf ("eval error: symbol has no associated setf expander\n");
     }
   else if (err->type == TOO_FEW_ARGUMENTS)
     {
