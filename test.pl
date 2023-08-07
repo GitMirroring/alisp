@@ -430,6 +430,8 @@ make_test ("(type-of (make-hash-table))", "HASH-TABLE");
 make_test ("(type-of #p\"aaa\")", "PATHNAME");
 make_test ("(type-of *standard-output*)", "STREAM");
 make_test ("(deftype not-integer () `(not integer))", "NOT-INTEGER");
+make_test ("(typep 0 'not-integer)", "NIL");
+make_test ("(typep \"\" 'not-integer)", "T");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
 
