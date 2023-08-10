@@ -716,6 +716,9 @@ make_test ("(when nil \"\" \"\" \"\")", "NIL");
 make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
 make_test ("(prog1 2 (write \"hello\"))", "\"hello\"\n2");
 make_test ("(prog2 2 3 (write \"hello\"))", "\"hello\"\n3");
+make_test ("(destructuring-bind ((x)) '((0)) x)", "0");
+make_test ("(destructuring-bind (x (y (z))) '(0 (1 (2))) (list x y z))", "(0 1 2)");
+make_test ("(destructuring-bind (x (y z) w) '(0 ((1 2) 3) 4) (list x y z w))", "(0 (1 2) 3 4)");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
