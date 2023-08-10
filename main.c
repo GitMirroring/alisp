@@ -314,6 +314,7 @@ outcome_type
     TOO_FEW_ARGUMENTS,
     TOO_MANY_ARGUMENTS,
     WRONG_NUMBER_OF_ARGUMENTS,
+    MISMATCH_IN_DESTRUCTURING_CALL,
     WRONG_TYPE_OF_ARGUMENT,
     WRONG_NUMBER_OF_AXIS,
     OUT_OF_BOUND_INDEX,
@@ -593,6 +594,10 @@ parameter
   enum parameter_type type;
 
   struct object *name;
+
+  struct parameter *sub_lambda_list;
+  int sub_allow_other_keys;
+
   struct object *key;
   struct object *typespec;
 
@@ -1132,7 +1137,8 @@ void clone_lexical_environment (struct binding **lex_vars,
 
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
-				struct outcome *outcome, int is_macro);
+				struct outcome *outcome, int is_macro,
+				int allow_destructuring);
 
 const char *find_end_of_string
 (const char *input, size_t size, size_t *new_size, size_t *string_length);
@@ -1278,18 +1284,21 @@ int hash_table_count (const struct hashtable *hasht);
 
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
-struct parameter *parse_required_parameters
-(struct object *obj, struct parameter **last, struct object **next,
- struct environment *env, struct outcome *outcome);
+struct parameter *parse_required_parameters (struct object *obj,
+					     struct parameter **last,
+					     struct object **rest,
+					     int allow_destructuring,
+					     struct environment *env,
+					     struct outcome *outcome);
 struct parameter *parse_optional_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct outcome *outcome);
 struct parameter *parse_keyword_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct outcome *outcome);
-struct parameter *parse_lambda_list (struct object *obj, struct environment *env,
-				     struct outcome *outcome,
-				     int *allow_other_keys);
+struct parameter *parse_lambda_list
+(struct object *obj, int allow_destructuring, struct environment *env,
+ struct outcome *outcome, int *allow_other_keys);
 
 int parse_declarations (struct object *body, struct environment *env,
 			int bin_num, struct outcome *outcome,
@@ -1301,9 +1310,8 @@ struct object *evaluate_body
  struct environment *env, struct outcome *outcome);
 int parse_argument_list (struct object *arglist, struct parameter *par,
 			 int eval_args, int is_macro, int allow_other_keys,
-			 struct binding *lex_vars, struct binding *lex_funcs,
 			 struct environment *env, struct outcome *outcome,
-			 int *argsnum, int *closnum);
+			 struct binding **bins, int *argsnum);
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int is_macro,
  struct environment *env, struct outcome *outcome);
@@ -1815,6 +1823,8 @@ struct object *evaluate_declare
 struct object *evaluate_prog1
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_prog2
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_destructuring_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_deftype
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2421,6 +2431,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROG1", env, evaluate_prog1, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROG2", env, evaluate_prog2, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DESTRUCTURING-BIND", env, evaluate_destructuring_bind,
+		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFTYPE", env, evaluate_deftype, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFINE-SETF-EXPANDER", env, evaluate_define_setf_expander,
 		    TYPE_MACRO, NULL, 0);
@@ -5684,15 +5696,15 @@ clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs
 
 struct object *
 create_function (struct object *lambda_list, struct object *body,
-		 struct environment *env, struct outcome *outcome,
-		 int is_macro)
+		 struct environment *env, struct outcome *outcome, int is_macro,
+		 int allow_destructuring)
 {
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
   outcome->type = EVAL_OK;
-  f->lambda_list = parse_lambda_list (lambda_list, env, outcome,
-				      &f->allow_other_keys);
+  f->lambda_list = parse_lambda_list (lambda_list, allow_destructuring, env,
+				      outcome, &f->allow_other_keys);
 
   if (outcome->type != EVAL_OK)
     {
@@ -7414,6 +7426,7 @@ alloc_parameter (enum parameter_type type, struct object *sym)
   struct parameter *par = malloc_and_check (sizeof (*par));
   par->type = type;
   par->name = sym;
+  par->sub_lambda_list = NULL;
   par->init_form = NULL;
   par->supplied_p_param = NULL;
   par->key = NULL;
@@ -7425,8 +7438,8 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 
 struct parameter *
 parse_required_parameters (struct object *obj, struct parameter **last,
-			   struct object **rest, struct environment *env,
-			   struct outcome *outcome)
+			   struct object **rest, int allow_destructuring,
+			   struct environment *env, struct outcome *outcome)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -7437,35 +7450,52 @@ parse_required_parameters (struct object *obj, struct parameter **last,
     {
       car = CAR (obj);
 
-      if (!IS_SYMBOL (car))
+      if (car->type == TYPE_CONS_PAIR && allow_destructuring)
 	{
-	  outcome->type = INVALID_LAMBDA_LIST;
-	  return NULL;
+	  if (!first)
+	    *last = first = alloc_parameter (REQUIRED_PARAM, NULL);
+	  else
+	    *last = (*last)->next = alloc_parameter (REQUIRED_PARAM, NULL);
+
+	  outcome->type = EVAL_OK;
+	  (*last)->sub_lambda_list = parse_lambda_list (car, 1, env, outcome,
+							&(*last)->
+							sub_allow_other_keys);
+
+	  if (outcome->type != EVAL_OK)
+	    return NULL;
 	}
-
-      if (SYMBOL (car)->value_ptr.symbol->is_const)
-	{
-	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
-	  return NULL;
-	}
-
-      car = SYMBOL (car);
-
-      if (car == env->amp_optional_sym || car == env->amp_rest_sym
-	  || car == env->amp_body_sym || car == env->amp_key_sym
-	  || car == env->amp_allow_other_keys_sym || car == env->amp_aux_sym)
-	{
-	  break;
-	}
-
-      if (!first)
-	*last = first = alloc_parameter (REQUIRED_PARAM, car);
       else
-	*last = (*last)->next = alloc_parameter (REQUIRED_PARAM, car);
+	{
+	  if (!IS_SYMBOL (car))
+	    {
+	      outcome->type = INVALID_LAMBDA_LIST;
+	      return NULL;
+	    }
 
-      (*last)->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (car);
-      INC_WEAK_REFCOUNT (car);
+	  if (SYMBOL (car)->value_ptr.symbol->is_const)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return NULL;
+	    }
 
+	  car = SYMBOL (car);
+
+	  if (car == env->amp_optional_sym || car == env->amp_rest_sym
+	      || car == env->amp_body_sym || car == env->amp_key_sym
+	      || car == env->amp_allow_other_keys_sym || car == env->amp_aux_sym)
+	    {
+	      break;
+	    }
+
+	  if (!first)
+	    *last = first = alloc_parameter (REQUIRED_PARAM, car);
+	  else
+	    *last = (*last)->next = alloc_parameter (REQUIRED_PARAM, car);
+
+	  (*last)->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (car);
+	  INC_WEAK_REFCOUNT (car);
+	}
       obj = CDR (obj);
     }
 
@@ -7763,8 +7793,9 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 
 struct parameter *
-parse_lambda_list (struct object *obj, struct environment *env,
-		   struct outcome *outcome, int *allow_other_keys)
+parse_lambda_list (struct object *obj, int allow_destructuring,
+		   struct environment *env, struct outcome *outcome,
+		   int *allow_other_keys)
 {
   struct parameter *first = NULL, *last = NULL;
   struct object *car;
@@ -7783,7 +7814,8 @@ parse_lambda_list (struct object *obj, struct environment *env,
       return NULL;
     }
 
-  first = parse_required_parameters (obj, &last, &obj, env, outcome);
+  first = parse_required_parameters (obj, &last, &obj, allow_destructuring, env,
+				     outcome);
 
   if (outcome->type != EVAL_OK)
     return NULL;
@@ -8147,46 +8179,66 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 int
 parse_argument_list (struct object *arglist, struct parameter *par,
 		     int eval_args, int is_macro, int allow_other_keys,
-		     struct binding *lex_vars, struct binding *lex_funcs,
 		     struct environment *env, struct outcome *outcome,
-		     int *argsnum, int *closnum)
+		     struct binding **bins, int *argsnum)
 {
   struct parameter *findk;
-  struct binding *bins = NULL;
   struct object *val, *args = NULL;
-  int rest_found = 0;
+  struct binding *subbins;
+  int rest_found = 0, subargs;
 
-  *argsnum = 0, *closnum = 0;
+  *bins = NULL, *argsnum = 0;
 
   while (SYMBOL (arglist) != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
-      if (eval_args)
+      if (par->sub_lambda_list)
 	{
-	  val = evaluate_object (CAR (arglist), env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  if (!val)
+	  if (CAR (arglist)->type != TYPE_CONS_PAIR)
 	    {
-	      env->vars = chain_bindings (bins, env->vars, NULL);
+	      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
 	      return 0;
 	    }
+
+	  if (!parse_argument_list (CAR (arglist), par->sub_lambda_list,
+				    eval_args, is_macro,
+				    par->sub_allow_other_keys, env, outcome,
+				    &subbins, &subargs))
+	    {
+	      return 0;
+	    }
+
+	  *argsnum += subargs;
+	  *bins = chain_bindings (subbins, *bins, NULL);
 	}
       else
 	{
-	  increment_refcount (CAR (arglist));
-	  val = CAR (arglist);
-	}
+	  if (eval_args)
+	    {
+	      val = evaluate_object (CAR (arglist), env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      bins = bind_variable (par->name, val, bins);
+	      if (!val)
+		{
+		  return 0;
+		}
+	    }
+	  else
+	    {
+	      increment_refcount (CAR (arglist));
+	      val = CAR (arglist);
+	    }
 
-      (*argsnum)++;
-
-      if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
-	{
-	  bins = bind_variable (par->supplied_p_param, &t_object, bins);
+	  *bins = bind_variable (par->name, val, *bins);
 
 	  (*argsnum)++;
+
+	  if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
+	    {
+	      *bins = bind_variable (par->supplied_p_param, &t_object, *bins);
+
+	      (*argsnum)++;
+	    }
 	}
 
       par = par->next;
@@ -8196,7 +8248,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
   if (par && par->type == REQUIRED_PARAM)
     {
-      env->vars = chain_bindings (bins, env->vars, NULL);
       outcome->type = TOO_FEW_ARGUMENTS;
       return 0;
     }
@@ -8205,7 +8256,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       && (!par || (par && par->type != REST_PARAM && par->type != KEYWORD_PARAM))
       && !allow_other_keys)
     {
-      env->vars = chain_bindings (bins, env->vars, NULL);
       outcome->type = TOO_MANY_ARGUMENTS;
       return 0;
     }
@@ -8222,20 +8272,20 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	      return 0;
 	    }
 
-	  bins = bind_variable (par->name, val, bins);
+	  *bins = bind_variable (par->name, val, *bins);
 
 	  (*argsnum)++;
 	}
       else
 	{
-	  bins = bind_variable (par->name, &nil_object, bins);
+	  *bins = bind_variable (par->name, &nil_object, *bins);
 
 	  (*argsnum)++;
 	}
 
       if (par->supplied_p_param)
 	{
-	  bins = bind_variable (par->supplied_p_param, &nil_object, bins);
+	  *bins = bind_variable (par->supplied_p_param, &nil_object, *bins);
 
 	  (*argsnum)++;
 	}
@@ -8251,7 +8301,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!args)
 	    {
-	      env->vars = chain_bindings (bins, env->vars, NULL);
 	      return 0;
 	    }
 	}
@@ -8264,7 +8313,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
   if (par && par->type == REST_PARAM)
     {
-      bins = bind_variable (par->name, args, bins);
+      *bins = bind_variable (par->name, args, *bins);
 
       (*argsnum)++;
 
@@ -8304,7 +8353,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 		  if (SYMBOL (args) == &nil_object)
 		    {
-		      env->vars = chain_bindings (bins, env->vars, NULL);
 		      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 		      return 0;
 		    }
@@ -8312,7 +8360,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 		  args = CDR (args);
 		  continue;
 		}
-	      env->vars = chain_bindings (bins, env->vars, NULL);
+
 	      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
 	      return 0;
 	    }
@@ -8321,7 +8369,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (SYMBOL (args) == &nil_object)
 	    {
-	      env->vars = chain_bindings (bins, env->vars, NULL);
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 	      return 0;
 	    }
@@ -8330,7 +8377,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    {
 	      increment_refcount (CAR (args));
 
-	      bins = bind_variable (findk->name, CAR (args), bins);
+	      *bins = bind_variable (findk->name, CAR (args), *bins);
 	      findk->key_passed = 1;
 	      (*argsnum)++;
 	    }
@@ -8351,26 +8398,25 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 		  if (!val)
 		    {
-		      env->vars = chain_bindings (bins, env->vars, NULL);
 		      return 0;
 		    }
 		}
 	      else
 		val = &nil_object;
 
-	      bins = bind_variable (findk->name, val, bins);
+	      *bins = bind_variable (findk->name, val, *bins);
 	      (*argsnum)++;
 
 	      if (findk->supplied_p_param)
 		{
-		  bins = bind_variable (findk->supplied_p_param, &nil_object,
-					bins);
+		  *bins = bind_variable (findk->supplied_p_param, &nil_object,
+					 *bins);
 		  (*argsnum)++;
 		}
 	    }
 	  else if (findk->supplied_p_param)
 	    {
-	      bins = bind_variable (findk->supplied_p_param, &t_object, bins);
+	      *bins = bind_variable (findk->supplied_p_param, &t_object, *bins);
 	      (*argsnum)++;
 	    }
 
@@ -8381,16 +8427,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (args && !rest_found)
     decrement_refcount (args);
 
-  if (is_macro)
-    env->lex_env_vars_boundary += (*argsnum);
-  else
-    env->lex_env_vars_boundary = (*argsnum);
-
-  env->vars = chain_bindings (lex_vars, env->vars, closnum);
-  env->lex_env_vars_boundary += *closnum;
-
-  env->vars = chain_bindings (bins, env->vars, NULL);
-
   return 1;
 }
 
@@ -8400,7 +8436,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	       int is_macro, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct binding *b;
+  struct binding *bins, *b;
   struct object *ret, *ret2, *args = NULL;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
 
@@ -8428,32 +8464,42 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
 			   eval_args, is_macro,
-			   func->value_ptr.function->allow_other_keys,
-			   func->value_ptr.function->lex_vars,
-			   func->value_ptr.function->lex_funcs, env, outcome,
-			   &argsnum, &closnum))
+			   func->value_ptr.function->allow_other_keys, env,
+			   outcome, &bins, &argsnum))
     {
+      env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
+				  &closnum);
+
+      if (is_macro)
+	env->lex_env_vars_boundary += closnum;
+      else
+	env->lex_env_vars_boundary = closnum;
+
+      env->vars = chain_bindings (bins, env->vars, NULL);
+      env->lex_env_vars_boundary += argsnum;
+
       ret = evaluate_body (func->value_ptr.function->body, 0,
 			   func->value_ptr.function->name, env, outcome);
+
+      env->vars = remove_bindings (env->vars, argsnum);
+
+      for (; closnum; closnum--)
+	{
+	  b = env->vars;
+
+	  env->vars = env->vars->next;
+
+	  if (closnum == 1)
+	    b->next = NULL;
+	}
+
+      env->lex_env_vars_boundary = prev_lex_bin_num;
     }
   else
     {
       ret = NULL;
     }
 
-  env->vars = remove_bindings (env->vars, argsnum);
-
-  for (; closnum; closnum--)
-    {
-      b = env->vars;
-
-      env->vars = env->vars->next;
-
-      if (closnum == 1)
-	b->next = NULL;
-    }
-
-  env->lex_env_vars_boundary = prev_lex_bin_num;
 
   if (ret && is_macro)
     {
@@ -16044,7 +16090,7 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	}
 
       fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome,
-			     type == TYPE_MACRO);
+			     type == TYPE_MACRO, 0);
 
       if (!fun)
 	return NULL;
@@ -16776,7 +16822,7 @@ evaluate_defun (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 0);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 0, 0);
 
   if (!fun)
     return NULL;
@@ -16825,7 +16871,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1);
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
 
   if (!mac)
     return NULL;
@@ -17042,7 +17088,7 @@ evaluate_lambda (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (list), CDR (list), env, outcome, 0);
+  fun = create_function (CAR (list), CDR (list), env, outcome, 0, 0);
 
   if (!fun)
     return NULL;
@@ -17223,6 +17269,38 @@ evaluate_prog2 (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_destructuring_bind (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *fun, *ret, *args;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  fun = create_function (CAR (list), CDR (CDR (list)), env, outcome, 0, 1);
+
+  if (!fun)
+    return NULL;
+
+  args = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!args)
+    return NULL;
+
+  ret = call_function (fun, args, 0, 0, env, outcome);
+
+  decrement_refcount (fun);
+  decrement_refcount (args);
+
+  return ret;
+}
+
+
+struct object *
 evaluate_deftype (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
@@ -17245,7 +17323,7 @@ evaluate_deftype (struct object *list, struct environment *env,
     }
 
   typename->value_ptr.symbol->typespec =
-    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1);
+    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
 
   if (!typename->value_ptr.symbol->typespec)
     return NULL;
@@ -17275,7 +17353,7 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
     }
 
   SYMBOL (CAR (list))->value_ptr.symbol->setf_expander =
-    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1);
+    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
 
   if (!SYMBOL (CAR (list))->value_ptr.symbol->setf_expander)
     return NULL;
@@ -19009,6 +19087,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == TOO_MANY_ARGUMENTS)
     {
       printf ("eval error: too many arguments to function or macro call\n");
+    }
+  else if (err->type == MISMATCH_IN_DESTRUCTURING_CALL)
+    {
+      printf ("eval error: found mismatch while destructuring argument list\n");
     }
   else if (err->type == WRONG_TYPE_OF_ARGUMENT)
     {
