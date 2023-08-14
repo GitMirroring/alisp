@@ -453,6 +453,7 @@ make_test ("(boundp 'b)", "T");
 make_test ("(boundp 'g3)", "NIL");
 make_test ("(symbol-value 'b)", "9");
 make_test ("(let ((b 10)) (symbol-value 'b))", "10");
+make_test ("(let ((b 11)) (set 'b 12) b)", "12");
 make_test ("(fboundp 'b)", "NIL");
 make_test ("(fboundp 'g3)", "T");
 make_test ("(symbol-function 'fun)", "#<FUNCTION FUN>");
