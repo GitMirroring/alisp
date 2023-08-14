@@ -161,6 +161,19 @@
 (defun endp (l) (null l))
 
 
+
+(define-setf-expander symbol-value (sym)
+  (let ((var (gensym))
+	(val (gensym)))
+    (values
+     `(,var)
+     `(,sym)
+     `(,val)
+     `(set ,var ,val)
+     `(symbol-value ,var))))
+
+
+
 (defmacro when (clause &body body)
   `(if ,clause (progn ,@body)))
 
