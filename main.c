@@ -331,6 +331,8 @@ outcome_type
     TAG_NOT_FOUND,
     BLOCK_NOT_FOUND,
     INVALID_ACCESSOR,
+    SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES,
+    INVALID_SETF_EXPANSION,
     FUNCTION_NOT_FOUND_IN_EVAL,
     DECLARE_NOT_ALLOWED_HERE,
     WRONG_SYNTAX_IN_DECLARE,
@@ -999,6 +1001,7 @@ int jump_to_end_of_multiline_comment (const char **input, size_t *size,
 struct line_list *append_line_to_list
 (char *line, size_t size, struct line_list *list, int do_copy);
 
+fixnum object_list_length (struct object_list *list);
 void prepend_object_to_obj_list (struct object *obj, struct object_list **list);
 struct object_list *copy_list_to_obj_list (struct object *list);
 struct object *pop_object_from_obj_list (struct object_list **list);
@@ -3135,6 +3138,21 @@ append_line_to_list (char *line, size_t size, struct line_list *list,
   prev->next = l;
   
   return beg;
+}
+
+
+fixnum
+object_list_length (struct object_list *list)
+{
+  fixnum i = 0;
+
+  while (list)
+    {
+      i++;
+      list = list->next;
+    }
+
+  return i;
 }
 
 
@@ -17032,7 +17050,9 @@ struct object *
 evaluate_setf (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *val = &nil_object;
+  struct object *val = &nil_object, *exp, *cons1, *cons2, *res;
+  struct object_list *l, *expvals;
+  int binsnum = 0;
 
   if (list_length (list) % 2)
     {
@@ -17052,24 +17072,116 @@ evaluate_setf (struct object *list, struct environment *env,
 	}
       else if (CAR (list)->type == TYPE_CONS_PAIR)
 	{
-	  if (!IS_SYMBOL (CAR (CAR (list)))
-	      || !SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor)
+	  if (!IS_SYMBOL (CAR (CAR (list))))
 	    {
 	      outcome->type = INVALID_ACCESSOR;
 	      return NULL;
 	    }
 
-	  val = evaluate_object (CAR (CDR (list)), env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+	  if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor)
+	    {
+	      val = evaluate_object (CAR (CDR (list)), env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-	  if (!val)
-	    return NULL;
+	      if (!val)
+		return NULL;
 
-	  val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
-	    (CAR (list), val, env, outcome);
+	      val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
+		(CAR (list), val, env, outcome);
 
-	  if (!val)
-	    return NULL;
+	      if (!val)
+		return NULL;
+	    }
+	  else if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
+	    {
+	      exp = call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
+				   setf_expander, CDR (CAR (list)), 0, 0, env,
+				   outcome);
+
+	      if (!exp)
+		return NULL;
+
+	      if (object_list_length (outcome->other_values) < 4)
+		{
+		  outcome->type = SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES;
+		  return NULL;
+		}
+
+	      expvals = outcome->other_values;
+	      outcome->other_values = NULL;
+
+	      cons1 = exp;
+	      cons2 = expvals->obj;
+
+	      while (SYMBOL (cons1) != &nil_object)
+		{
+		  if (!IS_SYMBOL (CAR (cons1)) || cons2->type != TYPE_CONS_PAIR)
+		    {
+		      outcome->type = INVALID_SETF_EXPANSION;
+		      return NULL;
+		    }
+
+		  res = evaluate_object (CAR (cons2), env, outcome);
+		  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+		  if (!res)
+		    return NULL;
+
+		  env->vars = bind_variable (SYMBOL (CAR (cons1)), res,
+					     env->vars);
+		  binsnum++;
+
+		  cons1 = CDR (cons1);
+		}
+
+	      val = evaluate_object (CAR (CDR (list)), env, outcome);
+
+	      if (!val)
+		return NULL;
+
+	      cons1 = expvals->next->obj;
+	      l = NULL;
+
+	      while (SYMBOL (cons1) != &nil_object)
+		{
+		  if (!IS_SYMBOL (CAR (cons1)))
+		    {
+		      outcome->type = INVALID_SETF_EXPANSION;
+		      return NULL;
+		    }
+
+		  if (!l)
+		    {
+		      env->vars = bind_variable (SYMBOL (CAR (cons1)), val,
+						 env->vars);
+		      l = outcome->other_values;
+		    }
+		  else
+		    {
+		      env->vars = bind_variable (SYMBOL (CAR (cons1)), l->obj,
+						 env->vars);
+		      l = l->next;
+		    }
+
+		  binsnum++;
+
+		  cons1 = CDR (cons1);
+		}
+
+	      env->lex_env_vars_boundary += binsnum;
+
+	      val = evaluate_object (expvals->next->next->obj, env, outcome);
+
+	      env->vars = remove_bindings (env->vars, binsnum);
+	      env->lex_env_vars_boundary -= binsnum;
+
+	      return val;
+	    }
+	  else
+	    {
+	      outcome->type = INVALID_ACCESSOR;
+	      return NULL;
+	    }
 	}
       else
 	{
@@ -19199,6 +19311,14 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INVALID_ACCESSOR)
     {
       printf ("eval error: not a valid accessor\n");
+    }
+  else if (err->type == SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES)
+    {
+      printf ("eval error: setf expansion did not produce five values\n");
+    }
+  else if (err->type == INVALID_SETF_EXPANSION)
+    {
+      printf ("eval error: not a valid setf expansion\n");
     }
   else if (err->type == FUNCTION_NOT_FOUND_IN_EVAL)
     {
