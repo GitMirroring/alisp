@@ -14488,6 +14488,8 @@ builtin_set (struct object *list, struct environment *env,
       delete_reference (SYMBOL (CAR (list)),
 			SYMBOL (CAR (list))->value_ptr.symbol->value_cell, 0);
       SYMBOL (CAR (list))->value_ptr.symbol->value_cell = CAR (CDR (list));
+
+      SYMBOL (CAR (list))->value_ptr.symbol->is_parameter = 1;
     }
 
   increment_refcount (CAR (CDR (list)));
