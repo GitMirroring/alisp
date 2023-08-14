@@ -1660,6 +1660,8 @@ struct object *builtin_boundp (struct object *list, struct environment *env,
 struct object *builtin_symbol_value (struct object *list,
 				     struct environment *env,
 				     struct outcome *outcome);
+struct object *builtin_set (struct object *list, struct environment *env,
+			    struct outcome *outcome);
 struct object *builtin_fboundp (struct object *list, struct environment *env,
 				struct outcome *outcome);
 struct object *builtin_symbol_function (struct object *list,
@@ -2460,6 +2462,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("SET", env, builtin_set, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
 		    TYPE_FUNCTION, NULL, 0);
@@ -14450,6 +14453,45 @@ builtin_symbol_value (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_set (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  struct binding *b;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  b = find_binding (SYMBOL (CAR (list))->value_ptr.symbol, env->vars,
+		    DYNAMIC_BINDING, -1);
+
+  if (b)
+    {
+      b->obj = CAR (CDR (list));
+      increment_refcount (b->obj);
+    }
+  else
+    {
+      add_reference (SYMBOL (CAR (list)), CAR (CDR (list)), 0);
+      delete_reference (SYMBOL (CAR (list)),
+			SYMBOL (CAR (list))->value_ptr.symbol->value_cell, 0);
+      SYMBOL (CAR (list))->value_ptr.symbol->value_cell = CAR (CDR (list));
+    }
+
+  increment_refcount (CAR (CDR (list)));
+  return CAR (CDR (list));
 }
 
 
