@@ -214,6 +214,17 @@ go_tag_frame
 };
 
 
+struct
+handler_binding
+{
+  struct object *condition;
+
+  struct object *handler;
+
+  struct handler_binding *next;
+};
+
+
 enum
 binding_type
   {
@@ -461,6 +472,8 @@ environment
   struct object_list *blocks;
 
   struct go_tag_frame *go_tag_stack;
+
+  struct handler_binding *handlers;
 
   struct binding *structs;
 
@@ -1231,6 +1244,10 @@ struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 struct object_list *add_block (struct object *name, struct object_list *blocks);
 struct object_list *remove_block (struct object_list *blocks);
 
+int does_condition_include_outcome_type (struct object *cond,
+					 enum outcome_type type,
+					 struct environment *env);
+
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
 		       (const struct object *obj, const struct object *typespec,
@@ -1413,6 +1430,17 @@ int type_file_stream (const struct object *obj, const struct object *typespec,
 		      struct environment *env, struct outcome *outcome);
 int type_string_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
+
+int type_file_error (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct outcome *outcome);
+int type_division_by_zero (const struct object *obj,
+			   const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
+int type_arithmetic_error (const struct object *obj,
+			   const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
+int type_error (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct outcome *outcome);
 
 struct object *builtin_car
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -1846,6 +1874,9 @@ struct object *evaluate_go
 struct object *evaluate_block
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_return_from
+(struct object *list, struct environment *env, struct outcome *outcome);
+
+struct object *evaluate_handler_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_print_no_warranty
@@ -2448,6 +2479,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
   add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
 		    1);
+  add_builtin_form ("HANDLER-BIND", env, evaluate_handler_bind, TYPE_MACRO, NULL,
+		    0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
@@ -2567,6 +2600,12 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
 		    (char *)NULL);
 
+  add_builtin_type ("FILE-ERROR", env, type_file_error, 1, (char *)NULL);
+  add_builtin_type ("DIVISION-BY-ZERO", env, type_division_by_zero, 1,
+		    (char *)NULL);
+  add_builtin_type ("ARITHMETIC-ERROR", env, type_arithmetic_error, 1,
+		    (char *)NULL);
+  add_builtin_type ("ERROR", env, type_error, 1, (char *)NULL);
 
   env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
 							strlen ("&OPTIONAL"),
@@ -6930,6 +6969,23 @@ remove_block (struct object_list *blocks)
 }
 
 
+int
+does_condition_include_outcome_type (struct object *cond, enum outcome_type type,
+				     struct environment *env)
+{
+  if ((cond == BUILTIN_SYMBOL ("DIVISION-BY-ZERO")
+       && type == CANT_DIVIDE_BY_ZERO)
+      || (cond == BUILTIN_SYMBOL ("ARITHMETIC-ERROR")
+	  && type == CANT_DIVIDE_BY_ZERO)
+      || (cond == BUILTIN_SYMBOL ("ERROR") && type > EVAL_OK))
+    {
+      return 1;
+    }
+
+  return 0;
+}
+
+
 void
 add_builtin_type (char *name, struct environment *env,
 		  int (*builtin_type) (const struct object *obj,
@@ -9548,6 +9604,38 @@ type_string_stream (const struct object *obj, const struct object *typespec,
 {
   return obj->type == TYPE_STREAM
     && obj->value_ptr.stream->medium == STRING_STREAM;
+}
+
+
+int
+type_file_error (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct outcome *outcome)
+{
+  return 0;
+}
+
+
+int
+type_division_by_zero (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return 0;
+}
+
+
+int
+type_arithmetic_error (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return 0;
+}
+
+
+int
+type_error (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct outcome *outcome)
+{
+  return 0;
 }
 
 
@@ -17638,6 +17726,115 @@ evaluate_return_from (struct object *list, struct environment *env,
   outcome->return_value = ret;
 
   return NULL;
+}
+
+
+struct object *
+evaluate_handler_bind (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  int handlers = 0;
+  struct object *cons, *ret = NULL, *res, *hret;
+  struct handler_binding *b, *prev = NULL, *first = NULL;
+  struct object arg;
+  struct cons_pair c;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  cons = CAR (list);
+
+  while (cons->type == TYPE_CONS_PAIR)
+    {
+      if (CAR (cons)->type != TYPE_CONS_PAIR || list_length (CAR (cons)) != 2
+	  || !IS_SYMBOL (CAR (CAR (cons))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  goto cleanup_and_leave;
+	}
+
+      res = evaluate_object (CAR (CDR (CAR (cons))), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!res)
+	goto cleanup_and_leave;
+
+      if (res->type != TYPE_FUNCTION)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  goto cleanup_and_leave;
+	}
+
+      b = malloc_and_check (sizeof (*b));
+      b->condition = SYMBOL (CAR (CAR (cons)));
+      b->handler = res;
+      b->next = NULL;
+
+      if (!first)
+	{
+	  prev = env->handlers;
+	  first = b;
+	}
+
+      if (env->handlers)
+	env->handlers->next = b;
+
+      env->handlers = b;
+
+      handlers++;
+
+      cons = CDR (cons);
+    }
+
+  ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
+
+  if (!ret)
+    {
+      b = first;
+
+      arg.type = TYPE_CONS_PAIR;
+      arg.value_ptr.cons_pair = &c;
+      arg.refcount1 = 0;
+      arg.refcount2 = 1;
+      c.car = &nil_object;
+      c.cdr = &nil_object;
+
+      while (b)
+	{
+	  if (does_condition_include_outcome_type (b->condition, outcome->type,
+						   env))
+	    {
+	      hret = call_function (b->handler, &arg, 1, 0, env, outcome);
+
+	      if (!hret)
+		goto cleanup_and_leave;
+	    }
+
+	  b = b->next;
+	}
+    }
+
+ cleanup_and_leave:
+  for (; handlers; handlers--)
+    {
+      b = first->next;
+      decrement_refcount (first->handler);
+      free (first);
+      first = b;
+    }
+
+  env->handlers = prev;
+
+  return ret;
 }
 
 
