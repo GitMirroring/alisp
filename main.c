@@ -341,6 +341,7 @@ outcome_type
     INVALID_GO_TAG,
     TAG_NOT_FOUND,
     BLOCK_NOT_FOUND,
+    CATCH_NOT_FOUND,
     INVALID_ACCESSOR,
     SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES,
     INVALID_SETF_EXPANSION,
@@ -427,10 +428,11 @@ outcome
   struct object *obj;
   struct object *pack;
 
-  struct object *block_to_leave;
-  struct object *return_value;
-
   struct object *tag_to_jump_to;
+
+  struct object *block_to_leave;
+  struct object *object_to_catch;
+  struct object *return_value;
 };
 
 
@@ -469,9 +471,11 @@ environment
   struct object_list *packages;
   struct object *cl_package, *keyword_package;
 
+  struct go_tag_frame *go_tag_stack;
+
   struct object_list *blocks;
 
-  struct go_tag_frame *go_tag_stack;
+  struct object_list *catches;
 
   struct handler_binding *handlers;
 
@@ -1876,6 +1880,11 @@ struct object *evaluate_block
 struct object *evaluate_return_from
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *evaluate_catch
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_throw
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *evaluate_handler_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -2479,6 +2488,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
   add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
 		    1);
+  add_builtin_form ("CATCH", env, evaluate_catch, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("THROW", env, evaluate_throw, TYPE_MACRO, NULL, 1);
   add_builtin_form ("HANDLER-BIND", env, evaluate_handler_bind, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
@@ -17730,6 +17741,102 @@ evaluate_return_from (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_catch (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *t, *tag, *ret;
+
+  if (!list_length (list))
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  t = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!t)
+    return NULL;
+
+  if (IS_SYMBOL (t))
+    tag = SYMBOL (t);
+  else
+    tag = t;
+
+  env->catches = add_block (tag, env->catches);
+
+  ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
+
+  if (!ret && outcome->object_to_catch
+      && tag == SYMBOL (outcome->object_to_catch))
+    {
+      outcome->object_to_catch = NULL;
+
+      ret = outcome->return_value;
+    }
+
+  decrement_refcount (t);
+  env->catches = remove_block (env->catches);
+
+  return ret;
+}
+
+
+struct object *
+evaluate_throw (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *t, *tag, *ret;
+  struct object_list *l = env->catches;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  t = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!t)
+    return NULL;
+
+  if (IS_SYMBOL (t))
+    tag = SYMBOL (t);
+  else
+    tag = t;
+
+  while (l)
+    {
+      if (tag == SYMBOL (l->obj))
+	break;
+
+      l = l->next;
+    }
+
+  if (!l)
+    {
+      decrement_refcount (t);
+      outcome->type = CATCH_NOT_FOUND;
+      return NULL;
+    }
+
+  ret = evaluate_object (CAR (CDR (list)), env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (tag);
+      return NULL;
+    }
+
+  outcome->object_to_catch = t;
+  outcome->return_value = ret;
+
+  return NULL;
+}
+
+
+struct object *
 evaluate_handler_bind (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
@@ -19504,6 +19611,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == BLOCK_NOT_FOUND)
     {
       printf ("eval error: block not found\n");
+    }
+  else if (err->type == CATCH_NOT_FOUND)
+    {
+      printf ("eval error: catch matching throw not found\n");
     }
   else if (err->type == INVALID_ACCESSOR)
     {
