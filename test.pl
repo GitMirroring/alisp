@@ -737,6 +737,8 @@ make_test ("(block test (write 1) (block test2 (write 2) (return-from test (valu
 make_test ("(block nil (return (values 11 12)))", "11\n12");
 make_test ("(defun test () (write 1) (write 2) (return-from test 10) (write 3))", "TEST");
 make_test ("(test)", "12\n10");
+make_test ("(defun f () (throw 'label (values 0 1 2)))", "F");
+make_test ("(catch 'label (f))", "0\n1\n2");
 make_test ("(block nil (handler-bind ((file-error (lambda (e) (write 0))) (division-by-zero (lambda (e) (return 1)))) (/ 1 0)))", "1");
 make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (write 0))) (arithmetic-error (lambda (e) (write 1))) (error (lambda (e) (return 2)))) (/ 1 0)))", "01\n2");
 make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (return 0)))) (handler-bind ((arithmetic-error (lambda (e) (write 1)))) (/ 1 0))))", "1\n0");
