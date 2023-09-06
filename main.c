@@ -1888,6 +1888,9 @@ struct object *evaluate_throw
 struct object *evaluate_handler_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *evaluate_unwind_protect
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
@@ -2492,6 +2495,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("THROW", env, evaluate_throw, TYPE_MACRO, NULL, 1);
   add_builtin_form ("HANDLER-BIND", env, evaluate_handler_bind, TYPE_MACRO, NULL,
 		    0);
+  add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
+		    NULL, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
@@ -17942,6 +17947,40 @@ evaluate_handler_bind (struct object *list, struct environment *env,
   env->handlers = prev;
 
   return ret;
+}
+
+
+struct object *
+evaluate_unwind_protect (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  struct object *res, *clres;
+  struct object_list *ov;
+  int nov;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  res = evaluate_object (CAR (list), env, outcome);
+  nov = outcome->no_value;
+  ov = outcome->other_values;
+  outcome->other_values = NULL;
+
+  clres = evaluate_body (CDR (list), 0, NULL, env, outcome);
+
+  if (clres)
+    {
+      decrement_refcount (clres);
+      outcome->no_value = nov;
+      outcome->other_values = ov;
+
+      return res;
+    }
+
+  return NULL;
 }
 
 
