@@ -717,6 +717,8 @@ make_test ("(endp ())", "T");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
 make_test ("(when nil \"\" \"\" \"\")", "NIL");
 make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
+make_test ("(the integer 0)", "0");
+make_test ("(the integer (values 0 1))", "0\n1");
 make_test ("(prog1 2 (write \"hello\"))", "\"hello\"\n2");
 make_test ("(prog2 2 3 (write \"hello\"))", "\"hello\"\n3");
 make_test ("(destructuring-bind ((x)) '((0)) x)", "0");
