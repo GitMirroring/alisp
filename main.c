@@ -483,6 +483,8 @@ environment
 
   struct object *c_stdout;
 
+  struct object *quote_sym, *function_sym;
+
   struct object *declare_sym, *ignorable_sym, *ignore_sym, *inline_sym,
     *notinline_sym, *optimize_sym, *compilation_speed_sym, *debug_sym,
     *safety_sym, *space_sym, *speed_sym, *special_sym;
@@ -655,9 +657,8 @@ function
 struct
 cons_pair
 {
-  int filling_car;  /* when car is incomplete but already partly allocated */
-  int empty_list_in_car;  /* when car is a still empty list so nothing
-			     allocated yet */
+  int filling_car;
+  int empty_list_in_car;
 
   int found_dot;
 
@@ -840,7 +841,6 @@ bytespec
 enum
 object_type
   {
-    TYPE_QUOTE = 1,
     TYPE_BACKQUOTE = 1 << 1,
     TYPE_COMMA = 1 << 2,
     TYPE_AT = 1 << 3,
@@ -870,8 +870,7 @@ object_type
   };
 
 
-#define TYPE_PREFIX (TYPE_QUOTE | TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT \
-		     | TYPE_DOT)
+#define TYPE_PREFIX (TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT | TYPE_DOT)
 #define TYPE_REAL (TYPE_INTEGER | TYPE_FIXNUM | TYPE_RATIO | TYPE_FLOAT)
 #define TYPE_NUMBER (TYPE_REAL | TYPE_COMPLEX)
 
@@ -941,6 +940,12 @@ object
 
 #define WITH_CHANGED_BIT(x,ind,new)		\
   (((x) & ~(1 << (ind))) | ((new) << (ind)))
+
+
+#define WAS_A_READER_MACRO(obj) ((obj)->flags & 0x200)
+
+#define SET_READER_MACRO_FLAG(obj) ((obj)->flags =	\
+				    WITH_CHANGED_BIT ((obj)->flags, 9, 1))
 
 
 struct
@@ -2668,6 +2673,9 @@ add_standard_definitions (struct environment *env)
 
   env->std_out_sym = define_variable ("*STANDARD-OUTPUT*", env->c_stdout, env);
 
+  env->quote_sym = CREATE_BUILTIN_SYMBOL ("QUOTE");
+  env->function_sym = CREATE_BUILTIN_SYMBOL ("FUNCTION");
+
   env->declare_sym = CREATE_BUILTIN_SYMBOL ("DECLARE");
   env->ignorable_sym = CREATE_BUILTIN_SYMBOL ("IGNORABLE");
   env->ignore_sym = CREATE_BUILTIN_SYMBOL ("IGNORE");
@@ -3396,7 +3404,45 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	      break;
 	    }
 	}
-      else if (ch == '\'' || ch == '`' || ch == ',')
+      else if (ch == '\'')
+	{
+	  ob = alloc_empty_cons_pair ();
+
+	  SET_READER_MACRO_FLAG (ob);
+
+	  increment_refcount (env->quote_sym);
+	  ob->value_ptr.cons_pair->car = env->quote_sym;
+
+	  ob->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+	  ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+
+	  out = read_object (&ob->value_ptr.cons_pair->cdr->
+			     value_ptr.cons_pair->car, backts_commas_balance,
+			     input, size, stream, preserve_whitespace,
+			     ends_with_eof, env, outcome, obj_begin, obj_end);
+
+	  if (input)
+	    {
+	      size = size - (*obj_end - input);
+	      input = *obj_end;
+	    }
+
+	  if (out == INCOMPLETE_EMPTY_LIST)
+	    {
+	      ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->
+		empty_list_in_car = 1;
+	      out = INCOMPLETE_NONEMPTY_LIST;
+	    }
+	  else if (out != COMPLETE_OBJECT)
+	    {
+	      ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->filling_car = 1;
+	      out = INCOMPLETE_NONEMPTY_LIST;
+	    }
+
+	  break;
+	}
+      else if (ch == '`' || ch == ',')
  	{
 	  unget_char (ch, &input, &size, stream);
 
@@ -3507,10 +3553,14 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
   struct object *last_cons = *obj, *car = NULL, *ob = *obj, *cons;
   const char *obj_beg, *obj_end = NULL;
   enum outcome_type out;
+  int found_dot = 0;
 
 
   while (ob && ob->type == TYPE_CONS_PAIR)
     {
+      if (ob->value_ptr.cons_pair->found_dot)
+	found_dot = 1;
+
       if (ob->value_ptr.cons_pair->filling_car
 	  || ob->value_ptr.cons_pair->filling_cdr)
 	{
@@ -3523,9 +3573,21 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       &obj_end);
 
 	  if (out == COMPLETE_OBJECT)
-	    ob->value_ptr.cons_pair->filling_car =
-	      ob->value_ptr.cons_pair->filling_cdr = 0;
-	  else if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
+	    {
+	      ob->value_ptr.cons_pair->filling_car =
+		ob->value_ptr.cons_pair->filling_cdr = 0;
+	    }
+	  else if (out == INCOMPLETE_EMPTY_LIST)
+	    {
+	      ob->value_ptr.cons_pair->filling_car
+		? (ob->value_ptr.cons_pair->empty_list_in_car = 1)
+		: (ob->value_ptr.cons_pair->empty_list_in_cdr = 1);
+
+	      ob->value_ptr.cons_pair->filling_car =
+		ob->value_ptr.cons_pair->filling_cdr = 0;
+	    }
+
+	  if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
 	    return out;
 	}
       else if (ob->value_ptr.cons_pair->empty_list_in_car
@@ -3565,6 +3627,13 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
     {
       size -= obj_end - input + 1;
       input = obj_end + 1;
+    }
+
+  if (last_cons && last_cons->value_ptr.cons_pair->cdr == &nil_object
+      && !found_dot)
+    {
+      *list_end = obj_end;
+      return COMPLETE_OBJECT;
     }
 
   out = read_object (&car, backts_commas_balance, input, size, stream,
@@ -3839,7 +3908,7 @@ read_prefix (struct object **obj, const char *input, size_t size, FILE *stream,
   if (!next_nonspace_char (&ch, &input, &size, stream))
     return JUST_PREFIX;
 
-  while (ch == '\'' || ch == '`' || ch == ',' || ch == '@' || ch == '.')
+  while (ch == '`' || ch == ',' || ch == '@' || ch == '.')
     {
       if ((ch == '@' || ch == '.') && !found_comma)
 	{
@@ -4987,9 +5056,6 @@ alloc_prefix (unsigned char pr)
 
   switch (pr)
     {
-    case '\'':
-      obj->type = TYPE_QUOTE;
-      break;
     case '`':
       obj->type = TYPE_BACKQUOTE;
       break;
@@ -7175,10 +7241,8 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
   if (num_commas)
     *num_commas = 0;
 
-  while (prefix &&
-	 (prefix->type == TYPE_QUOTE
-	  || prefix->type == TYPE_BACKQUOTE
-	  || prefix->type == TYPE_COMMA))
+  while (prefix && (prefix->type == TYPE_BACKQUOTE
+		    || prefix->type == TYPE_COMMA))
     {
       if (last_prefix)
 	*last_prefix = prefix;
@@ -7364,8 +7428,7 @@ copy_prefix (const struct object *begin, const struct object *end,
 
   while (begin && begin != end)
     {
-      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? '\'' :
-			  begin->type == TYPE_BACKQUOTE ? '`' :
+      tmp = alloc_prefix (begin->type == TYPE_BACKQUOTE ? '`' :
 			  begin->type == TYPE_COMMA ? ',' :
 			  begin->type == TYPE_AT ? '@' :
 			  begin->type == TYPE_DOT ? '.'
@@ -7381,8 +7444,7 @@ copy_prefix (const struct object *begin, const struct object *end,
 
   if (begin)
     {
-      tmp = alloc_prefix (begin->type == TYPE_QUOTE ? '\'' :
-			  begin->type == TYPE_BACKQUOTE ? '`' :
+      tmp = alloc_prefix (begin->type == TYPE_BACKQUOTE ? '`' :
 			  begin->type == TYPE_COMMA ? ',' :
 			  begin->type == TYPE_AT ? '@' :
 			  begin->type == TYPE_DOT ? '.' : NONE);
@@ -8879,12 +8941,7 @@ evaluate_object (struct object *obj, struct environment *env,
   struct binding *bind;
   struct object *sym, *ret;
 
-  if (obj->type == TYPE_QUOTE)
-    {
-      increment_refcount (obj->value_ptr.next);
-      return obj->value_ptr.next;
-    }
-  else if (obj->type == TYPE_BACKQUOTE)
+  if (obj->type == TYPE_BACKQUOTE)
     {
       return apply_backquote (obj->value_ptr.next, 1, env, outcome, 1, NULL,
 			      NULL);
@@ -8959,7 +9016,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
       return ret;
     }
-  else if (form->type == TYPE_BACKQUOTE || form->type == TYPE_QUOTE)
+  else if (form->type == TYPE_BACKQUOTE)
     {
       ret = apply_backquote (form->value_ptr.next, backts_commas_balance
 			     + (form->type == TYPE_BACKQUOTE), env, outcome,
@@ -19249,12 +19306,15 @@ print_object (const struct object *obj, struct environment *env,
   char *out;
   int ret;
 
-  if (obj->type == TYPE_QUOTE)
+  if (obj->type == TYPE_CONS_PAIR
+      && obj->value_ptr.cons_pair->car == env->quote_sym
+      && WAS_A_READER_MACRO (obj))
     {
       if (write_to_stream (str, "'", 1) < 0)
 	return -1;
 
-      return print_object (obj->value_ptr.next, env, str);
+      return print_object (obj->value_ptr.cons_pair->cdr->value_ptr.cons_pair->
+			   car, env, str);
     }
   else if (obj->type == TYPE_BACKQUOTE)
     {
