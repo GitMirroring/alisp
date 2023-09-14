@@ -106,6 +106,7 @@ make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 make_test ("'cl:car", "CAR");
 make_test ("'cl-user::car", "CAR");
 make_test ("(car ''0)", "QUOTE");
+make_test ("(car '#'car)", "FUNCTION");
 
 
 # now we extensively test backtick notation.  maybe some of these
