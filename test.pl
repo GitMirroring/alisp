@@ -78,6 +78,7 @@ make_test (" #| #|\n" .
 	   "|##|\n" .
 	   "|#\n" .
 	   "  |# \"\"", "\"\"");
+make_test ("'\n(\n)", "NIL");
 make_test ("'(1 . 2)", "(1 . 2)");
 make_test ("'(1 . (2 3))", "(1 2 3)");
 make_test ("'(1 . 2\n" .
@@ -86,6 +87,7 @@ make_test ("'(1 .\n" .
 	   "2)", "(1 . 2)");
 make_test ("'(1\n" .
 	   ". 2)", "(1 . 2)");
+make_test ("'(1 .\n(2)\n)", "(1 2)");
 make_test ("'(1 . (\n" .
 	   "2))", "(1 2)");
 make_test ("'( \"\" #||# )", "(\"\")");
@@ -103,6 +105,7 @@ make_test ("'|aaa\n:bbb|", "|aaa\n:bbb|");
 make_test (":\\asd\\\\f", ":|aSD\\\\F|");
 make_test ("'cl:car", "CAR");
 make_test ("'cl-user::car", "CAR");
+make_test ("(car ''0)", "QUOTE");
 
 
 # now we extensively test backtick notation.  maybe some of these
@@ -118,7 +121,8 @@ make_test ("``(a ,,(+ 1 2) ,(+ 3 4))", "`(A ,3 ,(+ 3 4))");
 make_test ("``(a ,(+ ,1 2))", "`(A ,(+ 1 2))");
 make_test ("`(,1 . ,2)", "(1 . 2)");
 make_test ("`(,1 ,2 . ,3)", "(1 2 . 3)");
-make_test ("`',(car ())", "'NIL");
+#make_test ("`',(car ())", "'NIL");
+make_test ("`',(car ())", "(QUOTE NIL)");
 make_test ("`(if ``(progn ,,1))", "(IF ``(PROGN ,,1))");
 make_test ("'@", "@");
 make_test ("`(,@())", "NIL");
