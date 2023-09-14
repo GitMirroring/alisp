@@ -4221,25 +4221,23 @@ struct object *
 call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *obj = macro_call->obj, *fun, *ret;
+  struct object *obj = macro_call->obj, *ret;
   struct symbol_name *s;
   int l;
 
   if (macro_call->dispatch_ch == '\'')
     {
-      if (!IS_SYMBOL (obj))
-	{
-	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+      ret = alloc_empty_cons_pair ();
 
-	  return NULL;
-	}
+      increment_refcount (env->function_sym);
+      ret->value_ptr.cons_pair->car = env->function_sym;
 
-      fun = get_function (SYMBOL (obj), env, 1, 1);
+      ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
 
-      if (!fun)
-	outcome->type = FUNCTION_NOT_FOUND_IN_READ;
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = obj;
 
-      return fun;
+      return ret;
     }
   else if (macro_call->dispatch_ch == '\\')
     {
