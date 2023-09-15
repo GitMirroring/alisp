@@ -310,6 +310,7 @@ outcome_type
     MALFORMED_IF,
     INCORRECT_SYNTAX_IN_LET,
     INCORRECT_SYNTAX_IN_FLET,
+    NOT_A_FUNCTION_NAME_OR_LAMBDA_IN_FUNCTION,
     INCORRECT_SYNTAX_IN_DEFUN,
     INCORRECT_SYNTAX_IN_DEFMACRO,
     INCORRECT_SYNTAX_IN_DEFTYPE,
@@ -483,7 +484,7 @@ environment
 
   struct object *c_stdout;
 
-  struct object *quote_sym, *function_sym;
+  struct object *quote_sym, *function_sym, *lambda_sym;
 
   struct object *declare_sym, *ignorable_sym, *ignore_sym, *inline_sym,
     *notinline_sym, *optimize_sym, *compilation_speed_sym, *debug_sym,
@@ -2675,6 +2676,7 @@ add_standard_definitions (struct environment *env)
 
   env->quote_sym = CREATE_BUILTIN_SYMBOL ("QUOTE");
   env->function_sym = CREATE_BUILTIN_SYMBOL ("FUNCTION");
+  env->lambda_sym = CREATE_BUILTIN_SYMBOL ("LAMBDA");
 
   env->declare_sym = CREATE_BUILTIN_SYMBOL ("DECLARE");
   env->ignorable_sym = CREATE_BUILTIN_SYMBOL ("IGNORABLE");
@@ -17373,20 +17375,29 @@ evaluate_function (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL)
+  if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
+      && (CAR (list)->type != TYPE_CONS_PAIR
+	  || SYMBOL (CAR (CAR (list))) != env->lambda_sym))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = NOT_A_FUNCTION_NAME_OR_LAMBDA_IN_FUNCTION;
 
       return NULL;
     }
 
-  f = get_function (SYMBOL (CAR (list)), env, 1, 1);
-
-  if (!f)
+  if (IS_SYMBOL (CAR (list)))
     {
-      outcome->type = FUNCTION_NOT_FOUND_IN_EVAL;
+      f = get_function (SYMBOL (CAR (list)), env, 1, 1);
 
-      return NULL;
+      if (!f)
+	{
+	  outcome->type = FUNCTION_NOT_FOUND_IN_EVAL;
+
+	  return NULL;
+	}
+    }
+  else
+    {
+      f = evaluate_lambda (CDR (CAR (list)), env, outcome);
     }
 
   return f;
@@ -19609,6 +19620,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INCORRECT_SYNTAX_IN_FLET)
     {
       printf ("eval error: incorrect syntax in FLET, LABELS or MACROLET\n");
+    }
+  else if (err->type == NOT_A_FUNCTION_NAME_OR_LAMBDA_IN_FUNCTION)
+    {
+      printf ("eval error: FUNCTION takes a function name or a lambda expression\n");
     }
   else if (err->type == INCORRECT_SYNTAX_IN_DEFUN)
     {
