@@ -8189,6 +8189,8 @@ parse_declarations (struct object *body, struct environment *env, int bin_num,
 		      if (vars->sym == SYMBOL (CAR (form)))
 			{
 			  vars->type = DYNAMIC_BINDING;
+			  SYMBOL (CAR (form))->value_ptr.symbol->
+			    value_dyn_bins_num++;
 			  break;
 			}
 
