@@ -460,6 +460,8 @@ make_test ("(intern \"hi\" 'keyword)", ":|hi|\nNIL");
 make_test ("(make-symbol \"aaa\")", "#:|aaa|");
 make_test ("(boundp 'b)", "T");
 make_test ("(boundp 'g3)", "NIL");
+make_test ("(let ((var 0)) (boundp 'var))", "NIL");
+make_test ("(let ((var 0)) (declare (special var)) (boundp 'var))", "T");
 make_test ("(symbol-value 'b)", "9");
 make_test ("(let ((b 10)) (symbol-value 'b))", "10");
 make_test ("(setf (symbol-value 'foo) 0)", "0");
