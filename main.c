@@ -230,7 +230,9 @@ binding_type
   {
     ANY_BINDING,
     LEXICAL_BINDING,
-    DYNAMIC_BINDING
+    DYNAMIC_BINDING,
+
+    DELETED_BINDING = 4
   };
 
 
@@ -1716,6 +1718,10 @@ struct object *builtin_symbol_package (struct object *list,
 struct object *builtin_special_operator_p (struct object *list,
 					   struct environment *env,
 					   struct outcome *outcome);
+struct object *builtin_makunbound (struct object *list, struct environment *env,
+				   struct outcome *outcome);
+struct object *builtin_fmakunbound (struct object *list, struct environment *env,
+				    struct outcome *outcome);
 struct object *builtin_macroexpand_1 (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
@@ -2534,6 +2540,10 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKUNBOUND", env, builtin_makunbound, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("FMAKUNBOUND", env, builtin_fmakunbound, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
@@ -6879,7 +6889,7 @@ remove_bindings (struct binding *env, int num)
 
   b = env->next;
 
-  if (env->type == DYNAMIC_BINDING)
+  if (env->type == DYNAMIC_BINDING && !(env->type & DELETED_BINDING))
     env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
   decrement_refcount (env->sym);
@@ -6901,8 +6911,9 @@ find_binding (struct symbol *sym, struct binding *bins, enum binding_type type,
   while (bins && (type != LEXICAL_BINDING || bin_num))
     {
       if (bins->sym->value_ptr.symbol == sym
-	  && (type == ANY_BINDING || bins->type == type)
-	  && (bins->type == DYNAMIC_BINDING || bin_num))
+	  && (type == ANY_BINDING || bins->type & type)
+	  && (bins->type == DYNAMIC_BINDING || bin_num)
+	  && !(bins->type & DELETED_BINDING))
 	{
 	  return bins;
 	}
@@ -14819,6 +14830,75 @@ builtin_special_operator_p (struct object *list, struct environment *env,
     return &t_object;
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_makunbound (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct binding *b = env->vars;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  delete_reference (SYMBOL (CAR (list)),
+		    SYMBOL (CAR (list))->value_ptr.symbol->value_cell, 0);
+  SYMBOL (CAR (list))->value_ptr.symbol->value_cell = NULL;
+
+  while (SYMBOL (CAR (list))->value_ptr.symbol->value_dyn_bins_num)
+    {
+      while (1)
+	{
+	  if (b->sym == SYMBOL (CAR (list)) && b->type & DYNAMIC_BINDING)
+	    {
+	      b->type |= DELETED_BINDING;
+	      b = b->next;
+	      break;
+	    }
+	  else
+	    b = b->next;
+	}
+
+      SYMBOL (CAR (list))->value_ptr.symbol->value_dyn_bins_num--;
+    }
+
+  increment_refcount (SYMBOL (CAR (list)));
+  return SYMBOL (CAR (list));
+}
+
+
+struct object *
+builtin_fmakunbound (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  delete_reference (SYMBOL (CAR (list)),
+		    SYMBOL (CAR (list))->value_ptr.symbol->function_cell, 1);
+  SYMBOL (CAR (list))->value_ptr.symbol->function_cell = NULL;
+
+  increment_refcount (SYMBOL (CAR (list)));
+  return SYMBOL (CAR (list));
 }
 
 
