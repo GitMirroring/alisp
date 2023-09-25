@@ -33,6 +33,7 @@
 #include <string.h>
 #include <limits.h>
 #include <errno.h>
+#include <time.h>
 
 #include <gmp.h>
 
@@ -1782,6 +1783,9 @@ struct object *builtin_use_package (struct object *list, struct environment *env
 struct object *builtin_unuse_package (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *builtin_get_decoded_time (struct object *list,
+					 struct environment *env,
+					 struct outcome *outcome);
 struct object *builtin_lisp_implementation_type (struct object *list,
 						 struct environment *env,
 						 struct outcome *outcome);
@@ -2583,6 +2587,8 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("GET-DECODED-TIME", env, builtin_get_decoded_time,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
 		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
@@ -16141,6 +16147,43 @@ builtin_unuse_package (struct object *list, struct environment *env,
     } while (cons && SYMBOL (cons) != &nil_object);
 
   return &t_object;
+}
+
+
+struct object *
+builtin_get_decoded_time (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  time_t t;
+  struct tm *lt;
+
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  t = time (NULL);
+  lt = localtime (&t);
+
+  prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+  prepend_object_to_obj_list (lt->tm_wday > 0 ? &t_object : &nil_object,
+			      &outcome->other_values);
+  prepend_object_to_obj_list (create_integer_from_long (!lt->tm_wday ? 6
+							: lt->tm_wday-1),
+			      &outcome->other_values);
+  prepend_object_to_obj_list (create_integer_from_long (lt->tm_year+1900),
+			      &outcome->other_values);
+  prepend_object_to_obj_list (create_integer_from_long (lt->tm_mon+1),
+			      &outcome->other_values);
+  prepend_object_to_obj_list (create_integer_from_long (lt->tm_mday),
+			      &outcome->other_values);
+  prepend_object_to_obj_list (create_integer_from_long (lt->tm_hour),
+			      &outcome->other_values);
+  prepend_object_to_obj_list (create_integer_from_long (lt->tm_min),
+			      &outcome->other_values);
+
+  return create_integer_from_long (lt->tm_sec == 60 ? 0 : lt->tm_sec);
 }
 
 
