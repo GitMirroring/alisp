@@ -1088,6 +1088,7 @@ struct object *alloc_complex (void);
 struct object *create_complex (struct object *real, struct object *imag,
 			       struct environment *env, struct outcome *outcome);
 struct object *create_integer_from_long (long num);
+struct object *create_ratio_from_longs (long num, long den);
 struct object *create_floating_from_double (double d);
 
 void print_range (const char *begin, const char *end);
@@ -4871,6 +4872,21 @@ create_integer_from_long (long num)
 
   mpz_init (obj->value_ptr.integer);
   mpz_set_si (obj->value_ptr.integer, num);
+
+  return obj;
+}
+
+
+struct object *
+create_ratio_from_longs (long num, long den)
+{
+  struct object *obj = alloc_object ();
+
+  obj->type = TYPE_RATIO;
+
+  mpq_init (obj->value_ptr.ratio);
+  mpq_set_si (obj->value_ptr.ratio, num, den);
+  mpq_canonicalize (obj->value_ptr.ratio);
 
   return obj;
 }
@@ -16154,8 +16170,9 @@ struct object *
 builtin_get_decoded_time (struct object *list, struct environment *env,
 			  struct outcome *outcome)
 {
-  time_t t;
-  struct tm *lt;
+  time_t t, t2;
+  struct tm *lt, *gmt;
+  double tz;
 
   if (list_length (list))
     {
@@ -16164,9 +16181,15 @@ builtin_get_decoded_time (struct object *list, struct environment *env,
     }
 
   t = time (NULL);
-  lt = localtime (&t);
 
-  prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+  gmt = gmtime (&t);
+  t2 = mktime (gmt);
+
+  lt = localtime (&t);
+  tz = difftime (t2, t);
+
+  prepend_object_to_obj_list (create_ratio_from_longs (tz, 3600),
+  &outcome->other_values);
   prepend_object_to_obj_list (lt->tm_wday > 0 ? &t_object : &nil_object,
 			      &outcome->other_values);
   prepend_object_to_obj_list (create_integer_from_long (!lt->tm_wday ? 6
