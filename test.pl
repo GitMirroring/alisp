@@ -744,6 +744,17 @@ make_test ("(prog2 2 3 (write \"hello\"))", "\"hello\"\n3");
 make_test ("(destructuring-bind ((x)) '((0)) x)", "0");
 make_test ("(destructuring-bind (x (y (z))) '(0 (1 (2))) (list x y z))", "(0 1 2)");
 make_test ("(destructuring-bind (x (y z) w) '(0 ((1 2) 3) 4) (list x y z w))", "(0 (1 2) 3 4)");
+make_test ("(defstruct ship x y)", "SHIP");
+make_test ("#'make-ship", "#<FUNCTION MAKE-SHIP>");
+make_test ("#'ship-x", "#<FUNCTION SHIP-X>");
+make_test ("(defparameter s1 (make-ship))", "S1");
+make_test ("s1", "#<STRUCTURE OF CLASS SHIP>");
+make_test ("(ship-x s1)", "NIL");
+make_test ("(ship-y s1)", "NIL");
+make_test ("(setf (ship-x s1) 0)", "0");
+make_test ("(setf (ship-y s1) 1)", "1");
+make_test ("(ship-x s1)", "0");
+make_test ("(ship-y s1)", "1");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
