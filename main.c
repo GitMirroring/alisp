@@ -6726,25 +6726,26 @@ load_file (const char *filename, struct environment *env,
 
   while (1)
     {
-      if (out == COMPLETE_OBJECT)
+      if (out == COMPLETE_OBJECT || out == NO_ACTUAL_OBJECT)
 	{
-	  res = evaluate_object (obj, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  if (res)
+	  if (out == COMPLETE_OBJECT)
 	    {
-	      out = read_object (&obj, 0, in, sz, NULL, 0, 1, env, outcome,
-				 &obj_b, &obj_e);
-	      sz = sz - (obj_e + 1 - in);
-	      in = obj_e + 1;
-	    }
-	  else
-	    {
-	      free (buf);
-	      fclose (f);
+	      res = evaluate_object (obj, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-	      return NULL;
+	      if (!res)
+		{
+		  free (buf);
+		  fclose (f);
+
+		  return NULL;
+		}
 	    }
+
+	  out = read_object (&obj, 0, in, sz, NULL, 0, 1, env, outcome, &obj_b,
+			     &obj_e);
+	  sz = sz - (obj_e + 1 - in);
+	  in = obj_e + 1;
 	}
       else if (out == NO_OBJECT)
 	{
@@ -6754,22 +6755,17 @@ load_file (const char *filename, struct environment *env,
 
 	  return &t_object;
 	}
-      else if (IS_READ_OR_EVAL_ERROR (out))
+      else if (IS_READ_OR_EVAL_ERROR (out) || IS_INCOMPLETE_OBJECT (out))
 	{
 	  free (buf);
 	  fclose (f);
 	  CLEAR_READER_STATUS (*outcome);
 
-	  outcome->type = out;
-	  return NULL;
-	}
-      else if (IS_INCOMPLETE_OBJECT (out))
-	{
-	  free (buf);
-	  fclose (f);
-	  CLEAR_READER_STATUS (*outcome);
+	  if (IS_READ_OR_EVAL_ERROR (out))
+	    outcome->type = out;
+	  else
+	    outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
 
-	  outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
 	  return NULL;
 	}
     }
