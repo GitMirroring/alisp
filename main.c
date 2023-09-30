@@ -641,6 +641,8 @@ struct
 function
 {
   struct object *name;
+  int is_special_operator;
+
 
   struct parameter *lambda_list;
   int allow_other_keys;
@@ -650,11 +652,24 @@ function
   struct binding *lex_vars;
   struct binding *lex_funcs;
 
-  int is_special_operator;
+  struct object *body;
+
+
   struct object *(*builtin_form)
     (struct object *list, struct environment *env, struct outcome *outcome);
 
-  struct object *body;
+
+  struct object *struct_constructor_class;
+
+
+  struct object *struct_accessor_class;
+  struct object *struct_accessor_field;
+
+
+  struct object *struct_predicate_class;
+
+
+  struct object *struct_copyier_class;
 };
 
 
@@ -760,25 +775,47 @@ stream
 
 
 struct
-structure_slot
+structure_field_decl
 {
   struct object *name;
   struct object *initform;
   struct object *type;
   int read_only;
 
-  struct structure_slot *next;
+  struct structure_field_decl *next;
+};
+
+
+struct
+structure_class
+{
+  struct object *name;
+
+  char *conc_name;
+  size_t initial_offset;
+  int named;
+
+  struct structure_field_decl *fields;
+};
+
+
+struct
+structure_field
+{
+  struct object *name;
+
+  struct object *value;
+
+  struct structure_field *next;
 };
 
 
 struct
 structure
 {
-  char *conc_name;
-  size_t initial_offset;
-  int named;
+  struct object *class;
 
-  struct structure_slot *slots;
+  struct structure_field *fields;
 };
 
 
@@ -866,6 +903,7 @@ object_type
     TYPE_PACKAGE = 1 << 19,
     TYPE_FILENAME = 1 << 20,
     TYPE_STREAM = 1 << 21,
+    TYPE_STRUCTURE_CLASS = 1,
     TYPE_STRUCTURE = 1 << 22,
     TYPE_CONDITION = 1 << 23,
     TYPE_FUNCTION = 1 << 24,
@@ -900,6 +938,7 @@ object_ptr_union
   struct package *package;
   struct filename *filename;
   struct stream *stream;
+  struct structure_class *structure_class;
   struct structure *structure;
   struct function *function;
   struct function *macro;
@@ -1223,6 +1262,9 @@ struct object *create_stream_from_open_file (enum stream_type type,
 struct object *create_string_stream (enum stream_direction direction,
 				     struct object *instr);
 
+struct structure_field_decl *create_structure_field_decl
+(struct object *fieldform, struct environment *env, struct outcome *outcome);
+
 struct object *load_file (const char *filename, struct environment *env,
 			  struct outcome *outcome);
 
@@ -1349,6 +1391,16 @@ int parse_argument_list (struct object *arglist, struct parameter *par,
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int is_macro,
  struct environment *env, struct outcome *outcome);
+struct object *call_structure_constructor (struct object *struct_class,
+					   struct object *args,
+					   struct environment *env,
+					   struct outcome *outcome);
+struct object *call_structure_accessor (struct object *struct_class,
+					struct object *field,
+					struct object *args,
+					struct object *newval,
+					struct environment *env,
+					struct outcome *outcome);
 
 int check_type (struct object *obj, struct object *typespec,
 		struct environment *env, struct outcome *outcome);
@@ -1867,8 +1919,6 @@ struct object *evaluate_function
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_lambda
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defstruct
-(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_apply
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_funcall
@@ -1888,6 +1938,8 @@ struct object *evaluate_deftype
 struct object *evaluate_define_setf_expander
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_get_setf_expansion
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
@@ -2493,7 +2545,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, NULL, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
   add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FUNCALL", env, evaluate_funcall, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
@@ -2507,6 +2558,7 @@ add_standard_definitions (struct environment *env)
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("GET-SETF-EXPANSION", env, builtin_get_setf_expansion,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -5159,15 +5211,18 @@ alloc_function (void)
   struct function *fun = malloc_and_check (sizeof (*fun));
 
   fun->name = NULL;
+  fun->is_special_operator = 0;
+
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
-
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
-
-  fun->is_special_operator = 0;
-  fun->builtin_form = NULL;
   fun->body = NULL;
+  fun->builtin_form = NULL;
+  fun->struct_constructor_class = NULL;
+  fun->struct_accessor_class = NULL;
+  fun->struct_predicate_class = NULL;
+  fun->struct_copyier_class = NULL;
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
@@ -6583,6 +6638,33 @@ create_string_stream (enum stream_direction direction, struct object *instr)
   obj->value_ptr.stream = str;
 
   return obj;
+}
+
+
+struct structure_field_decl *
+create_structure_field_decl (struct object *fieldform, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *name;
+  struct structure_field_decl *ret;
+
+  if (IS_SYMBOL (fieldform))
+    name = SYMBOL (fieldform);
+  else if (IS_LIST (fieldform) && IS_SYMBOL (CAR (fieldform)))
+    name = SYMBOL (CAR (fieldform));
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = malloc_and_check (sizeof (*ret));
+
+  ret->name = name;
+  ret->initform = NULL;
+  ret->next = NULL;
+
+  return ret;
 }
 
 
@@ -8654,6 +8736,38 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       return ret;
     }
+  else if (func->value_ptr.function->struct_constructor_class)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	return NULL;
+
+      ret = call_structure_constructor (func->value_ptr.function->
+					struct_constructor_class, args, env,
+					outcome);
+
+      decrement_refcount (args);
+
+      return ret;
+    }
+  else if (func->value_ptr.function->struct_accessor_class)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	return NULL;
+
+      ret = call_structure_accessor (func->value_ptr.function->
+				     struct_accessor_class,
+				     func->value_ptr.function->
+				     struct_accessor_field, args, NULL,
+				     env, outcome);
+
+      decrement_refcount (args);
+
+      return ret;
+    }
 
 
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
@@ -8705,6 +8819,82 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
   return ret;
+}
+
+
+struct object *
+call_structure_constructor (struct object *struct_class, struct object *args,
+			    struct environment *env, struct outcome *outcome)
+{
+  struct object *ret;
+  struct structure *s;
+  struct structure_field *f;
+  struct structure_field_decl *fd;
+
+  ret = alloc_object ();
+  ret->type = TYPE_STRUCTURE;
+
+  s = malloc_and_check (sizeof (*s));
+  s->class = struct_class;
+  s->fields = NULL;
+  ret->value_ptr.structure = s;
+
+  fd = struct_class->value_ptr.structure_class->fields;
+
+  while (fd)
+    {
+      if (s->fields)
+	f = f->next = malloc_and_check (sizeof (*f));
+      else
+	s->fields = f = malloc_and_check (sizeof (*f));
+
+      f->name = fd->name;
+      f->value = &nil_object;
+
+      fd = fd->next;
+    }
+
+  return ret;
+}
+
+
+struct object *
+call_structure_accessor (struct object *struct_class, struct object *field,
+			 struct object *args, struct object *newval,
+			 struct environment *env, struct outcome *outcome)
+{
+  struct structure_field *f;
+
+  if (list_length (args) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (args)->type != TYPE_STRUCTURE
+      || CAR (args)->value_ptr.structure->class != struct_class)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (args)->value_ptr.structure->fields;
+
+  while (f)
+    {
+      if (f->name == field)
+	{
+	  if (newval)
+	    f->value = newval;
+
+	  increment_refcount (f->value);
+	  return f->value;
+	}
+
+      f = f->next;
+    }
+
+  return NULL;
 }
 
 
@@ -17368,7 +17558,7 @@ struct object *
 evaluate_setf (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *val = &nil_object, *exp, *cons1, *cons2, *res;
+  struct object *val = &nil_object, *exp, *cons1, *cons2, *res, *fun, *args;
   struct object_list *l, *expvals;
   int binsnum = 0;
 
@@ -17495,6 +17685,30 @@ evaluate_setf (struct object *list, struct environment *env,
 
 	      return val;
 	    }
+	  else if ((fun = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
+		    function_cell)
+		   && fun->value_ptr.function->struct_accessor_class)
+	    {
+	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
+
+	      if (!args)
+		return NULL;
+
+	      val = evaluate_object (CAR (CDR (list)), env, outcome);
+
+	      if (!val)
+		return NULL;
+
+	      val = call_structure_accessor (fun->value_ptr.function->
+					     struct_accessor_class,
+					     fun->value_ptr.function->
+					     struct_accessor_field, args, val,
+					     env, outcome);
+
+	      decrement_refcount (args);
+
+	      return val;
+	    }
 	  else
 	    {
 	      outcome->type = INVALID_ACCESSOR;
@@ -17577,14 +17791,6 @@ evaluate_lambda (struct object *list, struct environment *env,
     return NULL;
 
   return fun;
-}
-
-
-struct object *
-evaluate_defstruct (struct object *list, struct environment *env,
-		    struct outcome *outcome)
-{
-  return &nil_object;
 }
 
 
@@ -17891,6 +18097,101 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
 
   return call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
 			setf_expander, CDR (CAR (list)), 0, 0, env, outcome);
+}
+
+
+struct object *
+evaluate_defstruct (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct object *name, *strcl, *funcname,
+    *pack = inspect_variable (env->package_sym, env);
+  struct structure_class *sc;
+  struct structure_field_decl *f, *prev;
+  char *constr_name, *acc_name;
+
+  if (IS_SYMBOL (CAR (list)))
+    name = SYMBOL (CAR (list));
+  else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
+    name = SYMBOL (CAR (CAR (list)));
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  strcl = alloc_object ();
+  strcl->type = TYPE_STRUCTURE_CLASS;
+
+  sc = malloc_and_check (sizeof (*sc));
+  strcl->value_ptr.structure_class = sc;
+
+  increment_refcount (name);
+  sc->name = name;
+
+
+  sc->fields = NULL;
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      f = create_structure_field_decl (CAR (list), env, outcome);
+
+      if (!f)
+	return NULL;
+
+      if (sc->fields)
+	prev = prev->next = f;
+      else
+	sc->fields = prev = f;
+
+      list = CDR (list);
+    }
+
+  constr_name = malloc_and_check (5 + name->value_ptr.symbol->name_len);
+  memcpy (constr_name, "MAKE-", 5);
+  memcpy (constr_name+5, name->value_ptr.symbol->name,
+	  name->value_ptr.symbol->name_len);
+  funcname = intern_symbol_by_char_vector (constr_name,
+					   5+name->value_ptr.symbol->name_len, 0,
+					   EXTERNAL_VISIBILITY, 1, pack);
+  increment_refcount (funcname);
+  funcname->value_ptr.symbol->function_cell = alloc_function ();
+  funcname->value_ptr.symbol->function_cell->value_ptr.function->
+    struct_constructor_class = strcl;
+  funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
+
+  f = sc->fields;
+
+  while (f)
+    {
+      acc_name = malloc_and_check (name->value_ptr.symbol->name_len + 1 +
+				   f->name->value_ptr.symbol->name_len);
+      memcpy (acc_name, name->value_ptr.symbol->name,
+	      name->value_ptr.symbol->name_len);
+      memcpy (acc_name+name->value_ptr.symbol->name_len, "-", 1);
+      memcpy (acc_name+name->value_ptr.symbol->name_len+1,
+	      f->name->value_ptr.symbol->name,
+	      f->name->value_ptr.symbol->name_len);
+      funcname = intern_symbol_by_char_vector (acc_name,
+					       name->value_ptr.symbol->name_len +
+					       1 +
+					       f->name->value_ptr.symbol->name_len,
+					       0, EXTERNAL_VISIBILITY, 1, pack);
+      increment_refcount (funcname);
+      funcname->value_ptr.symbol->function_cell = alloc_function ();
+      funcname->value_ptr.symbol->function_cell->value_ptr.function->
+	struct_accessor_class = strcl;
+      funcname->value_ptr.symbol->function_cell->value_ptr.function->
+	struct_accessor_field = f->name;
+      funcname->value_ptr.symbol->function_cell->value_ptr.function->name =
+	funcname;
+
+      f = f->next;
+    }
+
+  increment_refcount (name);
+  return name;
 }
 
 
@@ -19574,8 +19875,28 @@ print_object (const struct object *obj, struct environment *env,
 	return write_to_stream (str, "#<ENVIRONMENT ?>",
 				strlen ("#<ENVIRONMENT ?>"));
       else if (obj->type == TYPE_STREAM)
-	return write_to_stream (str, "#<STREAM ?>",
-				strlen ("#<STREAM ?>"));
+	return write_to_stream (str, "#<STREAM ?>", strlen ("#<STREAM ?>"));
+      else if (obj->type == TYPE_STRUCTURE_CLASS)
+	{
+	  if (write_to_stream (str, "#<STRUCTURE CLASS ",
+			       strlen ("#<STRUCTURE CLASS ")) < 0
+	      || print_symbol (obj->value_ptr.structure_class->name, env, str)
+	      || write_to_stream (str, ">", 1))
+	    return -1;
+
+	  return 0;
+	}
+      else if (obj->type == TYPE_STRUCTURE)
+	{
+	  if (write_to_stream (str, "#<STRUCTURE OF CLASS ",
+			       strlen ("#<STRUCTURE OF CLASS ")) < 0
+	      || print_symbol (obj->value_ptr.structure->class->
+			       value_ptr.structure_class->name, env, str)
+	      || write_to_stream (str, ">", 1))
+	    return -1;
+
+	  return 0;
+	}
       else
 	return write_to_stream (str, "#<print not implemented>",
 				strlen ("#<print not implemented>"));
