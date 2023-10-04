@@ -690,6 +690,7 @@ make_test ("(princ '|Aa,a|)", "Aa,a\n|Aa,a|");
 make_test ("(princ #\\a)", "a\n#\\a");
 make_test ("(princ \"aaa\" *standard-output*)", "aaa\n\"aaa\"");
 make_test ("(print \"aaa\" *standard-output*)", "\n\"aaa\" \n\"aaa\"");
+make_test ("(let ((a 0)) (loop (if (= a 2) (return 0)) (incf a)))", "0");
 make_test ("(loop initially (write 'hello) for i from 1 to 5 finally (write 'world) do (write i))", "HELLO12345WORLD\nNIL");
 make_test ("(loop for i from 1 to 5 do (write i))", "12345\nNIL");
 make_test ("(loop for i from 1 below 5 do (write i))", "1234\nNIL");
