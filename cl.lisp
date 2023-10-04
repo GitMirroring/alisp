@@ -785,24 +785,23 @@
 		 (setf (elt var 4) (car forms)))))
 	    (append do-forms `(,form)))))
     `(block ,block-name
-       (tagbody
-	  (let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) vars)
-	    ,@initially-forms
-	    (block ,inner-block-name
-	      (tagbody
-		 ,tagname
-		 (if (or ,@(mapcar (lambda (x) (if (elt x 2)
-						      (if (= (elt x 3) 1)
-							  `(> ,(elt x 0) ,(elt x 2))
-							  `(< ,(elt x 0) ,(elt x 2)))
-						      nil)) vars))
-		     (return-from ,inner-block-name nil))
-		 ,@do-forms
-		 (progn
-		   ,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) vars))
-		 (go ,tagname)))
-	    ,@finally-forms
-	    nil)))))
+       (let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) vars)
+	 ,@initially-forms
+	 (block ,inner-block-name
+	   (tagbody
+	      ,tagname
+	      (if (or ,@(mapcar (lambda (x) (if (elt x 2)
+						(if (= (elt x 3) 1)
+						    `(> ,(elt x 0) ,(elt x 2))
+						    `(< ,(elt x 0) ,(elt x 2)))
+						nil)) vars))
+		  (return-from ,inner-block-name nil))
+	      ,@do-forms
+	      (progn
+		,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) vars))
+	      (go ,tagname)))
+	 ,@finally-forms
+	 nil))))
 
 
 (defun format (out fstr &rest args)
