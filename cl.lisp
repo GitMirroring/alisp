@@ -783,7 +783,7 @@
 		((or (string= sym "BY"))
 		 (setq forms (cdr forms))
 		 (setf (elt var 4) (car forms)))))
-	    (append do-forms `(,form)))))
+	    (setq do-forms (append do-forms `(,form))))))
     `(block ,block-name
        (let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) vars)
 	 ,@initially-forms
