@@ -97,6 +97,7 @@
   (complex (realpart num) (- (imagpart num))))
 
 
+
 (defparameter *gensym-counter* 1)
 
 (defun gensym (&optional x)
@@ -111,6 +112,20 @@
        (write *gensym-counter* :stream str)
        (incf *gensym-counter*)))
     (make-symbol (get-output-stream-string str))))
+
+
+(defparameter gentemp-counter 1)
+
+(defun gentemp (&optional (pr "T") (pack *package*))
+  (let ((str (make-string-output-stream)))
+    (loop
+     (write-string pr str)
+     (write gentemp-counter :stream str)
+     (incf gentemp-counter)
+     (let ((s (get-output-stream-string str)))
+       (if (not (find-symbol s pack))
+	   (return-from gentemp (intern s pack)))))))
+
 
 
 (defun first (list) (nth 0 list))
@@ -823,18 +838,31 @@
 
 
 
+(defun encode-universal-time (sec min hour d m y &optional tz)
+  (+ (* (- y 1900) 31536000)
+     (* 86400 (+ (1+ (floor (- y 1900 1) 4))
+		 (- (1+ (floor (- y 1901) 100)))
+		 (floor (- y 1601))))
+     (* 86400 (nth m '(0 0 31 59 90 120 151 181 212 243 273 304 334)))
+     (* (1- d) 86400)
+     (* hour 3600)
+     (* min 60)
+     sec))
+
+
+
 
 (export '(*features* machine-instance machine-type machine-version
 	  lambda-parameters-limit call-arguments-limit multiple-values-limit
 	  array-rank-limit array-dimension-limit array-total-size-limit
 	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
 	  abs zerop mod rem evenp oddp isqrt conjugate *gensym-counter* gensym
-	  first second third fourth fifth sixth seventh eighth ninth tenth rest
-	  caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
-	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
-	  cdadar cdaddr cddaar cddadr cdddar cddddr endp when unless incf decf
-	  and or cond otherwise case return multiple-value-bind every some
-	  notany notevery member member-if member-if-not find find-if
+	  gentemp first second third fourth fifth sixth seventh eighth ninth
+	  tenth rest caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr
+	  cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
+	  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr endp when
+	  unless incf decf and or cond otherwise case return multiple-value-bind
+	  every some notany notevery member member-if member-if-not find find-if
 	  find-if-not assoc assoc-if assoc-if-not position position-if
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not nreverse adjoin fill push pop
