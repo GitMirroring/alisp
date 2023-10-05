@@ -442,6 +442,16 @@
   def)
 
 
+(defun get-properties (pl il)
+  (let ((l (length pl)))
+    (do ((i 0 (+ i 2)))
+	((>= i l))
+      (if (position-if (lambda (e) (eq e (car pl))) il)
+	  (return-from get-properties (values (car pl) (cadr pl) pl)))
+      (setq pl (cddr pl))))
+  (values nil nil nil))
+
+
 (defun char (str ind)
   (aref str ind))
 
@@ -877,15 +887,16 @@
 	  find-if-not assoc assoc-if assoc-if-not position position-if
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not nreverse adjoin fill push pop
-	  array-rank array-dimension array-total-size array-in-bounds-p get char
-	  string/= char-equal digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp characterp vectorp arrayp sequencep stringp
-	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
-	  fdefinition complement mapc terpri write-line write-sequence prin1
-	  princ print loop format))
+	  array-rank array-dimension array-total-size array-in-bounds-p get
+	  get-properties char string/= char-equal digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp characterp
+	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
+	  numberp macroexpand equal equalp fdefinition complement mapc terpri
+	  write-line write-sequence prin1 princ print loop format
+	  encode-universal-time))
 
 
 
