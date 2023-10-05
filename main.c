@@ -1649,6 +1649,9 @@ struct object *accessor_elt (struct object *list, struct object *newval,
 			     struct environment *env, struct outcome *outcome);
 struct object *accessor_gethash (struct object *list, struct object *newval,
 				 struct environment *env, struct outcome *outcome);
+struct object *accessor_symbol_plist (struct object *list, struct object *newval,
+				      struct environment *env,
+				      struct outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -2601,7 +2604,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("SYMBOL-PLIST", env, builtin_symbol_plist, TYPE_FUNCTION,
-		    NULL, 0);
+		    accessor_symbol_plist, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKUNBOUND", env, builtin_makunbound, TYPE_FUNCTION, NULL,
@@ -13388,6 +13391,34 @@ accessor_gethash (struct object *list, struct object *newval,
   delete_reference (table, table->value_ptr.hashtable->table [ind], ind);
 
   table->value_ptr.hashtable->table [ind] = newval;
+
+  increment_refcount (newval);
+  return newval;
+}
+
+
+struct object *
+accessor_symbol_plist (struct object *list, struct object *newval,
+		       struct environment *env, struct outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  list = evaluate_through_list (CDR (list), env, outcome);
+
+  if (!list)
+    return NULL;
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  SYMBOL (CAR (list))->value_ptr.symbol->plist = newval;
 
   increment_refcount (newval);
   return newval;
