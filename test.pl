@@ -483,6 +483,7 @@ make_test ("(symbol-package 'ggg)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(symbol-package :eee)", "#<PACKAGE \"KEYWORD\">");
 make_test ("(symbol-package '#:aaa)", "NIL");
 make_test ("(symbol-package (make-symbol \"aaa\"))", "NIL");
+make_test ("(symbol-plist 's)", "NIL");
 make_test ("(special-operator-p 'if)", "T");
 make_test ("(special-operator-p 'car)", "NIL");
 make_test ("(special-operator-p 'aaa)", "NIL");
