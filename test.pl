@@ -777,6 +777,7 @@ make_test ("(block test (write 1) (write 2) (return-from test 10) (write 3))", "
 make_test ("(block test (write 1) (block test2 (write 2) (return-from test 10) (write 3)))", "12\n10");
 make_test ("(block test (write 1) (block test2 (write 2) (return-from test (values 10 11)) (write 3)))", "12\n10\n11");
 make_test ("(block nil (return (values 11 12)))", "11\n12");
+make_test ("(block b (do nil (nil) (return-from b (values 0 1 2))))", "0\n1\n2");
 make_test ("(defun test () (write 1) (write 2) (return-from test 10) (write 3))", "TEST");
 make_test ("(test)", "12\n10");
 make_test ("(defun f () (throw 'label (values 0 1 2)))", "F");
