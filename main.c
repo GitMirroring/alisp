@@ -578,6 +578,8 @@ symbol
   int function_dyn_bins_num;
   struct object *function_cell;
 
+  struct object *plist;
+
   struct object *setf_expander;
 
   struct object *home_package;
@@ -1769,6 +1771,9 @@ struct object *builtin_symbol_name (struct object *list, struct environment *env
 struct object *builtin_symbol_package (struct object *list,
 				       struct environment *env,
 				       struct outcome *outcome);
+struct object *builtin_symbol_plist (struct object *list,
+				     struct environment *env,
+				     struct outcome *outcome);
 struct object *builtin_special_operator_p (struct object *list,
 					   struct environment *env,
 					   struct outcome *outcome);
@@ -2594,6 +2599,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("SYMBOL-PLIST", env, builtin_symbol_plist, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
@@ -6358,6 +6365,7 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->value_cell = NULL;
   sym->function_dyn_bins_num = 0;
   sym->function_cell = NULL;
+  sym->plist = &nil_object;
   sym->setf_expander = NULL;
   sym->home_package = NULL;
 
@@ -15009,6 +15017,28 @@ builtin_symbol_package (struct object *list, struct environment *env,
     }
 
   return SYMBOL (CAR (list))->value_ptr.symbol->home_package;
+}
+
+
+struct object *
+builtin_symbol_plist (struct object *list, struct environment *env,
+		      struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->plist);
+  return SYMBOL (CAR (list))->value_ptr.symbol->plist;
 }
 
 
