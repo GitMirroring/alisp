@@ -437,6 +437,8 @@ outcome
   struct object *block_to_leave;
   struct object *object_to_catch;
   struct object *return_value;
+  int return_no_value;
+  struct object_list *return_other_values;
 };
 
 
@@ -8428,6 +8430,9 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 		      outcome->block_to_leave = NULL;
 
 		      res = outcome->return_value;
+
+		      outcome->no_value = outcome->return_no_value;
+		      outcome->other_values = outcome->return_other_values;
 		    }
 
 		  goto cleanup_and_leave;
@@ -12271,6 +12276,9 @@ builtin_do (struct object *list, struct environment *env,
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	    }
 	  else
 	    ret = NULL;
@@ -12300,6 +12308,9 @@ builtin_do (struct object *list, struct environment *env,
 	{
 	  outcome->block_to_leave = NULL;
 	  ret = outcome->return_value;
+
+	  outcome->no_value = outcome->return_no_value;
+	  outcome->other_values = outcome->return_other_values;
 	}
       else
 	ret = NULL;
@@ -12322,6 +12333,9 @@ builtin_do (struct object *list, struct environment *env,
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	    }
 	  else
 	    ret = NULL;
@@ -12347,6 +12361,9 @@ builtin_do (struct object *list, struct environment *env,
 		    {
 		      outcome->block_to_leave = NULL;
 		      ret = outcome->return_value;
+
+		      outcome->no_value = outcome->return_no_value;
+		      outcome->other_values = outcome->return_other_values;
 		    }
 		  else
 		    ret = NULL;
@@ -12387,6 +12404,9 @@ builtin_do (struct object *list, struct environment *env,
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	    }
 	  else
 	    ret = NULL;
@@ -12401,6 +12421,9 @@ builtin_do (struct object *list, struct environment *env,
     {
       outcome->block_to_leave = NULL;
       ret = outcome->return_value;
+
+      outcome->no_value = outcome->return_no_value;
+      outcome->other_values = outcome->return_other_values;
     }
 
  cleanup_and_leave:
@@ -12445,6 +12468,9 @@ builtin_do_star (struct object *list, struct environment *env,
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	    }
 	  else
 	    ret = NULL;
@@ -12469,6 +12495,9 @@ builtin_do_star (struct object *list, struct environment *env,
 	{
 	  outcome->block_to_leave = NULL;
 	  ret = outcome->return_value;
+
+	  outcome->no_value = outcome->return_no_value;
+	  outcome->other_values = outcome->return_other_values;
 	}
       else
 	ret = NULL;
@@ -12489,6 +12518,9 @@ builtin_do_star (struct object *list, struct environment *env,
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	    }
 	  else
 	    ret = NULL;
@@ -12514,6 +12546,9 @@ builtin_do_star (struct object *list, struct environment *env,
 		    {
 		      outcome->block_to_leave = NULL;
 		      ret = outcome->return_value;
+
+		      outcome->no_value = outcome->return_no_value;
+		      outcome->other_values = outcome->return_other_values;
 		    }
 		  else
 		    ret = NULL;
@@ -12536,6 +12571,9 @@ builtin_do_star (struct object *list, struct environment *env,
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	    }
 	  else
 	    ret = NULL;
@@ -12550,6 +12588,9 @@ builtin_do_star (struct object *list, struct environment *env,
     {
       outcome->block_to_leave = NULL;
       ret = outcome->return_value;
+
+      outcome->no_value = outcome->return_no_value;
+      outcome->other_values = outcome->return_other_values;
     }
 
  cleanup_and_leave:
@@ -12590,6 +12631,8 @@ builtin_dotimes (struct object *list, struct environment *env,
       if (outcome->block_to_leave == &nil_object)
 	{
 	  outcome->block_to_leave = NULL;
+	  outcome->no_value = outcome->return_no_value;
+	  outcome->other_values = outcome->return_other_values;
 	  return outcome->return_value;
 	}
       else
@@ -12627,6 +12670,8 @@ builtin_dotimes (struct object *list, struct environment *env,
 	  if (outcome->block_to_leave == &nil_object)
 	    {
 	      outcome->block_to_leave = NULL;
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
@@ -12656,6 +12701,8 @@ builtin_dotimes (struct object *list, struct environment *env,
 	  if (outcome->block_to_leave == &nil_object)
 	    {
 	      outcome->block_to_leave = NULL;
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
@@ -12700,6 +12747,8 @@ builtin_dolist (struct object *list, struct environment *env,
       if (outcome->block_to_leave == &nil_object)
 	{
 	  outcome->block_to_leave = NULL;
+	  outcome->no_value = outcome->return_no_value;
+	  outcome->other_values = outcome->return_other_values;
 	  return outcome->return_value;
 	}
       else
@@ -12737,6 +12786,8 @@ builtin_dolist (struct object *list, struct environment *env,
 	  if (outcome->block_to_leave == &nil_object)
 	    {
 	      outcome->block_to_leave = NULL;
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
@@ -12769,6 +12820,8 @@ builtin_dolist (struct object *list, struct environment *env,
 	  if (outcome->block_to_leave == &nil_object)
 	    {
 	      outcome->block_to_leave = NULL;
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
@@ -18341,6 +18394,10 @@ evaluate_return_from (struct object *list, struct environment *env,
 
   outcome->block_to_leave = SYMBOL (CAR (list));
   outcome->return_value = ret;
+  outcome->return_no_value = outcome->no_value;
+  outcome->return_other_values = outcome->other_values;
+  outcome->no_value = 0;
+  outcome->other_values = 0;
 
   return NULL;
 }
@@ -18379,6 +18436,11 @@ evaluate_catch (struct object *list, struct environment *env,
       outcome->object_to_catch = NULL;
 
       ret = outcome->return_value;
+
+      outcome->no_value = outcome->return_no_value;
+      outcome->other_values = outcome->return_other_values;
+      outcome->return_no_value = 0;
+      outcome->return_other_values = NULL;
     }
 
   decrement_refcount (t);
@@ -18437,6 +18499,10 @@ evaluate_throw (struct object *list, struct environment *env,
 
   outcome->object_to_catch = t;
   outcome->return_value = ret;
+  outcome->return_no_value = outcome->no_value;
+  outcome->return_other_values = outcome->other_values;
+  outcome->no_value = 0;
+  outcome->other_values = 0;
 
   return NULL;
 }
