@@ -431,6 +431,17 @@
 	  (array-dimensions array))))
 
 
+(defun get (sym ind &optional (def nil))
+  (let* ((pl (symbol-plist sym))
+	 (l (length pl)))
+    (do ((i 0 (+ i 2)))
+	((>= i l))
+      (if (eq (car pl) ind)
+	  (return-from get (cadr pl)))
+      (setq pl (cddr pl))))
+  def)
+
+
 (defun char (str ind)
   (aref str ind))
 
@@ -866,7 +877,7 @@
 	  find-if-not assoc assoc-if assoc-if-not position position-if
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not nreverse adjoin fill push pop
-	  array-rank array-dimension array-total-size array-in-bounds-p char
+	  array-rank array-dimension array-total-size array-in-bounds-p get char
 	  string/= char-equal digit-char digit-char-p char-int string-upcase
 	  string-downcase string-capitalize nstring-upcase nstring-downcase
 	  nstring-capitalize string-left-trim string-right-trim string-trim
