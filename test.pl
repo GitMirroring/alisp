@@ -484,6 +484,8 @@ make_test ("(symbol-package :eee)", "#<PACKAGE \"KEYWORD\">");
 make_test ("(symbol-package '#:aaa)", "NIL");
 make_test ("(symbol-package (make-symbol \"aaa\"))", "NIL");
 make_test ("(symbol-plist 's)", "NIL");
+make_test ("(setf (symbol-plist 's) (list :a 0 :b 1))", "(:A 0 :B 1)");
+make_test ("(symbol-plist 's)", "(:A 0 :B 1)");
 make_test ("(special-operator-p 'if)", "T");
 make_test ("(special-operator-p 'car)", "NIL");
 make_test ("(special-operator-p 'aaa)", "NIL");
