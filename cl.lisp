@@ -124,7 +124,7 @@
      (incf gentemp-counter)
      (let ((s (get-output-stream-string str)))
        (if (not (find-symbol s pack))
-	   (return-from gentemp (intern s pack)))))))
+	   (return-from gentemp (values (intern s pack))))))))
 
 
 
