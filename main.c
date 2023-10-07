@@ -13151,39 +13151,31 @@ struct object *
 accessor_car (struct object *list, struct object *newval,
 	      struct environment *env, struct outcome *outcome)
 {
-  struct object *obj;
-
-  if (list_length (list) != 2)
+  if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (IS_SYMBOL (CAR (CDR (list)))
+  /*if (IS_SYMBOL (CAR (CDR (list)))
       && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
     {
       outcome->type = CANT_MODIFY_CONSTANT;
       return NULL;
-    }
+      }*/
 
-  obj = evaluate_object (CAR (CDR (list)), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!obj)
-    return NULL;
-
-  if (obj->type != TYPE_CONS_PAIR)
+  if (CAR (list)->type != TYPE_CONS_PAIR)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  add_reference (obj, newval, 0);
+  add_reference (CAR (list), newval, 0);
   decrement_refcount (newval);
 
-  delete_reference (obj, CAR (obj), 0);
+  delete_reference (CAR (list), CAR (CAR (list)), 0);
 
-  obj->value_ptr.cons_pair->car = newval;
+  CAR (list)->value_ptr.cons_pair->car = newval;
 
   increment_refcount (newval);
   return newval;
@@ -13194,39 +13186,31 @@ struct object *
 accessor_cdr (struct object *list, struct object *newval,
 	      struct environment *env, struct outcome *outcome)
 {
-  struct object *obj;
-
-  if (list_length (list) != 2)
+  if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (IS_SYMBOL (CAR (CDR (list)))
+  /*if (IS_SYMBOL (CAR (CDR (list)))
       && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
     {
       outcome->type = CANT_MODIFY_CONSTANT;
       return NULL;
-    }
+      }*/
 
-  obj = evaluate_object (CAR (CDR (list)), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!obj)
-    return NULL;
-
-  if (obj->type != TYPE_CONS_PAIR)
+  if (CAR (list)->type != TYPE_CONS_PAIR)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  add_reference (obj, newval, 1);
+  add_reference (CAR (list), newval, 1);
   decrement_refcount (newval);
 
-  delete_reference (obj, CDR (obj), 1);
+  delete_reference (CAR (list), CDR (CAR (list)), 1);
 
-  obj->value_ptr.cons_pair->cdr = newval;
+  CAR (list)->value_ptr.cons_pair->cdr = newval;
 
   increment_refcount (newval);
   return newval;
@@ -13240,16 +13224,11 @@ accessor_aref (struct object *list, struct object *newval,
   struct object *ret, *lin_ind;
   int l = list_length (list), ind;
 
-  if (l < 2)
+  if (!l)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
-
-  list = evaluate_through_list (CDR (list), env, outcome);
-
-  if (!list)
-    return NULL;
 
   if (!IS_ARRAY (CAR (list)))
     {
@@ -13259,7 +13238,7 @@ accessor_aref (struct object *list, struct object *newval,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      if (l != 3)
+      if (l != 2)
 	{
 	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
 	  return NULL;
@@ -13324,16 +13303,11 @@ accessor_elt (struct object *list, struct object *newval,
   struct object *ret, *cons;
   int ind;
 
-  if (list_length (list) != 3)
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
-
-  list = evaluate_through_list (CDR (list), env, outcome);
-
-  if (!list)
-    return NULL;
 
   if (!IS_SEQUENCE (CAR (list)) || CAR (CDR (list))->type != TYPE_INTEGER)
     {
@@ -13409,41 +13383,29 @@ struct object *
 accessor_gethash (struct object *list, struct object *newval,
 		  struct environment *env, struct outcome *outcome)
 {
-  struct object *key, *table;
   int ind;
 
-  if (list_length (list) != 3)
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  key = evaluate_object (CAR (CDR (list)), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!key)
-    return NULL;
-
-  table = evaluate_object (CAR (CDR (CDR (list))), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!table)
-    return NULL;
-
-  if (table->type != TYPE_HASHTABLE)
+  if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  ind = hash_object_respecting_eq (key, LISP_HASHTABLE_SIZE);
+  ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
 
-  add_reference (table, newval, ind);
+  add_reference (CAR (CDR (list)), newval, ind);
   decrement_refcount (newval);
 
-  delete_reference (table, table->value_ptr.hashtable->table [ind], ind);
+  delete_reference (CAR (CDR (list)),
+		    CAR (CDR (list))->value_ptr.hashtable->table [ind], ind);
 
-  table->value_ptr.hashtable->table [ind] = newval;
+  CAR (CDR (list))->value_ptr.hashtable->table [ind] = newval;
 
   increment_refcount (newval);
   return newval;
@@ -13454,16 +13416,11 @@ struct object *
 accessor_symbol_plist (struct object *list, struct object *newval,
 		       struct environment *env, struct outcome *outcome)
 {
-  if (list_length (list) != 2)
+  if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
-
-  list = evaluate_through_list (CDR (list), env, outcome);
-
-  if (!list)
-    return NULL;
 
   if (!IS_SYMBOL (CAR (list)))
     {
@@ -17698,6 +17655,11 @@ evaluate_setf (struct object *list, struct environment *env,
 
 	  if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor)
 	    {
+	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
+
+	      if (!args)
+		return NULL;
+
 	      val = evaluate_object (CAR (CDR (list)), env, outcome);
 	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
@@ -17705,7 +17667,7 @@ evaluate_setf (struct object *list, struct environment *env,
 		return NULL;
 
 	      val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
-		(CAR (list), val, env, outcome);
+		(args, val, env, outcome);
 
 	      if (!val)
 		return NULL;
