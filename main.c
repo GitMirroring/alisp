@@ -489,7 +489,7 @@ environment
 
   struct object *c_stdout;
 
-  struct object *quote_sym, *function_sym, *lambda_sym;
+  struct object *quote_sym, *function_sym, *lambda_sym, *setf_sym;
 
   struct object *declare_sym, *ignorable_sym, *ignore_sym, *inline_sym,
     *notinline_sym, *optimize_sym, *compilation_speed_sym, *debug_sym,
@@ -585,6 +585,9 @@ symbol
   struct object *setf_expander;
 
   struct object *home_package;
+
+  int setf_func_dyn_bins_num;
+  struct object *setf_func_cell;
 };
 
 
@@ -650,6 +653,7 @@ function
 
   struct parameter *lambda_list;
   int allow_other_keys;
+  int is_setf_func;
   int min_args;
   int max_args;
 
@@ -1882,7 +1886,7 @@ struct object *evaluate_macrolet
 
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 struct object *get_function (struct object *sym, struct environment *env,
-			     int only_functions, int only_globals,
+			     int only_functions, int setf_func, int only_globals,
 			     int increment_refc);
 
 struct object *inspect_variable_by_c_string (char *var,
@@ -2759,6 +2763,7 @@ add_standard_definitions (struct environment *env)
   env->quote_sym = CREATE_BUILTIN_SYMBOL ("QUOTE");
   env->function_sym = CREATE_BUILTIN_SYMBOL ("FUNCTION");
   env->lambda_sym = CREATE_BUILTIN_SYMBOL ("LAMBDA");
+  env->setf_sym = CREATE_BUILTIN_SYMBOL ("SETF");
 
   env->declare_sym = CREATE_BUILTIN_SYMBOL ("DECLARE");
   env->ignorable_sym = CREATE_BUILTIN_SYMBOL ("IGNORABLE");
@@ -5227,6 +5232,7 @@ alloc_function (void)
 
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
+  fun->is_setf_func = 0;
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
   fun->body = NULL;
@@ -6373,6 +6379,8 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->plist = &nil_object;
   sym->setf_expander = NULL;
   sym->home_package = NULL;
+  sym->setf_func_dyn_bins_num = 0;
+  sym->setf_func_cell = NULL;
 
   obj->value_ptr.symbol = sym;
 
@@ -15002,7 +15010,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = get_function (SYMBOL (s), env, 0, 1, 1);
+  ret = get_function (SYMBOL (s), env, 0, 0, 1, 1);
 
   if (!ret)
     {
@@ -15194,7 +15202,7 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list)))
-      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 0))
+      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 0, 0))
       && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
       ret = call_function (mac, CDR (CAR (list)), 0, 0, env, outcome);
@@ -16908,22 +16916,38 @@ get_dynamic_value (struct object *sym, struct environment *env)
 
 struct object *
 get_function (struct object *sym, struct environment *env, int only_functions,
-	      int only_globals, int increment_refc)
+	      int setf_func, int only_globals, int increment_refc)
 {
   struct object *f;
-  struct binding *b;
+  struct binding *b = NULL, *n = NULL;
 
   if (!only_globals)
     {
-      b = find_binding (SYMBOL (sym)->value_ptr.symbol, env->funcs, ANY_BINDING,
-			env->lex_env_funcs_boundary);
+      do
+	{
+	  if (n)
+	    n = b->next;
+	  else
+	    n = env->funcs;
+
+	  b = find_binding (SYMBOL (sym)->value_ptr.symbol, n, ANY_BINDING,
+			    env->lex_env_funcs_boundary);
+
+	} while (b && setf_func && (b->obj->type != TYPE_FUNCTION
+				    || !b->obj->value_ptr.function->is_setf_func));
     }
 
-  if ((only_globals || !b) && !SYMBOL (sym)->value_ptr.symbol->function_cell)
-    return NULL;
+  if ((only_globals || !b)
+      && ((!setf_func && !SYMBOL (sym)->value_ptr.symbol->function_cell)
+	  || (setf_func && !SYMBOL (sym)->value_ptr.symbol->setf_func_cell)))
+    {
+      return NULL;
+    }
 
-  if (!only_globals && b)
+  if (b)
     f = b->obj;
+  else if (setf_func)
+    f = SYMBOL (sym)->value_ptr.symbol->setf_func_cell;
   else
     f = SYMBOL (sym)->value_ptr.symbol->function_cell;
 
@@ -17440,16 +17464,20 @@ struct object *
 evaluate_defun (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *fun, *sym;
+  struct object *fun, *sym, *ret;
 
-  if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
+  if (list_length (list) < 2
+      || (!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
+				       && list_length (CAR (list)) == 2
+				       && SYMBOL (CAR (CAR (list))) == env->setf_sym))
       || (!IS_LIST (CAR (CDR (list)))))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
       return NULL;
     }
 
-  sym = SYMBOL (CAR (list));
+  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
 
   if (sym->value_ptr.symbol->function_cell
       && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
@@ -17464,21 +17492,46 @@ evaluate_defun (struct object *list, struct environment *env,
   if (!fun)
     return NULL;
 
-  if (sym->value_ptr.symbol->function_cell)
+  if (IS_SYMBOL (CAR (list)))
     {
-      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+      if (sym->value_ptr.symbol->function_cell)
+	{
+	  delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+	}
+      else
+	{
+	  increment_refcount (sym);
+	}
+
+      sym->value_ptr.symbol->function_cell = fun;
+      add_strong_reference (sym, fun, 1);
+      decrement_refcount (fun);
     }
   else
     {
-      increment_refcount (sym);
+      sym->value_ptr.symbol->setf_func_cell = fun;
     }
-
-  sym->value_ptr.symbol->function_cell = fun;
-  add_strong_reference (sym, fun, 1);
-  decrement_refcount (fun);
 
   fun->value_ptr.function->name = sym;
   add_reference (fun, sym, 0);
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      fun->value_ptr.function->is_setf_func = 1;
+
+      ret = alloc_empty_cons_pair ();
+
+      increment_refcount (env->setf_sym);
+      ret->value_ptr.cons_pair->car = env->setf_sym;
+
+      ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+
+      increment_refcount (sym);
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = sym;
+
+      return ret;
+    }
 
   increment_refcount (sym);
   return sym;
@@ -17783,8 +17836,31 @@ evaluate_setf (struct object *list, struct environment *env,
 	    }
 	  else
 	    {
-	      outcome->type = INVALID_ACCESSOR;
-	      return NULL;
+	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
+
+	      if (!args)
+		return NULL;
+
+	      val = evaluate_object (CAR (CDR (list)), env, outcome);
+
+	      if (!val)
+		return NULL;
+
+	      fun = get_function (SYMBOL (CAR (CAR (list))), env, 1, 1, 0, 0);
+
+	      if (!fun)
+		{
+		  outcome->type = INVALID_ACCESSOR;
+		  return NULL;
+		}
+
+	      cons1 = alloc_empty_cons_pair ();
+	      cons1->value_ptr.cons_pair->car = val;
+	      cons1->value_ptr.cons_pair->cdr = args;
+
+	      val = call_function (fun, cons1, 0, 0, env, outcome);
+
+	      return val;
 	    }
 	}
       else
@@ -17816,17 +17892,21 @@ evaluate_function (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
-      && (CAR (list)->type != TYPE_CONS_PAIR
-	  || SYMBOL (CAR (CAR (list))) != env->lambda_sym))
+      && !(CAR (list)->type == TYPE_CONS_PAIR && list_length (CAR (list)) == 2
+	   && SYMBOL (CAR (CAR (list))) == env->setf_sym)
+      && !(CAR (list)->type == TYPE_CONS_PAIR
+	   && SYMBOL (CAR (CAR (list))) == env->lambda_sym))
     {
       outcome->type = NOT_A_FUNCTION_NAME_OR_LAMBDA_IN_FUNCTION;
 
       return NULL;
     }
 
-  if (IS_SYMBOL (CAR (list)))
+  if (IS_SYMBOL (CAR (list)) || SYMBOL (CAR (CAR (list))) == env->setf_sym)
     {
-      f = get_function (SYMBOL (CAR (list)), env, 1, 0, 1);
+      f = get_function (IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+			: SYMBOL (CAR (CDR (CAR (list)))), env, 1,
+			CAR (list)->type == TYPE_CONS_PAIR, 0, 1);
 
       if (!f)
 	{
@@ -17892,7 +17972,7 @@ evaluate_apply (struct object *list, struct environment *env,
     {
       s = SYMBOL (CAR (list));
 
-      fun = get_function (s, env, 1, 0, 0);
+      fun = get_function (s, env, 1, 0, 0, 0);
 
       if (!fun)
 	{
@@ -17939,7 +18019,7 @@ evaluate_funcall (struct object *list, struct environment *env,
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
 
       if (!fun)
 	{
@@ -19800,7 +19880,13 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 {
   if (obj->type == TYPE_FUNCTION)
     {
-      if (write_to_stream (str, "#<FUNCTION ", strlen ("#<FUNCTION ")) < 0)
+      if (obj->value_ptr.function->is_setf_func)
+	{
+	  if (write_to_stream (str, "#<FUNCTION (SETF ",
+			       strlen ("#<FUNCTION (SETF ")) < 0)
+	    return -1;
+	}
+      else if (write_to_stream (str, "#<FUNCTION ", strlen ("#<FUNCTION ")) < 0)
 	return -1;
 
       if (obj->value_ptr.function->builtin_form
@@ -19815,7 +19901,10 @@ print_function_or_macro (const struct object *obj, struct environment *env,
       else if (write_to_stream (str, "?", 1) < 0)
 	return -1;
 
-      return write_to_stream (str, ">", 1);
+      if (obj->value_ptr.function->is_setf_func)
+	return write_to_stream (str, ")>", 2);
+      else
+	return write_to_stream (str, ">", 1);
     }
   else
     {
