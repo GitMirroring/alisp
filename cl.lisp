@@ -176,6 +176,20 @@
 (defun endp (l) (null l))
 
 
+(defun butlast (ls &optional (n 1))
+  (let* ((l (length ls))
+	 (last (max 0 (- l n)))
+	 out)
+    (dotimes (i last)
+      (setq out (cons (car ls) out))
+      (setq ls (cdr ls)))
+    (reverse out)))
+
+
+(defun nbutlast (ls &optional (n 1))
+  (butlast ls n))
+
+
 
 (define-setf-expander symbol-value (sym)
   (let ((var (gensym))
@@ -881,21 +895,21 @@
 	  gentemp first second third fourth fifth sixth seventh eighth ninth
 	  tenth rest caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr
 	  cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
-	  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr endp when
-	  unless incf decf and or cond otherwise case return multiple-value-bind
-	  every some notany notevery member member-if member-if-not find find-if
-	  find-if-not assoc assoc-if assoc-if-not position position-if
-	  position-if-not count count-if count-if-not remove remove-if-not
-	  delete delete-if delete-if-not nreverse adjoin fill push pop
-	  array-rank array-dimension array-total-size array-in-bounds-p get
-	  get-properties char string/= char-equal digit-char digit-char-p
-	  char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp characterp
-	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
-	  numberp macroexpand equal equalp fdefinition complement mapc terpri
-	  write-line write-sequence prin1 princ print loop format
+	  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr endp butlast
+	  nbutlast when unless incf decf and or cond otherwise case return
+	  multiple-value-bind every some notany notevery member member-if
+	  member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
+	  position position-if position-if-not count count-if count-if-not
+	  remove remove-if-not delete delete-if delete-if-not nreverse adjoin
+	  fill push pop array-rank array-dimension array-total-size
+	  array-in-bounds-p get get-properties char string/= char-equal
+	  digit-char digit-char-p char-int string-upcase string-downcase
+	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
+	  string-left-trim string-right-trim string-trim defpackage consp listp
+	  symbolp keywordp functionp packagep integerp rationalp floatp complexp
+	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
+	  streamp realp numberp macroexpand equal equalp fdefinition complement
+	  mapc terpri write-line write-sequence prin1 princ print loop format
 	  encode-universal-time))
 
 
