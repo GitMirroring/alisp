@@ -1738,6 +1738,10 @@ struct object *builtin_min (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_max (struct object *list, struct environment *env,
 			    struct outcome *outcome);
+struct object *builtin_lognot (struct object *list, struct environment *env,
+			       struct outcome *outcome);
+struct object *builtin_logior (struct object *list, struct environment *env,
+			       struct outcome *outcome);
 
 struct object *builtin_byte (struct object *list, struct environment *env,
 			     struct outcome *outcome);
@@ -2530,6 +2534,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MIN", env, builtin_min, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAX", env, builtin_max, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LOGNOT", env, builtin_lognot, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LOGIOR", env, builtin_logior, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, NULL, 1);
@@ -14415,6 +14421,72 @@ builtin_max (struct object *list, struct environment *env,
     }
 
   increment_refcount (ret);
+  return ret;
+}
+
+
+struct object *
+builtin_lognot (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_number (TYPE_INTEGER);
+
+  mpz_com (ret->value_ptr.integer, CAR (list)->value_ptr.integer);
+
+  return ret;
+}
+
+
+struct object *
+builtin_logior (struct object *list, struct environment *env,
+	       struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      return create_integer_from_long (0);
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_number (TYPE_INTEGER);
+  mpz_set (ret->value_ptr.integer, CAR (list)->value_ptr.integer);
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (CAR (list)->type != TYPE_INTEGER)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      mpz_ior (ret->value_ptr.integer, ret->value_ptr.integer,
+	       CAR (list)->value_ptr.integer);
+
+      list = CDR (list);
+    }
+
   return ret;
 }
 
