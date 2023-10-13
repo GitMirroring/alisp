@@ -772,6 +772,8 @@ make_test ("#'make-ship", "#<FUNCTION MAKE-SHIP>");
 make_test ("#'ship-x", "#<FUNCTION SHIP-X>");
 make_test ("(defparameter s1 (make-ship))", "S1");
 make_test ("s1", "#<STRUCTURE OF CLASS SHIP>");
+make_test ("(typep s1 'ship)", "T");
+make_test ("(typep 0 'ship)", "NIL");
 make_test ("(ship-x s1)", "NIL");
 make_test ("(ship-y s1)", "NIL");
 make_test ("(setf (ship-x s1) 0)", "0");
