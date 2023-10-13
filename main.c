@@ -17541,7 +17541,8 @@ evaluate_defun (struct object *list, struct environment *env,
   if (list_length (list) < 2
       || (!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
 				       && list_length (CAR (list)) == 2
-				       && SYMBOL (CAR (CAR (list))) == env->setf_sym))
+				       && SYMBOL (CAR (CAR (list))) == env->setf_sym
+				       && IS_SYMBOL (CAR (CDR (CAR (list))))))
       || (!IS_LIST (CAR (CDR (list)))))
     {
       outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
@@ -17965,7 +17966,8 @@ evaluate_function (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
       && !(CAR (list)->type == TYPE_CONS_PAIR && list_length (CAR (list)) == 2
-	   && SYMBOL (CAR (CAR (list))) == env->setf_sym)
+	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	   && IS_SYMBOL (CAR (CDR (CAR (list)))))
       && !(CAR (list)->type == TYPE_CONS_PAIR
 	   && SYMBOL (CAR (CAR (list))) == env->lambda_sym))
     {
