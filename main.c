@@ -9013,7 +9013,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	}
       else
 	{
-	  outcome->type = INVALID_TYPE_SPECIFIER;
+	  outcome->type = UNKNOWN_TYPE;
 	  return -1;
 	}
     }
