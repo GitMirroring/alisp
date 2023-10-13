@@ -135,6 +135,44 @@
       (t (logxor (car ints) (apply 'logxor (cdr ints)))))))
 
 
+(defconstant boole-1 'boole-1)
+(defconstant boole-2 'boole-2)
+(defconstant boole-andc1 'boole-andc1)
+(defconstant boole-andc2  'boole-andc2)
+(defconstant boole-and 'boole-and)
+(defconstant boole-c1 'boole-c1)
+(defconstant boole-c2 'boole-c2)
+(defconstant boole-clr 'boole-clr)
+(defconstant boole-eqv 'boole-eqv)
+(defconstant boole-ior 'boole-ior)
+(defconstant boole-nand 'boole-nand)
+(defconstant boole-nor 'boole-nor)
+(defconstant boole-orc1 'boole-orc1)
+(defconstant boole-orc2 'boole-orc2)
+(defconstant boole-set 'boole-set)
+(defconstant boole-xor 'boole-xor)
+
+(defun boole (op int1 int2)
+  (cond
+    ((eq op 'boole-1) int1)
+    ((eq op 'boole-2) int2)
+    ((eq op 'boole-andc1) (logandc1 int1 int2))
+    ((eq op 'boole-andc2) (logandc2 int1 int2))
+    ((eq op 'boole-and) (logand int1 int2))
+    ((eq op 'boole-c1) (lognot int1))
+    ((eq op 'boole-c2) (lognot int2))
+    ((eq op 'boole-clr) 0)
+    ((eq op 'boole-eqv) (logeqv int1 int2))
+    ((eq op 'boole-ior) (logior int1 int2))
+    ((eq op 'boole-nand) (lognand int1 int2))
+    ((eq op 'boole-nor) (lognor int1 int2))
+    ((eq op 'boole-orc1) (logorc1 int1 int2))
+    ((eq op 'boole-orc2) (logorc2 int1 int2))
+    ((eq op 'boole-set) -1)
+    ((eq op 'boole-xor) (logxor int1 int2))
+    (t (+ ""))))
+
+
 
 (defparameter *gensym-counter* 1)
 
@@ -930,25 +968,28 @@
 	  array-rank-limit array-dimension-limit array-total-size-limit
 	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
 	  abs zerop mod rem evenp oddp isqrt conjugate logand logandc1 logandc2
-	  logeqv lognand lognor logorc1 logorc2 logxor *gensym-counter* gensym
-	  gentemp first second third fourth fifth sixth seventh eighth ninth
-	  tenth rest caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr
-	  cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
-	  cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr endp butlast
-	  nbutlast when unless incf decf and or cond otherwise case return
-	  multiple-value-bind every some notany notevery member member-if
-	  member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
-	  position position-if position-if-not count count-if count-if-not
-	  remove remove-if-not delete delete-if delete-if-not nreverse adjoin
-	  fill push pop array-rank array-dimension array-total-size
-	  array-in-bounds-p get get-properties char string/= char-equal
-	  digit-char digit-char-p char-int string-upcase string-downcase
-	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
-	  string-left-trim string-right-trim string-trim defpackage consp listp
-	  symbolp keywordp functionp packagep integerp rationalp floatp complexp
-	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
-	  streamp realp numberp macroexpand equal equalp fdefinition complement
-	  mapc terpri write-line write-sequence prin1 princ print loop format
+	  logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
+	  boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
+	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
+	  boole-set boole-xor boole *gensym-counter* gensym gentemp first second
+	  third fourth fifth sixth seventh eighth ninth tenth rest caar cadr
+	  cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr caaaar
+	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
+	  cdaddr cddaar cddadr cdddar cddddr endp butlast nbutlast when unless
+	  incf decf and or cond otherwise case return multiple-value-bind every
+	  some notany notevery member member-if member-if-not find find-if
+	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not nreverse adjoin fill push pop
+	  array-rank array-dimension array-total-size array-in-bounds-p get
+	  get-properties char string/= char-equal digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp characterp
+	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
+	  numberp macroexpand equal equalp fdefinition complement mapc terpri
+	  write-line write-sequence prin1 princ print loop format
 	  encode-universal-time))
 
 
