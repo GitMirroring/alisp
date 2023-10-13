@@ -1505,6 +1505,8 @@ int type_file_stream (const struct object *obj, const struct object *typespec,
 int type_string_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
 
+int type_type_error (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct outcome *outcome);
 int type_file_error (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome);
 int type_division_by_zero (const struct object *obj,
@@ -2717,12 +2719,15 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
 		    (char *)NULL);
 
+
+  add_builtin_type ("TYPE-ERROR", env, type_type_error, 1, (char *)NULL);
   add_builtin_type ("FILE-ERROR", env, type_file_error, 1, (char *)NULL);
   add_builtin_type ("DIVISION-BY-ZERO", env, type_division_by_zero, 1,
 		    (char *)NULL);
   add_builtin_type ("ARITHMETIC-ERROR", env, type_arithmetic_error, 1,
 		    (char *)NULL);
   add_builtin_type ("ERROR", env, type_error, 1, (char *)NULL);
+
 
   env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
 							strlen ("&OPTIONAL"),
@@ -7197,7 +7202,9 @@ int
 does_condition_include_outcome_type (struct object *cond, enum outcome_type type,
 				     struct environment *env)
 {
-  if ((cond == BUILTIN_SYMBOL ("DIVISION-BY-ZERO")
+  if ((cond == BUILTIN_SYMBOL ("TYPE-ERROR")
+      && type == WRONG_TYPE_OF_ARGUMENT)
+      || (cond == BUILTIN_SYMBOL ("DIVISION-BY-ZERO")
        && type == CANT_DIVIDE_BY_ZERO)
       || (cond == BUILTIN_SYMBOL ("ARITHMETIC-ERROR")
 	  && type == CANT_DIVIDE_BY_ZERO)
@@ -9938,6 +9945,14 @@ type_string_stream (const struct object *obj, const struct object *typespec,
 {
   return obj->type == TYPE_STREAM
     && obj->value_ptr.stream->medium == STRING_STREAM;
+}
+
+
+int
+type_type_error (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct outcome *outcome)
+{
+  return 0;
 }
 
 
