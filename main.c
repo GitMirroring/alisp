@@ -8994,6 +8994,12 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 
 	  return 0;
 	}
+      else if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->typespec
+	       && sym->value_ptr.symbol->typespec->type == TYPE_STRUCTURE_CLASS)
+	{
+	  return obj->type == TYPE_STRUCTURE
+	    && obj->value_ptr.structure->class == sym->value_ptr.symbol->typespec;
+	}
       else if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->typespec)
 	{
 	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, env,
@@ -18363,6 +18369,8 @@ evaluate_defstruct (struct object *list, struct environment *env,
   increment_refcount (name);
   sc->name = name;
 
+  name->value_ptr.symbol->is_type = 1;
+  name->value_ptr.symbol->typespec = strcl;
 
   sc->fields = NULL;
   list = CDR (list);
