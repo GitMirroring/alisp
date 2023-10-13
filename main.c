@@ -15045,7 +15045,10 @@ builtin_fboundp (struct object *list, struct environment *env,
 
   s = CAR (list);
 
-  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL
+      && !(CAR (list)->type == TYPE_CONS_PAIR && list_length (CAR (list)) == 2
+	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -15053,9 +15056,14 @@ builtin_fboundp (struct object *list, struct environment *env,
 
   sym = SYMBOL (s);
 
-  if (sym->value_ptr.symbol->function_cell
-      || sym->value_ptr.symbol->function_dyn_bins_num)
-    return &t_object;
+  if ((CAR (list)->type == TYPE_CONS_PAIR
+       && SYMBOL (CAR (CDR (CAR (list))))->value_ptr.symbol->setf_func_cell)
+      || (CAR (list)->type != TYPE_CONS_PAIR &&
+	  (sym->value_ptr.symbol->function_cell
+	   || sym->value_ptr.symbol->function_dyn_bins_num)))
+    {
+      return &t_object;
+    }
 
   return &nil_object;
 }
