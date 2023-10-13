@@ -97,6 +97,44 @@
   (complex (realpart num) (- (imagpart num))))
 
 
+(defun logand (&rest ints)
+  (lognot (apply 'logior (mapcar #'lognot ints))))
+
+(defun logandc1 (int1 int2)
+  (logand (lognot int1) int2))
+
+(defun logandc2 (int1 int2)
+  (logand int1 (lognot int2)))
+
+(defun logeqv (&rest ints)
+  (let ((l (length ints)))
+    (cond
+      ((= l 0) -1)
+      ((= l 1) (car ints))
+      ((= l 2) (lognot (logxor (car ints) (cadr ints))))
+      (t (logeqv (car ints) (apply 'logeqv (cdr ints)))))))
+
+(defun lognand (int1 int2)
+  (lognot (logand int1 int2)))
+
+(defun lognor (int1 int2)
+  (lognot (logior int1 int2)))
+
+(defun logorc1 (int1 int2)
+  (logior (lognot int1) int2))
+
+(defun logorc2 (int1 int2)
+  (logior int1 (lognot int2)))
+
+(defun logxor (&rest ints)
+  (let ((l (length ints)))
+    (cond
+      ((= l 0) 0)
+      ((= l 1) (car ints))
+      ((= l 2) (logand (logior (car ints) (cadr ints)) (lognot (logand (car ints) (cadr ints)))))
+      (t (logxor (car ints) (apply 'logxor (cdr ints)))))))
+
+
 
 (defparameter *gensym-counter* 1)
 
@@ -891,7 +929,8 @@
 	  lambda-parameters-limit call-arguments-limit multiple-values-limit
 	  array-rank-limit array-dimension-limit array-total-size-limit
 	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
-	  abs zerop mod rem evenp oddp isqrt conjugate *gensym-counter* gensym
+	  abs zerop mod rem evenp oddp isqrt conjugate logand logandc1 logandc2
+	  logeqv lognand lognor logorc1 logorc2 logxor *gensym-counter* gensym
 	  gentemp first second third fourth fifth sixth seventh eighth ninth
 	  tenth rest caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr
 	  cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr
