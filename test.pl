@@ -348,6 +348,8 @@ make_test ("(f :a 0)", "NIL");
 make_test ("(defun f (&key x &allow-other-keys) x)", "F");
 make_test ("(f :x 0 :y 1)", "0");
 make_test ("(f)", "NIL");
+make_test ("(defun f (x y &aux (z (+ x y)) w) (list z w))", "F");
+make_test ("(f 1 2)", "(3 NIL)");
 make_test ("(let ((x 0)) (defun inc () (setf x (+ x 1))))", "INC");
 make_test ("(inc)", "1");
 make_test ("(inc)", "2");
