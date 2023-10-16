@@ -915,6 +915,8 @@ make_test ("(count-if-not #'evenp #(0 1 2))", "1");
 make_test ("(machine-type)", "NIL");
 make_test ("(machine-instance)", "NIL");
 make_test ("(machine-version)", "NIL");
+make_test ("(short-site-name)", "NIL");
+make_test ("(long-site-name)", "NIL");
 
 make_test ("#+common-lisp \"\" \"\"", "\"\"\n\"\"");
 make_test ("#-common-lisp \"\" \"\"", "\"\"");
