@@ -1856,6 +1856,9 @@ struct object *builtin_use_package (struct object *list, struct environment *env
 struct object *builtin_unuse_package (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *builtin_get_internal_run_time (struct object *list,
+					      struct environment *env,
+					      struct outcome *outcome);
 struct object *builtin_get_decoded_time (struct object *list,
 					 struct environment *env,
 					 struct outcome *outcome);
@@ -2664,6 +2667,8 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("GET-DECODED-TIME", env, builtin_get_decoded_time,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
@@ -2760,6 +2765,9 @@ add_standard_definitions (struct environment *env)
 			   create_integer_from_long (FIXNUM_MAX), env);
   define_constant_by_name ("MOST-NEGATIVE-FIXNUM",
 			   create_integer_from_long (FIXNUM_MIN), env);
+
+  define_constant_by_name ("INTERNAL-TIME-UNITS-PER-SECOND",
+			   create_integer_from_long (CLOCKS_PER_SEC), env);
 
   env->std_in_sym = define_variable ("*STANDARD-INPUT*",
 				     create_stream_from_open_file
@@ -16658,6 +16666,20 @@ builtin_unuse_package (struct object *list, struct environment *env,
     } while (cons && SYMBOL (cons) != &nil_object);
 
   return &t_object;
+}
+
+
+struct object *
+builtin_get_internal_run_time (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  return create_integer_from_long (clock ());
 }
 
 
