@@ -404,6 +404,7 @@ make_test ("(typep 0.1 'short-float)", "T");
 make_test ("(typep 0.1 'long-float)", "T");
 make_test ("(typep 1.0 'complex)", "NIL");
 make_test ("(typep (complex 1 1) 'complex)", "T");
+make_test ("(typep (make-random-state) 'random-state)", "T");
 make_test ("(typep \"abc\" 'string)", "T");
 make_test ("(typep \"abc\" '(string))", "T");
 make_test ("(typep \"abc\" 'array)", "T");
@@ -1131,6 +1132,7 @@ make_test ("(evenp 0)", "T");
 make_test ("(evenp 1)", "NIL");
 make_test ("(oddp 0)", "NIL");
 make_test ("(oddp -1)", "T");
+make_test ("(make-random-state)", "#<RANDOM-STATE ?>");
 
 
 
