@@ -1290,7 +1290,7 @@ struct binding *create_binding (struct object *sym, struct object *obj,
 				enum binding_type type, int inc_refcs);
 struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *chain_bindings (struct binding *bin, struct binding *env,
-				int *num);
+				int *num, struct binding **last_bin);
 struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *bins,
 			      enum binding_type type, int bin_num);
@@ -6985,12 +6985,16 @@ add_binding (struct binding *bin, struct binding *env)
 
 
 struct binding *
-chain_bindings (struct binding *bin, struct binding *env, int *num)
+chain_bindings (struct binding *bin, struct binding *env, int *num,
+		struct binding **last_bin)
 {
   struct binding *last = bin, *b = bin;
 
   if (num)
     *num = 0;
+
+  if (last_bin)
+    *last_bin = NULL;
 
   if (!bin)
     return env;
@@ -7006,6 +7010,9 @@ chain_bindings (struct binding *bin, struct binding *env, int *num)
     }
 
   last->next = env;
+
+  if (last_bin)
+    *last_bin = last;
 
   return bin;
 }
@@ -8103,7 +8110,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 {
   struct parameter *first = NULL, *last = NULL;
   struct object *car;
-  int found_amp_key = 0;
+  int found_amp_key = 0, l;
 
   *allow_other_keys = 0;
 
@@ -8194,6 +8201,83 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       *allow_other_keys = 1;
 
       obj = CDR (obj);
+    }
+
+  if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_aux_sym)
+    {
+      obj = CDR (obj);
+
+      while (obj && SYMBOL (obj) != &nil_object)
+	{
+	  car = CAR (obj);
+
+	  if (IS_SYMBOL (car) && (car = SYMBOL (car))
+	      && (car == env->amp_optional_sym || car == env->amp_rest_sym
+		  || car == env->amp_body_sym || car == env->amp_key_sym
+		  || car == env->amp_allow_other_keys_sym
+		  || car == env->amp_aux_sym))
+	    {
+	      break;
+	    }
+
+	  if (IS_SYMBOL (car))
+	    {
+	      if (SYMBOL (car)->value_ptr.symbol->is_const)
+		{
+		  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      if (!first)
+		last = first = alloc_parameter (AUXILIARY_VAR, SYMBOL (car));
+	      else
+		last = last->next =
+		  alloc_parameter (AUXILIARY_VAR, SYMBOL (car));
+
+	      last->reference_strength_factor =
+		!STRENGTH_FACTOR_OF_OBJECT (SYMBOL (car));
+	      INC_WEAK_REFCOUNT (SYMBOL (car));
+	    }
+	  else if (car->type == TYPE_CONS_PAIR)
+	    {
+	      l = list_length (car);
+
+	      if (!l || l > 2 || !IS_SYMBOL (CAR (car)))
+		{
+		  outcome->type = INVALID_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      if (SYMBOL (CAR (car))->value_ptr.symbol->is_const)
+		{
+		  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+		  return NULL;
+		}
+
+	      if (!first)
+		last = first = alloc_parameter (AUXILIARY_VAR,
+						SYMBOL (CAR (car)));
+	      else
+		last = last->next =
+		  alloc_parameter (AUXILIARY_VAR, SYMBOL (CAR (car)));
+
+	      last->reference_strength_factor =
+		!STRENGTH_FACTOR_OF_OBJECT (SYMBOL (CAR (car)));
+	      INC_WEAK_REFCOUNT (SYMBOL (CAR (car)));
+
+	      if (l == 2)
+		{
+		  last->init_form = nth (1, car);
+		  last->reference_strength_factor =
+		    WITH_CHANGED_BIT (last->reference_strength_factor, 1,
+				      !STRENGTH_FACTOR_OF_OBJECT (nth (1, car)));
+		  INC_WEAK_REFCOUNT (nth (1, car));
+		}
+	    }
+
+	  obj = CDR (obj);
+	}
     }
 
   if (SYMBOL (obj) != &nil_object)
@@ -8493,7 +8577,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 {
   struct parameter *findk;
   struct object *val, *args = NULL;
-  struct binding *subbins;
+  struct binding *subbins, *lastbin = NULL;
   int rest_found = 0, subargs;
 
   *bins = NULL, *argsnum = 0;
@@ -8518,7 +8602,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    }
 
 	  *argsnum += subargs;
-	  *bins = chain_bindings (subbins, *bins, NULL);
+	  *bins = chain_bindings (subbins, *bins, NULL, NULL);
 	}
       else
 	{
@@ -8736,6 +8820,51 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (args && !rest_found)
     decrement_refcount (args);
 
+  if (par && par->type == AUXILIARY_VAR)
+    {
+      env->vars = chain_bindings (*bins, env->vars, NULL, &lastbin);
+      env->lex_env_vars_boundary += *argsnum;
+    }
+
+  while (par && par->type == AUXILIARY_VAR)
+    {
+      if (par->init_form)
+	{
+	  val = evaluate_object (par->init_form, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!val)
+	    {
+	      *bins = env->vars;
+	      env->vars = lastbin->next;
+	      lastbin->next = NULL;
+	      env->lex_env_vars_boundary -= *argsnum;
+
+	      return 0;
+	    }
+
+	  env->vars = bind_variable (par->name, val, env->vars);
+
+	  (*argsnum)++;
+	}
+      else
+	{
+	  env->vars = bind_variable (par->name, &nil_object, env->vars);
+
+	  (*argsnum)++;
+	}
+
+      par = par->next;
+    }
+
+  if (lastbin)
+    {
+      *bins = env->vars;
+      env->vars = lastbin->next;
+      lastbin->next = NULL;
+      env->lex_env_vars_boundary -= *argsnum;
+    }
+
   return 1;
 }
 
@@ -8809,14 +8938,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 			   outcome, &bins, &argsnum))
     {
       env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
-				  &closnum);
+				  &closnum, NULL);
 
       if (is_macro)
 	env->lex_env_vars_boundary += closnum;
       else
 	env->lex_env_vars_boundary = closnum;
 
-      env->vars = chain_bindings (bins, env->vars, NULL);
+      env->vars = chain_bindings (bins, env->vars, NULL, NULL);
       env->lex_env_vars_boundary += argsnum;
 
       ret = evaluate_body (func->value_ptr.function->body, 0,
@@ -12318,7 +12447,7 @@ builtin_do (struct object *list, struct environment *env,
 	  else
 	    ret = NULL;
 
-	  env->vars = chain_bindings (bins, env->vars, NULL);
+	  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
 	  goto cleanup_and_leave;
 	}
 
@@ -12328,7 +12457,7 @@ builtin_do (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->vars = chain_bindings (bins, env->vars, NULL);
+  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
 
   env->lex_env_vars_boundary += bin_num;
 
@@ -16731,7 +16860,7 @@ evaluate_let (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->vars = chain_bindings (bins, env->vars, NULL);
+  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
 
   env->lex_env_vars_boundary += bin_num;
 
@@ -16880,7 +17009,7 @@ evaluate_flet (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->funcs = chain_bindings (bins, env->funcs, NULL);
+  env->funcs = chain_bindings (bins, env->funcs, NULL, NULL);
 
   env->lex_env_funcs_boundary += bin_num;
 
@@ -16968,7 +17097,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  env->funcs = chain_bindings (bins, env->funcs, NULL);
+  env->funcs = chain_bindings (bins, env->funcs, NULL, NULL);
 
   env->lex_env_funcs_boundary += bin_num;
 
