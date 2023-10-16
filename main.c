@@ -901,6 +901,7 @@ object_type
     TYPE_RATIO = 1 << 9,
     TYPE_FLOAT = 1 << 10,
     TYPE_COMPLEX = 1 << 11,
+    TYPE_RANDOM_STATE = 1 << 27,
     TYPE_BYTESPEC = 1 << 12,
     TYPE_CONS_PAIR = 1 << 13,
     TYPE_STRING = 1 << 14,
@@ -936,6 +937,7 @@ object_ptr_union
   mpq_t ratio;
   mpf_t floating;
   struct complex *complex;
+  gmp_randstate_t random_state;
   struct bytespec *bytespec;
   struct cons_pair *cons_pair;
   struct string *string;
@@ -1484,6 +1486,8 @@ int type_long_float (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome);
 int type_complex (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome);
+int type_random_state (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome);
 int type_character (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
@@ -1744,6 +1748,9 @@ struct object *builtin_lognot (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logior (struct object *list, struct environment *env,
 			       struct outcome *outcome);
+struct object *builtin_make_random_state (struct object *list,
+					  struct environment *env,
+					  struct outcome *outcome);
 
 struct object *builtin_byte (struct object *list, struct environment *env,
 			     struct outcome *outcome);
@@ -2597,6 +2604,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-RANDOM-STATE", env, builtin_make_random_state,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE-SIZE", env, builtin_byte_size, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE-POSITION", env, builtin_byte_position, TYPE_FUNCTION,
@@ -2704,6 +2713,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("LONG-FLOAT", env, type_long_float, 1, "SINGLE-FLOAT",
 		    (char *)NULL);
   add_builtin_type ("COMPLEX", env, type_complex, 1, "NUMBER", (char *)NULL);
+  add_builtin_type ("RANDOM-STATE", env, type_random_state, 1, (char *)NULL);
   add_builtin_type ("CHARACTER", env, type_character, 1, (char *)NULL);
   add_builtin_type ("SEQUENCE", env, type_sequence, 1, (char *)NULL);
   add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", (char *)NULL);
@@ -10002,6 +10012,14 @@ type_complex (const struct object *obj, const struct object *typespec,
 
 
 int
+type_random_state (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_RANDOM_STATE;
+}
+
+
+int
 type_character (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome)
 {
@@ -14644,6 +14662,28 @@ builtin_logior (struct object *list, struct environment *env,
 
       list = CDR (list);
     }
+
+  return ret;
+}
+
+
+struct object *
+builtin_make_random_state (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *ret;
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  ret = alloc_object ();
+  ret->type = TYPE_RANDOM_STATE;
+  gmp_randinit_default (ret->value_ptr.random_state);
+  gmp_randseed_ui (ret->value_ptr.random_state, time (NULL));
 
   return ret;
 }
@@ -20258,6 +20298,11 @@ print_object (const struct object *obj, struct environment *env,
 	return print_floating (obj->value_ptr.floating, env, str);
       else if (obj->type == TYPE_COMPLEX)
 	return print_complex (obj->value_ptr.complex, env, str);
+      else if (obj->type == TYPE_RANDOM_STATE)
+	{
+	  return write_to_stream (str, "#<RANDOM-STATE ?>",
+				  strlen ("#<RANDOM-STATE ?>"));
+	}
       else if (obj->type == TYPE_BYTESPEC)
 	return print_bytespec (obj->value_ptr.bytespec, env, str);
       else if (obj->type == TYPE_STRING)

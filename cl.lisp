@@ -707,6 +707,9 @@
 (defun complexp (obj)
   (typep obj 'complex))
 
+(defun random-state-p (obj)
+  (typep obj 'random-state))
+
 (defun characterp (obj)
   (typep obj 'character))
 
@@ -991,10 +994,10 @@
 	  string-downcase string-capitalize nstring-upcase nstring-downcase
 	  nstring-capitalize string-left-trim string-right-trim string-trim
 	  defpackage consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp characterp vectorp arrayp sequencep stringp
-	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
-	  fdefinition complement mapc terpri write-line write-sequence prin1
-	  princ print loop format encode-universal-time))
+	  rationalp floatp complexp random-state-p characterp vectorp arrayp
+	  sequencep stringp hash-table-p pathnamep streamp realp numberp
+	  macroexpand equal equalp fdefinition complement mapc terpri write-line
+	  write-sequence prin1 princ print loop format encode-universal-time))
 
 
 
