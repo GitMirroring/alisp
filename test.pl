@@ -1134,6 +1134,9 @@ make_test ("(oddp 0)", "NIL");
 make_test ("(oddp -1)", "T");
 make_test ("*random-state*", "#<RANDOM-STATE ?>");
 make_test ("(make-random-state)", "#<RANDOM-STATE ?>");
+make_test ("(< (random 10) 10)", "T");
+make_test ("(< (random 4.5) 4.5)", "T");
+make_test ("(< (random 10.5 (make-random-state)) 10.5)", "T");
 
 
 
