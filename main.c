@@ -14694,10 +14694,33 @@ builtin_make_random_state (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (l == 1 && CAR (list)->type != TYPE_RANDOM_STATE
+      && SYMBOL (CAR (list)) != &nil_object
+      && SYMBOL (CAR (list)) != &t_object)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
   ret = alloc_object ();
   ret->type = TYPE_RANDOM_STATE;
-  gmp_randinit_default (ret->value_ptr.random_state);
-  gmp_randseed_ui (ret->value_ptr.random_state, time (NULL));
+
+  if (!l || SYMBOL (CAR (list)) == &t_object)
+    {
+      gmp_randinit_default (ret->value_ptr.random_state);
+      gmp_randseed_ui (ret->value_ptr.random_state, time (NULL));
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      gmp_randinit_set
+	(ret->value_ptr.random_state,
+	 inspect_variable (env->random_state_sym, env)->value_ptr.random_state);
+    }
+  else
+    {
+      gmp_randinit_set (ret->value_ptr.random_state,
+			CAR (list)->value_ptr.random_state);
+    }
 
   return ret;
 }
