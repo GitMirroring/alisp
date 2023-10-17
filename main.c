@@ -1751,6 +1751,8 @@ struct object *builtin_logior (struct object *list, struct environment *env,
 struct object *builtin_make_random_state (struct object *list,
 					  struct environment *env,
 					  struct outcome *outcome);
+struct object *builtin_random (struct object *list, struct environment *env,
+			       struct outcome *outcome);
 
 struct object *builtin_byte (struct object *list, struct environment *env,
 			     struct outcome *outcome);
@@ -2617,6 +2619,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-RANDOM-STATE", env, builtin_make_random_state,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("RANDOM", env, builtin_random, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE-SIZE", env, builtin_byte_size, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BYTE-POSITION", env, builtin_byte_position, TYPE_FUNCTION,
@@ -14695,6 +14698,53 @@ builtin_make_random_state (struct object *list, struct environment *env,
   ret->type = TYPE_RANDOM_STATE;
   gmp_randinit_default (ret->value_ptr.random_state);
   gmp_randseed_ui (ret->value_ptr.random_state, time (NULL));
+
+  return ret;
+}
+
+
+struct object *
+builtin_random (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *rs, *ret;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (((CAR (list)->type != TYPE_INTEGER
+	|| mpz_cmp_si (CAR (list)->value_ptr.integer, 0) <= 0)
+       && (CAR (list)->type != TYPE_FLOAT
+	   || mpf_cmp_si (CAR (list)->value_ptr.floating, 0) <= 0))
+      || (l == 2 && CAR (CDR (list))->type != TYPE_RANDOM_STATE))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1)
+    rs = inspect_variable (env->random_state_sym, env);
+  else
+    rs = CAR (CDR (list));
+
+  if (CAR (list)->type == TYPE_INTEGER)
+    {
+      ret = alloc_number (TYPE_INTEGER);
+      mpz_urandomm (ret->value_ptr.integer, rs->value_ptr.random_state,
+		    CAR (list)->value_ptr.integer);
+    }
+  else
+    {
+      ret = alloc_number (TYPE_FLOAT);
+      mpf_urandomb (ret->value_ptr.floating, rs->value_ptr.random_state,
+		    mpf_get_default_prec ());
+      mpf_mul (ret->value_ptr.floating, ret->value_ptr.floating,
+	       CAR (list)->value_ptr.floating);
+    }
 
   return ret;
 }
