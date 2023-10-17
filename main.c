@@ -500,8 +500,8 @@ environment
 
   struct object *not_sym, *and_sym, *or_sym;
 
-  struct object *package_sym, *std_in_sym, *std_out_sym, *print_escape_sym,
-    *print_readably_sym;
+  struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
+    *print_escape_sym, *print_readably_sym;
 };
 
 
@@ -2377,7 +2377,7 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 void
 add_standard_definitions (struct environment *env)
 {
-  struct object *cluser_package;
+  struct object *cluser_package, *rs;
   struct package_record *rec;
 
   env->keyword_package = create_package_from_c_strings ("KEYWORD", (char *)NULL);
@@ -2421,6 +2421,17 @@ add_standard_definitions (struct environment *env)
 						   env->cl_package);
   env->package_sym->value_ptr.symbol->is_parameter = 1;
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
+
+
+  env->random_state_sym =
+    intern_symbol_by_char_vector ("*RANDOM-STATE*", strlen ("*RANDOM-STATE*"), 1,
+				  EXTERNAL_VISIBILITY, 1, env->cl_package);
+  env->random_state_sym->value_ptr.symbol->is_parameter = 1;
+  rs = alloc_object ();
+  rs->type = TYPE_RANDOM_STATE;
+  gmp_randinit_default (rs->value_ptr.random_state);
+  gmp_randseed_ui (rs->value_ptr.random_state, time (NULL));
+  env->random_state_sym->value_ptr.symbol->value_cell = rs;
 
 
   add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
