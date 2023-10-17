@@ -253,6 +253,13 @@
 (defun cddddr (list) (nthcdr 4 list))
 
 
+(defun make-list (len &key initial-element)
+  (let (out)
+    (dotimes (i len)
+      (setq out (cons initial-element out)))
+    out))
+
+
 (defun endp (l) (null l))
 
 
@@ -983,12 +990,12 @@
 	  seventh eighth ninth tenth rest caar cadr cdar cddr caaar caadr cadar
 	  caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar
 	  cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
-	  cddddr endp butlast nbutlast when unless incf decf and or cond
-	  otherwise case return multiple-value-bind every some notany notevery
-	  member member-if member-if-not find find-if find-if-not assoc assoc-if
-	  assoc-if-not position position-if position-if-not count count-if
-	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  nreverse adjoin fill push pop array-rank array-dimension
+	  cddddr make-list endp butlast nbutlast when unless incf decf and or
+	  cond otherwise case return multiple-value-bind every some notany
+	  notevery member member-if member-if-not find find-if find-if-not assoc
+	  assoc-if assoc-if-not position position-if position-if-not count
+	  count-if count-if-not remove remove-if-not delete delete-if
+	  delete-if-not nreverse adjoin fill push pop array-rank array-dimension
 	  array-total-size array-in-bounds-p get get-properties char string/=
 	  char-equal digit-char digit-char-p char-int string-upcase
 	  string-downcase string-capitalize nstring-upcase nstring-downcase
