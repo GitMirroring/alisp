@@ -1132,6 +1132,7 @@ make_test ("(evenp 0)", "T");
 make_test ("(evenp 1)", "NIL");
 make_test ("(oddp 0)", "NIL");
 make_test ("(oddp -1)", "T");
+make_test ("*random-state*", "#<RANDOM-STATE ?>");
 make_test ("(make-random-state)", "#<RANDOM-STATE ?>");
 
 
