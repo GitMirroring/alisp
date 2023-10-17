@@ -752,6 +752,8 @@ make_test ("'s3", "S3");
 make_test ("(gentemp \"S\")", "S4");
 make_test ("(second '(0))", "NIL");
 make_test ("(fifth '(0 1 2 3 4))", "4");
+make_test ("(make-list 3)", "(NIL NIL NIL)");
+make_test ("(make-list 4 :initial-element 0)", "(0 0 0 0)");
 make_test ("(endp '(1 . 2))", "NIL");
 make_test ("(endp ())", "T");
 make_test ("(butlast '(0 1 2))", "(0 1)");
