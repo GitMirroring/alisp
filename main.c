@@ -1671,6 +1671,7 @@ struct object *compare_any_numbers (struct object *list, struct environment *env
 				    struct outcome *outcome,
 				    enum number_comparison comp);
 int is_zero (struct object *num);
+double convert_number_to_double (struct object *num);
 struct object *divide_two_numbers (struct object *n1, struct object *n2,
 				   struct environment *env,
 				   struct outcome *outcome);
@@ -1751,6 +1752,10 @@ struct object *builtin_cos (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_tan (struct object *list, struct environment *env,
 			    struct outcome *outcome);
+struct object *builtin_exp (struct object *list, struct environment *env,
+			    struct outcome *outcome);
+struct object *builtin_expt (struct object *list, struct environment *env,
+			     struct outcome *outcome);
 struct object *builtin_lognot (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logior (struct object *list, struct environment *env,
@@ -2569,6 +2574,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SIN", env, builtin_sin, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COS", env, builtin_cos, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAN", env, builtin_tan, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EXP", env, builtin_exp, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EXPT", env, builtin_expt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGNOT", env, builtin_lognot, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGIOR", env, builtin_logior, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
@@ -13731,6 +13738,24 @@ is_zero (struct object *num)
 }
 
 
+double
+convert_number_to_double (struct object *num)
+{
+  if (num->type == TYPE_INTEGER)
+    {
+      return mpz_get_d (num->value_ptr.integer);
+    }
+  else if (num->type == TYPE_RATIO)
+    {
+      return mpq_get_d (num->value_ptr.ratio);
+    }
+  else
+    {
+      return mpf_get_d (num->value_ptr.floating);
+    }
+}
+
+
 struct object *
 divide_two_numbers (struct object *n1, struct object *n2, struct environment *env,
 		    struct outcome *outcome)
@@ -14727,6 +14752,116 @@ builtin_tan (struct object *list, struct environment *env,
     }
 
   return create_floating_from_double (tan (arg));
+}
+
+
+struct object *
+builtin_exp (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  double arg;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_INTEGER)
+    {
+      arg = mpz_get_d (CAR (list)->value_ptr.integer);
+    }
+  else if (CAR (list)->type == TYPE_RATIO)
+    {
+      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
+    }
+  else
+    {
+      arg = mpf_get_d (CAR (list)->value_ptr.floating);
+    }
+
+  return create_floating_from_double (exp (arg));
+}
+
+
+struct object *
+builtin_expt (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  double base, exp;
+  struct object *ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)) || !IS_REAL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  exp = convert_number_to_double (CAR (CDR (list)));
+
+  if (CAR (list)->type == TYPE_FLOAT || CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      base = convert_number_to_double (CAR (list));
+
+      if (!exp && base <= 0)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      return create_floating_from_double (pow (base, exp));
+    }
+
+  if (exp < 0)
+    {
+      ret = alloc_number (TYPE_RATIO);
+
+      if (CAR (list)->type == TYPE_INTEGER)
+	{
+	  mpz_set (mpq_denref (ret->value_ptr.ratio),
+		   CAR (list)->value_ptr.integer);
+	}
+      else
+	{
+	  mpq_inv (ret->value_ptr.ratio, CAR (list)->value_ptr.ratio);
+	}
+
+      mpq_canonicalize (ret->value_ptr.ratio);
+      exp = -exp;
+    }
+  else
+    {
+      ret = alloc_number (CAR (list)->type);
+    }
+
+  if (ret->type == TYPE_INTEGER)
+    {
+      mpz_set_si (ret->value_ptr.integer,
+		  pow (mpz_get_si (CAR (list)->value_ptr.integer), exp));
+    }
+  else
+    {
+      mpz_set_si (mpq_numref (ret->value_ptr.ratio),
+		  pow (mpz_get_si (mpq_numref (ret->value_ptr.ratio)), exp));
+      mpq_canonicalize (ret->value_ptr.ratio);
+      mpz_set_si (mpq_denref (ret->value_ptr.ratio),
+		  pow (mpz_get_si (mpq_denref (ret->value_ptr.ratio)), exp));
+      mpq_canonicalize (ret->value_ptr.ratio);
+    }
+
+  return ret;
 }
 
 
