@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <math.h>
 #include <ctype.h>
 #include <string.h>
 #include <limits.h>
@@ -1744,6 +1745,12 @@ struct object *builtin_min (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_max (struct object *list, struct environment *env,
 			    struct outcome *outcome);
+struct object *builtin_sin (struct object *list, struct environment *env,
+			    struct outcome *outcome);
+struct object *builtin_cos (struct object *list, struct environment *env,
+			    struct outcome *outcome);
+struct object *builtin_tan (struct object *list, struct environment *env,
+			    struct outcome *outcome);
 struct object *builtin_lognot (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logior (struct object *list, struct environment *env,
@@ -2559,6 +2566,9 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MIN", env, builtin_min, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAX", env, builtin_max, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SIN", env, builtin_sin, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("COS", env, builtin_cos, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("TAN", env, builtin_tan, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGNOT", env, builtin_lognot, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGIOR", env, builtin_logior, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
@@ -14612,6 +14622,111 @@ builtin_max (struct object *list, struct environment *env,
 
   increment_refcount (ret);
   return ret;
+}
+
+
+struct object *
+builtin_sin (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  double arg;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_INTEGER)
+    {
+      arg = mpz_get_d (CAR (list)->value_ptr.integer);
+    }
+  else if (CAR (list)->type == TYPE_RATIO)
+    {
+      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
+    }
+  else
+    {
+      arg = mpf_get_d (CAR (list)->value_ptr.floating);
+    }
+
+  return create_floating_from_double (sin (arg));
+}
+
+
+struct object *
+builtin_cos (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  double arg;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_INTEGER)
+    {
+      arg = mpz_get_d (CAR (list)->value_ptr.integer);
+    }
+  else if (CAR (list)->type == TYPE_RATIO)
+    {
+      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
+    }
+  else
+    {
+      arg = mpf_get_d (CAR (list)->value_ptr.floating);
+    }
+
+  return create_floating_from_double (cos (arg));
+}
+
+
+struct object *
+builtin_tan (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  double arg;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_INTEGER)
+    {
+      arg = mpz_get_d (CAR (list)->value_ptr.integer);
+    }
+  else if (CAR (list)->type == TYPE_RATIO)
+    {
+      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
+    }
+  else
+    {
+      arg = mpf_get_d (CAR (list)->value_ptr.floating);
+    }
+
+  return create_floating_from_double (tan (arg));
 }
 
 

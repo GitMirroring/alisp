@@ -68,6 +68,8 @@ AS_IF([test "x$with_readline" != xno],
 
 AC_SEARCH_LIBS([__gmpz_init], [gmp], , [AC_MSG_ERROR([GNU mp not found])])
 
+AC_SEARCH_LIBS([sin], [m], , [AC_MSG_ERROR([standard math library not found])])
+
 
 
 AC_ARG_VAR(AL_FIXNUM, [whether a fixnum maps to an `int' or a `long' @<:@default=int@:>@])
