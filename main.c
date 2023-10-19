@@ -1752,6 +1752,12 @@ struct object *builtin_cos (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_tan (struct object *list, struct environment *env,
 			    struct outcome *outcome);
+struct object *builtin_sinh (struct object *list, struct environment *env,
+			     struct outcome *outcome);
+struct object *builtin_cosh (struct object *list, struct environment *env,
+			     struct outcome *outcome);
+struct object *builtin_tanh (struct object *list, struct environment *env,
+			     struct outcome *outcome);
 struct object *builtin_exp (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_expt (struct object *list, struct environment *env,
@@ -2574,6 +2580,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SIN", env, builtin_sin, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COS", env, builtin_cos, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAN", env, builtin_tan, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SINH", env, builtin_sinh, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("COSH", env, builtin_cosh, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("TANH", env, builtin_tanh, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EXP", env, builtin_exp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EXPT", env, builtin_expt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGNOT", env, builtin_lognot, TYPE_FUNCTION, NULL, 0);
@@ -14654,8 +14663,6 @@ struct object *
 builtin_sin (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  double arg;
-
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -14668,20 +14675,7 @@ builtin_sin (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_INTEGER)
-    {
-      arg = mpz_get_d (CAR (list)->value_ptr.integer);
-    }
-  else if (CAR (list)->type == TYPE_RATIO)
-    {
-      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
-    }
-  else
-    {
-      arg = mpf_get_d (CAR (list)->value_ptr.floating);
-    }
-
-  return create_floating_from_double (sin (arg));
+  return create_floating_from_double (sin (convert_number_to_double (CAR (list))));
 }
 
 
@@ -14689,8 +14683,6 @@ struct object *
 builtin_cos (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  double arg;
-
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -14703,20 +14695,7 @@ builtin_cos (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_INTEGER)
-    {
-      arg = mpz_get_d (CAR (list)->value_ptr.integer);
-    }
-  else if (CAR (list)->type == TYPE_RATIO)
-    {
-      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
-    }
-  else
-    {
-      arg = mpf_get_d (CAR (list)->value_ptr.floating);
-    }
-
-  return create_floating_from_double (cos (arg));
+  return create_floating_from_double (cos (convert_number_to_double (CAR (list))));
 }
 
 
@@ -14724,8 +14703,6 @@ struct object *
 builtin_tan (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  double arg;
-
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -14738,20 +14715,67 @@ builtin_tan (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_INTEGER)
+  return create_floating_from_double (tan (convert_number_to_double (CAR (list))));
+}
+
+
+struct object *
+builtin_sinh (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  if (list_length (list) != 1)
     {
-      arg = mpz_get_d (CAR (list)->value_ptr.integer);
-    }
-  else if (CAR (list)->type == TYPE_RATIO)
-    {
-      arg = mpq_get_d (CAR (list)->value_ptr.ratio);
-    }
-  else
-    {
-      arg = mpf_get_d (CAR (list)->value_ptr.floating);
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
     }
 
-  return create_floating_from_double (tan (arg));
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return create_floating_from_double (sinh (convert_number_to_double (CAR (list))));
+}
+
+
+struct object *
+builtin_cosh (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return create_floating_from_double (cosh (convert_number_to_double (CAR (list))));
+}
+
+
+struct object *
+builtin_tanh (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return create_floating_from_double (tanh (convert_number_to_double (CAR (list))));
 }
 
 
