@@ -103,6 +103,9 @@
 (defun conjugate (num)
   (complex (realpart num) (- (imagpart num))))
 
+(defun cis (rad)
+  (complex (cos rad) (sin rad)))
+
 
 (defun logand (&rest ints)
   (lognot (apply 'logior (mapcar #'lognot ints))))
@@ -985,7 +988,7 @@
 	  call-arguments-limit multiple-values-limit array-rank-limit
 	  array-dimension-limit array-total-size-limit char-code-limit
 	  lambda-list-keywords identity pi 1+ 1- minusp plusp abs zerop signum
-	  mod rem evenp oddp isqrt conjugate logand logandc1 logandc2 logeqv
+	  mod rem evenp oddp isqrt conjugate cis logand logandc1 logandc2 logeqv
 	  lognand lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1
 	  boole-andc2 boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior
 	  boole-nand boole-nor boole-orc1 boole-orc2 boole-set boole-xor boole
