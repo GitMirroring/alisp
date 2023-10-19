@@ -1762,6 +1762,8 @@ struct object *builtin_exp (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_expt (struct object *list, struct environment *env,
 			     struct outcome *outcome);
+struct object *builtin_log (struct object *list, struct environment *env,
+			    struct outcome *outcome);
 struct object *builtin_lognot (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logior (struct object *list, struct environment *env,
@@ -2585,6 +2587,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TANH", env, builtin_tanh, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EXP", env, builtin_exp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EXPT", env, builtin_expt, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LOG", env, builtin_log, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGNOT", env, builtin_lognot, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LOGIOR", env, builtin_logior, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
@@ -14886,6 +14889,41 @@ builtin_expt (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_log (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  int l = list_length (list);
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)) || convert_number_to_double (CAR (list)) <= 0
+      || (l == 2 && !IS_REAL (CAR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1)
+    {
+      return create_floating_from_double (log (convert_number_to_double (CAR (list))));
+    }
+
+  if (is_zero (CAR (CDR (list))))
+    {
+      return create_floating_from_double (0);
+    }
+
+  return
+    create_floating_from_double (log (convert_number_to_double (CAR (list)))
+				 / log (convert_number_to_double (CAR (CDR (list)))));
 }
 
 
