@@ -1063,6 +1063,7 @@ make_test ("(imagpart 1)", "0");
 make_test ("(imagpart (complex 1 1/2))", "1/2");
 make_test ("(conjugate 1)", "1");
 make_test ("(conjugate (complex 1 1))", "#C(1 -1)");
+make_test ("(cis 1.5)", "#C(0.0707372016677029064047 0.9974949866040544455)");
 make_test ("(= 1)", "T");
 make_test ("(= 1 1)", "T");
 make_test ("(= 1 2)", "NIL");
