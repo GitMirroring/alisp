@@ -762,6 +762,8 @@ make_test ("(butlast '(0 1 2 . 3) 2)", "(0)");
 make_test ("(nbutlast '(0 1 2))", "(0 1)");
 make_test ("(nbutlast '(0 1 2) 3)", "NIL");
 make_test ("(nbutlast '(0 1 2 . 3) 2)", "(0)");
+make_test ("(acons 1 \"\" '((2 . \"\")))", "((1 . \"\") (2 . \"\"))");
+make_test ("(pairlis '(1 2 3) '(\"a\" \"b\" \"c\") '((4 . \"d\")))", "((3 . \"c\") (2 . \"b\") (1 . \"a\") (4 . \"d\"))");
 make_test ("(when t \"\" \"\" \"\")", "\"\"");
 make_test ("(when nil \"\" \"\" \"\")", "NIL");
 make_test ("(unless nil \"\" \"\" \"\")", "\"\"");
