@@ -787,6 +787,8 @@ make_test ("(setf (ship-x s1) 0)", "0");
 make_test ("(setf (ship-y s1) 1)", "1");
 make_test ("(ship-x s1)", "0");
 make_test ("(ship-y s1)", "1");
+make_test ("(defclass starship () (x y speed))", "#<STANDARD-CLASS STARSHIP>");
+make_test ("(make-instance 'starship)", "#<STARSHIP OBJECT ...>");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
