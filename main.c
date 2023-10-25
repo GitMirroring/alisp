@@ -829,6 +829,44 @@ structure
 
 
 struct
+class_field_decl
+{
+  struct object *name;
+
+  struct class_field_decl *next;
+};
+
+
+struct
+standard_class
+{
+  struct object *name;
+
+  struct class_field_decl *fields;
+};
+
+
+struct
+class_field
+{
+  struct object *name;
+
+  struct object *value;
+
+  struct class_field *next;
+};
+
+
+struct
+standard_object
+{
+  struct object *class;
+
+  struct class_field *fields;
+};
+
+
+struct
 sharp_macro_call
 {
   int arg;
@@ -915,6 +953,8 @@ object_type
     TYPE_STREAM = 1 << 21,
     TYPE_STRUCTURE_CLASS = 1,
     TYPE_STRUCTURE = 1 << 22,
+    TYPE_STANDARD_CLASS = 1 << 28,
+    TYPE_STANDARD_OBJECT = 1 << 29,
     TYPE_CONDITION = 1 << 23,
     TYPE_FUNCTION = 1 << 24,
     TYPE_MACRO = 1 << 25,
@@ -951,6 +991,8 @@ object_ptr_union
   struct stream *stream;
   struct structure_class *structure_class;
   struct structure *structure;
+  struct standard_class *standard_class;
+  struct standard_object *standard_object;
   struct function *function;
   struct function *macro;
   struct sharp_macro_call *sharp_macro_call;
@@ -1274,6 +1316,9 @@ struct object *create_string_stream (enum stream_direction direction,
 				     struct object *instr);
 
 struct structure_field_decl *create_structure_field_decl
+(struct object *fieldform, struct environment *env, struct outcome *outcome);
+
+struct class_field_decl *create_class_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
 struct object *load_file (const char *filename, struct environment *env,
@@ -1993,6 +2038,10 @@ struct object *builtin_get_setf_expansion
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_defclass
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_make_instance
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2633,6 +2682,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("GET-SETF-EXPANSION", env, builtin_get_setf_expansion,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFCLASS", env, evaluate_defclass, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -6755,6 +6807,32 @@ create_structure_field_decl (struct object *fieldform, struct environment *env,
 
   ret->name = name;
   ret->initform = NULL;
+  ret->next = NULL;
+
+  return ret;
+}
+
+
+struct class_field_decl *
+create_class_field_decl (struct object *fieldform, struct environment *env,
+			 struct outcome *outcome)
+{
+  struct object *name;
+  struct class_field_decl *ret;
+
+  if (IS_SYMBOL (fieldform))
+    name = SYMBOL (fieldform);
+  else if (IS_LIST (fieldform) && IS_SYMBOL (CAR (fieldform)))
+    name = SYMBOL (CAR (fieldform));
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = malloc_and_check (sizeof (*ret));
+
+  ret->name = name;
   ret->next = NULL;
 
   return ret;
@@ -19040,6 +19118,120 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_defclass (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  struct object *name, *class;
+  struct standard_class *sc;
+  struct class_field_decl *f, *prev;
+
+  if (IS_SYMBOL (CAR (list)))
+    name = SYMBOL (CAR (list));
+  else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
+    name = SYMBOL (CAR (CAR (list)));
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  class = alloc_object ();
+  class->type = TYPE_STANDARD_CLASS;
+
+  sc = malloc_and_check (sizeof (*sc));
+  class->value_ptr.standard_class = sc;
+
+  increment_refcount (name);
+  sc->name = name;
+
+  name->value_ptr.symbol->is_type = 1;
+  name->value_ptr.symbol->typespec = class;
+
+  sc->fields = NULL;
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      f = create_class_field_decl (CAR (list), env, outcome);
+
+      if (!f)
+	return NULL;
+
+      if (sc->fields)
+	prev = prev->next = f;
+      else
+	sc->fields = prev = f;
+
+      list = CDR (list);
+    }
+
+  return class;
+}
+
+
+struct object *
+builtin_make_instance (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *class = NULL, *ret;
+  struct standard_object *so;
+  struct class_field_decl *fd;
+  struct class_field *f;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STANDARD_CLASS)
+    {
+      class = CAR (list);
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+	  == TYPE_STANDARD_CLASS)
+	{
+	  class = SYMBOL (CAR (list))->value_ptr.symbol->typespec;
+	}
+    }
+
+  if (!class)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+
+  ret = alloc_object ();
+  ret->type = TYPE_STANDARD_OBJECT;
+
+  so = malloc_and_check (sizeof (*so));
+  so->class = class;
+  so->fields = NULL;
+  ret->value_ptr.standard_object = so;
+
+  fd = class->value_ptr.standard_class->fields;
+
+  while (fd)
+    {
+      if (so->fields)
+	f = f->next = malloc_and_check (sizeof (*f));
+      else
+	so->fields = f = malloc_and_check (sizeof (*f));
+
+      f->name = fd->name;
+      f->value = &nil_object;
+
+      fd = fd->next;
+    }
+
+  return ret;
+}
+
+
+struct object *
 evaluate_tagbody (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
@@ -20764,6 +20956,26 @@ print_object (const struct object *obj, struct environment *env,
 	      || print_symbol (obj->value_ptr.structure->class->
 			       value_ptr.structure_class->name, env, str)
 	      || write_to_stream (str, ">", 1))
+	    return -1;
+
+	  return 0;
+	}
+      else if (obj->type == TYPE_STANDARD_CLASS)
+	{
+	  if (write_to_stream (str, "#<STANDARD-CLASS ",
+			       strlen ("#<STANDARD-CLASS ")) < 0
+	      || print_symbol (obj->value_ptr.standard_class->name, env, str)
+	      || write_to_stream (str, ">", 1))
+	    return -1;
+
+	  return 0;
+	}
+      else if (obj->type == TYPE_STANDARD_OBJECT)
+	{
+	  if (write_to_stream (str, "#<", strlen ("#<")) < 0
+	      || print_symbol (obj->value_ptr.standard_object->class
+			       ->value_ptr.standard_class->name, env, str)
+	      || write_to_stream (str, " OBJECT ...>", strlen (" OBJECT ...>")) < 0)
 	    return -1;
 
 	  return 0;
