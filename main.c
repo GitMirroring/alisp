@@ -19030,6 +19030,12 @@ evaluate_defstruct (struct object *list, struct environment *env,
   struct structure_field_decl *f, *prev;
   char *constr_name, *acc_name;
 
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
   if (IS_SYMBOL (CAR (list)))
     name = SYMBOL (CAR (list));
   else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
