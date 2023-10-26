@@ -19131,11 +19131,23 @@ evaluate_defclass (struct object *list, struct environment *env,
   struct standard_class *sc;
   struct class_field_decl *f, *prev;
 
+  if (list_length (list) < 3)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
   if (IS_SYMBOL (CAR (list)))
     name = SYMBOL (CAR (list));
   else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
     name = SYMBOL (CAR (CAR (list)));
   else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (CDR (list))) || !IS_LIST (CAR (CDR (CDR (list)))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -19154,7 +19166,7 @@ evaluate_defclass (struct object *list, struct environment *env,
   name->value_ptr.symbol->typespec = class;
 
   sc->fields = NULL;
-  list = CDR (list);
+  list = CAR (CDR (CDR (list)));
 
   while (SYMBOL (list) != &nil_object)
     {
