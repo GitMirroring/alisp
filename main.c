@@ -2041,7 +2041,11 @@ struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defclass
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_find_class
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_instance
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
@@ -2684,8 +2688,11 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFCLASS", env, evaluate_defclass, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("FIND-CLASS", env, builtin_find_class, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -19189,6 +19196,37 @@ evaluate_defclass (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_find_class (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (SYMBOL (CAR (list))->value_ptr.symbol->typespec &&
+      SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+      == TYPE_STANDARD_CLASS)
+    {
+      increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->typespec);
+      return SYMBOL (CAR (list))->value_ptr.symbol->typespec;
+    }
+  else
+    {
+      outcome->type = CLASS_NOT_FOUND;
+      return NULL;
+    }
+}
+
+
+struct object *
 builtin_make_instance (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
@@ -19252,6 +19290,27 @@ builtin_make_instance (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_class_of (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list)->value_ptr.standard_object->class);
+  return CAR (list)->value_ptr.standard_object->class;
 }
 
 
