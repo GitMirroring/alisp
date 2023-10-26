@@ -343,6 +343,7 @@ outcome_type
     ERROR_READING_FILE,
     INVALID_TYPE_SPECIFIER,
     UNKNOWN_TYPE,
+    CLASS_NOT_FOUND,
     INVALID_GO_TAG,
     TAG_NOT_FOUND,
     BLOCK_NOT_FOUND,
@@ -19208,14 +19209,19 @@ builtin_make_instance (struct object *list, struct environment *env,
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec &&
+	  SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
 	  == TYPE_STANDARD_CLASS)
 	{
 	  class = SYMBOL (CAR (list))->value_ptr.symbol->typespec;
 	}
+      else
+	{
+	  outcome->type = CLASS_NOT_FOUND;
+	  return NULL;
+	}
     }
-
-  if (!class)
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -21310,6 +21316,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == UNKNOWN_TYPE)
     {
       printf ("eval error: type not known\n");
+    }
+  else if (err->type == CLASS_NOT_FOUND)
+    {
+      printf ("eval error: class not found\n");
     }
   else if (err->type == INVALID_GO_TAG)
     {
