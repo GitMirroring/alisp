@@ -664,6 +664,8 @@ function
 
   struct object *body;
 
+  int is_generic;
+  struct object_list *methods;
 
   struct object *(*builtin_form)
     (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2047,6 +2049,8 @@ struct object *builtin_make_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_defgeneric
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2693,6 +2697,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -5368,6 +5373,8 @@ alloc_function (void)
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
   fun->body = NULL;
+  fun->is_generic = 0;
+  fun->methods = NULL;
   fun->builtin_form = NULL;
   fun->struct_constructor_class = NULL;
   fun->struct_accessor_class = NULL;
@@ -19315,6 +19322,62 @@ builtin_class_of (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_defgeneric (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  struct object *sym, *fun;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  if (sym->value_ptr.symbol->function_cell
+      && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
+      && sym->value_ptr.symbol->function_cell->value_ptr.macro->is_special_operator)
+    {
+      outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
+      return NULL;
+    }
+
+  fun = create_function (CAR (CDR (list)), &nil_object, env, outcome, 0, 0);
+
+  if (!fun)
+    return NULL;
+
+  fun->value_ptr.function->is_generic = 1;
+
+  if (sym->value_ptr.symbol->function_cell)
+    {
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+    }
+  else
+    {
+      increment_refcount (sym);
+    }
+
+  sym->value_ptr.symbol->function_cell = fun;
+  add_strong_reference (sym, fun, 1);
+  decrement_refcount (fun);
+
+  fun->value_ptr.function->name = sym;
+  add_reference (fun, sym, 0);
+
+  increment_refcount (fun);
+  return fun;
+}
+
+
+struct object *
 evaluate_tagbody (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
@@ -20851,6 +20914,12 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 	{
 	  if (write_to_stream (str, "#<FUNCTION (SETF ",
 			       strlen ("#<FUNCTION (SETF ")) < 0)
+	    return -1;
+	}
+      else if (obj->value_ptr.function->is_generic)
+	{
+	  if (write_to_stream (str, "#<STANDARD-GENERIC-FUNCTION ",
+			       strlen ("#<STANDARD-GENERIC-FUNCTION ")) < 0)
 	    return -1;
 	}
       else if (write_to_stream (str, "#<FUNCTION ", strlen ("#<FUNCTION ")) < 0)
