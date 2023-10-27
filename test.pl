@@ -792,6 +792,7 @@ make_test ("(find-class 'starship)", "#<STANDARD-CLASS STARSHIP>");
 make_test ("(defparameter inst (make-instance 'starship))", "INST");
 make_test ("inst", "#<STARSHIP OBJECT ...>");
 make_test ("(class-of inst)", "#<STANDARD-CLASS STARSHIP>");
+make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
