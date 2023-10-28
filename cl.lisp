@@ -37,6 +37,7 @@
 
 (defun describe (obj &optional str) (values))
 (defun describe-object (obj str))
+(defun inspect (obj))
 
 
 
@@ -1000,7 +1001,7 @@
 
 
 (export '(*features* machine-instance machine-type machine-version
-	  short-site-name long-site-name describe describe-object
+	  short-site-name long-site-name describe describe-object inspect
 	  lambda-parameters-limit call-arguments-limit multiple-values-limit
 	  array-rank-limit array-dimension-limit array-total-size-limit
 	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
