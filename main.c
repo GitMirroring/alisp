@@ -1557,6 +1557,14 @@ int type_file_stream (const struct object *obj, const struct object *typespec,
 		      struct environment *env, struct outcome *outcome);
 int type_string_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
+int type_standard_object (const struct object *obj, const struct object *typespec,
+			  struct environment *env, struct outcome *outcome);
+int type_class (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct outcome *outcome);
+int type_structure_class (const struct object *obj, const struct object *typespec,
+			  struct environment *env, struct outcome *outcome);
+int type_standard_class (const struct object *obj, const struct object *typespec,
+			 struct environment *env, struct outcome *outcome);
 
 int type_type_error (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome);
@@ -2840,6 +2848,13 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("FILE-STREAM", env, type_file_stream, 1, "STREAM",
 		    (char *)NULL);
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
+		    (char *)NULL);
+  add_builtin_type ("STANDARD-OBJECT", env, type_standard_object, 1,
+		    (char *)NULL);
+  add_builtin_type ("CLASS", env, type_class, 1, (char *)NULL);
+  add_builtin_type ("STRUCTURE-CLASS", env, type_structure_class, 1,
+		    (char *)NULL);
+  add_builtin_type ("STANDARD-CLASS", env, type_standard_class, 1,
 		    (char *)NULL);
 
 
@@ -10236,6 +10251,39 @@ type_string_stream (const struct object *obj, const struct object *typespec,
 {
   return obj->type == TYPE_STREAM
     && obj->value_ptr.stream->medium == STRING_STREAM;
+}
+
+
+int
+type_standard_object (const struct object *obj, const struct object *typespec,
+		      struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STANDARD_OBJECT || obj->type == TYPE_STANDARD_CLASS
+    || obj->type == TYPE_STRUCTURE_CLASS;
+}
+
+
+int
+type_class (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STANDARD_CLASS || obj->type == TYPE_STRUCTURE_CLASS;
+}
+
+
+int
+type_structure_class (const struct object *obj, const struct object *typespec,
+		      struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STRUCTURE_CLASS;
+}
+
+
+int
+type_standard_class (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STANDARD_CLASS;
 }
 
 
