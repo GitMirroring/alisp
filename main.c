@@ -367,7 +367,9 @@ outcome_type
     KEYWORD_PACKAGE_CANT_USE_ANY_PACKAGE,
     CANT_USE_KEYWORD_PACKAGE,
     USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL,
-    PACKAGE_IS_NOT_IN_USE
+    PACKAGE_IS_NOT_IN_USE,
+    SLOT_NOT_FOUND,
+    SLOT_NOT_BOUND
   };
 
 
@@ -1721,6 +1723,9 @@ struct object *accessor_gethash (struct object *list, struct object *newval,
 struct object *accessor_symbol_plist (struct object *list, struct object *newval,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *accessor_slot_value (struct object *list, struct object *newval,
+				    struct environment *env,
+				    struct outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -2056,6 +2061,8 @@ struct object *builtin_find_class
 struct object *builtin_make_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_slot_value
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defgeneric
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2705,6 +2712,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
+		    accessor_slot_value, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
@@ -13809,6 +13818,45 @@ accessor_symbol_plist (struct object *list, struct object *newval,
 }
 
 
+struct object *
+accessor_slot_value (struct object *list, struct object *newval,
+		     struct environment *env, struct outcome *outcome)
+{
+  struct class_field *f;
+  struct object *req;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.standard_object->fields;
+  req = SYMBOL (CAR (CDR (list)));
+
+  while (f)
+    {
+      if (f->name == req)
+	{
+	  f->value = newval;
+	  increment_refcount (f->value);
+	  return f->value;
+	}
+
+      f = f->next;
+    }
+
+  outcome->type = SLOT_NOT_FOUND;
+  return NULL;
+}
+
+
 int
 compare_two_numbers (struct object *num1, struct object *num2)
 {
@@ -19339,7 +19387,7 @@ builtin_make_instance (struct object *list, struct environment *env,
 	so->fields = f = malloc_and_check (sizeof (*f));
 
       f->name = fd->name;
-      f->value = &nil_object;
+      f->value = NULL;
 
       fd = fd->next;
     }
@@ -19366,6 +19414,50 @@ builtin_class_of (struct object *list, struct environment *env,
 
   increment_refcount (CAR (list)->value_ptr.standard_object->class);
   return CAR (list)->value_ptr.standard_object->class;
+}
+
+
+struct object *
+builtin_slot_value (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct class_field *f;
+  struct object *req;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.standard_object->fields;
+  req = SYMBOL (CAR (CDR (list)));
+
+  while (f)
+    {
+      if (f->name == req)
+	{
+	  if (!f->value)
+	    {
+	      outcome->type = SLOT_NOT_BOUND;
+	      return NULL;
+	    }
+
+	  increment_refcount (f->value);
+	  return f->value;
+	}
+
+      f = f->next;
+    }
+
+  outcome->type = SLOT_NOT_FOUND;
+  return NULL;
 }
 
 
@@ -21600,6 +21692,15 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: package is not in use\n");
     }
+  else if (err->type == SLOT_NOT_FOUND)
+    {
+      printf ("eval error: slot doesn't exist\n");
+    }
+  else if (err->type == SLOT_NOT_BOUND)
+    {
+      printf ("eval error: slot is not bound\n");
+    }
+
 
   std_out->value_ptr.stream->dirty_line = 0;
 }
