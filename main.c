@@ -326,7 +326,6 @@ outcome_type
     CANT_MODIFY_CONSTANT,
     CANT_REBIND_CONSTANT,
     CANT_REDEFINE_STANDARD_TYPE,
-    NO_SETF_EXPANDER,
     TOO_FEW_ARGUMENTS,
     TOO_MANY_ARGUMENTS,
     WRONG_NUMBER_OF_ARGUMENTS,
@@ -349,6 +348,7 @@ outcome_type
     BLOCK_NOT_FOUND,
     CATCH_NOT_FOUND,
     INVALID_ACCESSOR,
+    NO_SETF_EXPANDER,
     SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES,
     INVALID_SETF_EXPANSION,
     FUNCTION_NOT_FOUND_IN_EVAL,
@@ -21429,10 +21429,6 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: redefining standard types is not allowed\n");
     }
-  else if (err->type == NO_SETF_EXPANDER)
-    {
-      printf ("eval error: symbol has no associated setf expander\n");
-    }
   else if (err->type == TOO_FEW_ARGUMENTS)
     {
       printf ("eval error: too few arguments to function or macro call\n");
@@ -21516,6 +21512,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INVALID_ACCESSOR)
     {
       printf ("eval error: not a valid accessor\n");
+    }
+  else if (err->type == NO_SETF_EXPANDER)
+    {
+      printf ("eval error: symbol has no associated setf expander\n");
     }
   else if (err->type == SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES)
     {
