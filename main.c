@@ -320,6 +320,7 @@ outcome_type
     INCORRECT_SYNTAX_IN_DEFTYPE,
     INVALID_LAMBDA_LIST,
     CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST,
+    LAMBDA_LISTS_NOT_CONGRUENT,
     CANT_REDEFINE_SPECIAL_OPERATOR,
     CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE,
     CANT_REDEFINE_CONSTANT_BY_DIFFERENT_OPERATOR,
@@ -335,6 +336,7 @@ outcome_type
     OUT_OF_BOUND_INDEX,
     DECREASING_INTERVAL_NOT_MEANINGFUL,
     INVALID_SIZE,
+    NO_APPLICABLE_METHOD,
     COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
@@ -667,7 +669,7 @@ function
   struct object *body;
 
   int is_generic;
-  struct object_list *methods;
+  struct method_list *methods;
 
   struct object *(*builtin_form)
     (struct object *list, struct environment *env, struct outcome *outcome);
@@ -684,6 +686,29 @@ function
 
 
   struct object *struct_copyier_class;
+};
+
+
+struct
+method
+{
+  struct object *generic_func;
+
+  struct parameter *lambda_list;
+  int allow_other_keys;
+
+  struct object *body;
+};
+
+
+struct
+method_list
+{
+  int reference_strength_factor;
+
+  struct object *meth;
+
+  struct method_list *next;
 };
 
 
@@ -963,6 +988,7 @@ object_type
     TYPE_CONDITION = 1 << 23,
     TYPE_FUNCTION = 1 << 24,
     TYPE_MACRO = 1 << 25,
+    TYPE_METHOD = 1 << 30,
     TYPE_SHARP_MACRO_CALL = 1 << 26,
   };
 
@@ -1000,6 +1026,7 @@ object_ptr_union
   struct standard_object *standard_object;
   struct function *function;
   struct function *macro;
+  struct method *method;
   struct sharp_macro_call *sharp_macro_call;
 };
 
@@ -1425,6 +1452,7 @@ struct parameter *parse_required_parameters (struct object *obj,
 					     struct parameter **last,
 					     struct object **rest,
 					     int allow_destructuring,
+					     int is_specialized,
 					     struct environment *env,
 					     struct outcome *outcome);
 struct parameter *parse_optional_parameters
@@ -1434,8 +1462,11 @@ struct parameter *parse_keyword_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct outcome *outcome);
 struct parameter *parse_lambda_list
-(struct object *obj, int allow_destructuring, struct environment *env,
- struct outcome *outcome, int *allow_other_keys);
+(struct object *obj, int allow_destructuring, int is_specialized,
+ struct environment *env, struct outcome *outcome, int *allow_other_keys);
+
+int are_lambda_lists_congruent (struct parameter *meth_list,
+				struct parameter *gen_list);
 
 int parse_declarations (struct object *body, struct environment *env,
 			int bin_num, struct outcome *outcome,
@@ -1462,6 +1493,13 @@ struct object *call_structure_accessor (struct object *struct_class,
 					struct object *newval,
 					struct environment *env,
 					struct outcome *outcome);
+
+int is_method_applicable (struct object *meth, struct object *args,
+			  struct environment *env, struct outcome *outcome);
+struct object *dispatch_generic_function_call (struct object *func,
+					       struct object *arglist,
+					       struct environment *env,
+					       struct outcome *outcome);
 
 int check_type (struct object *obj, struct object *typespec,
 		struct environment *env, struct outcome *outcome);
@@ -2068,6 +2106,8 @@ struct object *builtin_slot_value
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defgeneric
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_defmethod
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2138,6 +2178,8 @@ int print_array (const struct array *array, struct environment *env,
 		 struct stream *str);
 int print_function_or_macro (const struct object *obj, struct environment *env,
 			     struct stream *str);
+int print_method (const struct object *obj, struct environment *env,
+		  struct stream *str);
 int print_object (const struct object *obj, struct environment *env,
 		  struct stream *str);
 
@@ -2170,6 +2212,7 @@ void free_ratio (struct object *obj);
 void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
 void free_function_or_macro (struct object *obj);
+void free_method (struct object *obj);
 
 void free_sharp_macro_call (struct object *macro);
 void free_list_structure (struct object *list);
@@ -2717,6 +2760,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
 		    accessor_slot_value, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -5306,11 +5350,11 @@ struct object *
 alloc_object (void)
 {
   struct object *obj = malloc_and_check (sizeof (*obj));
-  
+
   obj->refcount1 = 0;
   obj->refcount2 = 1;
   obj->flags = 0;
-  
+
   return obj;
 }
 
@@ -6120,7 +6164,7 @@ create_function (struct object *lambda_list, struct object *body,
   struct function *f = fun->value_ptr.function;
 
   outcome->type = EVAL_OK;
-  f->lambda_list = parse_lambda_list (lambda_list, allow_destructuring, env,
+  f->lambda_list = parse_lambda_list (lambda_list, allow_destructuring, 0, env,
 				      outcome, &f->allow_other_keys);
 
   if (outcome->type != EVAL_OK)
@@ -7923,7 +7967,7 @@ alloc_parameter (enum parameter_type type, struct object *sym)
   par->supplied_p_param = NULL;
   par->key = NULL;
   par->next = NULL;
-  
+
   return par;
 }
 
@@ -7931,7 +7975,8 @@ alloc_parameter (enum parameter_type type, struct object *sym)
 struct parameter *
 parse_required_parameters (struct object *obj, struct parameter **last,
 			   struct object **rest, int allow_destructuring,
-			   struct environment *env, struct outcome *outcome)
+			   int is_specialized, struct environment *env,
+			   struct outcome *outcome)
 {
   struct object *car;
   struct parameter *first = NULL;
@@ -7950,12 +7995,39 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	    *last = (*last)->next = alloc_parameter (REQUIRED_PARAM, NULL);
 
 	  outcome->type = EVAL_OK;
-	  (*last)->sub_lambda_list = parse_lambda_list (car, 1, env, outcome,
+	  (*last)->sub_lambda_list = parse_lambda_list (car, 1, 0, env, outcome,
 							&(*last)->
 							sub_allow_other_keys);
 
 	  if (outcome->type != EVAL_OK)
 	    return NULL;
+	}
+      else if (car->type == TYPE_CONS_PAIR && is_specialized)
+	{
+	  if (list_length (car) != 2 || !IS_SYMBOL (CAR (car))
+	      || !IS_SYMBOL (CAR (CDR (car))))
+	    {
+	      outcome->type = INVALID_LAMBDA_LIST;
+	      return NULL;
+	    }
+
+	  if (SYMBOL (CAR (car))->value_ptr.symbol->is_const)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return NULL;
+	    }
+
+	  if (!first)
+	    *last = first = alloc_parameter (REQUIRED_PARAM, SYMBOL (CAR (car)));
+	  else
+	    *last = (*last)->next = alloc_parameter (REQUIRED_PARAM,
+						     SYMBOL (CAR (car)));
+
+	  (*last)->reference_strength_factor =
+	    !STRENGTH_FACTOR_OF_OBJECT (SYMBOL (CAR (car)));
+	  INC_WEAK_REFCOUNT (SYMBOL (CAR (car)));
+
+	  (*last)->typespec = SYMBOL (CAR (CDR (car)));
 	}
       else
 	{
@@ -7987,7 +8059,11 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
 	  (*last)->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (car);
 	  INC_WEAK_REFCOUNT (car);
+
+	  if (is_specialized)
+	    (*last)->typespec = &t_object;
 	}
+
       obj = CDR (obj);
     }
 
@@ -8286,8 +8362,8 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 struct parameter *
 parse_lambda_list (struct object *obj, int allow_destructuring,
-		   struct environment *env, struct outcome *outcome,
-		   int *allow_other_keys)
+		   int is_specialized, struct environment *env,
+		   struct outcome *outcome, int *allow_other_keys)
 {
   struct parameter *first = NULL, *last = NULL;
   struct object *car;
@@ -8306,8 +8382,8 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       return NULL;
     }
 
-  first = parse_required_parameters (obj, &last, &obj, allow_destructuring, env,
-				     outcome);
+  first = parse_required_parameters (obj, &last, &obj, allow_destructuring,
+				     is_specialized, env, outcome);
 
   if (outcome->type != EVAL_OK)
     return NULL;
@@ -8468,6 +8544,14 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
     }
 
   return first;
+}
+
+
+int
+are_lambda_lists_congruent (struct parameter *meth_list,
+			    struct parameter *gen_list)
+{
+  return 1;
 }
 
 
@@ -9113,6 +9197,12 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
 
+  if (func->value_ptr.function->is_generic)
+    {
+      return dispatch_generic_function_call (func, arglist, env, outcome);
+    }
+
+
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
 			   eval_args, is_macro,
 			   func->value_ptr.function->allow_other_keys, env,
@@ -9238,6 +9328,85 @@ call_structure_accessor (struct object *struct_class, struct object *field,
     }
 
   return NULL;
+}
+
+
+int
+is_method_applicable (struct object *meth, struct object *args,
+		      struct environment *env, struct outcome *outcome)
+{
+  struct parameter *par = meth->value_ptr.method->lambda_list;
+  int ret;
+
+  while (par && par->type == REQUIRED_PARAM)
+    {
+      ret = check_type (CAR (args), par->typespec, env, outcome);
+
+      if (ret <= 0)
+	return ret;
+
+      par = par->next;
+    }
+
+  return 1;
+}
+
+
+struct object *
+dispatch_generic_function_call (struct object *func, struct object *arglist,
+				struct environment *env,
+				struct outcome *outcome)
+{
+  struct object *args = evaluate_through_list (arglist, env, outcome), *ret;
+  struct method_list *applm = NULL, *lapplm,
+    *ml = func->value_ptr.function->methods;
+  struct binding *bins;
+  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+
+  if (!args)
+    return NULL;
+
+  while (ml)
+    {
+      if (is_method_applicable (ml->meth, args, env, outcome))
+	{
+	  if (applm)
+	    lapplm = lapplm->next = malloc_and_check (sizeof (*lapplm));
+	  else
+	    applm = lapplm = malloc_and_check (sizeof (*lapplm));
+
+	  lapplm->meth = ml->meth;
+	  lapplm->next = NULL;
+	}
+
+      ml = ml->next;
+    }
+
+  if (!applm)
+    {
+      outcome->type = NO_APPLICABLE_METHOD;
+      return NULL;
+    }
+
+
+  if (parse_argument_list (args, applm->meth->value_ptr.method->lambda_list, 0,
+			   0, 0, env, outcome, &bins, &argsnum))
+    {
+      env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+      env->lex_env_vars_boundary += argsnum;
+
+      ret = evaluate_body (applm->meth->value_ptr.method->body, 0, NULL, env,
+			   outcome);
+
+      env->vars = remove_bindings (env->vars, argsnum);
+      env->lex_env_vars_boundary = prev_lex_bin_num;
+    }
+  else
+    {
+      ret = NULL;
+    }
+
+  return ret;
 }
 
 
@@ -19520,20 +19689,84 @@ evaluate_defgeneric (struct object *list, struct environment *env,
     {
       delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
     }
-  else
-    {
-      increment_refcount (sym);
-    }
 
   sym->value_ptr.symbol->function_cell = fun;
-  add_strong_reference (sym, fun, 1);
-  decrement_refcount (fun);
+  add_reference (sym, fun, 1);
 
   fun->value_ptr.function->name = sym;
   add_reference (fun, sym, 0);
 
-  increment_refcount (fun);
   return fun;
+}
+
+
+struct object *
+evaluate_defmethod (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct object *fun, *meth;
+  struct method *m;
+  struct method_list *ml;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!(fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0))
+      || !fun->value_ptr.function->is_generic)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  meth = alloc_object ();
+  meth->type = TYPE_METHOD;
+  m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
+  m->generic_func = NULL;
+  m->body = NULL;
+
+  outcome->type = EVAL_OK;
+  m->lambda_list = NULL;
+  m->lambda_list = parse_lambda_list (CAR (CDR (list)), 0, 1, env, outcome,
+				      &m->allow_other_keys);
+
+  if (outcome->type != EVAL_OK)
+    {
+      free_method (meth);
+
+      return NULL;
+    }
+
+  if (!are_lambda_lists_congruent (m->lambda_list,
+				   fun->value_ptr.function->lambda_list))
+    {
+      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+      return NULL;
+    }
+
+  m->body = CDR (CDR (list));
+  add_reference (meth, CDR (CDR (list)), 1);
+
+  m->generic_func = fun;
+  add_reference (meth, fun, 0);
+
+  ml = malloc_and_check (sizeof (*ml));
+  ml->reference_strength_factor = 1;
+  ml->meth = meth;
+  ml->next = fun->value_ptr.function->methods;
+
+  fun->value_ptr.function->methods = ml;
+  INC_WEAK_REFCOUNT (meth);
+
+  return meth;
 }
 
 
@@ -21134,6 +21367,21 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 
 
 int
+print_method (const struct object *obj, struct environment *env,
+	      struct stream *str)
+{
+  if (write_to_stream (str, "#<STANDARD-METHOD ", strlen ("#<STANDARD-METHOD "))
+      < 0
+      || print_symbol (obj->value_ptr.method->generic_func->
+		       value_ptr.function->name, env, str) < 0
+      || write_to_stream (str, ">", 1))
+      return -1;
+
+  return 0;
+}
+
+
+int
 print_object (const struct object *obj, struct environment *env,
 	      struct stream *str)
 {
@@ -21236,6 +21484,8 @@ print_object (const struct object *obj, struct environment *env,
 	}
       else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
 	return print_function_or_macro (obj, env, str);
+      else if (obj->type == TYPE_METHOD)
+	return print_method (obj, env, str);
       else if (obj->type == TYPE_PACKAGE)
 	{
 	  if (write_to_stream (str, "#<PACKAGE ", strlen ("#<PACKAGE ")) < 0
@@ -21515,6 +21765,10 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: can't use name of constant in a lambda list\n");
     }
+  else if (err->type == LAMBDA_LISTS_NOT_CONGRUENT)
+    {
+      printf ("eval error: lambda lists are not congruent\n");
+    }
   else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
     {
       printf ("eval error: redefining special operators is not allowed\n");
@@ -21572,6 +21826,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INVALID_SIZE)
     {
       printf ("eval error: not a valid size\n");
+    }
+  else if (err->type == NO_APPLICABLE_METHOD)
+    {
+      printf ("eval error: no applicable method found\n");
     }
   else if (err->type == COULD_NOT_OPEN_FILE)
     {
@@ -21730,6 +21988,7 @@ int
 is_reference_weak (struct object *src, int ind, struct object *dest)
 {
   struct parameter *par;
+  struct method_list *ml;
 
   if (src->type == TYPE_ARRAY)
     {
@@ -21748,20 +22007,53 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
 	  return !(src->flags & (0x1 << ind))
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
-      else
-	{
-	  ind -= 2;
-	  par = src->value_ptr.function->lambda_list;
 
-	  while (ind > 3)
+      ind -= 2;
+
+      if (ind % 8 == 4)
+	{
+	  ml = src->value_ptr.function->methods;
+
+	  while (ind > 7)
 	    {
-	      ind -= 4;
-	      par = par->next;
+	      ind -= 8;
+	      ml = ml->next;
 	    }
 
-	  return !(par->reference_strength_factor & (0x1 << ind))
+	  return !(ml->reference_strength_factor & (0x1 << ind))
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
+
+      par = src->value_ptr.function->lambda_list;
+
+      while (ind > 7)
+	{
+	  ind -= 8;
+	  par = par->next;
+	}
+
+      return !(par->reference_strength_factor & (0x1 << ind))
+	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
+  else if (src->type == TYPE_METHOD)
+    {
+      if (ind <= 1)
+	{
+	  return !(src->flags & (0x1 << ind))
+	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
+	}
+
+      ind -= 2;
+      par = src->value_ptr.method->lambda_list;
+
+      while (ind > 3)
+	{
+	  ind -= 4;
+	  par = par->next;
+	}
+
+      return !(par->reference_strength_factor & (0x1 << ind))
+	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
     }
   else
     {
@@ -21776,6 +22068,7 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 			       int decrease_other_refcount)
 {
   struct parameter *par;
+  struct method_list *ml;
 
   if (src->type == TYPE_ARRAY)
     {
@@ -21796,9 +22089,50 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 	}
       else
 	{
-	  par = src->value_ptr.function->lambda_list;
+	  ind -= 2;
 
-	  while (ind > 2)
+	  if (ind % 8 == 4)
+	    {
+	      ml = src->value_ptr.function->methods;
+
+	      while (ind > 7)
+		{
+		  ind -= 8;
+		  ml = ml->next;
+		}
+
+	      ml->reference_strength_factor =
+		!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest);
+	    }
+	  else
+	    {
+	      par = src->value_ptr.function->lambda_list;
+
+	      while (ind > 7)
+		{
+		  ind -= 8;
+		  par = par->next;
+		}
+
+	      par->reference_strength_factor = (par->reference_strength_factor
+						& ~(1 << ind))
+		| ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
+	    }
+	}
+    }
+  else if (src->type == TYPE_METHOD)
+    {
+      if (ind <= 1)
+	{
+	  src->flags = (src->flags & ~(1 << ind))
+	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
+	}
+      else
+	{
+	  ind -= 2;
+	  par = src->value_ptr.method->lambda_list;
+
+	  while (ind > 3)
 	    {
 	      ind -= 4;
 	      par = par->next;
@@ -21950,6 +22284,7 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 {
   size_t sz, i;
   struct parameter *par;
+  struct method_list *ml;
 
   if (node->type & TYPE_PREFIX)
     rest_inv_at_edge (node->value_ptr.next, 0);
@@ -22000,6 +22335,37 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
       rest_inv_at_edge (node->value_ptr.function->body, 1);
 
       par = node->value_ptr.function->lambda_list;
+      i = 2;
+
+      while (par)
+	{
+	  rest_inv_at_edge (par->name, i++);
+	  rest_inv_at_edge (par->init_form, i++);
+	  rest_inv_at_edge (par->supplied_p_param, i++);
+	  rest_inv_at_edge (par->key, i++);
+
+	  i += 4;
+
+	  par = par->next;
+	}
+
+      ml = node->value_ptr.function->methods;
+      i = 6;
+
+      while (ml)
+	{
+	  rest_inv_at_edge (ml->meth, i);
+	  i += 8;
+	  ml = ml->next;
+	}
+    }
+  else if (node->type == TYPE_METHOD)
+    {
+      rest_inv_at_edge (node->value_ptr.method->generic_func, 0);
+
+      rest_inv_at_edge (node->value_ptr.method->body, 1);
+
+      par = node->value_ptr.method->lambda_list;
       i = 2;
 
       while (par)
@@ -22072,6 +22438,8 @@ free_object (struct object *obj)
     free_bytespec (obj);
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
     free_function_or_macro (obj);
+  else if (obj->type == TYPE_METHOD)
+    free_method (obj);
   else if (obj->type == TYPE_STREAM)
     {
       if (obj->value_ptr.stream->is_open
@@ -22230,10 +22598,52 @@ void
 free_function_or_macro (struct object *obj)
 {
   struct parameter *n, *l = obj->value_ptr.function->lambda_list;
+  struct method_list *nml, *ml = obj->value_ptr.function->methods;
   int i = 2;
 
   delete_reference (obj, obj->value_ptr.function->name, 0);
   delete_reference (obj, obj->value_ptr.function->body, 1);
+
+  while (l)
+    {
+      delete_reference (obj, l->name, i++);
+      delete_reference (obj, l->init_form, i++);
+      delete_reference (obj, l->supplied_p_param, i++);
+      delete_reference (obj, l->key, i++);
+
+      i += 4;
+
+      n = l->next;
+      free (l);
+      l = n;
+    }
+
+  i = 6;
+
+  while (ml)
+    {
+      delete_reference (obj, ml->meth, i);
+
+      i += 8;
+
+      nml = ml->next;
+      free (ml);
+      ml = nml;
+    }
+
+  free (obj->value_ptr.function);
+  free (obj);
+}
+
+
+void
+free_method (struct object *obj)
+{
+  struct parameter *n, *l = obj->value_ptr.method->lambda_list;
+  int i = 2;
+
+  delete_reference (obj, obj->value_ptr.method->generic_func, 0);
+  delete_reference (obj, obj->value_ptr.method->body, 1);
 
   while (l)
     {
@@ -22247,7 +22657,7 @@ free_function_or_macro (struct object *obj)
       l = n;
     }
 
-  free (obj->value_ptr.function);
+  free (obj->value_ptr.method);
   free (obj);
 }
 
