@@ -7430,7 +7430,7 @@ add_builtin_type (char *name, struct environment *env,
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1,
-					  EXTERNAL_VISIBILITY, 0, pack);
+					  EXTERNAL_VISIBILITY, 1, pack);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
