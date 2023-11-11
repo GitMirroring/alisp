@@ -806,6 +806,10 @@ make_test ("(setf (slot-value inst 'y) 2.5)", "2.5");
 make_test ("(slot-value inst 'x)", "0");
 make_test ("(slot-value inst 'y)", "2.5");
 make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
+make_test ("(defmethod genfun ((x string) y z) 10)", "#<STANDARD-METHOD GENFUN>");
+make_test ("(defmethod genfun ((x integer) y z) 11)", "#<STANDARD-METHOD GENFUN>");
+make_test ("(genfun \"\" nil nil)", "10");
+make_test ("(genfun 0 nil nil)", "11");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
