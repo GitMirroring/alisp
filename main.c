@@ -18404,13 +18404,9 @@ evaluate_defun (struct object *list, struct environment *env,
 	{
 	  delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
 	}
-      else
-	{
-	  increment_refcount (sym);
-	}
 
       sym->value_ptr.symbol->function_cell = fun;
-      add_strong_reference (sym, fun, 1);
+      add_reference (sym, fun, 1);
       decrement_refcount (fun);
     }
   else
@@ -18478,13 +18474,9 @@ evaluate_defmacro (struct object *list, struct environment *env,
     {
       delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
     }
-  else
-    {
-      increment_refcount (sym);
-    }
 
   sym->value_ptr.symbol->function_cell = mac;
-  add_strong_reference (sym, mac, 1);
+  add_reference (sym, mac, 1);
   decrement_refcount (mac);
 
   mac->value_ptr.function->name = sym;
