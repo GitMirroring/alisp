@@ -1847,6 +1847,8 @@ struct object *builtin_typep (struct object *list, struct environment *env,
 			      struct outcome *outcome);
 struct object *builtin_type_of (struct object *list, struct environment *env,
 				struct outcome *outcome);
+struct object *builtin_subtypep (struct object *list, struct environment *env,
+				 struct outcome *outcome);
 
 struct object *builtin_make_string (struct object *list, struct environment *env,
 				    struct outcome *outcome);
@@ -2728,6 +2730,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 1);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SUBTYPEP", env, builtin_subtypep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-RANDOM-STATE", env, builtin_make_random_state,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("RANDOM", env, builtin_random, TYPE_FUNCTION, NULL, 0);
@@ -15452,6 +15455,31 @@ builtin_type_of (struct object *list, struct environment *env,
 
   increment_refcount (ret);
   return ret;
+}
+
+
+struct object *
+builtin_subtypep (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || !IS_SYMBOL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  prepend_object_to_obj_list (&t_object, &outcome->other_values);
+
+  if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), env, outcome))
+    return &t_object;
+
+  return &nil_object;
 }
 
 
