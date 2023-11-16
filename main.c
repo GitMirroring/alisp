@@ -897,6 +897,46 @@ standard_object
 
 
 struct
+condition_field_decl
+{
+  struct object *name;
+
+  struct condition_field_decl *next;
+};
+
+
+struct
+condition_class
+{
+  struct object *name;
+
+  struct object_list *parents;
+
+  struct condition_field_decl *fields;
+};
+
+
+struct
+condition_field
+{
+  struct object *name;
+
+  struct object *value;
+
+  struct condition_field *next;
+};
+
+
+struct
+condition
+{
+  struct object *class;
+
+  struct condition_field *fields;
+};
+
+
+struct
 sharp_macro_call
 {
   int arg;
@@ -985,6 +1025,7 @@ object_type
     TYPE_STRUCTURE = 1 << 22,
     TYPE_STANDARD_CLASS = 1 << 28,
     TYPE_STANDARD_OBJECT = 1 << 29,
+    TYPE_CONDITION_CLASS = 1 << 31,
     TYPE_CONDITION = 1 << 23,
     TYPE_FUNCTION = 1 << 24,
     TYPE_MACRO = 1 << 25,
@@ -1024,6 +1065,8 @@ object_ptr_union
   struct structure *structure;
   struct standard_class *standard_class;
   struct standard_object *standard_object;
+  struct condition_class *condition_class;
+  struct condition *condition;
   struct function *function;
   struct function *macro;
   struct method *method;
@@ -1353,6 +1396,9 @@ struct structure_field_decl *create_structure_field_decl
 struct class_field_decl *create_class_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
+struct condition_field_decl *create_condition_field_decl
+(struct object *fieldform, struct environment *env, struct outcome *outcome);
+
 struct object *load_file (const char *filename, struct environment *env,
 			  struct outcome *outcome);
 
@@ -1618,6 +1664,11 @@ int type_arithmetic_error (const struct object *obj,
 			   struct environment *env, struct outcome *outcome);
 int type_error (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome);
+int type_serious_condition (const struct object *obj,
+			    const struct object *typespec,
+			    struct environment *env, struct outcome *outcome);
+int type_condition (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct outcome *outcome);
 
 struct object *builtin_car
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2126,8 +2177,11 @@ struct object *evaluate_throw
 
 struct object *evaluate_handler_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
-
 struct object *evaluate_unwind_protect
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_define_condition
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_make_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_print_no_warranty
@@ -2772,6 +2826,10 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
 		    NULL, 1);
+  add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
+		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SUBTYPEP", env, builtin_subtypep, TYPE_FUNCTION, NULL, 0);
@@ -2917,10 +2975,14 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("TYPE-ERROR", env, type_type_error, 1, (char *)NULL);
   add_builtin_type ("FILE-ERROR", env, type_file_error, 1, (char *)NULL);
   add_builtin_type ("DIVISION-BY-ZERO", env, type_division_by_zero, 1,
+		    "ARITHMETIC-ERROR", (char *)NULL);
+  add_builtin_type ("ARITHMETIC-ERROR", env, type_arithmetic_error, 1, "ERROR",
 		    (char *)NULL);
-  add_builtin_type ("ARITHMETIC-ERROR", env, type_arithmetic_error, 1,
+  add_builtin_type ("ERROR", env, type_error, 1, "SERIOUS-CONDITION",
 		    (char *)NULL);
-  add_builtin_type ("ERROR", env, type_error, 1, (char *)NULL);
+  add_builtin_type ("SERIOUS-CONDITION", env, type_serious_condition, 1,
+		    "CONDITION", (char *)NULL);
+  add_builtin_type ("CONDITION", env, type_condition, 1, (char *)NULL);
 
 
   env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
@@ -6925,6 +6987,32 @@ create_class_field_decl (struct object *fieldform, struct environment *env,
 }
 
 
+struct condition_field_decl *
+create_condition_field_decl (struct object *fieldform, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *name;
+  struct condition_field_decl *ret;
+
+  if (IS_SYMBOL (fieldform))
+    name = SYMBOL (fieldform);
+  else if (IS_LIST (fieldform) && IS_SYMBOL (CAR (fieldform)))
+    name = SYMBOL (CAR (fieldform));
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = malloc_and_check (sizeof (*ret));
+
+  ret->name = name;
+  ret->next = NULL;
+
+  return ret;
+}
+
+
 struct object *
 load_file (const char *filename, struct environment *env,
 	   struct outcome *outcome)
@@ -9564,7 +9652,9 @@ is_subtype (const struct object *first, const struct object *second,
 
   if (IS_SYMBOL (first) && IS_SYMBOL (second))
     {
-      p = SYMBOL (first)->value_ptr.symbol->parent_types;
+      p = !SYMBOL (first)->value_ptr.symbol->builtin_type
+	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->parents
+	: SYMBOL (first)->value_ptr.symbol->parent_types;
 
       while (p)
 	{
@@ -9574,7 +9664,9 @@ is_subtype (const struct object *first, const struct object *second,
 	  p = p->next;
 	}
 
-      p = SYMBOL (first)->value_ptr.symbol->parent_types;
+      p = !SYMBOL (first)->value_ptr.symbol->builtin_type
+	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->parents
+	: SYMBOL (first)->value_ptr.symbol->parent_types;
 
       while (p)
 	{
@@ -10503,6 +10595,22 @@ type_arithmetic_error (const struct object *obj, const struct object *typespec,
 int
 type_error (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct outcome *outcome)
+{
+  return 0;
+}
+
+
+int
+type_serious_condition (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome)
+{
+  return 0;
+}
+
+
+int
+type_condition (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct outcome *outcome)
 {
   return 0;
 }
@@ -20117,6 +20225,132 @@ evaluate_unwind_protect (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_define_condition (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  struct object *condcl, *cons;
+  struct condition_class *cc;
+  struct condition_field_decl *f, *prev;
+  struct object_list *p;
+
+  if (list_length (list) < 3)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list)))
+      || !IS_LIST (CAR (CDR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  condcl = alloc_object ();
+  condcl->type = TYPE_CONDITION_CLASS;
+
+  cc = malloc_and_check (sizeof (*cc));
+  condcl->value_ptr.condition_class = cc;
+
+  increment_refcount (SYMBOL (CAR (list)));
+  cc->name = SYMBOL (CAR (list));
+
+
+  cc->parents = NULL;
+  cons = CAR (CDR (list));
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (cc->parents)
+	p = p->next = malloc_and_check (sizeof (*p));
+      else
+	cc->parents = p = malloc_and_check (sizeof (*p));
+
+      p->obj = SYMBOL (CAR (cons));
+
+      cons = CDR (cons);
+    }
+
+  p->next = NULL;
+
+
+  cc->fields = NULL;
+  cons = CAR (CDR (CDR (list)));
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      f = create_condition_field_decl (CAR (cons), env, outcome);
+
+      if (!f)
+	return NULL;
+
+      if (cc->fields)
+	prev = prev->next = f;
+      else
+	cc->fields = prev = f;
+
+      cons = CDR (cons);
+    }
+
+  SYMBOL (CAR (list))->value_ptr.symbol->is_type = 1;
+  SYMBOL (CAR (list))->value_ptr.symbol->typespec = condcl;
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
+builtin_make_condition (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  struct object *ret;
+  struct condition *c;
+  struct condition_field_decl *fd;
+  struct condition_field *f;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || !is_subtype_by_char_vector (SYMBOL (CAR (list)),
+							     "CONDITION", env,
+							     outcome))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_object ();
+  ret->type = TYPE_CONDITION;
+
+  c = malloc_and_check (sizeof (*c));
+  c->class = SYMBOL (CAR (list))->value_ptr.symbol->typespec;
+  c->fields = NULL;
+  ret->value_ptr.condition = c;
+
+  fd = c->class->value_ptr.condition_class->fields;
+
+  while (fd)
+    {
+      if (c->fields)
+	f = f->next = malloc_and_check (sizeof (*f));
+      else
+	c->fields = f = malloc_and_check (sizeof (*f));
+
+      f->name = fd->name;
+      f->value = NULL;
+
+      fd = fd->next;
+    }
+
+  return ret;
+}
+
+
+struct object *
 builtin_al_print_no_warranty (struct object *list, struct environment *env,
 			      struct outcome *outcome)
 {
@@ -21538,6 +21772,17 @@ print_object (const struct object *obj, struct environment *env,
 	      || print_symbol (obj->value_ptr.standard_object->class
 			       ->value_ptr.standard_class->name, env, str)
 	      || write_to_stream (str, " OBJECT ...>", strlen (" OBJECT ...>")) < 0)
+	    return -1;
+
+	  return 0;
+	}
+      else if (obj->type == TYPE_CONDITION)
+	{
+	  if (write_to_stream (str, "#<CONDITION OF CLASS ",
+			       strlen ("#<CONDITION OF CLASS ")) < 0
+	      || print_symbol (obj->value_ptr.condition->class->
+			       value_ptr.condition_class->name, env, str)
+	      || write_to_stream (str, ">", 1))
 	    return -1;
 
 	  return 0;
