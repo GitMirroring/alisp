@@ -227,6 +227,17 @@ handler_binding
 };
 
 
+struct
+restart_binding
+{
+  struct object *name;
+
+  struct object *restart;
+
+  struct restart_binding *next;
+};
+
+
 enum
 binding_type
   {
@@ -371,7 +382,8 @@ outcome_type
     USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL,
     PACKAGE_IS_NOT_IN_USE,
     SLOT_NOT_FOUND,
-    SLOT_NOT_BOUND
+    SLOT_NOT_BOUND,
+    RESTART_NOT_FOUND
   };
 
 
@@ -490,6 +502,8 @@ environment
   struct object_list *catches;
 
   struct handler_binding *handlers;
+
+  struct restart_binding *restarts;
 
   struct binding *structs;
 
@@ -1669,6 +1683,8 @@ int type_serious_condition (const struct object *obj,
 			    struct environment *env, struct outcome *outcome);
 int type_condition (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct outcome *outcome);
+int type_restart (const struct object *obj, const struct object *typespec,
+		  struct environment *env, struct outcome *outcome);
 
 struct object *builtin_car
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2176,6 +2192,10 @@ struct object *evaluate_throw
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_handler_bind
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_restart_bind
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_invoke_restart
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_unwind_protect
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2824,6 +2844,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("THROW", env, evaluate_throw, TYPE_MACRO, NULL, 1);
   add_builtin_form ("HANDLER-BIND", env, evaluate_handler_bind, TYPE_MACRO, NULL,
 		    0);
+  add_builtin_form ("RESTART-BIND", env, evaluate_restart_bind, TYPE_MACRO, NULL,
+		    0);
+  add_builtin_form ("INVOKE-RESTART", env, builtin_invoke_restart, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
 		    NULL, 1);
   add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
@@ -2983,6 +3007,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("SERIOUS-CONDITION", env, type_serious_condition, 1,
 		    "CONDITION", (char *)NULL);
   add_builtin_type ("CONDITION", env, type_condition, 1, (char *)NULL);
+
+  add_builtin_type ("RESTART", env, type_restart, 1, (char *)NULL);
 
 
   env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
@@ -10613,6 +10639,14 @@ type_condition (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome)
 {
   return 0;
+}
+
+
+int
+type_restart (const struct object *obj, const struct object *typespec,
+	      struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_FUNCTION;
 }
 
 
@@ -20191,6 +20225,142 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 
 
 struct object *
+evaluate_restart_bind (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  int restarts = 0;
+  struct object *cons, *res, *ret;
+  struct restart_binding *b, *prev = NULL, *first = NULL;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  cons = CAR (list);
+
+  while (cons->type == TYPE_CONS_PAIR)
+    {
+      if (CAR (cons)->type != TYPE_CONS_PAIR || list_length (CAR (cons)) != 2
+	  || !IS_SYMBOL (CAR (CAR (cons))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  goto cleanup_and_leave;
+	}
+
+      res = evaluate_object (CAR (CDR (CAR (cons))), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!res)
+	goto cleanup_and_leave;
+
+      if (res->type != TYPE_FUNCTION)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  goto cleanup_and_leave;
+	}
+
+      b = malloc_and_check (sizeof (*b));
+      b->name = SYMBOL (CAR (CAR (cons)));
+      b->restart = res;
+      b->next = NULL;
+
+      if (!first)
+	{
+	  prev = env->restarts;
+	  first = b;
+	}
+
+      if (env->restarts)
+	env->restarts->next = b;
+
+      env->restarts = b;
+
+      restarts++;
+
+      cons = CDR (cons);
+    }
+
+  ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
+
+ cleanup_and_leave:
+  for (; restarts; restarts--)
+    {
+      b = first->next;
+      decrement_refcount (first->restart);
+      free (first);
+      first = b;
+    }
+
+  env->restarts = prev;
+
+  return ret;
+}
+
+
+struct object *
+builtin_invoke_restart (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  struct restart_binding *b = env->restarts;
+  struct object *fun;
+
+  if (!list_length (list))
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_SYMBOL (CAR (list)))
+    {
+      while (b)
+	{
+	  if (SYMBOL (CAR (list)) == b->name)
+	    {
+	      fun = b->restart;
+	      break;
+	    }
+
+	  b = b->next;
+	}
+    }
+  else if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      while (b)
+	{
+	  if (CAR (list) == b->restart)
+	    {
+	      fun = b->restart;
+	      break;
+	    }
+
+	  b = b->next;
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!b)
+    {
+      outcome->type = RESTART_NOT_FOUND;
+      return NULL;
+    }
+
+  return call_function (fun, CDR (list), 1, 0, env, outcome);
+}
+
+
+struct object *
 evaluate_unwind_protect (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
@@ -22223,7 +22393,10 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: slot is not bound\n");
     }
-
+  else if (err->type == RESTART_NOT_FOUND)
+    {
+      printf ("eval error: restart not found\n");
+    }
 
   std_out->value_ptr.stream->dirty_line = 0;
 }
