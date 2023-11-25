@@ -33,6 +33,7 @@
 #include <ctype.h>
 #include <string.h>
 #include <limits.h>
+#include <float.h>
 #include <errno.h>
 #include <time.h>
 
@@ -3037,6 +3038,60 @@ add_standard_definitions (struct environment *env)
 			   create_integer_from_long (FIXNUM_MAX), env);
   define_constant_by_name ("MOST-NEGATIVE-FIXNUM",
 			   create_integer_from_long (FIXNUM_MIN), env);
+
+  define_constant_by_name ("MOST-POSITIVE-SHORT-FLOAT",
+			   create_floating_from_double (DBL_MAX), env);
+  define_constant_by_name ("MOST-POSITIVE-SINGLE-FLOAT",
+			   create_floating_from_double (DBL_MAX), env);
+  define_constant_by_name ("MOST-POSITIVE-DOUBLE-FLOAT",
+			   create_floating_from_double (DBL_MAX), env);
+  define_constant_by_name ("MOST-POSITIVE-LONG-FLOAT",
+			   create_floating_from_double (DBL_MAX), env);
+
+  define_constant_by_name ("LEAST-POSITIVE-SHORT-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-NORMALIZED-SHORT-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-SINGLE-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-NORMALIZED-SINGLE-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-DOUBLE-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-NORMALIZED-DOUBLE-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-LONG-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+  define_constant_by_name ("LEAST-POSITIVE-NORMALIZED-LONG-FLOAT",
+			   create_floating_from_double (DBL_MIN), env);
+
+  /* we assume that the set of floating-point numbers is symmetrical around 0,
+     even though C89 doesn't mandate that */
+  define_constant_by_name ("LEAST-NEGATIVE-SHORT-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-NORMALIZED-SHORT-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-SINGLE-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-NORMALIZED-SINGLE-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-DOUBLE-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-NORMALIZED-DOUBLE-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-LONG-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+  define_constant_by_name ("LEAST-NEGATIVE-NORMALIZED-LONG-FLOAT",
+			   create_floating_from_double (-DBL_MIN), env);
+
+  define_constant_by_name ("MOST-NEGATIVE-SHORT-FLOAT",
+			   create_floating_from_double (-DBL_MAX), env);
+  define_constant_by_name ("MOST-NEGATIVE-SINGLE-FLOAT",
+			   create_floating_from_double (-DBL_MAX), env);
+  define_constant_by_name ("MOST-NEGATIVE-DOUBLE-FLOAT",
+			   create_floating_from_double (-DBL_MAX), env);
+  define_constant_by_name ("MOST-NEGATIVE-LONG-FLOAT",
+			   create_floating_from_double (-DBL_MAX), env);
 
   define_constant_by_name ("INTERNAL-TIME-UNITS-PER-SECOND",
 			   create_integer_from_long (CLOCKS_PER_SEC), env);
