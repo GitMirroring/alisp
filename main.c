@@ -1062,7 +1062,7 @@ object_ptr_union
   mpz_t integer;
   fixnum *fixnum;
   mpq_t ratio;
-  mpf_t floating;
+  double *floating;
   struct complex *complex;
   gmp_randstate_t random_state;
   struct bytespec *bytespec;
@@ -1845,11 +1845,6 @@ struct object *divide_two_numbers (struct object *n1, struct object *n2,
 enum object_type highest_num_type (enum object_type t1, enum object_type t2);
 struct object *copy_number (const struct object *num);
 struct object *promote_number (struct object *num, enum object_type type);
-struct object *apply_arithmetic_operation
-(struct object *list, void (*opz) (mpz_t, const mpz_t, const mpz_t),
- void (*opq) (mpq_t, const mpq_t, const mpq_t),
- void (*opf) (mpf_t, const mpf_t, const mpf_t),  struct environment *env,
- struct outcome *outcome);
 struct object *perform_division_with_remainder
 (struct object *args, enum rounding_behavior round_behavior,
  enum object_type quotient_type, struct outcome *outcome);
@@ -2235,7 +2230,7 @@ int print_symbol_name (const struct symbol_name *sym, struct environment *env,
 int print_symbol (const struct object *sym, struct environment *env,
 		  struct stream *str);
 int print_bignum (const mpz_t z, struct environment *env, struct stream *str);
-int print_floating (const mpf_t f, struct environment *env, struct stream *str);
+int print_floating (const double f, struct environment *env, struct stream *str);
 int print_complex (const struct complex *c, struct environment *env,
 		   struct stream *str);
 int print_bytespec (const struct bytespec *bs, struct environment *env,
@@ -5116,7 +5111,9 @@ alloc_number (enum object_type numtype)
     }
   else if (numtype == TYPE_FLOAT)
     {
-      mpf_init (obj->value_ptr.floating);
+      obj->value_ptr.floating = malloc_and_check
+	(sizeof (*obj->value_ptr.floating));
+      *obj->value_ptr.floating = 0;
     }
 
   return obj;
@@ -5129,6 +5126,7 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
 {
   struct object *obj = alloc_object ();
   char *buf = malloc_and_check (size + 1);
+  mpf_t t;
 
   obj->type = numtype;
 
@@ -5152,8 +5150,14 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
       if (exp_marker_pos > 0)
 	buf [exp_marker_pos] = 'e';
 
-      mpf_init (obj->value_ptr.floating);
-      mpf_set_str (obj->value_ptr.floating, buf, radix);
+      mpf_init (t);
+      mpf_set_str (t, buf, radix);
+
+      obj->value_ptr.floating = malloc_and_check
+	(sizeof (*obj->value_ptr.floating));
+      *obj->value_ptr.floating = mpf_get_d (t);
+
+      mpf_clear (t);
     }
 
   free (buf);
@@ -5264,8 +5268,8 @@ create_floating_from_double (double d)
 
   obj->type = TYPE_FLOAT;
 
-  mpf_init (obj->value_ptr.floating);
-  mpf_set_d (obj->value_ptr.floating, d);
+  obj->value_ptr.floating = malloc_and_check (sizeof (*obj->value_ptr.floating));
+  *obj->value_ptr.floating = d;
 
   return obj;
 }
@@ -14178,13 +14182,17 @@ compare_two_numbers (struct object *num1, struct object *num2)
   struct object *first_p = promote_number (num1, tp);
   struct object *second_p = promote_number (num2, tp);
   int eq;
+  double d;
 
   if (tp == TYPE_INTEGER)
     eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
   else if (tp == TYPE_RATIO)
     eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
   else
-    eq = mpf_cmp (first_p->value_ptr.floating, second_p->value_ptr.floating);
+    {
+      d = *first_p->value_ptr.floating - *second_p->value_ptr.floating;
+      eq = (d < 0) ? -1 : !d ? 0 : 1;
+    }
 
   decrement_refcount (first_p);
   decrement_refcount (second_p);
@@ -14249,7 +14257,7 @@ is_zero (struct object *num)
 {
   return (num->type == TYPE_INTEGER && !mpz_sgn (num->value_ptr.integer))
     || (num->type == TYPE_RATIO && !mpq_sgn (num->value_ptr.ratio))
-    || (num->type == TYPE_FLOAT && !mpf_sgn (num->value_ptr.floating));
+    || (num->type == TYPE_FLOAT && *num->value_ptr.floating == 0);
 }
 
 
@@ -14266,7 +14274,7 @@ convert_number_to_double (struct object *num)
     }
   else
     {
-      return mpf_get_d (num->value_ptr.floating);
+      return *num->value_ptr.floating;
     }
 }
 
@@ -14310,8 +14318,8 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
 
       ret = alloc_number (TYPE_FLOAT);
 
-      mpf_div (ret->value_ptr.floating, pn1->value_ptr.floating,
-	       pn2->value_ptr.floating);
+      *ret->value_ptr.floating = *pn1->value_ptr.floating
+	/ *pn2->value_ptr.floating;
 
       decrement_refcount (pn1);
       decrement_refcount (pn2);
@@ -14353,8 +14361,9 @@ copy_number (const struct object *num)
     }
   else
     {
-      mpf_init (ret->value_ptr.floating);
-      mpf_set (ret->value_ptr.floating, num->value_ptr.floating);
+      ret->value_ptr.floating = malloc_and_check
+	(sizeof (*ret->value_ptr.floating));
+      *ret->value_ptr.floating = *num->value_ptr.floating;
     }
 
   return ret;
@@ -14382,74 +14391,14 @@ promote_number (struct object *num, enum object_type type)
     }
   else if (type == TYPE_FLOAT)
     {
-      mpf_init (ret->value_ptr.floating);
+      ret->value_ptr.floating = malloc_and_check
+	(sizeof (*ret->value_ptr.floating));
 
       if (num->type == TYPE_INTEGER)
-	mpf_set_z (ret->value_ptr.floating, num->value_ptr.integer);
+	*ret->value_ptr.floating = mpz_get_d (num->value_ptr.integer);
       else if (num->type == TYPE_RATIO)
-	mpf_set_q (ret->value_ptr.floating, num->value_ptr.ratio);
+	*ret->value_ptr.floating = mpq_get_d (num->value_ptr.ratio);
     }
-
-  return ret;
-}
-
-
-struct object *
-apply_arithmetic_operation (struct object *list,
-			    void (*opz) (mpz_t, const mpz_t, const mpz_t),
-			    void (*opq) (mpq_t, const mpq_t, const mpq_t),
-			    void (*opf) (mpf_t, const mpf_t, const mpf_t),
-			    struct environment *env,
-			    struct outcome *outcome)
-{
-  struct object *ret, *op;
-
-  if (!(CAR (list)->type & TYPE_NUMBER) || !(CAR (CDR (list))->type & TYPE_NUMBER))
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  if (highest_num_type (CAR (list)->type, CAR (CDR (list))->type)
-      == CAR (list)->type)
-    ret = copy_number (CAR (list));
-  else
-    ret = promote_number (CAR (list), highest_num_type (CAR (list)->type,
-							CAR (CDR (list))->type));
-
-  list = CDR (list);
-
-  do
-    {
-      if (!(CAR (list)->type & TYPE_NUMBER))
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-
-      op = promote_number (CAR (list), highest_num_type (ret->type,
-							 CAR (list)->type));
-
-      if (ret->type == TYPE_INTEGER)
-	{
-	  opz (ret->value_ptr.integer, ret->value_ptr.integer,
-	       op->value_ptr.integer);
-	}
-      else if (ret->type == TYPE_RATIO)
-	{
-	  opq (ret->value_ptr.ratio, ret->value_ptr.ratio, op->value_ptr.ratio);
-	}
-      else if (ret->type == TYPE_FLOAT)
-	{
-	  opf (ret->value_ptr.floating, ret->value_ptr.floating,
-	       op->value_ptr.floating);
-	}
-
-      decrement_refcount (op);
-
-      list = CDR (list);
-
-    } while (SYMBOL (list) != &nil_object);
 
   return ret;
 }
@@ -14463,9 +14412,9 @@ perform_division_with_remainder (struct object *args,
 {
   int l = list_length (args);
   enum object_type rem_type, op_type;
-  struct object *div_, *div, *num, *half, *ret, *ret2;
+  struct object *div_, *div, *num, *ret, *ret2;
   mpz_t tmp;
-  mpf_t q, r;
+  mpf_t q, r, half, divf, numf;
 
   if (!l)
     {
@@ -14534,8 +14483,9 @@ perform_division_with_remainder (struct object *args,
 	}
       else
 	{
-	  mpf_init (ret->value_ptr.floating);
-	  mpf_set_z (ret->value_ptr.floating, tmp);
+	  ret->value_ptr.floating = malloc_and_check
+	    (sizeof (*ret->value_ptr.floating));
+	  *ret->value_ptr.floating = mpz_get_si (tmp);
 	}
 
       mpz_clear (tmp);
@@ -14543,7 +14493,7 @@ perform_division_with_remainder (struct object *args,
   else
     {
       mpf_init (q);
-      mpf_div (q, num->value_ptr.floating, div->value_ptr.floating);
+      mpf_set_d (q, *num->value_ptr.floating / *div->value_ptr.floating);
 
       if (round_behavior == FLOOR)
 	mpf_floor (q, q);
@@ -14553,9 +14503,12 @@ perform_division_with_remainder (struct object *args,
 	mpf_trunc (q, q);
       else if (round_behavior == ROUND_TO_NEAREST)
 	{
-	  half = create_floating_from_double (.5);
+	  mpf_init (half);
+	  mpf_set_d (half, .5);
 
-	  mpf_add (q, q, half->value_ptr.floating);
+	  mpf_add (q, q, half);
+
+	  mpf_clear (half);
 
 	  if (mpf_integer_p (q))
 	    {
@@ -14573,20 +14526,28 @@ perform_division_with_remainder (struct object *args,
 	    {
 	      mpf_floor (q, q);
 	    }
-
-	  free_float (half);
 	}
 
       mpf_init (r);
-      mpf_mul (r, div->value_ptr.floating, q);
-      mpf_sub (r, num->value_ptr.floating, r);
+
+      mpf_init (divf);
+      mpf_set_d (divf, *div->value_ptr.floating);
+
+      mpf_init (numf);
+      mpf_set_d (numf, *num->value_ptr.floating);
+
+      mpf_mul (r, divf, q);
+      mpf_sub (r, numf, r);
+
+      mpf_clear (divf);
+      mpf_clear (numf);
 
       ret = alloc_number (quotient_type);
 
       if (quotient_type == TYPE_INTEGER)
 	mpz_set_f (ret->value_ptr.integer, q);
       else
-	mpf_set (ret->value_ptr.floating, q);
+	*ret->value_ptr.floating = mpf_get_d (q);
 
       ret2 = alloc_number (rem_type);
 
@@ -14595,7 +14556,7 @@ perform_division_with_remainder (struct object *args,
       else if (rem_type == TYPE_RATIO)
 	mpq_set_f (ret2->value_ptr.ratio, r);
       else if (rem_type == TYPE_FLOAT)
-	mpf_set (ret2->value_ptr.floating, r);
+	*ret2->value_ptr.floating = mpf_get_d (r);
 
       mpf_clear (q);
       mpf_clear (r);
@@ -14614,11 +14575,24 @@ struct object *
 builtin_plus (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
+  struct object *ret, *ret2, *op;
+  enum object_type t;
+
   if (!list_length (list))
     {
       return create_integer_from_long (0);
     }
-  else if (list_length (list) == 1)
+
+  if (!(CAR (list)->type & TYPE_NUMBER))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = copy_number (CAR (list));
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
@@ -14626,12 +14600,37 @@ builtin_plus (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      increment_refcount (CAR (list));
-      return CAR (list);
+      t = highest_num_type (ret->type, CAR (list)->type);
+
+      ret2 = promote_number (ret, t);
+      decrement_refcount (ret);
+      ret = ret2;
+
+      op = promote_number (CAR (list), t);
+
+
+      if (t == TYPE_INTEGER)
+	{
+	  mpz_add (ret->value_ptr.integer, ret->value_ptr.integer,
+		   op->value_ptr.integer);
+	}
+      else if (t == TYPE_RATIO)
+	{
+	  mpq_add (ret->value_ptr.ratio, ret->value_ptr.ratio,
+		   op->value_ptr.ratio);
+	}
+      else if (t == TYPE_FLOAT)
+	{
+	  *ret->value_ptr.floating = *ret->value_ptr.floating +
+	    *op->value_ptr.floating;
+	}
+
+      decrement_refcount (op);
+
+      list = CDR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_add, mpq_add, mpf_add, env,
-				     outcome);
+  return ret;
 }
 
 
@@ -14639,15 +14638,20 @@ struct object *
 builtin_minus (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *ret;
+  struct object *ret, *ret2, *op;
+  enum object_type t;
+  int l;
 
-  if (!list_length (list))
+  if (!(l = list_length (list)))
     {
       outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
-
-  if (list_length (list) == 1)
+  else if (l == 1)
+    {
+      ret = create_integer_from_long (0);
+    }
+  else
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
@@ -14656,36 +14660,11 @@ builtin_minus (struct object *list, struct environment *env,
 	}
 
       ret = copy_number (CAR (list));
-
-      if (ret->type == TYPE_INTEGER)
-	{
-	  mpz_neg (ret->value_ptr.integer, ret->value_ptr.integer);
-	}
-      else if (ret->type == TYPE_RATIO)
-	{
-	  mpq_neg (ret->value_ptr.ratio, ret->value_ptr.ratio);
-	}
-      else if (ret->type == TYPE_FLOAT)
-	{
-	  mpf_neg (ret->value_ptr.floating, ret->value_ptr.floating);
-	}
-
-      return ret;
+      list = CDR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_sub, mpq_sub, mpf_sub, env, outcome);
-}
 
-
-struct object *
-builtin_multiply (struct object *list, struct environment *env,
-		  struct outcome *outcome)
-{
-  if (!list_length (list))
-    {
-      return create_integer_from_long (1);
-    }
-  else if (list_length (list) == 1)
+  while (SYMBOL (list) != &nil_object)
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
@@ -14693,12 +14672,100 @@ builtin_multiply (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      increment_refcount (CAR (list));
-      return CAR (list);
+      t = highest_num_type (ret->type, CAR (list)->type);
+
+      ret2 = promote_number (ret, t);
+      decrement_refcount (ret);
+      ret = ret2;
+
+      op = promote_number (CAR (list), t);
+
+
+      if (t == TYPE_INTEGER)
+	{
+	  mpz_sub (ret->value_ptr.integer, ret->value_ptr.integer,
+		   op->value_ptr.integer);
+	}
+      else if (t == TYPE_RATIO)
+	{
+	  mpq_sub (ret->value_ptr.ratio, ret->value_ptr.ratio,
+		   op->value_ptr.ratio);
+	}
+      else if (t == TYPE_FLOAT)
+	{
+	  *ret->value_ptr.floating = *ret->value_ptr.floating -
+	    *op->value_ptr.floating;
+	}
+
+      decrement_refcount (op);
+
+      list = CDR (list);
     }
 
-  return apply_arithmetic_operation (list, mpz_mul, mpq_mul, mpf_mul, env,
-				     outcome);
+  return ret;
+}
+
+
+struct object *
+builtin_multiply (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *ret, *ret2, *op;
+  enum object_type t;
+
+  if (!list_length (list))
+    {
+      return create_integer_from_long (1);
+    }
+
+  if (!(CAR (list)->type & TYPE_NUMBER))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = copy_number (CAR (list));
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      t = highest_num_type (ret->type, CAR (list)->type);
+
+      ret2 = promote_number (ret, t);
+      decrement_refcount (ret);
+      ret = ret2;
+
+      op = promote_number (CAR (list), t);
+
+
+      if (t == TYPE_INTEGER)
+	{
+	  mpz_mul (ret->value_ptr.integer, ret->value_ptr.integer,
+		   op->value_ptr.integer);
+	}
+      else if (t == TYPE_RATIO)
+	{
+	  mpq_mul (ret->value_ptr.ratio, ret->value_ptr.ratio,
+		   op->value_ptr.ratio);
+	}
+      else if (t == TYPE_FLOAT)
+	{
+	  *ret->value_ptr.floating = *ret->value_ptr.floating *
+	    *op->value_ptr.floating;
+	}
+
+      decrement_refcount (op);
+
+      list = CDR (list);
+    }
+
+  return ret;
 }
 
 
@@ -14887,7 +14954,6 @@ builtin_sqrt (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
   struct object *num, *ret;
-  mpf_t rt;
 
   if (list_length (list) != 1)
     {
@@ -14902,11 +14968,8 @@ builtin_sqrt (struct object *list, struct environment *env,
 
   num = promote_number (CAR (list), TYPE_FLOAT);
 
-  mpf_init (rt);
-  mpf_sqrt (rt, num->value_ptr.floating);
-
   ret = alloc_number (TYPE_FLOAT);
-  mpf_set (ret->value_ptr.floating, rt);
+  *ret->value_ptr.floating = sqrt (*num->value_ptr.floating);
 
   decrement_refcount (num);
 
@@ -15313,7 +15376,7 @@ builtin_exp (struct object *list, struct environment *env,
     }
   else
     {
-      arg = mpf_get_d (CAR (list)->value_ptr.floating);
+      arg = *CAR (list)->value_ptr.floating;
     }
 
   return create_floating_from_double (exp (arg));
@@ -15547,6 +15610,7 @@ builtin_random (struct object *list, struct environment *env,
 {
   int l = list_length (list);
   struct object *rs, *ret;
+  mpf_t r;
 
   if (!l || l > 2)
     {
@@ -15557,7 +15621,7 @@ builtin_random (struct object *list, struct environment *env,
   if (((CAR (list)->type != TYPE_INTEGER
 	|| mpz_cmp_si (CAR (list)->value_ptr.integer, 0) <= 0)
        && (CAR (list)->type != TYPE_FLOAT
-	   || mpf_cmp_si (CAR (list)->value_ptr.floating, 0) <= 0))
+	   || *CAR (list)->value_ptr.floating <= 0))
       || (l == 2 && CAR (CDR (list))->type != TYPE_RANDOM_STATE))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -15578,10 +15642,13 @@ builtin_random (struct object *list, struct environment *env,
   else
     {
       ret = alloc_number (TYPE_FLOAT);
-      mpf_urandomb (ret->value_ptr.floating, rs->value_ptr.random_state,
-		    mpf_get_default_prec ());
-      mpf_mul (ret->value_ptr.floating, ret->value_ptr.floating,
-	       CAR (list)->value_ptr.floating);
+
+      mpf_init (r);
+      mpf_urandomb (r, rs->value_ptr.random_state, mpf_get_default_prec ());
+
+      *ret->value_ptr.floating = mpf_get_d (r) * *CAR (list)->value_ptr.floating;
+
+      mpf_clear (r);
     }
 
   return ret;
@@ -21487,12 +21554,16 @@ print_bignum (const mpz_t z, struct environment *env, struct stream *str)
 
 
 int
-print_floating (const mpf_t f, struct environment *env, struct stream *str)
+print_floating (const double f, struct environment *env, struct stream *str)
 {
   char *out;
   int l;
+  mpf_t fl;
 
-  l = gmp_asprintf (&out, "%.Ff", f);
+  mpf_init (fl);
+  mpf_set_d (fl, f);
+  l = gmp_asprintf (&out, "%.Ff", fl);
+  mpf_clear (fl);
 
   if (!strchr (out, '.'))
     {
@@ -21847,7 +21918,7 @@ print_object (const struct object *obj, struct environment *env,
 	  return ret;
 	}
       else if (obj->type == TYPE_FLOAT)
-	return print_floating (obj->value_ptr.floating, env, str);
+	return print_floating (*obj->value_ptr.floating, env, str);
       else if (obj->type == TYPE_COMPLEX)
 	return print_complex (obj->value_ptr.complex, env, str);
       else if (obj->type == TYPE_RANDOM_STATE)
@@ -22996,7 +23067,7 @@ free_ratio (struct object *obj)
 void
 free_float (struct object *obj)
 {
-  mpf_clear (obj->value_ptr.floating);
+  free (obj->value_ptr.floating);
   free (obj);
 }
 
