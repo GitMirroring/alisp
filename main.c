@@ -1270,6 +1270,7 @@ struct object *alloc_complex (void);
 struct object *create_complex (struct object *real, struct object *imag,
 			       struct environment *env, struct outcome *outcome);
 struct object *create_integer_from_long (long num);
+struct object *convert_to_integer_if_possible (struct object *rat);
 struct object *create_ratio_from_longs (long num, long den);
 struct object *create_floating_from_double (double d);
 
@@ -2303,6 +2304,9 @@ struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
 struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
 
 
+mpz_t integer_one;
+
+
 
 int
 main (int argc, char *argv [])
@@ -2603,11 +2607,15 @@ add_standard_definitions (struct environment *env)
 
   use_package (env->cl_package, cluser_package, NULL);
 
+
   t_symbol.value_cell = &t_object;
   t_symbol.home_package = env->cl_package;
 
   nil_symbol.value_cell = &nil_object;
   nil_symbol.home_package = env->cl_package;
+
+  mpz_init (integer_one);
+  mpz_set_si (integer_one, 1);
 
 
   rec = malloc_and_check (sizeof (*rec));
@@ -5199,6 +5207,8 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
       mpq_set_str (obj->value_ptr.ratio, buf, radix);
 
       mpq_canonicalize (obj->value_ptr.ratio);
+
+      obj = convert_to_integer_if_possible (obj);
     }
   else if (numtype == TYPE_FLOAT)
     {
@@ -5298,6 +5308,30 @@ create_integer_from_long (long num)
   mpz_set_si (obj->value_ptr.integer, num);
 
   return obj;
+}
+
+
+struct object *
+convert_to_integer_if_possible (struct object *rat)
+{
+  mpz_t den;
+  struct object *obj;
+
+  mpz_init (den);
+  mpq_get_den (den, rat->value_ptr.ratio);
+
+  if (!mpz_cmp (den, integer_one))
+    {
+      obj = alloc_object ();
+      obj->type = TYPE_INTEGER;
+      mpz_init (obj->value_ptr.integer);
+      mpz_set (obj->value_ptr.integer, mpq_numref (rat->value_ptr.ratio));
+
+      decrement_refcount (rat);
+      return obj;
+    }
+
+  return rat;
 }
 
 
@@ -10449,26 +10483,7 @@ int
 type_ratio (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct outcome *outcome)
 {
-  mpz_t den;
-  mpz_t one;
-  int ret = 0;
-
-  if (obj->type != TYPE_RATIO)
-    return 0;
-
-  mpz_init (den);
-  mpq_get_den (den, obj->value_ptr.ratio);
-
-  mpz_init (one);
-  mpz_set_si (one, 1);
-
-  if (mpz_cmp (den, one) > 0)
-    ret = 1;
-
-  mpz_clear (den);
-  mpz_clear (one);
-
-  return ret;
+  return obj->type == TYPE_RATIO;
 }
 
 
@@ -14347,14 +14362,7 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
       return NULL;
     }
 
-  if (t == TYPE_INTEGER
-      && mpz_divisible_p (n1->value_ptr.integer, n2->value_ptr.integer))
-    {
-      ret = alloc_number (TYPE_INTEGER);
-      mpz_divexact (ret->value_ptr.integer, n1->value_ptr.integer,
-		    n2->value_ptr.integer);
-    }
-  else if (t == TYPE_INTEGER || t == TYPE_RATIO)
+  if (t == TYPE_INTEGER || t == TYPE_RATIO)
     {
       pn1 = promote_number (n1, TYPE_RATIO);
       pn2 = promote_number (n2, TYPE_RATIO);
@@ -14363,8 +14371,7 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
 
       mpq_div (ret->value_ptr.ratio, pn1->value_ptr.ratio, pn2->value_ptr.ratio);
 
-      decrement_refcount (pn1);
-      decrement_refcount (pn2);
+      ret = convert_to_integer_if_possible (ret);
     }
   else
     {
@@ -14375,10 +14382,10 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
 
       *ret->value_ptr.floating = *pn1->value_ptr.floating
 	/ *pn2->value_ptr.floating;
-
-      decrement_refcount (pn1);
-      decrement_refcount (pn2);
     }
+
+  decrement_refcount (pn1);
+  decrement_refcount (pn2);
 
   return ret;
 }
@@ -14673,6 +14680,8 @@ builtin_plus (struct object *list, struct environment *env,
 	{
 	  mpq_add (ret->value_ptr.ratio, ret->value_ptr.ratio,
 		   op->value_ptr.ratio);
+
+	  ret = convert_to_integer_if_possible (ret);
 	}
       else if (t == TYPE_FLOAT)
 	{
@@ -14745,6 +14754,8 @@ builtin_minus (struct object *list, struct environment *env,
 	{
 	  mpq_sub (ret->value_ptr.ratio, ret->value_ptr.ratio,
 		   op->value_ptr.ratio);
+
+	  ret = convert_to_integer_if_possible (ret);
 	}
       else if (t == TYPE_FLOAT)
 	{
@@ -14808,6 +14819,8 @@ builtin_multiply (struct object *list, struct environment *env,
 	{
 	  mpq_mul (ret->value_ptr.ratio, ret->value_ptr.ratio,
 		   op->value_ptr.ratio);
+
+	  ret = convert_to_integer_if_possible (ret);
 	}
       else if (t == TYPE_FLOAT)
 	{
