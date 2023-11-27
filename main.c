@@ -14249,23 +14249,54 @@ int
 compare_two_numbers (struct object *num1, struct object *num2)
 {
   enum object_type tp = highest_num_type (num1->type, num2->type);
-  struct object *first_p = promote_number (num1, tp);
-  struct object *second_p = promote_number (num2, tp);
+  struct object *first_p, *second_p;
   int eq;
   double d;
 
-  if (tp == TYPE_INTEGER)
-    eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
-  else if (tp == TYPE_RATIO)
-    eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
+  if (tp != TYPE_COMPLEX)
+    {
+      first_p = promote_number (num1, tp);
+      second_p = promote_number (num2, tp);
+
+      if (tp == TYPE_INTEGER)
+	eq = mpz_cmp (first_p->value_ptr.integer, second_p->value_ptr.integer);
+      else if (tp == TYPE_RATIO)
+	eq = mpq_cmp (first_p->value_ptr.ratio, second_p->value_ptr.ratio);
+      else
+	{
+	  d = *first_p->value_ptr.floating - *second_p->value_ptr.floating;
+	  eq = (d < 0) ? -1 : !d ? 0 : 1;
+	}
+
+      decrement_refcount (first_p);
+      decrement_refcount (second_p);
+    }
   else
     {
-      d = *first_p->value_ptr.floating - *second_p->value_ptr.floating;
-      eq = (d < 0) ? -1 : !d ? 0 : 1;
-    }
+      if (num1->type == TYPE_COMPLEX)
+	{
+	  first_p = num1;
+	  second_p = num2;
+	}
+      else
+	{
+	  first_p = num2;
+	  second_p = num1;
+	}
 
-  decrement_refcount (first_p);
-  decrement_refcount (second_p);
+      if (second_p->type == TYPE_COMPLEX)
+	{
+	  return compare_two_numbers (first_p->value_ptr.complex->real,
+				      second_p->value_ptr.complex->real)
+	    || compare_two_numbers (first_p->value_ptr.complex->imag,
+				    second_p->value_ptr.complex->imag);
+	}
+      else
+	{
+	  return compare_two_numbers (first_p->value_ptr.complex->real, second_p)
+	    || !is_zero (first_p->value_ptr.complex->imag);
+	}
+    }
 
   return eq;
 }
@@ -14275,7 +14306,7 @@ struct object *
 compare_any_numbers (struct object *list, struct environment *env,
 		     struct outcome *outcome, enum number_comparison comp)
 {
-  int l = list_length (list), i, eq;
+  int l = list_length (list), eq;
   struct object *first, *second;
 
   if (!l)
@@ -14285,21 +14316,29 @@ compare_any_numbers (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (l == 1 && CAR (list)->type & TYPE_NUMBER)
-    return &t_object;
-  else if (l == 1)
+  if (l == 1)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      if (CAR (list)->type & TYPE_NUMBER
+	  && (comp == EQUAL || CAR (list)->type != TYPE_COMPLEX))
+	{
+	  return &t_object;
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
     }
 
-  first = CAR (list);
-  second = CAR (CDR (list));
 
-  for (i = 0; i + 1 < l; i++)
+  while (SYMBOL (CDR (list)) != &nil_object)
     {
-      if (!(first->type & TYPE_NUMBER) || !(second->type & TYPE_NUMBER))
+      first = CAR (list);
+      second = CAR (CDR (list));
+
+      if (!(first->type & TYPE_NUMBER) || !(second->type & TYPE_NUMBER)
+	  || (comp != EQUAL && (first->type == TYPE_COMPLEX
+				|| second->type == TYPE_COMPLEX)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
@@ -14314,8 +14353,7 @@ compare_any_numbers (struct object *list, struct environment *env,
 	  || (comp == MORE_THAN_OR_EQUAL && eq < 0))
 	return &nil_object;
 
-      first = second;
-      second = nth (i+2, list);
+      list = CDR (list);
     }
 
   return &t_object;
@@ -14394,6 +14432,9 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
 enum object_type
 highest_num_type (enum object_type t1, enum object_type t2)
 {
+  if (t1 == TYPE_COMPLEX || t2 == TYPE_COMPLEX)
+    return TYPE_COMPLEX;
+
   if (t1 == TYPE_FLOAT || t2 == TYPE_FLOAT)
     return TYPE_FLOAT;
 
@@ -15142,7 +15183,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
 			   struct outcome *outcome)
 {
   int l = list_length (list), i, j;
-  struct object *first, *second;
+  struct object *first, *second, *cons;
 
   if (l == 1 && CAR (list)->type & TYPE_NUMBER)
     return &t_object;
@@ -15155,7 +15196,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
 
   for (i = 0; i + 1 < l; i++)
     {
-      first = nth (i, list);
+      first = CAR (list);
 
       if (!(first->type & TYPE_NUMBER))
 	{
@@ -15164,9 +15205,11 @@ builtin_numbers_different (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
+      cons = CDR (list);
+
       for (j = i + 1; j < l; j++)
 	{
-	  second = nth (j, list);
+	  second = CAR (cons);
 
 	  if (!(second->type & TYPE_NUMBER))
 	    {
@@ -15177,7 +15220,11 @@ builtin_numbers_different (struct object *list, struct environment *env,
 
 	  if (!compare_two_numbers (first, second))
 	    return &nil_object;
+
+	  cons = CDR (cons);
 	}
+
+      list = CDR (list);
     }
 
   return &t_object;
