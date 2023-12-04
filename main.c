@@ -1268,7 +1268,8 @@ struct object *create_number (const char *token, size_t size,
 			      enum object_type numtype);
 struct object *alloc_complex (void);
 struct object *create_complex (struct object *real, struct object *imag,
-			       struct environment *env, struct outcome *outcome);
+			       int steal_refs, struct environment *env,
+			       struct outcome *outcome);
 struct object *create_integer_from_long (long num);
 struct object *convert_to_integer_if_possible (struct object *rat);
 struct object *create_ratio_from_longs (long num, long den);
@@ -1839,7 +1840,12 @@ struct object *compare_any_numbers (struct object *list, struct environment *env
 				    struct outcome *outcome,
 				    enum number_comparison comp);
 int is_zero (struct object *num);
+struct object *negate_number (struct object *num, int in_place);
+struct object *reciprocate_number (struct object *num);
 double convert_number_to_double (struct object *num);
+struct object *add_two_numbers (struct object *n1, struct object *n2);
+struct object *subtract_two_numbers (struct object *n1, struct object *n2);
+struct object *multiply_two_numbers (struct object *n1, struct object *n2);
 struct object *divide_two_numbers (struct object *n1, struct object *n2,
 				   struct environment *env,
 				   struct outcome *outcome);
@@ -4784,7 +4790,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      return create_complex (CAR (obj), CAR (CDR (obj)), env, outcome);
+      return create_complex (CAR (obj), CAR (CDR (obj)), 0, env, outcome);
     }
   else if (macro_call->dispatch_ch == '+' || macro_call->dispatch_ch == '-')
     {
@@ -5244,7 +5250,7 @@ alloc_complex (void)
 
 
 struct object *
-create_complex (struct object *real, struct object *imag,
+create_complex (struct object *real, struct object *imag, int steal_refs,
 		struct environment *env, struct outcome *outcome)
 {
   struct object *ret, *r, *i;
@@ -5256,9 +5262,14 @@ create_complex (struct object *real, struct object *imag,
       return NULL;
     }
 
-  if (!imag && IS_RATIONAL (real))
+  if (IS_RATIONAL (real) && (!imag || ((imag->type == TYPE_INTEGER
+					&& !mpz_sgn (imag->value_ptr.integer))
+				       || (imag->type == TYPE_RATIO
+					   && !mpq_sgn (imag->value_ptr.ratio)))))
     {
-      increment_refcount (real);
+      if (!steal_refs)
+	increment_refcount (real);
+
       return real;
     }
 
@@ -5266,28 +5277,24 @@ create_complex (struct object *real, struct object *imag,
     {
       ret = alloc_complex ();
 
-      increment_refcount (real);
+      if (!steal_refs)
+	increment_refcount (real);
+
       ret->value_ptr.complex->real = real;
       ret->value_ptr.complex->imag = create_floating_from_double (0.0);
 
       return ret;
     }
 
-  if (IS_RATIONAL (real))
-    {
-      if ((imag->type == TYPE_INTEGER
-	   && !mpz_sgn (imag->value_ptr.integer))
-	  || (imag->type == TYPE_RATIO
-	      && !mpq_sgn (imag->value_ptr.ratio)))
-	{
-	  increment_refcount (real);
-	  return real;
-	}
-    }
-
   t = highest_num_type (real->type, imag->type);
   r = promote_number (real, t);
   i = promote_number (imag, t);
+
+  if (steal_refs)
+    {
+      decrement_refcount (real);
+      decrement_refcount (imag);
+    }
 
   ret = alloc_complex ();
   ret->value_ptr.complex->real = r;
@@ -14365,7 +14372,104 @@ is_zero (struct object *num)
 {
   return (num->type == TYPE_INTEGER && !mpz_sgn (num->value_ptr.integer))
     || (num->type == TYPE_RATIO && !mpq_sgn (num->value_ptr.ratio))
-    || (num->type == TYPE_FLOAT && *num->value_ptr.floating == 0);
+    || (num->type == TYPE_FLOAT && *num->value_ptr.floating == 0)
+    || (num->type == TYPE_COMPLEX && is_zero (num->value_ptr.complex->real)
+	&& is_zero (num->value_ptr.complex->imag));
+}
+
+
+struct object *
+negate_number (struct object *num, int in_place)
+{
+  struct object *ret;
+
+  if (!in_place)
+    {
+      ret = alloc_object ();
+      ret->type = num->type;
+    }
+  else
+    ret = num;
+
+  if (num->type == TYPE_INTEGER)
+    {
+      mpz_neg (ret->value_ptr.integer, num->value_ptr.integer);
+    }
+  else if (num->type == TYPE_RATIO)
+    {
+      mpq_neg (ret->value_ptr.ratio, num->value_ptr.ratio);
+    }
+  else
+    {
+      if (!in_place)
+	ret->value_ptr.floating =
+	  malloc_and_check (sizeof (*ret->value_ptr.floating));
+
+      *ret->value_ptr.floating = -*num->value_ptr.floating;
+    }
+
+  return ret;
+}
+
+
+struct object *
+reciprocate_number (struct object *num)
+{
+  struct object *ret, *x, *x2, *y, *y2, *x2py2, *r, *i;
+
+  if (num->type == TYPE_INTEGER)
+    {
+      ret = alloc_object ();
+      ret->type = TYPE_RATIO;
+      mpq_init (ret->value_ptr.ratio);
+      mpq_set_z (ret->value_ptr.ratio, num->value_ptr.integer);
+      mpq_inv (ret->value_ptr.ratio, ret->value_ptr.ratio);
+
+      return convert_to_integer_if_possible (ret);
+    }
+  else if (num->type == TYPE_RATIO)
+    {
+      ret = alloc_object ();
+      ret->type = TYPE_RATIO;
+      mpq_init (ret->value_ptr.ratio);
+      mpq_inv (ret->value_ptr.ratio, num->value_ptr.ratio);
+
+      return ret;
+    }
+  else if (num->type == TYPE_FLOAT)
+    {
+      ret = alloc_object ();
+      ret->type = TYPE_FLOAT;
+      ret->value_ptr.floating =
+	malloc_and_check (sizeof (*ret->value_ptr.floating));
+      *ret->value_ptr.floating = 1 / *num->value_ptr.floating;
+
+      return ret;
+    }
+  else
+    {
+      x = copy_number (num->value_ptr.complex->real);
+      x2 = multiply_two_numbers (x, x);
+      decrement_refcount (x);
+
+      y = copy_number (num->value_ptr.complex->imag);
+      y2 = multiply_two_numbers (y, y);
+      decrement_refcount (y);
+
+      x2py2 = add_two_numbers (x2, y2);
+      decrement_refcount (x2);
+      decrement_refcount (y2);
+
+      x = copy_number (num->value_ptr.complex->real);
+      r = divide_two_numbers (x, x2py2, NULL, NULL);
+      decrement_refcount (x);
+
+      y = copy_number (num->value_ptr.complex->imag);
+      i = divide_two_numbers (y, x2py2, NULL, NULL);
+      i = negate_number (i, 1);
+
+      return create_complex (r, i, 1, NULL, NULL);
+    }
 }
 
 
@@ -14388,11 +14492,214 @@ convert_number_to_double (struct object *num)
 
 
 struct object *
+add_two_numbers (struct object *n1, struct object *n2)
+{
+  enum object_type t = highest_num_type (n1->type, n2->type);
+  struct object *ret, *op, *c, *r, *i;
+
+  if (t == TYPE_COMPLEX)
+    {
+      if (n1->type == TYPE_COMPLEX)
+	{
+	  c = n1;
+	}
+      else
+	{
+	  c = n2;
+	  n2 = n1;
+	}
+
+      r = add_two_numbers (c->value_ptr.complex->real,
+			   (n2->type == TYPE_COMPLEX)
+			   ? n2->value_ptr.complex->real : n2);
+
+      if (n2->type == TYPE_COMPLEX)
+	{
+	  i = add_two_numbers (c->value_ptr.complex->imag,
+			       n2->value_ptr.complex->imag);
+	}
+      else
+	{
+	  increment_refcount (c->value_ptr.complex->imag);
+	  i = c->value_ptr.complex->imag;
+	}
+
+      return create_complex (r, i, 1, NULL, NULL);
+    }
+  else
+    {
+      ret = promote_number (n1, t);
+      op = promote_number (n2, t);
+
+      if (t == TYPE_INTEGER)
+	{
+	  mpz_add (ret->value_ptr.integer, ret->value_ptr.integer,
+		   op->value_ptr.integer);
+	}
+      else if (t == TYPE_RATIO)
+	{
+	  mpq_add (ret->value_ptr.ratio, ret->value_ptr.ratio,
+		   op->value_ptr.ratio);
+
+	  ret = convert_to_integer_if_possible (ret);
+	}
+      else if (t == TYPE_FLOAT)
+	{
+	  *ret->value_ptr.floating = *ret->value_ptr.floating +
+	    *op->value_ptr.floating;
+	}
+
+      decrement_refcount (op);
+
+      return ret;
+    }
+}
+
+
+struct object *
+subtract_two_numbers (struct object *n1, struct object *n2)
+{
+  enum object_type t = highest_num_type (n1->type, n2->type);
+  struct object *ret, *op, *r, *i;
+
+  if (t == TYPE_COMPLEX)
+    {
+      r = subtract_two_numbers (n1->type == TYPE_COMPLEX
+				? n1->value_ptr.complex->real : n1,
+				n2->type == TYPE_COMPLEX
+				? n2->value_ptr.complex->real : n2);
+
+      if (n1->type == TYPE_COMPLEX && n2->type == TYPE_COMPLEX)
+	{
+	  i = subtract_two_numbers (n1->value_ptr.complex->imag,
+				    n2->value_ptr.complex->imag);
+	}
+      else if (n1->type == TYPE_COMPLEX)
+	{
+	  increment_refcount (n1->value_ptr.complex->imag);
+	  i = n1->value_ptr.complex->imag;
+	}
+      else
+	{
+	  i = negate_number (n2->value_ptr.complex->imag, 0);
+	}
+
+      return create_complex (r, i, 1, NULL, NULL);
+    }
+  else
+    {
+      ret = promote_number (n1, t);
+      op = promote_number (n2, t);
+
+      if (t == TYPE_INTEGER)
+	{
+	  mpz_sub (ret->value_ptr.integer, ret->value_ptr.integer,
+		   op->value_ptr.integer);
+	}
+      else if (t == TYPE_RATIO)
+	{
+	  mpq_sub (ret->value_ptr.ratio, ret->value_ptr.ratio,
+		   op->value_ptr.ratio);
+
+	  ret = convert_to_integer_if_possible (ret);
+	}
+      else if (t == TYPE_FLOAT)
+	{
+	  *ret->value_ptr.floating = *ret->value_ptr.floating -
+	    *op->value_ptr.floating;
+	}
+
+      decrement_refcount (op);
+
+      return ret;
+    }
+}
+
+
+struct object *
+multiply_two_numbers (struct object *n1, struct object *n2)
+{
+  enum object_type t = highest_num_type (n1->type, n2->type);
+  struct object *ret, *op, *c, *cr, *ci, *xu, *yv, *xv, *yu, *r, *i;
+
+  if (t == TYPE_COMPLEX)
+    {
+      if (n1->type == TYPE_COMPLEX)
+	{
+	  c = n1;
+	}
+      else
+	{
+	  c = n2;
+	  n2 = n1;
+	}
+
+      if (n2->type == TYPE_COMPLEX)
+	{
+	  cr = copy_number (c->value_ptr.complex->real);
+	  ci = copy_number (c->value_ptr.complex->imag);
+
+	  xu = multiply_two_numbers (c->value_ptr.complex->real,
+				     n2->value_ptr.complex->real);
+	  yv = multiply_two_numbers (c->value_ptr.complex->imag,
+				     n2->value_ptr.complex->imag);
+	  xv = multiply_two_numbers (cr, n2->value_ptr.complex->imag);
+	  yu = multiply_two_numbers (ci, n2->value_ptr.complex->real);
+
+	  r = subtract_two_numbers (xu, yv);
+	  i = add_two_numbers (xv, yu);
+
+	  decrement_refcount (cr);
+	  decrement_refcount (ci);
+	  decrement_refcount (xu);
+	  decrement_refcount (yv);
+	  decrement_refcount (xv);
+	  decrement_refcount (yu);
+	}
+      else
+	{
+	  r = multiply_two_numbers (c->value_ptr.complex->real, n2);
+	  i = multiply_two_numbers (c->value_ptr.complex->imag, n2);
+	}
+
+      return create_complex (r, i, 1, NULL, NULL);
+    }
+  else
+    {
+      ret = promote_number (n1, t);
+      op = promote_number (n2, t);
+
+      if (t == TYPE_INTEGER)
+	{
+	  mpz_mul (ret->value_ptr.integer, ret->value_ptr.integer,
+		   op->value_ptr.integer);
+	}
+      else if (t == TYPE_RATIO)
+	{
+	  mpq_mul (ret->value_ptr.ratio, ret->value_ptr.ratio,
+		   op->value_ptr.ratio);
+
+	  ret = convert_to_integer_if_possible (ret);
+	}
+      else if (t == TYPE_FLOAT)
+	{
+	  *ret->value_ptr.floating = *ret->value_ptr.floating *
+	    *op->value_ptr.floating;
+	}
+
+      decrement_refcount (op);
+
+      return ret;
+    }
+}
+
+
+struct object *
 divide_two_numbers (struct object *n1, struct object *n2, struct environment *env,
 		    struct outcome *outcome)
 {
   enum object_type t = highest_num_type (n1->type, n2->type);
-  struct object *ret, *pn1, *pn2;
+  struct object *ret, *pn1, *pn2, *div;
 
   if (is_zero (n2))
     {
@@ -14400,7 +14707,17 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
       return NULL;
     }
 
-  if (t == TYPE_INTEGER || t == TYPE_RATIO)
+  if (t == TYPE_COMPLEX)
+    {
+      div = reciprocate_number (n2);
+
+      ret = multiply_two_numbers (n1, div);
+
+      decrement_refcount (div);
+
+      return ret;
+    }
+  else if (t == TYPE_INTEGER || t == TYPE_RATIO)
     {
       pn1 = promote_number (n1, TYPE_RATIO);
       pn2 = promote_number (n2, TYPE_RATIO);
@@ -14462,11 +14779,17 @@ copy_number (const struct object *num)
       mpq_init (ret->value_ptr.ratio);
       mpq_set (ret->value_ptr.ratio, num->value_ptr.ratio);
     }
-  else
+  else if (num->type == TYPE_FLOAT)
     {
       ret->value_ptr.floating = malloc_and_check
 	(sizeof (*ret->value_ptr.floating));
       *ret->value_ptr.floating = *num->value_ptr.floating;
+    }
+  else
+    {
+      ret->value_ptr.complex = malloc_and_check (sizeof (*ret->value_ptr.complex));
+      ret->value_ptr.complex->real = copy_number (num->value_ptr.complex->real);
+      ret->value_ptr.complex->imag = copy_number (num->value_ptr.complex->imag);
     }
 
   return ret;
@@ -14501,6 +14824,10 @@ promote_number (struct object *num, enum object_type type)
 	*ret->value_ptr.floating = mpz_get_d (num->value_ptr.integer);
       else if (num->type == TYPE_RATIO)
 	*ret->value_ptr.floating = mpq_get_d (num->value_ptr.ratio);
+    }
+  else if (type == TYPE_COMPLEX)
+    {
+      return create_complex (num, NULL, 0, NULL, NULL);
     }
 
   return ret;
@@ -14678,10 +15005,10 @@ struct object *
 builtin_plus (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *ret, *ret2, *op;
-  enum object_type t;
+  struct object *ret, *ret2;
+  int l;
 
-  if (!list_length (list))
+  if (!(l = list_length (list)))
     {
       return create_integer_from_long (0);
     }
@@ -14690,6 +15017,12 @@ builtin_plus (struct object *list, struct environment *env,
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
+    }
+
+  if (l == 1)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
     }
 
   ret = copy_number (CAR (list));
@@ -14703,34 +15036,9 @@ builtin_plus (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      t = highest_num_type (ret->type, CAR (list)->type);
-
-      ret2 = promote_number (ret, t);
+      ret2 = add_two_numbers (ret, CAR (list));
       decrement_refcount (ret);
       ret = ret2;
-
-      op = promote_number (CAR (list), t);
-
-
-      if (t == TYPE_INTEGER)
-	{
-	  mpz_add (ret->value_ptr.integer, ret->value_ptr.integer,
-		   op->value_ptr.integer);
-	}
-      else if (t == TYPE_RATIO)
-	{
-	  mpq_add (ret->value_ptr.ratio, ret->value_ptr.ratio,
-		   op->value_ptr.ratio);
-
-	  ret = convert_to_integer_if_possible (ret);
-	}
-      else if (t == TYPE_FLOAT)
-	{
-	  *ret->value_ptr.floating = *ret->value_ptr.floating +
-	    *op->value_ptr.floating;
-	}
-
-      decrement_refcount (op);
 
       list = CDR (list);
     }
@@ -14743,8 +15051,7 @@ struct object *
 builtin_minus (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *ret, *ret2, *op;
-  enum object_type t;
+  struct object *ret, *ret2;
   int l;
 
   if (!(l = list_length (list)))
@@ -14777,34 +15084,9 @@ builtin_minus (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      t = highest_num_type (ret->type, CAR (list)->type);
-
-      ret2 = promote_number (ret, t);
+      ret2 = subtract_two_numbers (ret, CAR (list));
       decrement_refcount (ret);
       ret = ret2;
-
-      op = promote_number (CAR (list), t);
-
-
-      if (t == TYPE_INTEGER)
-	{
-	  mpz_sub (ret->value_ptr.integer, ret->value_ptr.integer,
-		   op->value_ptr.integer);
-	}
-      else if (t == TYPE_RATIO)
-	{
-	  mpq_sub (ret->value_ptr.ratio, ret->value_ptr.ratio,
-		   op->value_ptr.ratio);
-
-	  ret = convert_to_integer_if_possible (ret);
-	}
-      else if (t == TYPE_FLOAT)
-	{
-	  *ret->value_ptr.floating = *ret->value_ptr.floating -
-	    *op->value_ptr.floating;
-	}
-
-      decrement_refcount (op);
 
       list = CDR (list);
     }
@@ -14817,10 +15099,10 @@ struct object *
 builtin_multiply (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *ret, *ret2, *op;
-  enum object_type t;
+  struct object *ret, *ret2;
+  int l;
 
-  if (!list_length (list))
+  if (!(l = list_length (list)))
     {
       return create_integer_from_long (1);
     }
@@ -14829,6 +15111,12 @@ builtin_multiply (struct object *list, struct environment *env,
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
+    }
+
+  if (l == 1)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
     }
 
   ret = copy_number (CAR (list));
@@ -14842,34 +15130,9 @@ builtin_multiply (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      t = highest_num_type (ret->type, CAR (list)->type);
-
-      ret2 = promote_number (ret, t);
+      ret2 = multiply_two_numbers (ret, CAR (list));
       decrement_refcount (ret);
       ret = ret2;
-
-      op = promote_number (CAR (list), t);
-
-
-      if (t == TYPE_INTEGER)
-	{
-	  mpz_mul (ret->value_ptr.integer, ret->value_ptr.integer,
-		   op->value_ptr.integer);
-	}
-      else if (t == TYPE_RATIO)
-	{
-	  mpq_mul (ret->value_ptr.ratio, ret->value_ptr.ratio,
-		   op->value_ptr.ratio);
-
-	  ret = convert_to_integer_if_possible (ret);
-	}
-      else if (t == TYPE_FLOAT)
-	{
-	  *ret->value_ptr.floating = *ret->value_ptr.floating *
-	    *op->value_ptr.floating;
-	}
-
-      decrement_refcount (op);
 
       list = CDR (list);
     }
@@ -14882,32 +15145,19 @@ struct object *
 builtin_divide (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *ret;
+  struct object *ret, *ret2;
+  int l;
 
-  if (!list_length (list))
+  if (!(l = list_length (list)))
     {
       outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
-
-  if (!(CAR (list)->type & TYPE_NUMBER))
+  else if (l == 1)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      ret = create_integer_from_long (1);
     }
-
-  if (list_length (list) == 1)
-    {
-      ret = alloc_number (TYPE_INTEGER);
-      mpz_set_si (ret->value_ptr.integer, 1);
-
-      return divide_two_numbers (ret, CAR (list), env, outcome);
-    }
-
-  ret = copy_number (CAR (list));
-  list = CDR (list);
-
-  do
+  else
     {
       if (!(CAR (list)->type & TYPE_NUMBER))
 	{
@@ -14915,13 +15165,29 @@ builtin_divide (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = divide_two_numbers (ret, CAR (list), env, outcome);
+      ret = copy_number (CAR (list));
+      list = CDR (list);
+    }
 
-      if (!ret)
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (!(CAR (list)->type & TYPE_NUMBER))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret2 = divide_two_numbers (ret, CAR (list), env, outcome);
+
+      if (!ret2)
 	return NULL;
 
+      decrement_refcount (ret);
+      ret = ret2;
+
       list = CDR (list);
-    } while (SYMBOL (list) != &nil_object);
+    }
 
   return ret;
 }
@@ -15098,7 +15364,7 @@ builtin_complex (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_complex (CAR (list), l == 2 ? CAR (CDR (list)) : NULL, env,
+  return create_complex (CAR (list), l == 2 ? CAR (CDR (list)) : NULL, 0, env,
 			 outcome);
 }
 
