@@ -10440,8 +10440,9 @@ int
 type_number (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO
-    || obj->type == TYPE_FLOAT;
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_FIXNUM
+    || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT
+    || obj->type == TYPE_COMPLEX;
 }
 
 
@@ -10449,8 +10450,8 @@ int
 type_real (const struct object *obj, const struct object *typespec,
 	   struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO
-    || obj->type == TYPE_FLOAT;
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_FIXNUM
+    || obj->type == TYPE_RATIO || obj->type == TYPE_FLOAT;
 }
 
 
@@ -10458,7 +10459,8 @@ int
 type_rational (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_RATIO;
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_FIXNUM
+    || obj->type == TYPE_RATIO;
 }
 
 
@@ -10466,7 +10468,7 @@ int
 type_integer (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER;
+  return obj->type == TYPE_INTEGER || obj->type == TYPE_FIXNUM;
 }
 
 
