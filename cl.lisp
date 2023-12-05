@@ -189,6 +189,13 @@
     (t (+ ""))))
 
 
+(defun upgraded-complex-part-type (type)
+  (cond
+    ((subtypep type 'integer) 'integer)
+    ((subtypep type 'ratio) 'ratio)
+    ((subtypep type 'float) 'float)))
+
+
 
 (defparameter *gensym-counter* 1)
 
@@ -1009,26 +1016,27 @@
 	  logandc1 logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1
 	  boole-2 boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
 	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
-	  boole-set boole-xor boole *gensym-counter* gensym gentemp first second
-	  third fourth fifth sixth seventh eighth ninth tenth rest caar cadr
-	  cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr caaaar
-	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
-	  cdaddr cddaar cddadr cdddar cddddr make-list endp butlast nbutlast
-	  acons pairlis when unless incf decf and or cond otherwise case return
-	  multiple-value-bind every some notany notevery member member-if
-	  member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
-	  position position-if position-if-not count count-if count-if-not
-	  remove remove-if-not delete delete-if delete-if-not nreverse adjoin
-	  fill push pop array-rank array-dimension array-total-size
-	  array-in-bounds-p get get-properties char string/= char-equal
-	  digit-char digit-char-p char-int string-upcase string-downcase
-	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
-	  string-left-trim string-right-trim string-trim defpackage consp listp
-	  symbolp keywordp functionp packagep integerp rationalp floatp complexp
-	  random-state-p characterp vectorp arrayp sequencep stringp
-	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
-	  fdefinition complement mapc terpri write-line write-sequence prin1
-	  princ print loop format encode-universal-time))
+	  boole-set boole-xor boole upgraded-complex-part-type *gensym-counter*
+	  gensym gentemp first second third fourth fifth sixth seventh eighth
+	  ninth tenth rest caar cadr cdar cddr caaar caadr cadar caddr cdaar
+	  cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar
+	  cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
+	  make-list endp butlast nbutlast acons pairlis when unless incf decf
+	  and or cond otherwise case return multiple-value-bind every some
+	  notany notevery member member-if member-if-not find find-if
+	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not nreverse adjoin fill push pop
+	  array-rank array-dimension array-total-size array-in-bounds-p get
+	  get-properties char string/= char-equal digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
+	  streamp realp numberp macroexpand equal equalp fdefinition complement
+	  mapc terpri write-line write-sequence prin1 princ print loop format
+	  encode-universal-time))
 
 
 
