@@ -5297,8 +5297,8 @@ create_complex (struct object *real, struct object *imag, int steal_refs,
     }
 
   ret = alloc_complex ();
-  ret->value_ptr.complex->real = r;
-  ret->value_ptr.complex->imag = i;
+  ret->value_ptr.complex->real = convert_to_integer_if_possible (r);
+  ret->value_ptr.complex->imag = convert_to_integer_if_possible (i);
 
   return ret;
 }
@@ -5323,6 +5323,9 @@ convert_to_integer_if_possible (struct object *rat)
 {
   mpz_t den;
   struct object *obj;
+
+  if (rat->type != TYPE_RATIO)
+    return rat;
 
   mpz_init (den);
   mpq_get_den (den, rat->value_ptr.ratio);
