@@ -1103,6 +1103,7 @@ make_test ("#c (0 1)", "#C(0 1)");
 make_test ("#C(1 1.0)", "#C(1.0 1.0)");
 make_test ("(realpart 1)", "1");
 make_test ("(realpart (complex 1 2.0))", "1.0");
+make_test ("(typep (realpart #c(1 1/2)) 'integer)", "T");
 make_test ("(imagpart 1)", "0");
 make_test ("(imagpart (complex 1 1/2))", "1/2");
 make_test ("(conjugate 1)", "1");
