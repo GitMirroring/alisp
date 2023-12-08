@@ -237,6 +237,8 @@ make_test ("(let* ((x 0)) (declare (special x)) x)", "0");
 make_test ("(let* ((x 0)) (declare (special x)) (let ((x 1)) x))", "1");
 make_test ("(let* ((x 0)) (declare (special x)) (let ((x 1)) (eval 'x)))", "0");
 make_test ("(let* ((a)) a)", "NIL");
+make_test ("(defun fooo () (list x y z))", "FOOO");
+make_test ("(progv '(x y z) '(0 1 2) (fooo))", "(0 1 2)");
 make_test ("(flet ((a () (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a NIL (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a () (b)) (b () (write \"\"))) (a))", "\"\"\n\"\"");
