@@ -2082,6 +2082,8 @@ struct object *evaluate_let
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_let_star
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_progv
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct binding *create_binding_from_flet_form
 (struct object *form, struct environment *env, struct outcome *outcome,
@@ -2795,6 +2797,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("PROGV", env, evaluate_progv, TYPE_MACRO, NULL, 1);
   add_builtin_form ("FLET", env, evaluate_flet, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LABELS", env, evaluate_labels, TYPE_MACRO, NULL, 1);
   add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, NULL, 1);
@@ -18372,6 +18375,93 @@ evaluate_let_star (struct object *list, struct environment *env,
   env->lex_env_vars_boundary -= bin_num;
 
   return res;
+}
+
+
+struct object *
+evaluate_progv (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *syms, *vals, *cons1, *cons2, *ret;
+  struct binding *b, *bins = NULL;
+  int binnum = 0;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  syms = evaluate_object (CAR (list), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!syms)
+    return NULL;
+
+  vals = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!vals)
+    return NULL;
+
+  if (!IS_LIST (syms) || !IS_LIST (vals))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  cons1 = syms, cons2 = vals;
+
+  while (SYMBOL (cons1) != &nil_object && SYMBOL (cons2) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (cons1)))
+	{
+	  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  ret = NULL;
+	  goto cleanup_and_leave;
+	}
+
+      b = create_binding (SYMBOL (CAR (cons1)), CAR (cons2), DYNAMIC_BINDING, 0);
+      increment_refcount (b->sym);
+
+      if (!bins)
+	bins = b;
+      else
+	{
+	  b->next = bins;
+	  bins = b;
+	}
+
+      b->sym->value_ptr.symbol->value_dyn_bins_num++;
+      binnum++;
+
+      cons1 = CDR (cons1);
+      cons2 = CDR (cons2);
+    }
+
+  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+  env->lex_env_vars_boundary += binnum;
+  bins = NULL;
+
+  ret = evaluate_body (CDR (CDR (list)), 0, NULL, env, outcome);
+
+ cleanup_and_leave:
+  env->lex_env_vars_boundary -= binnum;
+
+  for (; binnum; binnum--)
+    {
+      b = env->vars;
+      env->vars = env->vars->next;
+      b->sym->value_ptr.symbol->value_dyn_bins_num--;
+      decrement_refcount (b->sym);
+      free (b);
+    }
+
+  decrement_refcount (syms);
+  decrement_refcount (vals);
+
+  return ret;
 }
 
 
