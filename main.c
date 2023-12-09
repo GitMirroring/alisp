@@ -9009,6 +9009,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 
 		      outcome->tag_to_jump_to = NULL;
 		      body = t->dest;
+		      res = &nil_object;
 		    }
 		  else
 		    goto cleanup_and_leave;
