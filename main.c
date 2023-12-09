@@ -22832,7 +22832,7 @@ print_error (struct outcome *err, struct environment *env)
     }
   else if (err->type == TAG_NOT_FOUND)
     {
-      printf ("eval error: tag not found\n");
+      printf ("eval error: go tag not found\n");
     }
   else if (err->type == BLOCK_NOT_FOUND)
     {
