@@ -9000,7 +9000,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 		goto cleanup_and_leave;
 	      else if (outcome->tag_to_jump_to)
 		{
-		  if (is_tagbody)
+		  if (is_tagbody && tags)
 		    {
 		      t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
 
