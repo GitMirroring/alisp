@@ -921,6 +921,8 @@ make_test ("(case (+ 1 2) (2 10) ((4 5) (+ 1 5)) (otherwise 11 12))", "12");
 make_test ("(multiple-value-bind (x y) (floor 2 1) (list x y))", "(2 0)");
 make_test ("(multiple-value-bind (x) (floor 2 1) (list x))", "(2)");
 make_test ("(multiple-value-bind (x y z) (floor 2 1) (list x y z))", "(2 0 NIL)");
+make_test ("(prog ((x 0) y) a (write 0) (go c) b (write 1) c (return x))", "0\n0");
+make_test ("(prog* ((x 0) (y x)) a (write 0) (go c) b (write 1) c (return y))", "0\n0");
 make_test ("(every #'evenp '(0 2 4))", "T");
 make_test ("(every #'< '(0 1 2) '(1 1))", "NIL");
 make_test ("(some #'< '(0 1 2) '(1 1))", "T");
