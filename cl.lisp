@@ -393,6 +393,21 @@
        ,valform)))
 
 
+(defmacro prog (bins &body body)
+  `(let ,bins
+     (block nil
+       (tagbody
+	  ,@body))))
+
+
+(defmacro prog* (bins &body body)
+  `(let* ,bins
+     (block nil
+       (tagbody
+	  ,@body))))
+
+
+
 (defun every (pred &rest sequences)
   (let ((n (apply 'min (mapcar #'length sequences))))
     (dotimes (i n)
@@ -1022,8 +1037,8 @@
 	  cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar
 	  cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
 	  make-list endp butlast nbutlast acons pairlis when unless incf decf
-	  and or cond otherwise case return multiple-value-bind every some
-	  notany notevery member member-if member-if-not find find-if
+	  and or cond otherwise case return multiple-value-bind prog prog* every
+	  some notany notevery member member-if member-if-not find find-if
 	  find-if-not assoc assoc-if assoc-if-not position position-if
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not nreverse adjoin fill push pop
