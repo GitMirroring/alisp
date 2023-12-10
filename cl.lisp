@@ -103,6 +103,39 @@
 (defun oddp (num)
   (= 1 (mod num 2)))
 
+(defun gcd (&rest nums)
+  (let ((l (length nums)))
+    (cond
+      ((= l 0)
+       0)
+      ((= l 1)
+       (abs (car nums)))
+      ((> l 2)
+       (apply 'gcd (gcd (car nums) (cadr nums)) (cddr nums)))
+      ((or (zerop (car nums)) (zerop (cadr nums)))
+       (max (abs (car nums)) (abs (cadr nums))))
+      (t
+       (gcd (min (abs (car nums)) (abs (cadr nums)))
+	    (mod (max (abs (car nums)) (abs (cadr nums)))
+		 (min (abs (car nums)) (abs (cadr nums)))))))))
+
+
+(defun lcm (&rest nums)
+  (let ((l (length nums)))
+    (cond
+      ((= l 0)
+       1)
+      ((= l 1)
+       (abs (car nums)))
+      ((> l 2)
+       (apply 'lcm (lcm (car nums) (cadr nums)) (cddr nums)))
+      ((or (zerop (car nums)) (zerop (cadr nums)))
+       0)
+      (t
+       (/ (abs (* (car nums) (cadr nums))) (gcd (car nums) (cadr nums)))))))
+
+
+
 (defun isqrt (num)
   (values (floor (sqrt num))))
 
@@ -1027,7 +1060,7 @@
 	  lambda-parameters-limit call-arguments-limit multiple-values-limit
 	  array-rank-limit array-dimension-limit array-total-size-limit
 	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
-	  abs zerop signum mod rem evenp oddp isqrt conjugate cis logand
+	  abs zerop signum mod rem evenp oddp gcd lcm isqrt conjugate cis logand
 	  logandc1 logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1
 	  boole-2 boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
 	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
