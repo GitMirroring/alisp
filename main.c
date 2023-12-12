@@ -2056,6 +2056,12 @@ struct object *builtin_use_package (struct object *list, struct environment *env
 struct object *builtin_unuse_package (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *builtin_do_symbols (struct object *list, struct environment *env,
+				   struct outcome *outcome);
+struct object *builtin_do_external_symbols (struct object *list,
+					    struct environment *env,
+					    struct outcome *outcome);
+
 struct object *builtin_get_internal_run_time (struct object *list,
 					      struct environment *env,
 					      struct outcome *outcome);
@@ -2943,6 +2949,9 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DO-EXTERNAL-SYMBOLS", env, builtin_do_external_symbols,
+		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("GET-DECODED-TIME", env, builtin_get_decoded_time,
@@ -18087,6 +18096,273 @@ builtin_unuse_package (struct object *list, struct environment *env,
     } while (cons && SYMBOL (cons) != &nil_object);
 
   return &t_object;
+}
+
+
+struct object *
+builtin_do_symbols (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct object *des, *pack, *var, *ret, *p;
+  struct object_list *u = NULL;
+  struct package_record *rec;
+  int l, i;
+
+  if (list_length (list) < 1 || CAR (list)->type != TYPE_CONS_PAIR
+      || (l = list_length (CAR (list))) > 3 || !IS_SYMBOL (CAR (CAR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  env->blocks = add_block (&nil_object, env->blocks);
+
+  if (l > 1)
+    {
+      des = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!des)
+	return NULL;
+
+      if (!IS_PACKAGE_DESIGNATOR (des))
+	{
+	  env->blocks = remove_block (env->blocks);
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (des, env);
+
+      if (!pack)
+	{
+	  env->blocks = remove_block (env->blocks);
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+
+  var = SYMBOL (CAR (CAR (list)));
+  p = pack;
+
+  while (1)
+    {
+      for (i = 0; i < SYMTABLE_SIZE; i++)
+	{
+	  rec = p->value_ptr.package->symtable [i];
+
+	  while (rec)
+	    {
+	      if (u && rec->visibility != EXTERNAL_VISIBILITY)
+		{
+		  rec = rec->next;
+		  continue;
+		}
+
+	      increment_refcount (rec->sym);
+	      env->vars = bind_variable (var, rec->sym, env->vars);
+
+	      env->lex_env_vars_boundary++;
+
+	      ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
+
+	      env->lex_env_vars_boundary--;
+
+	      env->vars = remove_bindings (env->vars, 1);
+
+	      if (!ret)
+		{
+		  env->blocks = remove_block (env->blocks);
+
+		  if (outcome->block_to_leave == &nil_object)
+		    {
+		      outcome->block_to_leave = NULL;
+		      outcome->no_value = outcome->return_no_value;
+		      outcome->other_values = outcome->return_other_values;
+		      return outcome->return_value;
+		    }
+		  else
+		    return NULL;
+		}
+
+	      rec = rec->next;
+	    }
+	}
+
+      if (!u)
+	u = pack->value_ptr.package->uses;
+      else
+	u = u->next;
+
+      if (!u)
+	break;
+
+      p = u->obj;
+    }
+
+  if (l == 3)
+    {
+      env->vars = bind_variable (var, &nil_object, env->vars);
+
+      env->lex_env_vars_boundary++;
+
+      ret = evaluate_object (nth (2, CAR (list)), env, outcome);
+
+      env->lex_env_vars_boundary--;
+
+      env->vars = remove_bindings (env->vars, 1);
+
+      if (!ret)
+	{
+	  env->blocks = remove_block (env->blocks);
+
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
+	      return outcome->return_value;
+	    }
+	  else
+	    return NULL;
+	}
+
+      env->blocks = remove_block (env->blocks);
+
+      return ret;
+    }
+
+  env->blocks = remove_block (env->blocks);
+  return &nil_object;
+}
+
+
+struct object *
+builtin_do_external_symbols (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *des, *pack, *var, *ret;
+  struct package_record *rec;
+  int l, i;
+
+  if (list_length (list) < 1 || CAR (list)->type != TYPE_CONS_PAIR
+      || (l = list_length (CAR (list))) > 3 || !IS_SYMBOL (CAR (CAR (list))))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
+      return NULL;
+    }
+
+  env->blocks = add_block (&nil_object, env->blocks);
+
+  if (l > 1)
+    {
+      des = evaluate_object (CAR (CDR (CAR (list))), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!des)
+	return NULL;
+
+      if (!IS_PACKAGE_DESIGNATOR (des))
+	{
+	  env->blocks = remove_block (env->blocks);
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (des, env);
+
+      if (!pack)
+	{
+	  env->blocks = remove_block (env->blocks);
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+
+  var = SYMBOL (CAR (CAR (list)));
+
+  for (i = 0; i < SYMTABLE_SIZE; i++)
+    {
+      rec = pack->value_ptr.package->symtable [i];
+
+      while (rec)
+	{
+	  if (rec->visibility != EXTERNAL_VISIBILITY)
+	    {
+	      rec = rec->next;
+	      continue;
+	    }
+
+	  increment_refcount (rec->sym);
+	  env->vars = bind_variable (var, rec->sym, env->vars);
+
+	  env->lex_env_vars_boundary++;
+
+	  ret = evaluate_body (CDR (list), 1, NULL, env, outcome);
+
+	  env->lex_env_vars_boundary--;
+
+	  env->vars = remove_bindings (env->vars, 1);
+
+	  if (!ret)
+	    {
+	      env->blocks = remove_block (env->blocks);
+
+	      if (outcome->block_to_leave == &nil_object)
+		{
+		  outcome->block_to_leave = NULL;
+		  outcome->no_value = outcome->return_no_value;
+		  outcome->other_values = outcome->return_other_values;
+		  return outcome->return_value;
+		}
+	      else
+		return NULL;
+	    }
+
+	  rec = rec->next;
+	}
+    }
+
+  if (l == 3)
+    {
+      env->vars = bind_variable (var, &nil_object, env->vars);
+
+      env->lex_env_vars_boundary++;
+
+      ret = evaluate_object (nth (2, CAR (list)), env, outcome);
+
+      env->lex_env_vars_boundary--;
+
+      env->vars = remove_bindings (env->vars, 1);
+
+      if (!ret)
+	{
+	  env->blocks = remove_block (env->blocks);
+
+	  if (outcome->block_to_leave == &nil_object)
+	    {
+	      outcome->block_to_leave = NULL;
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
+	      return outcome->return_value;
+	    }
+	  else
+	    return NULL;
+	}
+
+      env->blocks = remove_block (env->blocks);
+
+      return ret;
+    }
+
+  env->blocks = remove_block (env->blocks);
+  return &nil_object;
 }
 
 
