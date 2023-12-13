@@ -933,6 +933,17 @@
   obj)
 
 
+(defmacro do-all-symbols (varres &body body)
+  (let ((packsym (gensym)))
+    `(progn
+       (dolist (,packsym (list-all-packages))
+	 (do-symbols ,(list (car varres) packsym)
+	   ,@body))
+       (let (,(car varres))
+	 ,(cadr varres)))))
+
+
+
 (defmacro loop (&body forms)
   (let (block-name
 	(tagname (gensym))
@@ -1084,8 +1095,8 @@
 	  functionp packagep integerp rationalp floatp complexp random-state-p
 	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
 	  streamp realp numberp macroexpand equal equalp fdefinition complement
-	  mapc terpri write-line write-sequence prin1 princ print loop format
-	  encode-universal-time))
+	  mapc terpri write-line write-sequence prin1 princ print do-all-symbols
+	  loop format encode-universal-time))
 
 
 
