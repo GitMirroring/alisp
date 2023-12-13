@@ -146,6 +146,14 @@
   (complex (cos rad) (sin rad)))
 
 
+(defun upgraded-complex-part-type (type)
+  (cond
+    ((subtypep type 'integer) 'integer)
+    ((subtypep type 'ratio) 'ratio)
+    ((subtypep type 'float) 'float)))
+
+
+
 (defun logand (&rest ints)
   (lognot (apply 'logior (mapcar #'lognot ints))))
 
@@ -220,13 +228,6 @@
     ((eq op 'boole-set) -1)
     ((eq op 'boole-xor) (logxor int1 int2))
     (t (+ ""))))
-
-
-(defun upgraded-complex-part-type (type)
-  (cond
-    ((subtypep type 'integer) 'integer)
-    ((subtypep type 'ratio) 'ratio)
-    ((subtypep type 'float) 'float)))
 
 
 
@@ -1060,18 +1061,18 @@
 	  lambda-parameters-limit call-arguments-limit multiple-values-limit
 	  array-rank-limit array-dimension-limit array-total-size-limit
 	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
-	  abs zerop signum mod rem evenp oddp gcd lcm isqrt conjugate cis logand
-	  logandc1 logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1
-	  boole-2 boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
-	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
-	  boole-set boole-xor boole upgraded-complex-part-type *gensym-counter*
-	  gensym gentemp first second third fourth fifth sixth seventh eighth
-	  ninth tenth rest caar cadr cdar cddr caaar caadr cadar caddr cdaar
-	  cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar cadadr caddar
-	  cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar cddddr
-	  make-list endp butlast nbutlast acons pairlis when unless incf decf
-	  and or cond otherwise case return multiple-value-bind prog prog* every
-	  some notany notevery member member-if member-if-not find find-if
+	  abs zerop signum mod rem evenp oddp gcd lcm isqrt conjugate cis
+	  upgraded-complex-part-type logand logandc1 logandc2 logeqv lognand
+	  lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1 boole-andc2
+	  boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior boole-nand
+	  boole-nor boole-orc1 boole-orc2 boole-set boole-xor boole
+	  *gensym-counter* gensym gentemp first second third fourth fifth sixth
+	  seventh eighth ninth tenth rest caar cadr cdar cddr caaar caadr cadar
+	  caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar
+	  cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
+	  cddddr make-list endp butlast nbutlast acons pairlis when unless incf
+	  decf and or cond otherwise case return multiple-value-bind prog prog*
+	  every some notany notevery member member-if member-if-not find find-if
 	  find-if-not assoc assoc-if assoc-if-not position position-if
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not nreverse adjoin fill push pop
