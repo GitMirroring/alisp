@@ -796,6 +796,7 @@ make_test ("#'ship-x", "#<FUNCTION SHIP-X>");
 make_test ("(defparameter s1 (make-ship))", "S1");
 make_test ("s1", "#<STRUCTURE OF CLASS SHIP>");
 make_test ("(class-of s1)", "#<STRUCTURE CLASS SHIP>");
+make_test ("(class-name (class-of s1))", "SHIP");
 make_test ("(type-of s1)", "SHIP");
 make_test ("(typep s1 'ship)", "T");
 make_test ("(typep 0 'ship)", "NIL");
@@ -810,6 +811,7 @@ make_test ("(find-class 'starship)", "#<STANDARD-CLASS STARSHIP>");
 make_test ("(defparameter inst (make-instance 'starship))", "INST");
 make_test ("inst", "#<STARSHIP OBJECT ...>");
 make_test ("(class-of inst)", "#<STANDARD-CLASS STARSHIP>");
+make_test ("(class-name (class-of inst))", "STARSHIP");
 make_test ("(type-of inst)", "STARSHIP");
 make_test ("(setf (slot-value inst 'x) 0)", "0");
 make_test ("(setf (slot-value inst 'y) 2.5)", "2.5");
@@ -823,6 +825,7 @@ make_test ("(genfun 0 nil nil)", "11");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ERROR>");
 make_test ("(class-of (make-condition 'new-math-error))", "#<CONDITION-CLASS NEW-MATH-ERROR>");
+make_test ("(class-name (class-of (make-condition 'new-math-error)))", "NEW-MATH-ERROR");
 make_test ("(type-of (make-condition 'new-math-error))", "NEW-MATH-ERROR");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
