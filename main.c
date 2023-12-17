@@ -12603,7 +12603,7 @@ builtin_load (struct object *list, struct environment *env,
 {
   int l = list_length (list);
   char *fn;
-  struct object *ret;
+  struct object *ret, *pack = inspect_variable (env->package_sym, env);
 
   if (!l)
     {
@@ -12626,6 +12626,8 @@ builtin_load (struct object *list, struct environment *env,
   fn = copy_string_to_c_string (CAR (list)->value_ptr.string);
 
   ret = load_file (fn, env, outcome);
+
+  set_value (env->package_sym, pack, 0, env, outcome);
 
   free (fn);
 
