@@ -22842,6 +22842,16 @@ print_object (const struct object *obj, struct environment *env,
 
 	  return 0;
 	}
+      else if (obj->type == TYPE_CONDITION_CLASS)
+	{
+	  if (write_to_stream (str, "#<CONDITION-CLASS ",
+			       strlen ("#<CONDITION-CLASS ")) < 0
+	      || print_symbol (obj->value_ptr.condition_class->name, env, str)
+	      || write_to_stream (str, ">", 1))
+	    return -1;
+
+	  return 0;
+	}
       else if (obj->type == TYPE_CONDITION)
 	{
 	  if (write_to_stream (str, "#<CONDITION OF CLASS ",
