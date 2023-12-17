@@ -2206,6 +2206,8 @@ struct object *builtin_make_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_class_name
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_slot_value
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defgeneric
@@ -2877,6 +2879,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CLASS-NAME", env, builtin_class_name, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
 		    accessor_slot_value, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
@@ -20672,6 +20676,39 @@ builtin_class_of (struct object *list, struct environment *env,
     {
       increment_refcount (CAR (list)->value_ptr.condition->class);
       return CAR (list)->value_ptr.condition->class;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+}
+
+
+struct object *
+builtin_class_name (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STANDARD_CLASS)
+    {
+      increment_refcount (CAR (list)->value_ptr.standard_class->name);
+      return CAR (list)->value_ptr.standard_class->name;
+    }
+  else if (CAR (list)->type == TYPE_STRUCTURE_CLASS)
+    {
+      increment_refcount (CAR (list)->value_ptr.structure_class->name);
+      return CAR (list)->value_ptr.structure_class->name;
+    }
+  else if (CAR (list)->type == TYPE_CONDITION_CLASS)
+    {
+      increment_refcount (CAR (list)->value_ptr.condition_class->name);
+      return CAR (list)->value_ptr.condition_class->name;
     }
   else
     {
