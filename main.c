@@ -76,21 +76,30 @@ typedef long fixnum;
 			|| (s)->type == TYPE_STRING			\
 			|| ((s)->type == TYPE_ARRAY			\
 			    && (s)->value_ptr.array->alloc_size		\
-			    && !(s)->value_ptr.array->alloc_size->next))
+			    && !(s)->value_ptr.array->alloc_size->next)	\
+			|| ((s)->type == TYPE_BITARRAY			\
+			    && (s)->value_ptr.bitarray->alloc_size	\
+			    && !(s)->value_ptr.bitarray->alloc_size->next))
 
 #define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || SYMBOL (s) == &nil_object)
 
 #define IS_VECTOR(s) ((s)->type == TYPE_STRING				\
 		      || ((s)->type == TYPE_ARRAY			\
 			  && (s)->value_ptr.array->alloc_size		\
-			  && !(s)->value_ptr.array->alloc_size->next))
+			  && !(s)->value_ptr.array->alloc_size->next)	\
+		      || ((s)->type == TYPE_BITARRAY			\
+			  && (s)->value_ptr.bitarray->alloc_size	\
+			  && !(s)->value_ptr.bitarray->alloc_size->next))
 
-#define IS_ARRAY(s) ((s)->type == TYPE_STRING || (s)->type == TYPE_ARRAY)
+#define IS_ARRAY(s) ((s)->type == TYPE_STRING || (s)->type == TYPE_ARRAY \
+		     || (s)->type == TYPE_BITARRAY)
 
 #define HAS_FILL_POINTER(s) (((s)->type == TYPE_STRING			\
 			      && (s)->value_ptr.string->fill_pointer >= 0) \
 			     || ((s)->type == TYPE_ARRAY		\
-				 && (s)->value_ptr.array->fill_pointer >= 0))
+				 && (s)->value_ptr.array->fill_pointer >= 0) \
+			     || ((s)->type == TYPE_BITARRAY		\
+				 && (s)->value_ptr.bitarray->fill_pointer >= 0))
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
@@ -113,7 +122,8 @@ typedef long fixnum;
 #define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_FIXNUM	\
 					   | TYPE_RATIO | TYPE_FLOAT \
 					   | TYPE_BYTESPEC | TYPE_STRING \
-					   | TYPE_CHARACTER | TYPE_FILENAME))
+					   | TYPE_CHARACTER | TYPE_BITARRAY \
+					   | TYPE_FILENAME))
 
 
 
@@ -765,6 +775,17 @@ array
 };
 
 
+struct
+bitarray
+{
+  struct array_size *alloc_size;
+
+  fixnum fill_pointer;
+
+  mpz_t value;
+};
+
+
 #define LISP_HASHTABLE_SIZE 1024
 
 struct
@@ -1026,11 +1047,12 @@ object_type
     TYPE_FLOAT = 1 << 10,
     TYPE_COMPLEX = 1 << 11,
     TYPE_RANDOM_STATE = 1 << 27,
-    TYPE_BYTESPEC = 1 << 12,
+    TYPE_BYTESPEC = 0,
     TYPE_CONS_PAIR = 1 << 13,
     TYPE_STRING = 1 << 14,
     TYPE_CHARACTER = 1 << 15,
     TYPE_ARRAY = 1 << 16,
+    TYPE_BITARRAY = 1 << 12,
     TYPE_HASHTABLE = 1 << 17,
     TYPE_ENVIRONMENT = 1 << 18,
     TYPE_PACKAGE = 1 << 19,
@@ -1071,6 +1093,7 @@ object_ptr_union
   struct string *string;
   char *character;
   struct array *array;
+  struct bitarray *bitarray;
   struct hashtable *hashtable;
   struct environment *environment;
   struct package *package;
@@ -1395,7 +1418,7 @@ struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *create_character_from_char (char ch);
 struct object *get_nth_character (struct object *str, int ind);
-struct object *set_nth_character (struct object *str, int ind, char *ch);
+int set_nth_character (struct object *str, int ind, char *ch);
 
 struct object *create_file_stream (enum stream_type type,
 				   enum stream_direction direction,
@@ -1503,8 +1526,8 @@ struct object *copy_list_structure (struct object *list,
 				    const struct object *prefix, int num_conses,
 				    struct object **last_cell);
 
-fixnum array_rank (const struct array *array);
-fixnum array_total_size (const struct array *array);
+fixnum array_rank (const struct array_size *sz);
+fixnum array_total_size (const struct array_size *sz);
 
 int hash_object_respecting_eq (const struct object *object, size_t table_size);
 int hash_table_count (const struct hashtable *hasht);
@@ -1841,7 +1864,8 @@ int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
 				    struct outcome *outcome,
 				    enum number_comparison comp);
-int is_zero (struct object *num);
+int is_zero (const struct object *num);
+int is_bit (const struct object *num);
 struct object *negate_number (struct object *num, int in_place);
 struct object *reciprocate_number (struct object *num);
 double convert_number_to_double (struct object *num);
@@ -2293,6 +2317,7 @@ void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
 void free_array_size (struct array_size *size);
 void free_array (struct object *obj);
+void free_bitarray (struct object *obj);
 void free_hashtable (struct object *obj);
 void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
@@ -6969,7 +6994,7 @@ get_nth_character (struct object *str, int ind)
 }
 
 
-struct object *
+int
 set_nth_character (struct object *str, int ind, char *ch)
 {
   char *c = str->value_ptr.string->value;
@@ -6980,7 +7005,7 @@ set_nth_character (struct object *str, int ind, char *ch)
       off = next_utf8_char (ch, s);
 
       if (!off)
-	return NULL;
+	return 0;
 
       c += off;
       s -= off;
@@ -6988,7 +7013,7 @@ set_nth_character (struct object *str, int ind, char *ch)
 
   memcpy (c, ch, strlen (ch));
 
-  return create_character_from_utf8 (ch, strlen (ch));
+  return 1;
 }
 
 
@@ -8129,16 +8154,15 @@ copy_list_structure (struct object *list, const struct object *prefix,
 
 
 fixnum
-array_rank (const struct array *array)
+array_rank (const struct array_size *sz)
 {
-  struct array_size *as = array->alloc_size;
   fixnum rank = 0;
 
-  while (as)
+  while (sz)
     {
       rank++;
 
-      as = as->next;
+      sz = sz->next;
     }
 
   return rank;
@@ -8146,16 +8170,15 @@ array_rank (const struct array *array)
 
 
 fixnum
-array_total_size (const struct array *array)
+array_total_size (const struct array_size *sz)
 {
   fixnum ret = 1;
-  struct array_size *s = array->alloc_size;
 
-  while (s)
+  while (sz)
     {
-      ret *= s->size;
+      ret *= sz->size;
 
-      s = s->next;
+      sz = sz->next;
     }
 
   return ret;
@@ -10511,9 +10534,7 @@ int
 type_bit (const struct object *obj, const struct object *typespec,
 	  struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER
-    && (!mpz_cmp_si (obj->value_ptr.integer, 0)
-	|| !mpz_cmp_si (obj->value_ptr.integer, 1));
+  return obj->type == TYPE_INTEGER && is_bit (obj);
 }
 
 
@@ -10593,7 +10614,8 @@ int
 type_vector (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
-  return (obj->type == TYPE_ARRAY && array_rank (obj->value_ptr.array) == 1)
+  return (obj->type == TYPE_ARRAY
+	  && array_rank (obj->value_ptr.array->alloc_size) == 1)
     || obj->type == TYPE_STRING;
 }
 
@@ -11229,7 +11251,7 @@ builtin_elt (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
-      if (array_rank (CAR (list)->value_ptr.array) != 1)
+      if (array_rank (CAR (list)->value_ptr.array->alloc_size) != 1)
 	{
 	  outcome->type = WRONG_NUMBER_OF_AXIS;
 	  return NULL;
@@ -11323,7 +11345,7 @@ builtin_aref (struct object *list, struct environment *env,
 
       return ret;
     }
-  else if (arr->type == TYPE_ARRAY)
+  else if (arr->type == TYPE_ARRAY || arr->type == TYPE_BITARRAY)
     {
       lin_ind = builtin_array_row_major_index (list, env, outcome);
 
@@ -11332,8 +11354,16 @@ builtin_aref (struct object *list, struct environment *env,
 
       ind = mpz_get_si (lin_ind->value_ptr.integer);
 
-      increment_refcount (arr->value_ptr.array->value [ind]);
-      return arr->value_ptr.array->value [ind];
+      decrement_refcount (lin_ind);
+
+      if (arr->type == TYPE_ARRAY)
+	{
+	  increment_refcount (arr->value_ptr.array->value [ind]);
+	  return arr->value_ptr.array->value [ind];
+	}
+      else
+	return create_integer_from_long
+	  (mpz_tstbit (arr->value_ptr.bitarray->value, ind));
     }
 
   outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -11381,14 +11411,23 @@ builtin_row_major_aref (struct object *list, struct environment *env,
       return ret;
     }
 
-  if (ind < 0 || ind >= array_total_size (CAR (list)->value_ptr.array))
+  if (ind < 0
+      || ind >= array_total_size (CAR (list)->type == TYPE_ARRAY
+				  ? CAR (list)->value_ptr.array->alloc_size
+				  : CAR (list)->value_ptr.bitarray->alloc_size))
     {
       outcome->type = OUT_OF_BOUND_INDEX;
       return NULL;
     }
 
-  increment_refcount (CAR (list)->value_ptr.array->value [ind]);
-  return CAR (list)->value_ptr.array->value [ind];
+  if (CAR (list)->type == TYPE_ARRAY)
+    {
+      increment_refcount (CAR (list)->value_ptr.array->value [ind]);
+      return CAR (list)->value_ptr.array->value [ind];
+    }
+
+  return create_integer_from_long
+    (mpz_tstbit (CAR (list)->value_ptr.bitarray->value, ind));
 }
 
 
@@ -11606,7 +11645,7 @@ builtin_length (struct object *list, struct environment *env,
     }
   else
     {
-      if (array_rank (seq->value_ptr.array) != 1)
+      if (array_rank (seq->value_ptr.array->alloc_size) != 1)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -11859,7 +11898,11 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
       return CAR (list);
     }
 
-  sz = arr->value_ptr.array->alloc_size;
+  if (arr->type == TYPE_ARRAY)
+    sz = arr->value_ptr.array->alloc_size;
+  else
+    sz = arr->value_ptr.bitarray->alloc_size;
+
   tot = 0;
 
   while (SYMBOL (list) != &nil_object)
@@ -14030,7 +14073,7 @@ struct object *
 accessor_aref (struct object *list, struct object *newval,
 	       struct environment *env, struct outcome *outcome)
 {
-  struct object *ret, *lin_ind;
+  struct object *lin_ind;
   int l = list_length (list), ind;
 
   if (!l)
@@ -14073,9 +14116,7 @@ accessor_aref (struct object *list, struct object *newval,
 	  return NULL;
 	}
 
-      ret = set_nth_character (CAR (list), ind, newval->value_ptr.character);
-
-      if (!ret)
+      if (!set_nth_character (CAR (list), ind, newval->value_ptr.character))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
@@ -14090,18 +14131,34 @@ accessor_aref (struct object *list, struct object *newval,
 
       ind = mpz_get_si (lin_ind->value_ptr.integer);
 
-      add_reference (CAR (list), newval, ind);
-      delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
-			ind);
+      decrement_refcount (lin_ind);
 
-      CAR (list)->value_ptr.array->value [ind] = newval;
+      if (CAR (list)->type == TYPE_ARRAY)
+	{
+	  add_reference (CAR (list), newval, ind);
+	  delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
+			    ind);
 
-      ret = newval;
+	  CAR (list)->value_ptr.array->value [ind] = newval;
+	}
+      else
+	{
+	  if (newval->type != TYPE_INTEGER || !is_bit (newval))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  if (is_zero (newval))
+	    mpz_clrbit (CAR (list)->value_ptr.bitarray->value, ind);
+	  else
+	    mpz_setbit (CAR (list)->value_ptr.bitarray->value, ind);
+	}
     }
 
   decrement_refcount (list);
 
-  return ret;
+  return newval;
 }
 
 
@@ -14109,7 +14166,7 @@ struct object *
 accessor_elt (struct object *list, struct object *newval,
 	      struct environment *env, struct outcome *outcome)
 {
-  struct object *ret, *cons;
+  struct object *cons;
   int ind;
 
   if (list_length (list) != 2)
@@ -14140,9 +14197,7 @@ accessor_elt (struct object *list, struct object *newval,
 	  return NULL;
 	}
 
-      ret = set_nth_character (CAR (list), ind, newval->value_ptr.character);
-
-      if (!ret)
+      if (!set_nth_character (CAR (list), ind, newval->value_ptr.character))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
@@ -14161,8 +14216,6 @@ accessor_elt (struct object *list, struct object *newval,
 			ind);
 
       CAR (list)->value_ptr.array->value [ind] = newval;
-
-      ret = newval;
     }
   else
     {
@@ -14178,13 +14231,11 @@ accessor_elt (struct object *list, struct object *newval,
       delete_reference (cons, CAR (cons), 0);
 
       cons->value_ptr.cons_pair->car = newval;
-
-      ret = newval;
     }
 
   decrement_refcount (list);
 
-  return ret;
+  return newval;
 }
 
 
@@ -14399,13 +14450,21 @@ compare_any_numbers (struct object *list, struct environment *env,
 
 
 int
-is_zero (struct object *num)
+is_zero (const struct object *num)
 {
   return (num->type == TYPE_INTEGER && !mpz_sgn (num->value_ptr.integer))
     || (num->type == TYPE_RATIO && !mpq_sgn (num->value_ptr.ratio))
     || (num->type == TYPE_FLOAT && *num->value_ptr.floating == 0)
     || (num->type == TYPE_COMPLEX && is_zero (num->value_ptr.complex->real)
 	&& is_zero (num->value_ptr.complex->imag));
+}
+
+
+int
+is_bit (const struct object *num)
+{
+  return (!mpz_cmp_si (num->value_ptr.integer, 0)
+	  || !mpz_cmp_si (num->value_ptr.integer, 1));
 }
 
 
@@ -22507,7 +22566,7 @@ int
 print_array (const struct array *array, struct environment *env,
 	     struct stream *str)
 {
-  fixnum rk = array_rank (array), i;
+  fixnum rk = array_rank (array->alloc_size), i;
 
   if (rk == 1)
     {
@@ -23562,7 +23621,7 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
     }
   else if (node->type == TYPE_ARRAY)
     {
-      sz = array_total_size (node->value_ptr.array);
+      sz = array_total_size (node->value_ptr.array->alloc_size);
 
       for (i = 0; sz && i < sz; i++)
 	{
@@ -23663,6 +23722,8 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_ARRAY)
     free_array (obj);
+  else if (obj->type == TYPE_BITARRAY)
+    free_bitarray (obj);
   else if (obj->type == TYPE_HASHTABLE)
     free_hashtable (obj);
   else if (obj->type == TYPE_CHARACTER)
@@ -23782,7 +23843,7 @@ free_array_size (struct array_size *size)
 void
 free_array (struct object *obj)
 {
-  size_t i, sz = array_total_size (obj->value_ptr.array);
+  size_t i, sz = array_total_size (obj->value_ptr.array->alloc_size);
 
   for (i = 0; i < sz; i++)
     {
@@ -23793,6 +23854,16 @@ free_array (struct object *obj)
   free (obj->value_ptr.array->value);
   free (obj->value_ptr.array->reference_strength_factor);
   free (obj->value_ptr.array);
+  free (obj);
+}
+
+
+void
+free_bitarray (struct object *obj)
+{
+  free_array_size (obj->value_ptr.bitarray->alloc_size);
+  mpz_clear (obj->value_ptr.bitarray->value);
+  free (obj->value_ptr.bitarray);
   free (obj);
 }
 
