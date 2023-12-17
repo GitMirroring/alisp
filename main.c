@@ -20629,14 +20629,26 @@ builtin_class_of (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
+  if (CAR (list)->type == TYPE_STANDARD_OBJECT)
+    {
+      increment_refcount (CAR (list)->value_ptr.standard_object->class);
+      return CAR (list)->value_ptr.standard_object->class;
+    }
+  else if (CAR (list)->type == TYPE_STRUCTURE)
+    {
+      increment_refcount (CAR (list)->value_ptr.structure->class);
+      return CAR (list)->value_ptr.structure->class;
+    }
+  else if (CAR (list)->type == TYPE_CONDITION)
+    {
+      increment_refcount (CAR (list)->value_ptr.condition->class);
+      return CAR (list)->value_ptr.condition->class;
+    }
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
-
-  increment_refcount (CAR (list)->value_ptr.standard_object->class);
-  return CAR (list)->value_ptr.standard_object->class;
 }
 
 
