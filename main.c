@@ -16277,6 +16277,10 @@ builtin_type_of (struct object *list, struct environment *env,
     {
       ret = BUILTIN_SYMBOL ("COMPLEX");
     }
+  else if (CAR (list)->type == TYPE_RANDOM_STATE)
+    {
+      ret = BUILTIN_SYMBOL ("RANDOM-STATE");
+    }
   else if (CAR (list)->type == TYPE_FUNCTION)
     {
       ret = BUILTIN_SYMBOL ("FUNCTION");
@@ -16285,7 +16289,7 @@ builtin_type_of (struct object *list, struct environment *env,
     {
       ret = BUILTIN_SYMBOL ("PACKAGE");
     }
-  else if (CAR (list)->type == TYPE_ARRAY)
+  else if (CAR (list)->type == TYPE_ARRAY || CAR (list)->type == TYPE_BITARRAY)
     {
       ret = BUILTIN_SYMBOL ("ARRAY");
     }
@@ -16300,6 +16304,29 @@ builtin_type_of (struct object *list, struct environment *env,
   else if (CAR (list)->type == TYPE_STREAM)
     {
       ret = BUILTIN_SYMBOL ("STREAM");
+    }
+  else if (CAR (list)->type == TYPE_STRUCTURE_CLASS)
+    {
+      ret = BUILTIN_SYMBOL ("STRUCTURE-CLASS");
+    }
+  else if (CAR (list)->type == TYPE_STRUCTURE)
+    {
+      ret = CAR (list)->value_ptr.structure->class->value_ptr.structure_class->
+	name;
+    }
+  else if (CAR (list)->type == TYPE_STANDARD_CLASS)
+    {
+      ret = BUILTIN_SYMBOL ("STANDARD-CLASS");
+    }
+  else if (CAR (list)->type == TYPE_STANDARD_OBJECT)
+    {
+      ret = CAR (list)->value_ptr.standard_object->class->
+	value_ptr.standard_class->name;
+    }
+  else if (CAR (list)->type == TYPE_CONDITION)
+    {
+      ret = CAR (list)->value_ptr.condition->class->value_ptr.condition_class->
+	name;
     }
 
   increment_refcount (ret);
