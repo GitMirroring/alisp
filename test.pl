@@ -795,6 +795,7 @@ make_test ("#'make-ship", "#<FUNCTION MAKE-SHIP>");
 make_test ("#'ship-x", "#<FUNCTION SHIP-X>");
 make_test ("(defparameter s1 (make-ship))", "S1");
 make_test ("s1", "#<STRUCTURE OF CLASS SHIP>");
+make_test ("(class-of s1)", "#<STRUCTURE CLASS SHIP>");
 make_test ("(typep s1 'ship)", "T");
 make_test ("(typep 0 'ship)", "NIL");
 make_test ("(ship-x s1)", "NIL");
@@ -819,6 +820,7 @@ make_test ("(genfun \"\" nil nil)", "10");
 make_test ("(genfun 0 nil nil)", "11");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ERROR>");
+make_test ("(class-of (make-condition 'new-math-error))", "#<CONDITION-CLASS NEW-MATH-ERROR>");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
