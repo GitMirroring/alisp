@@ -822,6 +822,8 @@ make_test ("(defmethod genfun ((x string) y z) 10)", "#<STANDARD-METHOD GENFUN>"
 make_test ("(defmethod genfun ((x integer) y z) 11)", "#<STANDARD-METHOD GENFUN>");
 make_test ("(genfun \"\" nil nil)", "10");
 make_test ("(genfun 0 nil nil)", "11");
+make_test ("(defmethod genfun2 ((x string) y z) 12)", "#<STANDARD-METHOD GENFUN2>");
+make_test ("(defmethod genfun2 ((x integer) y z) 13)", "#<STANDARD-METHOD GENFUN2>");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ERROR>");
 make_test ("(class-of (make-condition 'new-math-error))", "#<CONDITION-CLASS NEW-MATH-ERROR>");
