@@ -20833,10 +20833,11 @@ evaluate_defmethod (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!(fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0))
-      || !fun->value_ptr.function->is_generic)
+  fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 1, 0);
+
+  if (fun && (fun->type == TYPE_MACRO || !fun->value_ptr.function->is_generic))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
       return NULL;
     }
 
@@ -20858,9 +20859,25 @@ evaluate_defmethod (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!are_lambda_lists_congruent (m->lambda_list,
-				   fun->value_ptr.function->lambda_list))
+  if (!fun)
     {
+      fun = create_function (&nil_object, &nil_object, env, outcome, 0, 0);
+
+      if (!fun)
+	return NULL;
+
+      fun->value_ptr.function->is_generic = 1;
+
+      SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
+      add_reference (SYMBOL (CAR (list)), fun, 1);
+
+      fun->value_ptr.function->name = SYMBOL (CAR (list));
+      add_reference (fun, SYMBOL (CAR (list)), 0);
+    }
+  else if (!are_lambda_lists_congruent (m->lambda_list,
+					fun->value_ptr.function->lambda_list))
+    {
+      free_method (meth);
       outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
       return NULL;
     }
