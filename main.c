@@ -344,6 +344,7 @@ outcome_type
     CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST,
     LAMBDA_LISTS_NOT_CONGRUENT,
     CANT_REDEFINE_SPECIAL_OPERATOR,
+    CANT_REDEFINE_AS_GENERIC_FUNCTION,
     CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE,
     CANT_REDEFINE_CONSTANT_BY_DIFFERENT_OPERATOR,
     CANT_MODIFY_CONSTANT,
@@ -20783,10 +20784,10 @@ evaluate_defgeneric (struct object *list, struct environment *env,
   sym = SYMBOL (CAR (list));
 
   if (sym->value_ptr.symbol->function_cell
-      && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
-      && sym->value_ptr.symbol->function_cell->value_ptr.macro->is_special_operator)
+      && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
+	  || !sym->value_ptr.symbol->function_cell->value_ptr.function->is_generic))
     {
-      outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
+      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
       return NULL;
     }
 
@@ -23171,6 +23172,11 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == CANT_REDEFINE_SPECIAL_OPERATOR)
     {
       printf ("eval error: redefining special operators is not allowed\n");
+    }
+  else if (err->type == CANT_REDEFINE_AS_GENERIC_FUNCTION)
+    {
+      printf ("eval error: can't redefine ordinary function, macro or special "
+	      "operator as generic function\n");
     }
   else if (err->type == CANT_REDEFINE_CONSTANT_TO_NONEQL_VALUE)
     {
