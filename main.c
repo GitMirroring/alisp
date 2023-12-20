@@ -525,7 +525,7 @@ environment
 
   struct object *declare_sym, *ignorable_sym, *ignore_sym, *inline_sym,
     *notinline_sym, *optimize_sym, *compilation_speed_sym, *debug_sym,
-    *safety_sym, *space_sym, *speed_sym, *special_sym;
+    *safety_sym, *space_sym, *speed_sym, *special_sym, *type_sym, *ftype_sym;
 
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
     *amp_allow_other_keys_sym, *amp_aux_sym;
@@ -1555,6 +1555,9 @@ struct parameter *parse_lambda_list
 int are_lambda_lists_congruent (struct parameter *meth_list,
 				struct parameter *gen_list);
 
+int parse_declaration_specifier (struct object *spec, int is_local,
+				 struct environment *env, int bin_num,
+				 struct outcome *outcome);
 int parse_declarations (struct object *body, struct environment *env,
 			int bin_num, struct outcome *outcome,
 			struct object **next);
@@ -2214,6 +2217,11 @@ struct object *builtin_slot_value
 struct object *evaluate_defgeneric
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defmethod
+(struct object *list, struct environment *env, struct outcome *outcome);
+
+struct object *evaluate_declaim
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_proclaim
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_tagbody
@@ -2886,6 +2894,8 @@ add_standard_definitions (struct environment *env)
 		    accessor_slot_value, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DECLAIM", env, evaluate_declaim, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("PROCLAIM", env, builtin_proclaim, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
   add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
   add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
@@ -3182,6 +3192,8 @@ add_standard_definitions (struct environment *env)
   env->space_sym = CREATE_BUILTIN_SYMBOL ("SPACE");
   env->speed_sym = CREATE_BUILTIN_SYMBOL ("SPEED");
   env->special_sym = CREATE_BUILTIN_SYMBOL ("SPECIAL");
+  env->type_sym = CREATE_BUILTIN_SYMBOL ("TYPE");
+  env->ftype_sym = CREATE_BUILTIN_SYMBOL ("FTYPE");
 
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
@@ -8816,11 +8828,186 @@ are_lambda_lists_congruent (struct parameter *meth_list,
 
 
 int
+parse_declaration_specifier (struct object *spec, int is_local,
+			     struct environment *env, int bin_num,
+			     struct outcome *outcome)
+{
+  struct object *form, *declid, *sym;
+  struct binding *vars;
+
+  if (spec->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (spec)))
+    {
+      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+      return 0;
+    }
+
+  declid = SYMBOL (CAR (spec));
+  form = CDR (spec);
+
+  if (declid == env->ignorable_sym || declid == env->ignore_sym)
+    {
+      sym = BUILTIN_SYMBOL ("FUNCTION");
+
+      while (SYMBOL (form) != &nil_object)
+	{
+	  if (!IS_SYMBOL (CAR (form))
+	      && (CAR (form)->type != TYPE_CONS_PAIR
+		  || list_length (CAR (form)) != 2
+		  || SYMBOL (CAR (CAR (form))) != sym
+		  || !IS_SYMBOL (CAR (CDR (CAR (form))))))
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+	      return 0;
+	    }
+
+	  form = CDR (form);
+	}
+    }
+  else if (declid == env->inline_sym || declid == env->notinline_sym)
+    {
+      sym = BUILTIN_SYMBOL ("SETF");
+
+      while (SYMBOL (form) != &nil_object)
+	{
+	  if (!IS_SYMBOL (CAR (form))
+	      && (CAR (form)->type != TYPE_CONS_PAIR
+		  || list_length (CAR (form)) != 2
+		  || SYMBOL (CAR (CAR (form))) != sym
+		  || !IS_SYMBOL (CAR (CDR (CAR (form))))))
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+	      return 0;
+	    }
+
+	  form = CDR (form);
+	}
+    }
+  else if (declid == env->optimize_sym)
+    {
+      while (SYMBOL (form) != &nil_object)
+	{
+	  if (IS_SYMBOL (CAR (form)))
+	    {
+	      sym = SYMBOL (CAR (form));
+
+	      if (sym != env->compilation_speed_sym
+		  && sym != env->debug_sym && sym != env->safety_sym
+		  && sym != env->space_sym && sym != env->speed_sym)
+		{
+		  outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+		  return 0;
+		}
+	    }
+	  else if (CAR (form)->type == TYPE_CONS_PAIR
+		   && list_length (CAR (form)) == 2
+		   && IS_SYMBOL (CAR (CAR (form))))
+	    {
+	      sym = SYMBOL (CAR (CAR (form)));
+
+	      if ((sym != env->compilation_speed_sym
+		   && sym != env->debug_sym && sym != env->safety_sym
+		   && sym != env->space_sym && sym != env->speed_sym)
+		  || CAR (CDR (CAR (form)))->type != TYPE_INTEGER
+		  || mpz_cmp_si (CAR (CDR (CAR (form)))->value_ptr.integer,
+				 0) < 0
+		  || mpz_cmp_si (CAR (CDR (CAR (form)))->value_ptr.integer,
+				 3) > 0)
+		{
+		  outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+		  return 0;
+		}
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+	      return 0;
+	    }
+
+	  form = CDR (form);
+	}
+    }
+  else if (declid == env->special_sym)
+    {
+      while (SYMBOL (form) != &nil_object)
+	{
+	  if (!IS_SYMBOL (CAR (form)))
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+	      return 0;
+	    }
+
+	  if (is_local)
+	    {
+	      vars = env->vars;
+
+	      for (; bin_num; bin_num--)
+		{
+		  if (vars->sym == SYMBOL (CAR (form)))
+		    {
+		      vars->type = DYNAMIC_BINDING;
+		      SYMBOL (CAR (form))->value_ptr.symbol->
+			value_dyn_bins_num++;
+		      break;
+		    }
+
+		  vars = vars->next;
+		}
+
+	      SYMBOL (CAR (form))->value_ptr.symbol->is_special++;
+	    }
+	  else
+	    {
+	      SYMBOL (CAR (form))->value_ptr.symbol->is_parameter = 1;
+	    }
+
+	  form = CDR (form);
+	}
+    }
+  else if (declid == env->type_sym)
+    {
+      form = CDR (form);
+
+      while (SYMBOL (form) != &nil_object)
+	{
+	  if (!IS_SYMBOL (CAR (form)))
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+	      return 0;
+	    }
+
+	  form = CDR (form);
+	}
+    }
+  else if (declid == env->ftype_sym)
+    {
+      form = CDR (form);
+
+      while (SYMBOL (form) != &nil_object)
+	{
+	  if (!IS_SYMBOL (CAR (form)))
+	    {
+	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
+	      return 0;
+	    }
+
+	  form = CDR (form);
+	}
+    }
+  else
+    {
+      outcome->type = UNKNOWN_DECLARATION;
+      return 0;
+    }
+
+  return 1;
+}
+
+
+int
 parse_declarations (struct object *body, struct environment *env, int bin_num,
 		    struct outcome *outcome, struct object **next)
 {
-  struct object *forms, *form, *decl, *sym;
-  struct binding *vars;
+  struct object *forms;
 
   *next = body;
 
@@ -8834,131 +9021,9 @@ parse_declarations (struct object *body, struct environment *env, int bin_num,
 
       while (forms->type == TYPE_CONS_PAIR)
 	{
-	  if (CAR (forms)->type != TYPE_CONS_PAIR
-	      || !IS_SYMBOL (CAR (CAR (forms))))
+	  if (!parse_declaration_specifier (CAR (forms), 1, env, bin_num,
+					    outcome))
 	    {
-	      outcome->type = WRONG_SYNTAX_IN_DECLARE;
-	      return 0;
-	    }
-
-	  decl = SYMBOL (CAR (CAR (forms)));
-	  form = CDR (CAR (forms));
-
-	  if (decl == env->ignorable_sym || decl == env->ignore_sym)
-	    {
-	      sym = BUILTIN_SYMBOL ("FUNCTION");
-
-	      while (SYMBOL (form) != &nil_object)
-		{
-		  if (!IS_SYMBOL (CAR (form))
-		      && (CAR (form)->type != TYPE_CONS_PAIR
-			  || list_length (CAR (form)) != 2
-			  || SYMBOL (CAR (CAR (form))) != sym
-			  || !IS_SYMBOL (CAR (CDR (CAR (form))))))
-		    {
-		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
-		      return 0;
-		    }
-
-		  form = CDR (form);
-		}
-	    }
-	  else if (decl == env->inline_sym || decl == env->notinline_sym)
-	    {
-	      sym = BUILTIN_SYMBOL ("SETF");
-
-	      while (SYMBOL (form) != &nil_object)
-		{
-		  if (!IS_SYMBOL (CAR (form))
-		      && (CAR (form)->type != TYPE_CONS_PAIR
-			  || list_length (CAR (form)) != 2
-			  || SYMBOL (CAR (CAR (form))) != sym
-			  || !IS_SYMBOL (CAR (CDR (CAR (form))))))
-		    {
-		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
-		      return 0;
-		    }
-
-		  form = CDR (form);
-		}
-	    }
-	  else if (decl == env->optimize_sym)
-	    {
-	      while (SYMBOL (form) != &nil_object)
-		{
-		  if (IS_SYMBOL (CAR (form)))
-		    {
-		      sym = SYMBOL (CAR (form));
-
-		      if (sym != env->compilation_speed_sym
-			  && sym != env->debug_sym && sym != env->safety_sym
-			  && sym != env->space_sym && sym != env->speed_sym)
-			{
-			  outcome->type = WRONG_SYNTAX_IN_DECLARATION;
-			  return 0;
-			}
-		    }
-		  else if (CAR (form)->type == TYPE_CONS_PAIR
-			   && list_length (CAR (form)) == 2
-			   && IS_SYMBOL (CAR (CAR (form))))
-		    {
-		      sym = SYMBOL (CAR (CAR (form)));
-
-		      if ((sym != env->compilation_speed_sym
-			  && sym != env->debug_sym && sym != env->safety_sym
-			   && sym != env->space_sym && sym != env->speed_sym)
-			  || CAR (CDR (CAR (form)))->type != TYPE_INTEGER
-			  || mpz_cmp_si (CAR (CDR (CAR (form)))->value_ptr.integer,
-					 0) < 0
-			  || mpz_cmp_si (CAR (CDR (CAR (form)))->value_ptr.integer,
-					 3) > 0)
-			{
-			  outcome->type = WRONG_SYNTAX_IN_DECLARATION;
-			  return 0;
-			}
-		    }
-		  else
-		    {
-		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
-		      return 0;
-		    }
-
-		  form = CDR (form);
-		}
-	    }
-	  else if (decl == env->special_sym)
-	    {
-	      while (SYMBOL (form) != &nil_object)
-		{
-		  if (!IS_SYMBOL (CAR (form)))
-		    {
-		      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
-		      return 0;
-		    }
-
-		  vars = env->vars;
-
-		  for (; bin_num; bin_num--)
-		    {
-		      if (vars->sym == SYMBOL (CAR (form)))
-			{
-			  vars->type = DYNAMIC_BINDING;
-			  SYMBOL (CAR (form))->value_ptr.symbol->
-			    value_dyn_bins_num++;
-			  break;
-			}
-
-		      vars = vars->next;
-		    }
-
-		  SYMBOL (CAR (form))->value_ptr.symbol->is_special++;
-
-		  form = CDR (form);
-		}
-	    }
-	  else
-	    {
-	      outcome->type = UNKNOWN_DECLARATION;
 	      return 0;
 	    }
 
@@ -20897,6 +20962,39 @@ evaluate_defmethod (struct object *list, struct environment *env,
   INC_WEAK_REFCOUNT (meth);
 
   return meth;
+}
+
+
+struct object *
+evaluate_declaim (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (!parse_declaration_specifier (CAR (list), 0, env, -1, outcome))
+	return NULL;
+
+      list = CDR (list);
+    }
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_proclaim (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!parse_declaration_specifier (CAR (list), 0, env, -1, outcome))
+    return NULL;
+
+  return &t_object;
 }
 
 
