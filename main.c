@@ -7376,14 +7376,18 @@ intern_symbol_name (struct object *symname, struct environment *env,
 		    enum outcome_type *out)
 {
   struct symbol_name *s = symname->value_ptr.symbol_name;
-  struct object *pack;
+  struct object *pack = inspect_variable (env->package_sym, env);
 
-  if (s->packname_present)
+  if (s->packname_present || pack == env->keyword_package)
     {
-      if (!s->used_size)
+      if (!s->used_size || pack == env->keyword_package)
 	{
-	  s->sym = intern_symbol_by_char_vector (s->actual_symname,
-						 s->actual_symname_used_s, 1,
+	  s->sym = intern_symbol_by_char_vector (!s->used_size
+						 ? s->actual_symname
+						 : s->value,
+						 !s->used_size
+						 ? s->actual_symname_used_s
+						 : s->used_size, 1,
 						 EXTERNAL_VISIBILITY, 1,
 						 env->keyword_package);
 
@@ -7418,7 +7422,6 @@ intern_symbol_name (struct object *symname, struct environment *env,
 	}
     }
 
-  pack = inspect_variable (env->package_sym, env);
   s->sym = intern_symbol_by_char_vector (s->value, s->used_size, 1,
 					 INTERNAL_VISIBILITY, 0, pack);
   add_reference (symname, s->sym, 0);
