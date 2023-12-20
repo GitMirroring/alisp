@@ -476,6 +476,7 @@ make_test ("(intern \"hi\" 'keyword)", ":|hi|\n:EXTERNAL");
 make_test ("(find-symbol \"CAR\")", "CAR\n:INHERITED");
 make_test ("(find-symbol \"CAR\" 'cl)", "CAR\n:EXTERNAL");
 make_test ("(find-symbol \"car\")", "NIL\nNIL");
+make_test ("(find-symbol \"INTERNAL\" 'keyword)", ":INTERNAL\n:EXTERNAL");
 make_test ("(unintern :hi)", "NIL");
 make_test ("(unintern '|hi|)", "T");
 make_test ("(intern \"hi\")", "|hi|\nNIL");
@@ -996,6 +997,7 @@ make_test ("#+common-lisp '(1\n2)", "(1 2)");
 make_test ("#-common-lisp (\n) 0", "0");
 make_test ("#+foo \"aaa\nbbb\" 0", "0");
 make_test ("#+foo (1\n2 (3)) 0", "0");
+make_test ("#-fooo :fooo 0", ":FOOO\n0");
 
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package *package*)", "#<PACKAGE \"COMMON-LISP-USER\">");
