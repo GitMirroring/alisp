@@ -829,6 +829,12 @@ make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ER
 make_test ("(class-of (make-condition 'new-math-error))", "#<CONDITION-CLASS NEW-MATH-ERROR>");
 make_test ("(class-name (class-of (make-condition 'new-math-error)))", "NEW-MATH-ERROR");
 make_test ("(type-of (make-condition 'new-math-error))", "NEW-MATH-ERROR");
+make_test ("(declaim (optimize speed (safety 0) (debug 3)))", "T");
+make_test ("(declaim (ignorable a) (ignore b c) (inline e) (notinline d f))", "T");
+make_test ("(declaim (type list a) (ftype (function nil nil) b))", "T");
+make_test ("(proclaim '(optimize speed (safety 0) (debug 3)))", "T");
+make_test ("(proclaim '(ignorable a))", "T");
+make_test ("(proclaim '(type list a))", "T");
 make_test ("(tagbody\n" .
 	   "  (write \"1\")\n" .
 	   "  (go jmp)\n" .
