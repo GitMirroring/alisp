@@ -533,7 +533,7 @@ environment
   struct object *not_sym, *and_sym, *or_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
-    *print_escape_sym, *print_readably_sym;
+    *print_escape_sym, *print_readably_sym, *read_base_sym;
 };
 
 
@@ -1283,6 +1283,7 @@ enum outcome_type skip_without_reading
 char *accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 			int *token_length, struct outcome *out);
 
+int get_base (struct environment *env);
 int is_number (const char *token, size_t size, int radix,
 	       enum object_type *numtype, const char **number_end,
 	       size_t *exp_marker_pos, const char **token_end);
@@ -3199,6 +3200,9 @@ add_standard_definitions (struct environment *env)
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
 					     env);
 
+  env->read_base_sym = define_variable ("*READ-BASE*",
+					create_integer_from_long (10), env);
+
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
@@ -3836,7 +3840,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	     int ends_with_eof, struct environment *env, struct outcome *outcome,
 	     const char **obj_begin, const char **obj_end)
 {
-  int found_prefix = 0, tokensize, tokenlength;
+  int found_prefix = 0, tokensize, tokenlength, numbase;
   struct object *last_pref, *ob = NULL, *call;
   enum object_type numtype;
   enum outcome_type out = NO_OBJECT;
@@ -4005,12 +4009,14 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	  else
 	    tokenlength = size;
 
-	  if (is_number (input ? input : token, tokenlength, 10, &numtype,
+	  numbase = get_base (env);
+
+	  if (is_number (input ? input : token, tokenlength, numbase, &numtype,
 			 &num_end, &exp_mark_pos, obj_end))
 	    {
 	      ob = create_number (input ? input : token, num_end
 				  - (input ? input : token) + 1,
-				  exp_mark_pos, 10, numtype);
+				  exp_mark_pos, numbase, numtype);
 	      out = COMPLETE_OBJECT;
 	    }
 	  else
@@ -5102,6 +5108,15 @@ accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
     }
 
   return outbuf;
+}
+
+
+int
+get_base (struct environment *env)
+{
+  struct object *b = inspect_variable (env->read_base_sym, env);
+
+  return mpz_get_si (b->value_ptr.integer);
 }
 
 
