@@ -176,6 +176,13 @@ make_test ("#(\n" .
 	   ")\n" .
 	   ")", "#(NIL)");
 make_test ("'#:a", "#:A");
+make_test ("(setq *read-base* 16)", "16");
+make_test ("(+ a f)", "25");
+make_test ("(setq *read-base* 8)", "8");
+make_test ("10", "8");
+make_test ("10/12", "4/5");
+make_test ("(typep '9 'symbol)", "T");
+make_test ("(setq *read-base* 12)", "10");
 
 
 # eval tests
