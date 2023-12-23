@@ -35,6 +35,12 @@
 
 
 
+(defparameter *modules* '("this variable is deprecated per ANSI CL"))
+(defun provide (mod) "this function is deprecated per ANSI CL.  It does nothing")
+(defun require (mod &optional pl) "this function is deprecated per ANSI CL.  It does nothing")
+
+
+
 (defun describe (obj &optional str) (values))
 (defun describe-object (obj str))
 (defun inspect (obj))
@@ -1068,35 +1074,36 @@
 
 
 (export '(*features* machine-instance machine-type machine-version
-	  short-site-name long-site-name describe describe-object inspect
-	  lambda-parameters-limit call-arguments-limit multiple-values-limit
-	  array-rank-limit array-dimension-limit array-total-size-limit
-	  char-code-limit lambda-list-keywords identity pi 1+ 1- minusp plusp
-	  abs zerop signum mod rem evenp oddp gcd lcm isqrt conjugate cis
-	  upgraded-complex-part-type logand logandc1 logandc2 logeqv lognand
-	  lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1 boole-andc2
-	  boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior boole-nand
-	  boole-nor boole-orc1 boole-orc2 boole-set boole-xor boole
-	  *gensym-counter* gensym gentemp first second third fourth fifth sixth
-	  seventh eighth ninth tenth rest caar cadr cdar cddr caaar caadr cadar
-	  caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar
-	  cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
-	  cddddr make-list endp butlast nbutlast acons pairlis when unless incf
-	  decf and or cond otherwise case return multiple-value-bind prog prog*
-	  every some notany notevery member member-if member-if-not find find-if
-	  find-if-not assoc assoc-if assoc-if-not position position-if
-	  position-if-not count count-if count-if-not remove remove-if-not
-	  delete delete-if delete-if-not nreverse adjoin fill push pop
-	  array-rank array-dimension array-total-size array-in-bounds-p get
-	  get-properties char string/= char-equal digit-char digit-char-p
-	  char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
-	  streamp realp numberp macroexpand equal equalp fdefinition complement
-	  mapc terpri write-line write-sequence prin1 princ print do-all-symbols
-	  loop format encode-universal-time))
+	  short-site-name long-site-name *modules* provide require describe
+	  describe-object inspect lambda-parameters-limit call-arguments-limit
+	  multiple-values-limit array-rank-limit array-dimension-limit
+	  array-total-size-limit char-code-limit lambda-list-keywords identity
+	  pi 1+ 1- minusp plusp abs zerop signum mod rem evenp oddp gcd lcm
+	  isqrt conjugate cis upgraded-complex-part-type logand logandc1
+	  logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
+	  boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
+	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
+	  boole-set boole-xor boole *gensym-counter* gensym gentemp first second
+	  third fourth fifth sixth seventh eighth ninth tenth rest caar cadr
+	  cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr caaaar
+	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
+	  cdaddr cddaar cddadr cdddar cddddr make-list endp butlast nbutlast
+	  acons pairlis when unless incf decf and or cond otherwise case return
+	  multiple-value-bind prog prog* every some notany notevery member
+	  member-if member-if-not find find-if find-if-not assoc assoc-if
+	  assoc-if-not position position-if position-if-not count count-if
+	  count-if-not remove remove-if-not delete delete-if delete-if-not
+	  nreverse adjoin fill push pop array-rank array-dimension
+	  array-total-size array-in-bounds-p get get-properties char string/=
+	  char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp random-state-p characterp vectorp arrayp
+	  sequencep stringp hash-table-p pathnamep streamp realp numberp
+	  macroexpand equal equalp fdefinition complement mapc terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
