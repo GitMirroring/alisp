@@ -1280,6 +1280,7 @@ enum outcome_type skip_without_reading
  struct environment *env, struct outcome *outc, int *list_depth,
  const char **obj_begin, const char **obj_end);
 
+int does_token_begin (const char *input, size_t size, FILE *stream);
 char *accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 			int *token_length, struct outcome *out);
 
@@ -1415,6 +1416,8 @@ struct object *create_filename (struct object *string);
 struct object *alloc_vector (fixnum size, int fill_with_nil,
 			     int dont_store_size);
 struct object *create_vector_from_list (struct object *list);
+struct object *create_bitvector_from_char_vector (const char *in, size_t sz,
+						  size_t req_size);
 void resize_vector (struct object *vector, fixnum size);
 
 struct object *create_character (char *character, int do_copy);
@@ -2300,6 +2303,8 @@ int print_list (const struct cons_pair *list, struct environment *env,
 		struct stream *str);
 int print_array (const struct array *array, struct environment *env,
 		 struct stream *str);
+int print_bitarray (const struct bitarray *array, struct environment *env,
+		    struct stream *str);
 int print_function_or_macro (const struct object *obj, struct environment *env,
 			     struct stream *str);
 int print_method (const struct object *obj, struct environment *env,
@@ -4468,12 +4473,14 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 		       const char **macro_end)
 {
   int arg, tokenlength, tokensize;
-  const char *obj_b;
+  const char *obj_b, *num_e;
   char *token;
   struct object *prevpack;
   struct sharp_macro_call *call;
   enum outcome_type out;
+  enum object_type ot;
   unsigned char ch;
+  size_t ep;
 
   if (*obj)
     {
@@ -4589,7 +4596,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(:cC+-", call->dispatch_ch))
+  if (!strchr ("'\\.pP(:cC+-*", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -4716,6 +4723,42 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	out = INCOMPLETE_SHARP_MACRO_CALL;
 
       return out;
+    }
+  else if (call->dispatch_ch == '*')
+    {
+      if (!input)
+	{
+	  token = accumulate_token (stream, 1, &tokensize, &tokenlength, outcome);
+	}
+      else
+	{
+	  tokenlength = size;
+	}
+
+      if (!does_token_begin (input ? input : token, tokenlength, NULL))
+	{
+	  if (input)
+	    *macro_end = input;
+	}
+      else if (!is_number (input ? input : token, tokenlength, 2, &ot, &num_e, &ep,
+			   macro_end)
+	       || ot != TYPE_INTEGER || num_e != *macro_end
+	       || (arg >= 0 && num_e - (input ? input : token) > arg-1))
+	{
+	  if (!input)
+	    free (token);
+
+	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	}
+
+      call->obj = create_bitvector_from_char_vector (input ? input : token,
+						     tokenlength,
+						     arg > 0 ? arg : 0);
+
+      if (!input)
+	free (token);
+
+      return COMPLETE_OBJECT;
     }
 
   call->obj = NULL;
@@ -4868,6 +4911,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
     }
+  else if (macro_call->dispatch_ch == '*')
+    return obj;
 
   return NULL;
 }
@@ -5062,6 +5107,23 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
     }
 
   return COMPLETE_OBJECT;
+}
+
+
+int
+does_token_begin (const char *input, size_t size, FILE *stream)
+{
+  unsigned char ch;
+
+  next_char (&ch, &input, &size, stream);
+
+  if (!input)
+    ungetc (ch, stream);
+
+  if (isspace (ch) || strchr (TERMINATING_MACRO_CHARS, ch))
+    return 0;
+
+  return 1;
 }
 
 
@@ -6951,6 +7013,55 @@ create_vector_from_list (struct object *list)
   obj->value_ptr.array = vec;
 
   return obj;
+}
+
+
+struct object *
+create_bitvector_from_char_vector (const char *in, size_t sz, size_t req_size)
+{
+  struct object *ret = alloc_object ();
+  size_t i;
+  char l;
+
+  ret->type = TYPE_BITARRAY;
+  ret->value_ptr.bitarray = malloc_and_check (sizeof (*ret->value_ptr.bitarray));
+
+  ret->value_ptr.bitarray->alloc_size =
+    malloc_and_check (sizeof (*ret->value_ptr.bitarray->alloc_size));
+  ret->value_ptr.bitarray->alloc_size->next = NULL;
+  ret->value_ptr.bitarray->fill_pointer = -1;
+
+  mpz_init (ret->value_ptr.bitarray->value);
+
+  for (i = 0; i < sz; i++)
+    {
+      if (in [i] == '1')
+	mpz_setbit (ret->value_ptr.bitarray->value, i);
+      else if (in [i] == '0')
+	mpz_clrbit (ret->value_ptr.bitarray->value, i);
+      else
+	break;
+    }
+
+  if (req_size)
+    {
+      if (in [i-1] == '0' || in [i-1] == '1')
+	l = in [i-1];
+      else
+	l = '0';
+
+      for (; i < req_size; i++)
+	{
+	  if (l == '1')
+	    mpz_setbit (ret->value_ptr.bitarray->value, i);
+	  else if (l == '0')
+	    mpz_clrbit (ret->value_ptr.bitarray->value, i);
+	}
+    }
+
+  ret->value_ptr.bitarray->alloc_size->size = req_size ? req_size : i;
+
+  return ret;
 }
 
 
@@ -22827,6 +22938,44 @@ print_array (const struct array *array, struct environment *env,
 
 
 int
+print_bitarray (const struct bitarray *array, struct environment *env,
+		struct stream *str)
+{
+  fixnum rk = array_rank (array->alloc_size), i;
+
+  if (rk == 1)
+    {
+      if (write_to_stream (str, "#*", 2) < 0)
+	return -1;
+
+      for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer :
+		       array->alloc_size->size); i++)
+	{
+	  if (mpz_tstbit (array->value, i))
+	    {
+	      if (write_to_stream (str, "1", 1) < 0)
+		return -1;
+	    }
+	  else
+	    {
+	      if (write_to_stream (str, "0", 1) < 0)
+		return -1;
+	    }
+	}
+
+      return 0;
+    }
+  else if (write_to_stream (str, "#<BIT ARRAY, RANK ",
+			    strlen ("#<BIT ARRAY, RANK ")) < 0
+	   || write_long_to_stream (str, rk) < 0
+	   || write_to_stream (str, ">", 1) < 0)
+    return -1;
+
+  return 0;
+}
+
+
+int
 print_function_or_macro (const struct object *obj, struct environment *env,
 			 struct stream *str)
 {
@@ -23004,6 +23153,8 @@ print_object (const struct object *obj, struct environment *env,
 	return print_list (obj->value_ptr.cons_pair, env, str);
       else if (obj->type == TYPE_ARRAY)
 	return print_array (obj->value_ptr.array, env, str);
+      else if (obj->type == TYPE_BITARRAY)
+	return print_bitarray (obj->value_ptr.bitarray, env, str);
       else if (obj->type == TYPE_HASHTABLE)
 	{
 	  if (write_to_stream (str, "#<HASH-TABLE EQ ",
