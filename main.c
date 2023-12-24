@@ -533,7 +533,7 @@ environment
   struct object *not_sym, *and_sym, *or_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
-    *print_escape_sym, *print_readably_sym, *read_base_sym;
+    *print_escape_sym, *print_readably_sym, *print_base_sym, *read_base_sym;
 };
 
 
@@ -1283,7 +1283,8 @@ enum outcome_type skip_without_reading
 char *accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 			int *token_length, struct outcome *out);
 
-int get_base (struct environment *env);
+int get_read_base (struct environment *env);
+int get_print_base (struct environment *env);
 int is_number (const char *token, size_t size, int radix,
 	       enum object_type *numtype, const char **number_end,
 	       size_t *exp_marker_pos, const char **token_end);
@@ -3199,6 +3200,8 @@ add_standard_definitions (struct environment *env)
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
 					     env);
+  env->print_base_sym = define_variable ("*PRINT-BASE*",
+					 create_integer_from_long (10), env);
 
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
@@ -4009,7 +4012,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	  else
 	    tokenlength = size;
 
-	  numbase = get_base (env);
+	  numbase = get_read_base (env);
 
 	  if (is_number (input ? input : token, tokenlength, numbase, &numtype,
 			 &num_end, &exp_mark_pos, obj_end))
@@ -5112,9 +5115,18 @@ accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 
 
 int
-get_base (struct environment *env)
+get_read_base (struct environment *env)
 {
   struct object *b = inspect_variable (env->read_base_sym, env);
+
+  return mpz_get_si (b->value_ptr.integer);
+}
+
+
+int
+get_print_base (struct environment *env)
+{
+  struct object *b = inspect_variable (env->print_base_sym, env);
 
   return mpz_get_si (b->value_ptr.integer);
 }
@@ -22580,9 +22592,14 @@ int
 print_bignum (const mpz_t z, struct environment *env, struct stream *str)
 {
   char *out;
-  int ret;
+  int ret, base = get_print_base (env);
 
-  gmp_asprintf (&out, "%Zd", z);
+  if (base == 8)
+    gmp_asprintf (&out, "%Zo", z);
+  else if (base == 16)
+    gmp_asprintf (&out, "%Zx", z);
+  else
+    gmp_asprintf (&out, "%Zd", z);
 
   ret = write_to_stream (str, out, strlen (out));
   free (out);
@@ -22898,7 +22915,7 @@ print_object (const struct object *obj, struct environment *env,
 	      struct stream *str)
 {
   char *out;
-  int ret;
+  int ret, base;
 
   if (obj->type == TYPE_CONS_PAIR
       && obj->value_ptr.cons_pair->car == env->quote_sym
@@ -22948,7 +22965,14 @@ print_object (const struct object *obj, struct environment *env,
 	return write_long_to_stream (str, *obj->value_ptr.fixnum);
       else if (obj->type == TYPE_RATIO)
 	{
-	  gmp_asprintf (&out, "%Qd", obj->value_ptr.integer);
+	  base = get_print_base (env);
+
+	  if (base == 8)
+	    gmp_asprintf (&out, "%Qo", obj->value_ptr.ratio);
+	  else if (base == 16)
+	    gmp_asprintf (&out, "%Qx", obj->value_ptr.ratio);
+	  else
+	    gmp_asprintf (&out, "%Qd", obj->value_ptr.ratio);
 
 	  ret = write_to_stream (str, out, strlen (out));
 	  free (out);
