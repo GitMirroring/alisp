@@ -72,7 +72,12 @@
 (defun identity (x) x)
 
 
+
+(defparameter *READ-DEFAULT-FLOAT-FORMAT* 'single-float)
+
+
 (defconstant PI 3.141592653589793L0)
+
 
 (defun 1+ (num)
   (+ num 1))
@@ -1078,19 +1083,19 @@
 	  describe-object inspect lambda-parameters-limit call-arguments-limit
 	  multiple-values-limit array-rank-limit array-dimension-limit
 	  array-total-size-limit char-code-limit lambda-list-keywords identity
-	  pi 1+ 1- minusp plusp abs zerop signum mod rem evenp oddp gcd lcm
-	  isqrt conjugate cis upgraded-complex-part-type logand logandc1
-	  logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
-	  boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
-	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
-	  boole-set boole-xor boole *gensym-counter* gensym gentemp first second
-	  third fourth fifth sixth seventh eighth ninth tenth rest caar cadr
-	  cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr caaaar
-	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
-	  cdaddr cddaar cddadr cdddar cddddr make-list endp butlast nbutlast
-	  acons pairlis when unless incf decf and or cond otherwise case return
-	  multiple-value-bind prog prog* every some notany notevery member
-	  member-if member-if-not find find-if find-if-not assoc assoc-if
+	  *read-default-float-format* pi 1+ 1- minusp plusp abs zerop signum mod
+	  rem evenp oddp gcd lcm isqrt conjugate cis upgraded-complex-part-type
+	  logand logandc1 logandc2 logeqv lognand lognor logorc1 logorc2 logxor
+	  boole-1 boole-2 boole-andc1 boole-andc2 boole-and boole-c1 boole-c2
+	  boole-clr boole-eqv boole-ior boole-nand boole-nor boole-orc1
+	  boole-orc2 boole-set boole-xor boole *gensym-counter* gensym gentemp
+	  first second third fourth fifth sixth seventh eighth ninth tenth rest
+	  caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
+	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
+	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list endp butlast
+	  nbutlast acons pairlis when unless incf decf and or cond otherwise
+	  case return multiple-value-bind prog prog* every some notany notevery
+	  member member-if member-if-not find find-if find-if-not assoc assoc-if
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  nreverse adjoin fill push pop array-rank array-dimension
