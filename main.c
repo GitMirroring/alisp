@@ -4472,7 +4472,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 		       struct environment *env, struct outcome *outcome,
 		       const char **macro_end)
 {
-  int arg, tokenlength, tokensize;
+  int arg, tokenlength, tokensize, base;
   const char *obj_b, *num_e;
   char *token;
   struct object *prevpack;
@@ -4596,7 +4596,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(:cC+-*", call->dispatch_ch))
+  if (!strchr ("'\\.pP(:cC+-*bBoOxXrR", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -4760,6 +4760,61 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
       return COMPLETE_OBJECT;
     }
+  else if (strchr ("bBoOxXrR", call->dispatch_ch))
+    {
+      switch (call->dispatch_ch)
+	{
+	case 'b':
+	case 'B':
+	  base = 2;
+	  break;
+	case 'o':
+	case 'O':
+	  base = 8;
+	  break;
+	case 'x':
+	case 'X':
+	  base = 16;
+	  break;
+	default:
+	  if (arg < 2 || arg > 32)
+	    {
+	      return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	    }
+	  base = arg;
+	  break;
+	}
+
+      if (!does_token_begin (input, size, stream))
+	{
+	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	}
+
+      if (!input)
+	{
+	  token = accumulate_token (stream, 1, &tokensize, &tokenlength, outcome);
+	}
+      else
+	{
+	  tokenlength = size;
+	}
+
+      if (!is_number (input ? input : token, tokenlength, base, &ot, &num_e, &ep,
+		      macro_end) || ot == TYPE_FLOAT)
+	{
+	  if (!input)
+	    free (token);
+
+	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	}
+
+      call->obj = create_number (input ? input : token, tokenlength, 0, base, ot);
+
+      if (!input)
+	free (token);
+
+      return COMPLETE_OBJECT;
+    }
 
   call->obj = NULL;
   out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
@@ -4911,7 +4966,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
     }
-  else if (macro_call->dispatch_ch == '*')
+  else if (strchr ("*bBoOxXrR", macro_call->dispatch_ch))
     return obj;
 
   return NULL;
