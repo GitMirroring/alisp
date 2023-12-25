@@ -176,6 +176,10 @@ make_test ("#(\n" .
 	   ")\n" .
 	   ")", "#(NIL)");
 make_test ("'#:a", "#:A");
+make_test ("#b01010", "10");
+make_test ("#xf4/f", "244/15");
+make_test ("#o10", "8");
+make_test ("#29rh", "17");
 make_test ("(setq *read-base* 16)", "16");
 make_test ("(+ a f)", "25");
 make_test ("(setq *read-base* 8)", "8");
