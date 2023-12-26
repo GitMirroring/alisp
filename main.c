@@ -3052,7 +3052,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("VECTOR", env, type_vector, 1, "ARRAY", "SEQUENCE",
 		    (char *)NULL);
   add_builtin_type ("STRING", env, type_string, 1, "VECTOR", "ARRAY", "SEQUENCE",
-		    (char *)NULL);
+		    "BASE-STRING", (char *)NULL);
+  add_builtin_type ("BASE-STRING", env, type_string, 1, "VECTOR", "ARRAY",
+		    "SEQUENCE", "STRING", (char *)NULL);
   add_builtin_type ("HASH-TABLE", env, type_hash_table, 1, (char *)NULL);
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
 		    (char *)NULL);
