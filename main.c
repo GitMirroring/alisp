@@ -3030,7 +3030,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("FIXNUM", env, type_fixnum, 1, "INTEGER", (char *)NULL);
   add_builtin_type ("BIT", env, type_bit, 1, "INTEGER", (char *)NULL);
   add_builtin_type ("RATIO", env, type_ratio, 1, "RATIONAL", (char *)NULL);
-  add_builtin_type ("FLOAT", env, type_float, 1, (char *)NULL);
+  add_builtin_type ("FLOAT", env, type_float, 1, "REAL", (char *)NULL);
   add_builtin_type ("SHORT-FLOAT", env, type_short_float, 1, "SINGLE-FLOAT",
 		    (char *)NULL);
   add_builtin_type ("SINGLE-FLOAT", env, type_single_float, 1, "FLOAT",
