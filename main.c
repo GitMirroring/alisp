@@ -3040,7 +3040,10 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("COMPLEX", env, type_complex, 1, "NUMBER", (char *)NULL);
   add_builtin_type ("RANDOM-STATE", env, type_random_state, 1, (char *)NULL);
-  add_builtin_type ("CHARACTER", env, type_character, 1, (char *)NULL);
+  add_builtin_type ("CHARACTER", env, type_character, 1, "BASE-CHAR",
+		    (char *)NULL);
+  add_builtin_type ("BASE-CHAR", env, type_character, 1, "CHARACTER",
+		    (char *)NULL);
   add_builtin_type ("SEQUENCE", env, type_sequence, 1, (char *)NULL);
   add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", (char *)NULL);
   add_builtin_type ("CONS", env, type_cons, 1, "LIST", "SEQUENCE", (char *)NULL);
