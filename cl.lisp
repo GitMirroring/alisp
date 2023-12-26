@@ -622,6 +622,14 @@
 	  (array-dimensions array))))
 
 
+(defun upgraded-array-element-type (ts &optional env)
+  (cond
+    ((subtypep ts 'bit) 'bit)
+    ((subtypep ts 'character) 'character)
+    (t t)))
+
+
+
 (defun get (sym ind &optional (def nil))
   (let* ((pl (symbol-plist sym))
 	 (l (length pl)))
@@ -1099,16 +1107,16 @@
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  nreverse adjoin fill push pop array-rank array-dimension
-	  array-total-size array-in-bounds-p get get-properties char string/=
-	  char-equal digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp random-state-p characterp vectorp arrayp
-	  sequencep stringp hash-table-p pathnamep streamp realp numberp
-	  macroexpand equal equalp fdefinition complement mapc terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  array-total-size array-in-bounds-p upgraded-array-element-type get
+	  get-properties char string/= char-equal digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
+	  streamp realp numberp macroexpand equal equalp fdefinition complement
+	  mapc terpri write-line write-sequence prin1 princ print do-all-symbols
+	  loop format encode-universal-time))
 
 
 
