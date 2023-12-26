@@ -468,6 +468,8 @@ make_test ("(subtypep 'integer 'cons)", "NIL\nT");
 make_test ("(subtypep 'short-float 'long-float)", "T\nT");
 make_test ("(subtypep 'long-float 'short-float)", "T\nT");
 make_test ("(subtypep 'long-float 'single-float)", "T\nT");
+make_test ("(subtypep 'float 'number)", "T\nT");
+make_test ("(subtypep 'float 'real)", "T\nT");
 make_test ("(subtypep 'character 'float)", "NIL\nT");
 make_test ("(subtypep 'character 'integer)", "NIL\nT");
 make_test ("(subtypep 'character 'bit)", "NIL\nT");
