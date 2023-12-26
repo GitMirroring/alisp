@@ -1606,7 +1606,8 @@ int is_subtype_by_char_vector (const struct object *first, char *second,
 			       struct environment *env,
 			       struct outcome *outcome);
 int is_subtype (const struct object *first, const struct object *second,
-		struct environment *env, struct outcome *outcome);
+		const struct object *prev, struct environment *env,
+		struct outcome *outcome);
 
 int evaluate_feature_test (const struct object *feat_test,
 			   struct environment *env, struct outcome *outcome);
@@ -10070,14 +10071,15 @@ is_subtype_by_char_vector (const struct object *first, char *second,
   return is_subtype (first,
 		     intern_symbol_by_char_vector (second, strlen (second), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package),
+						   env->cl_package), NULL,
 		     env, outcome);
 }
 
 
 int
 is_subtype (const struct object *first, const struct object *second,
-	    struct environment *env, struct outcome *outcome)
+	    const struct object *prev, struct environment *env,
+	    struct outcome *outcome)
 {
   struct object_list *p;
   int ret;
@@ -10109,10 +10111,14 @@ is_subtype (const struct object *first, const struct object *second,
 
       while (p)
 	{
-	  ret = is_subtype (p->obj, SYMBOL (second), env, outcome);
+	  if (p->obj != prev)
+	    {
+	      ret = is_subtype (p->obj, SYMBOL (second), SYMBOL (first), env,
+				outcome);
 
-	  if (ret)
-	    return 1;
+	      if (ret)
+		return 1;
+	    }
 
 	  p = p->next;
 	}
@@ -16632,8 +16638,11 @@ builtin_subtypep (struct object *list, struct environment *env,
 
   prepend_object_to_obj_list (&t_object, &outcome->other_values);
 
-  if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), env, outcome))
-    return &t_object;
+  if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), NULL, env,
+		  outcome))
+    {
+      return &t_object;
+    }
 
   return &nil_object;
 }
