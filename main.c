@@ -16623,6 +16623,13 @@ builtin_subtypep (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (!SYMBOL (CAR (list))->value_ptr.symbol->is_type
+      || !SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_type)
+    {
+      outcome->type = UNKNOWN_TYPE;
+      return NULL;
+    }
+
   prepend_object_to_obj_list (&t_object, &outcome->other_values);
 
   if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), env, outcome))
