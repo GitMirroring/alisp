@@ -818,6 +818,9 @@
 (defun characterp (obj)
   (typep obj 'character))
 
+(defun standard-char-p (obj)
+  (typep obj 'standard-char))
+
 (defun vectorp (obj)
   (typep obj 'vector))
 
@@ -1113,10 +1116,10 @@
 	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
 	  string-right-trim string-trim defpackage consp listp symbolp keywordp
 	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp vectorp arrayp sequencep stringp hash-table-p pathnamep
-	  streamp realp numberp macroexpand equal equalp fdefinition complement
-	  mapc terpri write-line write-sequence prin1 princ print do-all-symbols
-	  loop format encode-universal-time))
+	  characterp standard-char-p vectorp arrayp sequencep stringp
+	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
+	  fdefinition complement mapc terpri write-line write-sequence prin1
+	  princ print do-all-symbols loop format encode-universal-time))
 
 
 

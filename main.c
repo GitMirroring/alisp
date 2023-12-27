@@ -1677,6 +1677,8 @@ int type_random_state (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct outcome *outcome);
 int type_character (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct outcome *outcome);
+int type_standard_char (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
 int type_array (const struct object *obj, const struct object *typespec,
@@ -3044,6 +3046,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("CHARACTER", env, type_character, 1, "BASE-CHAR",
 		    (char *)NULL);
   add_builtin_type ("BASE-CHAR", env, type_character, 1, "CHARACTER",
+		    (char *)NULL);
+  add_builtin_type ("STANDARD-CHAR", env, type_standard_char, 1, "BASE-CHAR",
 		    (char *)NULL);
   add_builtin_type ("SEQUENCE", env, type_sequence, 1, (char *)NULL);
   add_builtin_type ("LIST", env, type_list, 1, "SEQUENCE", (char *)NULL);
@@ -10884,6 +10888,16 @@ type_character (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_CHARACTER;
+}
+
+
+int
+type_standard_char (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_CHARACTER && strlen (obj->value_ptr.character) == 1
+    && strchr ("\n aAbBcCdDeEfFgGhHiIjJkKlLmMnNoOpPqQrRsStTuUvVwWxXyYzZ12345678"
+	       "90!$\"'(),_-./:;?+<=>#%&*@[\\]{|}`^~", *obj->value_ptr.character);
 }
 
 
