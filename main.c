@@ -680,14 +680,13 @@ struct
 function
 {
   struct object *name;
+  int is_setf_func;
   int is_special_operator;
-
 
   struct parameter *lambda_list;
   int allow_other_keys;
-  int is_setf_func;
-  int min_args;
-  int max_args;
+  /*int min_args;
+    int max_args;*/
 
   struct binding *lex_vars;
   struct binding *lex_funcs;
@@ -1121,8 +1120,8 @@ object
   int mark;
   int flags;
 
-  const char *begin;
-  const char *end;
+  /*const char *begin;
+    const char *end;*/
   enum object_type type;
   union object_ptr_union value_ptr;
 };  
@@ -2358,12 +2357,12 @@ void print_help (void);
 
 struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
 
-struct object nil_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&nil_symbol}};
+struct object nil_object = {0, 0, 0, 0, TYPE_SYMBOL, {&nil_symbol}};
 
 
 struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
 
-struct object t_object = {0, 0, 0, 0, NULL, NULL, TYPE_SYMBOL, {&t_symbol}};
+struct object t_object = {0, 0, 0, 0, TYPE_SYMBOL, {&t_symbol}};
 
 
 mpz_t integer_one;
