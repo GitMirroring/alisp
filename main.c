@@ -3387,6 +3387,8 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
       if (out == NO_OBJECT && last_pref)
 	out = JUST_PREFIX;
+      else if (out == CLOSING_PARENTHESIS && last_pref)
+	out = CLOSING_PARENTHESIS_AFTER_PREFIX;
     }
   else if (ob->type == TYPE_CONS_PAIR)
     {
@@ -3467,7 +3469,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
   line = read_line_interactively ("> ");
   len = strlen (line);
-  
+
   read_out = read_object_continued (&obj, 0, is_empty_list, line, len, NULL, 0,
 				    0, env, outcome, &begin, &end);
 
@@ -23360,8 +23362,8 @@ print_error (struct outcome *err, struct environment *env)
     }
   else if (err->type == CLOSING_PARENTHESIS_AFTER_PREFIX)
     {
-      printf ("read error: closing parenthesis can't follows commas, ticks, "
-	      "backticks\n");
+      printf ("read error: closing parenthesis can't immediately follow "
+	      "ticks, backticks, commas, dots and ats\n");
     }
   else if (err->type == INVALID_SHARP_DISPATCH)
     {
