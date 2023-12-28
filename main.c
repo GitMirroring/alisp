@@ -275,7 +275,7 @@ outcome_type
   {
     NO_OBJECT,
 
-    NO_ACTUAL_OBJECT,
+    SKIPPED_OBJECT,
 
     COMPLETE_OBJECT,
 
@@ -283,8 +283,8 @@ outcome_type
     CLOSING_PARENTHESIS_AFTER_PREFIX,
 
     JUST_PREFIX,
-    INCOMPLETE_EMPTY_LIST,
-    INCOMPLETE_NONEMPTY_LIST,
+    UNCLOSED_EMPTY_LIST,
+    UNCLOSED_NONEMPTY_LIST,
     INCOMPLETE_STRING,
     INCOMPLETE_SYMBOL_NAME,
     INCOMPLETE_SHARP_MACRO_CALL,
@@ -402,16 +402,16 @@ outcome_type
 
 #define INCOMPLETE_OBJECT(o,emptylist)					\
   (!(o) ? JUST_PREFIX :							\
-   emptylist ? INCOMPLETE_EMPTY_LIST :					\
-   (o)->type == TYPE_CONS_PAIR ? INCOMPLETE_NONEMPTY_LIST :		\
+   emptylist ? UNCLOSED_EMPTY_LIST :					\
+   (o)->type == TYPE_CONS_PAIR ? UNCLOSED_NONEMPTY_LIST :		\
    (o)->type == TYPE_STRING ? INCOMPLETE_STRING :			\
    (o)->type == TYPE_SYMBOL_NAME ? INCOMPLETE_SYMBOL_NAME :		\
    (o)->type == TYPE_SHARP_MACRO_CALL ? INCOMPLETE_SHARP_MACRO_CALL : 0)
 
 
 #define IS_INCOMPLETE_OBJECT(t) ((t) == JUST_PREFIX			\
-				 || (t) == INCOMPLETE_EMPTY_LIST	\
-				 || (t) == INCOMPLETE_NONEMPTY_LIST	\
+				 || (t) == UNCLOSED_EMPTY_LIST		\
+				 || (t) == UNCLOSED_NONEMPTY_LIST	\
 				 || (t) == INCOMPLETE_STRING		\
 				 || (t) == INCOMPLETE_SYMBOL_NAME	\
 				 || (t) == INCOMPLETE_SHARP_MACRO_CALL)
@@ -3396,8 +3396,8 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 		       preserve_whitespace, ends_with_eof, env, outcome,
 		       obj_end);
 
-      if (out == INCOMPLETE_EMPTY_LIST)
-	out = INCOMPLETE_NONEMPTY_LIST;
+      if (out == UNCLOSED_EMPTY_LIST)
+	out = UNCLOSED_NONEMPTY_LIST;
     }
   else if (ob->type == TYPE_STRING)
     {
@@ -3488,7 +3488,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
       len = strlen (line);
 
       read_out = read_object_continued (&obj, 0,
-					read_out == INCOMPLETE_EMPTY_LIST, line,
+					read_out == UNCLOSED_EMPTY_LIST, line,
 					len, NULL, 0, 0, env, outcome, &begin,
 					&end);
     }
@@ -3497,9 +3497,9 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   *input_left_size = (line + len) - end - 1;
   *wholeline = line;
 
-  if (read_out == NO_ACTUAL_OBJECT)
+  if (read_out == SKIPPED_OBJECT)
     {
-      outcome->type = NO_ACTUAL_OBJECT;
+      outcome->type = SKIPPED_OBJECT;
       return NULL;
     }
 
@@ -3530,7 +3530,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
 
       return obj;
     }
-  else if (read_out == NO_ACTUAL_OBJECT)
+  else if (read_out == SKIPPED_OBJECT)
     {
       input_size = (input + input_size) - end - 1;
       input = end + 1;
@@ -3555,11 +3555,11 @@ read_object_interactively_continued (const char *input, size_t input_size,
   else
     {
       ret = complete_object_interactively (obj,
-					   read_out == INCOMPLETE_EMPTY_LIST,
+					   read_out == UNCLOSED_EMPTY_LIST,
 					   env, outcome, input_left,
 					   input_left_size, wholeline);
 
-      if (!ret && outcome->type == NO_ACTUAL_OBJECT)
+      if (!ret && outcome->type == SKIPPED_OBJECT)
 	{
 	  input = *input_left;
 	  input_size = *input_left_size;
@@ -3958,16 +3958,16 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	      input = *obj_end;
 	    }
 
-	  if (out == INCOMPLETE_EMPTY_LIST)
+	  if (out == UNCLOSED_EMPTY_LIST)
 	    {
 	      ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->
 		empty_list_in_car = 1;
-	      out = INCOMPLETE_NONEMPTY_LIST;
+	      out = UNCLOSED_NONEMPTY_LIST;
 	    }
 	  else if (out != COMPLETE_OBJECT)
 	    {
 	      ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->filling_car = 1;
-	      out = INCOMPLETE_NONEMPTY_LIST;
+	      out = UNCLOSED_NONEMPTY_LIST;
 	    }
 
 	  break;
@@ -4109,7 +4109,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	      ob->value_ptr.cons_pair->filling_car =
 		ob->value_ptr.cons_pair->filling_cdr = 0;
 	    }
-	  else if (out == INCOMPLETE_EMPTY_LIST)
+	  else if (out == UNCLOSED_EMPTY_LIST)
 	    {
 	      ob->value_ptr.cons_pair->filling_car
 		? (ob->value_ptr.cons_pair->empty_list_in_car = 1)
@@ -4137,7 +4137,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	    ob->value_ptr.cons_pair->empty_list_in_car =
 	      ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
 
-	  if (IS_INCOMPLETE_OBJECT (out) && out != INCOMPLETE_EMPTY_LIST)
+	  if (IS_INCOMPLETE_OBJECT (out) && out != UNCLOSED_EMPTY_LIST)
 	    {
 	      ob->value_ptr.cons_pair->empty_list_in_car
 		? (ob->value_ptr.cons_pair->filling_car = 1)
@@ -4173,7 +4173,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 		     &obj_beg, &obj_end);
 
   if (out == NO_OBJECT && !last_cons)
-    return INCOMPLETE_EMPTY_LIST;
+    return UNCLOSED_EMPTY_LIST;
 
   if (out == CLOSING_PARENTHESIS && !last_cons)
     {
@@ -4182,7 +4182,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
       return COMPLETE_OBJECT;
     }
 
-  while (out != NO_OBJECT && out != INCOMPLETE_EMPTY_LIST)
+  while (out != NO_OBJECT && out != UNCLOSED_EMPTY_LIST)
     {
       if (out == CLOSING_PARENTHESIS)
 	{
@@ -4224,7 +4224,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 		{
 		  last_cons->value_ptr.cons_pair->filling_cdr = 1;
 
-		  return INCOMPLETE_NONEMPTY_LIST;
+		  return UNCLOSED_NONEMPTY_LIST;
 		}
 	    }
 	  else
@@ -4241,7 +4241,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 		{
 		  cons->value_ptr.cons_pair->filling_car = 1;
 
-		  return INCOMPLETE_NONEMPTY_LIST;
+		  return UNCLOSED_NONEMPTY_LIST;
 		}
 	    }
 	}
@@ -4254,7 +4254,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 			 &obj_beg, &obj_end);
     }
 
-  if (out == INCOMPLETE_EMPTY_LIST)
+  if (out == UNCLOSED_EMPTY_LIST)
     {
       if (last_cons && last_cons->value_ptr.cons_pair->found_dot)
 	last_cons->value_ptr.cons_pair->empty_list_in_cdr = 1;
@@ -4270,7 +4270,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	}
     }
 
-  return INCOMPLETE_NONEMPTY_LIST;
+  return UNCLOSED_NONEMPTY_LIST;
 }
 
 
@@ -4519,7 +4519,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	      input = *macro_end + 1;
 	    }
 
-	  if (out == INCOMPLETE_EMPTY_LIST)
+	  if (out == UNCLOSED_EMPTY_LIST)
 	    {
 	      call->feat_test_is_empty_list = 1;
 	      return INCOMPLETE_SHARP_MACRO_CALL;
@@ -4561,7 +4561,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 				   ends_with_eof, env, outcome, &obj_b,
 				   macro_end);
 
-      if (out == INCOMPLETE_EMPTY_LIST)
+      if (out == UNCLOSED_EMPTY_LIST)
 	call->is_empty_list = 1;
       else
 	call->is_empty_list = 0;
@@ -4656,7 +4656,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       out = read_list (&call->obj, 0, input, size, stream, preserve_whitespace,
 		       ends_with_eof, env, outcome, macro_end);
 
-      if (out == INCOMPLETE_EMPTY_LIST)
+      if (out == UNCLOSED_EMPTY_LIST)
 	call->is_empty_list = 1;
 
       if (IS_INCOMPLETE_OBJECT (out))
@@ -4686,7 +4686,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	  input = *macro_end + 1;
 	}
 
-      if (out == INCOMPLETE_EMPTY_LIST)
+      if (out == UNCLOSED_EMPTY_LIST)
 	{
 	  call->feat_test_is_empty_list = 1;
 	  return INCOMPLETE_SHARP_MACRO_CALL;
@@ -4711,7 +4711,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 			     preserve_whitespace, ends_with_eof, env, outcome,
 			     &obj_b, macro_end);
 
-	  if (out == INCOMPLETE_EMPTY_LIST)
+	  if (out == UNCLOSED_EMPTY_LIST)
 	    call->is_empty_list = 1;
 	}
       else
@@ -4832,7 +4832,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
 		     ends_with_eof, env, outcome, &obj_b, macro_end);
 
-  if (out == INCOMPLETE_EMPTY_LIST)
+  if (out == UNCLOSED_EMPTY_LIST)
     call->is_empty_list = 1;
 
   if (IS_INCOMPLETE_OBJECT (out))
@@ -4974,7 +4974,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	return obj;
       else
 	{
-	  outcome->type = NO_ACTUAL_OBJECT;
+	  outcome->type = SKIPPED_OBJECT;
 	  return NULL;
 	}
     }
@@ -7462,7 +7462,7 @@ load_file (const char *filename, struct environment *env,
 
   while (1)
     {
-      if (out == COMPLETE_OBJECT || out == NO_ACTUAL_OBJECT)
+      if (out == COMPLETE_OBJECT || out == SKIPPED_OBJECT)
 	{
 	  if (out == COMPLETE_OBJECT)
 	    {
