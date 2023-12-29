@@ -10833,7 +10833,36 @@ int
 type_integer (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_INTEGER || obj->type == TYPE_FIXNUM;
+  int l = list_length (typespec);
+
+  if (l > 2)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return -1;
+    }
+
+  if ((l > 0 && !symbol_equals (CAR (typespec), "*", NULL)
+       && CAR (typespec)->type != TYPE_INTEGER)
+      || (l > 1 && !symbol_equals (CAR (CDR (typespec)), "*", NULL)
+	  && CAR (CDR (typespec))->type != TYPE_INTEGER))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return -1;
+    }
+
+  if (obj->type != TYPE_INTEGER && obj->type != TYPE_FIXNUM)
+    return 0;
+
+  if (l > 0 && CAR (typespec)->type == TYPE_INTEGER
+      && mpz_cmp (CAR (typespec)->value_ptr.integer, obj->value_ptr.integer) > 0)
+    return 0;
+
+  if (l == 2 && CAR (CDR (typespec))->type == TYPE_INTEGER
+      && mpz_cmp (obj->value_ptr.integer,
+		  CAR (CDR (typespec))->value_ptr.integer) > 0)
+    return 0;
+
+  return 1;
 }
 
 
