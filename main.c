@@ -456,6 +456,8 @@ outcome
   int single_escape;
   int multiple_escape;
 
+  int skipped_list_depth;
+
   int no_value;
   struct object_list *other_values;
 
@@ -533,7 +535,8 @@ environment
   struct object *not_sym, *and_sym, *or_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
-    *print_escape_sym, *print_readably_sym, *print_base_sym, *read_base_sym;
+    *print_escape_sym, *print_readably_sym, *print_base_sym, *read_base_sym,
+    *read_suppress_sym;
 };
 
 
@@ -3219,6 +3222,7 @@ add_standard_definitions (struct environment *env)
 
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
+  env->read_suppress_sym = define_variable ("*READ-SUPPRESS*", &nil_object, env);
 
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
 
@@ -3355,7 +3359,8 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 {
   enum outcome_type out;
   int bts, cs, tokensize, tokenlength;
-  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref);
+  struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref),
+    *skip = inspect_variable (env->read_suppress_sym, env);
   struct object *l, *call;
   char *token;
 
@@ -3366,6 +3371,24 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       if (!jump_to_end_of_multiline_comment (&input, &size, stream,
 					     &outcome->multiline_comment_depth))
 	return INCOMPLETE_OBJECT (ob, is_empty_list);
+    }
+
+  if (SYMBOL (skip) != &nil_object)
+    {
+      if (outcome->type == UNCLOSED_NONEMPTY_LIST)
+	outcome->type = NO_OBJECT;
+
+      out = skip_without_reading (outcome->type, 0, input, size, stream,
+				  preserve_whitespace, ends_with_eof, env,
+				  outcome, &outcome->skipped_list_depth,
+				  obj_begin, obj_end);
+
+      if (outcome->skipped_list_depth)
+	out = UNCLOSED_NONEMPTY_LIST;
+      else if (out == COMPLETE_OBJECT)
+	out = SKIPPED_OBJECT;
+
+      return out;
     }
 
   if (is_empty_list)
@@ -3518,7 +3541,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
   const char *begin, *end;
 
 
- read_again:
+ read_further:
   read_out = read_object (&obj, 0, input, input_size, NULL, 0, 0, env, outcome,
 			  &begin, &end);
 
@@ -3535,7 +3558,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
       input = end + 1;
       obj = NULL;
 
-      goto read_again;
+      goto read_further;
     }
   else if (read_out == NO_OBJECT && !outcome->multiline_comment_depth)
     {
@@ -3553,6 +3576,8 @@ read_object_interactively_continued (const char *input, size_t input_size,
     }
   else
     {
+      outcome->type = read_out;
+
       ret = complete_object_interactively (obj,
 					   read_out == UNCLOSED_EMPTY_LIST,
 					   env, outcome, input_left,
@@ -3564,7 +3589,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
 	  input_size = *input_left_size;
 	  obj = NULL;
 
-	  goto read_again;
+	  goto read_further;
 	}
 
       return ret;
@@ -3860,7 +3885,8 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	     const char **obj_begin, const char **obj_end)
 {
   int found_prefix = 0, tokensize, tokenlength, numbase;
-  struct object *last_pref, *ob = NULL, *call;
+  struct object *last_pref, *ob = NULL, *call,
+    *skip = inspect_variable (env->read_suppress_sym, env);
   enum object_type numtype;
   enum outcome_type out = NO_OBJECT;
   const char *num_end;
@@ -3868,6 +3894,21 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
   size_t exp_mark_pos;
   unsigned char ch;
 
+
+  if (SYMBOL (skip) != &nil_object)
+    {
+      out = skip_without_reading (NO_OBJECT, 0, input, size, stream,
+				  preserve_whitespace, ends_with_eof, env,
+				  outcome, &outcome->skipped_list_depth,
+				  obj_begin, obj_end);
+
+      if (outcome->skipped_list_depth)
+	out = UNCLOSED_NONEMPTY_LIST;
+      else if (out == COMPLETE_OBJECT)
+	out = SKIPPED_OBJECT;
+
+      return out;
+    }
 
   if (!next_nonspace_char (&ch, &input, &size, stream))
     return NO_OBJECT;
