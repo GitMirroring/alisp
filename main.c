@@ -21819,6 +21819,15 @@ evaluate_define_condition (struct object *list, struct environment *env,
 
   while (SYMBOL (cons) != &nil_object)
     {
+      if (!IS_SYMBOL (CAR (cons))
+	  || !SYMBOL (CAR (cons))->value_ptr.symbol->is_type
+	  || !is_subtype_by_char_vector (SYMBOL (CAR (cons)), "CONDITION", env,
+					 outcome))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
       if (cc->parents)
 	p = p->next = malloc_and_check (sizeof (*p));
       else
@@ -21873,9 +21882,9 @@ builtin_make_condition (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || !is_subtype_by_char_vector (SYMBOL (CAR (list)),
-							     "CONDITION", env,
-							     outcome))
+  if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
+      || !is_subtype_by_char_vector (SYMBOL (CAR (list)), "CONDITION", env,
+				     outcome))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
