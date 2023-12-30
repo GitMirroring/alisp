@@ -1602,14 +1602,11 @@ int check_type (struct object *obj, struct object *typespec,
 		struct environment *env, struct outcome *outcome);
 int check_type_by_char_vector (struct object *obj, char *type,
 			       struct environment *env, struct outcome *outcome);
-int type_starts_with (const struct object *typespec, const char *type,
-		      struct environment *env);
+int type_starts_with (const struct object *typespec, const struct object *sym);
 int is_subtype_by_char_vector (const struct object *first, char *second,
-			       struct environment *env,
-			       struct outcome *outcome);
+			       struct environment *env);
 int is_subtype (const struct object *first, const struct object *second,
-		const struct object *prev, struct environment *env,
-		struct outcome *outcome);
+		const struct object *prev);
 
 int evaluate_feature_test (const struct object *feat_test,
 			   struct environment *env, struct outcome *outcome);
@@ -10093,16 +10090,12 @@ check_type_by_char_vector (struct object *obj, char *type,
 
 
 int
-type_starts_with (const struct object *typespec, const char *type,
-		  struct environment *env)
+type_starts_with (const struct object *typespec, const struct object *sym)
 {
-  if ((typespec->type == TYPE_SYMBOL || typespec->type == TYPE_SYMBOL_NAME)
-      && symbol_equals (typespec, type, env))
+  if (SYMBOL (typespec) == sym)
     return 1;
 
-  if (typespec->type == TYPE_CONS_PAIR
-      && IS_SYMBOL (CAR (typespec))
-      && symbol_equals (CAR (typespec), type, env))
+  if (typespec->type == TYPE_CONS_PAIR && SYMBOL (CAR (typespec)) == sym)
     return 1;
 
   return 0;
@@ -10111,21 +10104,18 @@ type_starts_with (const struct object *typespec, const char *type,
 
 int
 is_subtype_by_char_vector (const struct object *first, char *second,
-			   struct environment *env,
-			   struct outcome *outcome)
+			   struct environment *env)
 {
   return is_subtype (first,
 		     intern_symbol_by_char_vector (second, strlen (second), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package), NULL,
-		     env, outcome);
+						   env->cl_package), NULL);
 }
 
 
 int
 is_subtype (const struct object *first, const struct object *second,
-	    const struct object *prev, struct environment *env,
-	    struct outcome *outcome)
+	    const struct object *prev)
 {
   struct object_list *p;
   int ret;
@@ -10133,8 +10123,7 @@ is_subtype (const struct object *first, const struct object *second,
   if (SYMBOL (first) == &nil_object || SYMBOL (second) == &t_object)
     return 1;
 
-  if (IS_SYMBOL (second)
-      && type_starts_with (first, SYMBOL (second)->value_ptr.symbol->name, env))
+  if (IS_SYMBOL (second) && type_starts_with (first, SYMBOL (second)))
     return 1;
 
   if (IS_SYMBOL (first) && IS_SYMBOL (second))
@@ -10159,8 +10148,7 @@ is_subtype (const struct object *first, const struct object *second,
 	{
 	  if (p->obj != prev)
 	    {
-	      ret = is_subtype (p->obj, SYMBOL (second), SYMBOL (first), env,
-				outcome);
+	      ret = is_subtype (p->obj, SYMBOL (second), SYMBOL (first));
 
 	      if (ret)
 		return 1;
@@ -13423,7 +13411,7 @@ builtin_concatenate (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env, outcome))
+  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -16723,8 +16711,7 @@ builtin_subtypep (struct object *list, struct environment *env,
 
   prepend_object_to_obj_list (&t_object, &outcome->other_values);
 
-  if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), NULL, env,
-		  outcome))
+  if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), NULL))
     {
       return &t_object;
     }
@@ -21821,8 +21808,7 @@ evaluate_define_condition (struct object *list, struct environment *env,
     {
       if (!IS_SYMBOL (CAR (cons))
 	  || !SYMBOL (CAR (cons))->value_ptr.symbol->is_type
-	  || !is_subtype_by_char_vector (SYMBOL (CAR (cons)), "CONDITION", env,
-					 outcome))
+	  || !is_subtype_by_char_vector (SYMBOL (CAR (cons)), "CONDITION", env))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -21883,8 +21869,7 @@ builtin_make_condition (struct object *list, struct environment *env,
     }
 
   if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
-      || !is_subtype_by_char_vector (SYMBOL (CAR (list)), "CONDITION", env,
-				     outcome))
+      || !is_subtype_by_char_vector (SYMBOL (CAR (list)), "CONDITION", env))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
