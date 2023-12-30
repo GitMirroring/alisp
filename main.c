@@ -1485,6 +1485,8 @@ struct object_list *remove_block (struct object_list *blocks);
 int does_condition_include_outcome_type (struct object *cond,
 					 enum outcome_type type,
 					 struct environment *env);
+void add_builtin_condition (char *name, struct environment *env, int is_standard,
+			    ...);
 
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
@@ -1605,6 +1607,8 @@ int check_type_by_char_vector (struct object *obj, char *type,
 int type_starts_with (const struct object *typespec, const struct object *sym);
 int is_subtype_by_char_vector (const struct object *first, char *second,
 			       struct environment *env);
+int is_descendant (const struct object *first, const struct object_list *parents,
+		   const struct object *second, const struct object *prev);
 int is_subtype (const struct object *first, const struct object *second,
 		const struct object *prev);
 
@@ -3077,17 +3081,15 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
 
 
-  add_builtin_type ("TYPE-ERROR", env, type_type_error, 1, (char *)NULL);
-  add_builtin_type ("FILE-ERROR", env, type_file_error, 1, (char *)NULL);
-  add_builtin_type ("DIVISION-BY-ZERO", env, type_division_by_zero, 1,
-		    "ARITHMETIC-ERROR", (char *)NULL);
-  add_builtin_type ("ARITHMETIC-ERROR", env, type_arithmetic_error, 1, "ERROR",
-		    (char *)NULL);
-  add_builtin_type ("ERROR", env, type_error, 1, "SERIOUS-CONDITION",
-		    (char *)NULL);
-  add_builtin_type ("SERIOUS-CONDITION", env, type_serious_condition, 1,
-		    "CONDITION", (char *)NULL);
-  add_builtin_type ("CONDITION", env, type_condition, 1, (char *)NULL);
+  add_builtin_condition ("TYPE-ERROR", env, 1, (char *)NULL);
+  add_builtin_condition ("FILE-ERROR", env, 1, (char *)NULL);
+  add_builtin_condition ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
+			 (char *)NULL);
+  add_builtin_condition ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL);
+  add_builtin_condition ("ERROR", env, 1, "SERIOUS-CONDITION", (char *)NULL);
+  add_builtin_condition ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL);
+  add_builtin_condition ("CONDITION", env, 1, (char *)NULL);
+
 
   add_builtin_type ("RESTART", env, type_restart, 1, (char *)NULL);
 
@@ -7969,6 +7971,48 @@ does_condition_include_outcome_type (struct object *cond, enum outcome_type type
 
 
 void
+add_builtin_condition (char *name, struct environment *env, int is_standard, ...)
+{
+  va_list valist;
+  char *s;
+  struct object *condcl, *pack = inspect_variable (env->package_sym, env);
+  struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     pack);
+  struct object *par;
+  struct condition_class *cc;
+
+  va_start (valist, is_standard);
+
+  sym->value_ptr.symbol->is_type = 1;
+  sym->value_ptr.symbol->is_standard_type = is_standard;
+
+  condcl = alloc_object ();
+  condcl->type = TYPE_CONDITION_CLASS;
+
+  cc = malloc_and_check (sizeof (*cc));
+  condcl->value_ptr.condition_class = cc;
+
+  increment_refcount (sym);
+  cc->name = sym;
+
+  cc->parents = NULL;
+
+  while ((s = va_arg (valist, char *)))
+    {
+      par = intern_symbol_by_char_vector (s, strlen (s), 1,
+					  EXTERNAL_VISIBILITY, 1, pack);
+
+      prepend_object_to_obj_list (par, &cc->parents);
+    }
+
+  sym->value_ptr.symbol->typespec = condcl;
+
+  va_end (valist);
+}
+
+
+void
 add_builtin_type (char *name, struct environment *env,
 		  int (*builtin_type) (const struct object *obj,
 				       const struct object *typespec,
@@ -10000,7 +10044,8 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
   else
     sym = SYMBOL (typespec);
 
-  if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->builtin_type)
+
+  if (sym->value_ptr.symbol->builtin_type)
     {
       return sym->value_ptr.symbol->builtin_type (obj,
 						  typespec->type == TYPE_CONS_PAIR
@@ -10051,13 +10096,29 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 
 	  return 0;
 	}
-      else if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->typespec
+      else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STRUCTURE_CLASS)
 	{
 	  return obj->type == TYPE_STRUCTURE
 	    && obj->value_ptr.structure->class == sym->value_ptr.symbol->typespec;
 	}
-      else if (sym->value_ptr.symbol->is_type && sym->value_ptr.symbol->typespec)
+      else if (sym->value_ptr.symbol->is_type
+	       && sym->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
+	{
+	  return obj->type == TYPE_STANDARD_OBJECT
+	    && obj->value_ptr.standard_object->class
+	    == sym->value_ptr.symbol->typespec;
+	}
+      else if (sym->value_ptr.symbol->is_type
+	       && sym->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
+	{
+	  return obj->type == TYPE_CONDITION
+	    && (obj->value_ptr.condition->class
+		== sym->value_ptr.symbol->typespec
+		|| is_descendant (NULL, obj->value_ptr.condition->class->
+				  value_ptr.condition_class->parents, sym, NULL));
+	}
+      else if (sym->value_ptr.symbol->is_type)
 	{
 	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, env,
 			       outcome);
@@ -10114,6 +10175,41 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 
 
 int
+is_descendant (const struct object *first, const struct object_list *parents,
+	       const struct object *second, const struct object *prev)
+{
+  const struct object_list *p = parents;
+  int ret;
+
+  while (p)
+    {
+      if (p->obj == SYMBOL (second))
+	return 1;
+
+      p = p->next;
+    }
+
+  p = parents;
+
+  while (p)
+    {
+      if (p->obj != prev)
+	{
+	  ret = is_subtype (p->obj, SYMBOL (second), first ? SYMBOL (first)
+			    : NULL);
+
+	  if (ret)
+	    return 1;
+	}
+
+      p = p->next;
+    }
+
+  return 0;
+}
+
+
+int
 is_subtype (const struct object *first, const struct object *second,
 	    const struct object *prev)
 {
@@ -10128,34 +10224,16 @@ is_subtype (const struct object *first, const struct object *second,
 
   if (IS_SYMBOL (first) && IS_SYMBOL (second))
     {
-      p = !SYMBOL (first)->value_ptr.symbol->builtin_type
-	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->parents
-	: SYMBOL (first)->value_ptr.symbol->parent_types;
+      p = SYMBOL (first)->value_ptr.symbol->builtin_type
+	? SYMBOL (first)->value_ptr.symbol->parent_types
+	: SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS
+	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->
+	parents : NULL;
 
-      while (p)
-	{
-	  if (p->obj == SYMBOL (second))
-	    return 1;
+      ret = is_descendant (SYMBOL (first), p, SYMBOL (second), prev);
 
-	  p = p->next;
-	}
-
-      p = !SYMBOL (first)->value_ptr.symbol->builtin_type
-	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->parents
-	: SYMBOL (first)->value_ptr.symbol->parent_types;
-
-      while (p)
-	{
-	  if (p->obj != prev)
-	    {
-	      ret = is_subtype (p->obj, SYMBOL (second), SYMBOL (first));
-
-	      if (ret)
-		return 1;
-	    }
-
-	  p = p->next;
-	}
+      if (ret)
+	return 1;
     }
 
   return 0;
@@ -16573,7 +16651,7 @@ builtin_typep (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = check_type (nth (0, list), nth (1, list), env, outcome);
+  ret = check_type (CAR (list), CAR (CDR (list)), env, outcome);
 
   if (ret == -1)
     return NULL;
