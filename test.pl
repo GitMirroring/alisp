@@ -664,6 +664,7 @@ make_test ("(length '(0 1 2))", "3");
 make_test ("(list-length '(0 1 2 3))", "4");
 make_test ("(make-array 4)", "#(NIL NIL NIL NIL)");
 make_test ("(make-array '(2 3))", "#2A((NIL NIL NIL) (NIL NIL NIL))");
+make_test ("(let ((*print-array* nil)) (write (make-array '(1 2 3))))", "#<ARRAY, RANK 3>\n#3A(((NIL NIL NIL) (NIL NIL NIL)))");
 make_test ("(make-array '(1 2 3))", "#3A(((NIL NIL NIL) (NIL NIL NIL)))");
 make_test ("(make-array nil)", "#0ANIL");
 make_test ("(vector)", "#()");
