@@ -3082,13 +3082,16 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
 
 
-  add_builtin_condition ("TYPE-ERROR", env, 1, (char *)NULL);
-  add_builtin_condition ("FILE-ERROR", env, 1, (char *)NULL);
+  add_builtin_condition ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL);
+  add_builtin_condition ("FILE-ERROR", env, 1, "ERROR", (char *)NULL);
   add_builtin_condition ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
 			 (char *)NULL);
   add_builtin_condition ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL);
   add_builtin_condition ("ERROR", env, 1, "SERIOUS-CONDITION", (char *)NULL);
   add_builtin_condition ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL);
+  add_builtin_condition ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL);
+  add_builtin_condition ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL);
+  add_builtin_condition ("WARNING", env, 1, "CONDITION", (char *)NULL);
   add_builtin_condition ("CONDITION", env, 1, (char *)NULL);
 
 
