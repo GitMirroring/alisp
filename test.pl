@@ -673,6 +673,7 @@ make_test ("#*011001", "#*011001");
 make_test ("#4*010", "#*0100");
 make_test ("#4*011", "#*0111");
 make_test ("(array-has-fill-pointer-p \"aaa\")", "NIL");
+make_test ("(length #*011001)", "6");
 make_test ("(array-rank #())", "1");
 make_test ("(array-rank (make-array nil))", "0");
 make_test ("(array-rank (make-array '(1 2)))", "2");
