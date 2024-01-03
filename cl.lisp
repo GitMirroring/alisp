@@ -779,6 +779,22 @@
 
 
 
+(deftype signed-byte (&optional s)
+  (if (eq s '*)
+      'integer
+      `(integer ,(- (expt 2 (1- s))) ,(1- (expt 2 (1- s))))))
+
+
+(deftype unsigned-byte (&optional s)
+  (if (eq s '*)
+      'integer
+      `(integer 0 ,(1- (expt 2 s)))))
+
+
+(deftype mod (s)
+  `(integer 0 ,(1- s)))
+
+
 (defun consp (obj)
   (typep obj 'cons))
 
@@ -1114,12 +1130,13 @@
 	  get-properties char string/= char-equal digit-char digit-char-p
 	  char-int string-upcase string-downcase string-capitalize
 	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp arrayp sequencep stringp
-	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
-	  fdefinition complement mapc terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  string-right-trim string-trim defpackage signed-byte unsigned-byte
+	  consp listp symbolp keywordp functionp packagep integerp rationalp
+	  floatp complexp random-state-p characterp standard-char-p vectorp
+	  arrayp sequencep stringp hash-table-p pathnamep streamp realp numberp
+	  macroexpand equal equalp fdefinition complement mapc terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
