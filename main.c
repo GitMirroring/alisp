@@ -535,8 +535,8 @@ environment
   struct object *not_sym, *and_sym, *or_sym, *star_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
-    *print_escape_sym, *print_readably_sym, *print_base_sym, *read_base_sym,
-    *read_suppress_sym;
+    *print_escape_sym, *print_readably_sym, *print_base_sym, *print_array_sym,
+    *read_base_sym, *read_suppress_sym;
 };
 
 
@@ -3223,6 +3223,7 @@ add_standard_definitions (struct environment *env)
 					     env);
   env->print_base_sym = define_variable ("*PRINT-BASE*",
 					 create_integer_from_long (10), env);
+  env->print_array_sym = define_variable ("*PRINT-ARRAY*", &t_object, env);
 
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
@@ -23147,27 +23148,83 @@ int
 print_array (const struct array *array, struct environment *env,
 	     struct stream *str)
 {
-  fixnum rk = array_rank (array->alloc_size), i;
+  struct object *parr = inspect_variable (env->print_array_sym, env);
+  fixnum rk = array_rank (array->alloc_size), i,
+    totsize = array_total_size (array->alloc_size);
+  struct array_size *s;
+  int print_space;
 
-  if (rk == 1)
+  if (SYMBOL (parr) != &nil_object)
     {
-      if (write_to_stream (str, "#(", 2) < 0)
-	return -1;
-
-      for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer :
-		       array->alloc_size->size); i++)
+      if (write_to_stream (str, "#", 1) < 0
+	  || (rk != 1 && (write_long_to_stream (str, rk) < 0
+			  || write_to_stream (str, "A", 1) < 0)))
 	{
-	  if (i && write_to_stream (str, " ", 1) < 0)
+	  return -1;
+	}
+
+      for (i = 0; i < rk; i++)
+	{
+	  if (write_to_stream (str, "(", 1) < 0)
 	    return -1;
+	}
+
+      for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer : totsize);
+	   i++)
+	{
+	  if (i)
+	    {
+	      print_space = 0;
+
+	      s = array->alloc_size;
+
+	      while (s)
+		{
+		  if (!(i % array_total_size (s)))
+		    {
+		      if (write_to_stream (str, ")", 1) < 0)
+			return -1;
+
+		      print_space = 1;
+		    }
+
+		  s = s->next;
+		}
+
+	      if (print_space && write_to_stream (str, " ", 1) < 0)
+		return -1;
+
+	      s = array->alloc_size;
+	      print_space = 1;
+
+	      while (s)
+		{
+		  if (!(i % array_total_size (s)))
+		    {
+		      if (write_to_stream (str, "(", 1) < 0)
+			return -1;
+
+		      print_space = 0;
+		    }
+
+		  s = s->next;
+		}
+
+	      if (print_space && write_to_stream (str, " ", 1) < 0)
+		return -1;
+	    }
 
 	  if (print_object (array->value [i], env, str) < 0)
 	    return -1;
 	}
 
-      if (write_to_stream (str, ")", 1) < 0)
-	return -1;
-      else
-	return 0;
+      for (i = 0; i < rk; i++)
+	{
+	  if (write_to_stream (str, ")", 1) < 0)
+	    return -1;
+	}
+
+      return 0;
     }
   else if (write_to_stream (str, "#<ARRAY, RANK ", strlen ("#<ARRAY, RANK ")) < 0
 	   || write_long_to_stream (str, rk) < 0
