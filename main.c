@@ -12063,13 +12063,6 @@ builtin_length (struct object *list, struct environment *env,
 
   seq = CAR (list);
 
-  if (seq->type != TYPE_STRING && seq->type != TYPE_CONS_PAIR
-      && seq->type != TYPE_ARRAY && SYMBOL (seq) != &nil_object)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
   if (seq->type == TYPE_STRING)
     {
       return create_integer_from_long (string_utf8_length (seq));
@@ -12078,18 +12071,26 @@ builtin_length (struct object *list, struct environment *env,
     {
       return create_integer_from_long (list_length (seq));
     }
-  else
+  else if (seq->type == TYPE_ARRAY &&
+	   array_rank (seq->value_ptr.array->alloc_size) == 1)
     {
-      if (array_rank (seq->value_ptr.array->alloc_size) != 1)
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-
       if (seq->value_ptr.array->fill_pointer >= 0)
 	return create_integer_from_long (seq->value_ptr.array->fill_pointer);
 
       return create_integer_from_long (seq->value_ptr.array->alloc_size->size);
+    }
+  else if (seq->type == TYPE_BITARRAY &&
+	   array_rank (seq->value_ptr.bitarray->alloc_size) == 1)
+    {
+      if (seq->value_ptr.bitarray->fill_pointer >= 0)
+	return create_integer_from_long (seq->value_ptr.bitarray->fill_pointer);
+
+      return create_integer_from_long (seq->value_ptr.bitarray->alloc_size->size);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
     }
 }
 
