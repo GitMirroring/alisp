@@ -23148,13 +23148,14 @@ int
 print_array (const struct array *array, struct environment *env,
 	     struct stream *str)
 {
-  struct object *parr = inspect_variable (env->print_array_sym, env);
+  struct object *parr = inspect_variable (env->print_array_sym, env),
+    *pread = inspect_variable (env->print_readably_sym, env);
   fixnum rk = array_rank (array->alloc_size), i,
     totsize = array_total_size (array->alloc_size);
   struct array_size *s;
   int print_space;
 
-  if (SYMBOL (parr) != &nil_object)
+  if (SYMBOL (parr) != &nil_object || SYMBOL (pread) != &nil_object)
     {
       if (write_to_stream (str, "#", 1) < 0
 	  || (rk != 1 && (write_long_to_stream (str, rk) < 0
