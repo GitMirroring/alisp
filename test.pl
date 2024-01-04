@@ -886,6 +886,8 @@ make_test ("(typep (make-condition 'new-math-error) 'new-math-error)", "T");
 make_test ("(typep (make-condition 'new-math-error) 'arithmetic-error)", "T");
 make_test ("(typep (make-condition 'new-math-error) 'file-error)", "NIL");
 make_test ("(typep 0 'new-math-error)", "NIL");
+make_test ("(define-condition strange-condition nil nil)", "STRANGE-CONDITION");
+make_test ("(typep (make-condition 'strange-condition) 'condition)", "T");
 make_test ("(declaim (optimize speed (safety 0) (debug 3)))", "T");
 make_test ("(declaim (ignorable a) (ignore b c) (inline e) (notinline d f))", "T");
 make_test ("(declaim (type list a) (ftype (function nil nil) b))", "T");
