@@ -21911,8 +21911,16 @@ evaluate_define_condition (struct object *list, struct environment *env,
       cons = CDR (cons);
     }
 
-  p->next = NULL;
-
+  if (cc->parents)
+    {
+      p->next = NULL;
+    }
+  else
+    {
+      cc->parents = malloc_and_check (sizeof (*cc->parents));
+      cc->parents->obj = CREATE_BUILTIN_SYMBOL ("CONDITION");
+      cc->parents->next = NULL;
+    }
 
   cc->fields = NULL;
   cons = CAR (CDR (CDR (list)));
