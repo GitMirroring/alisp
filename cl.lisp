@@ -989,7 +989,9 @@
 	initially-forms
 	finally-forms
 	do-forms
-	vars var)
+	counters counter
+	var vars parvars
+	lets l)
     (do ()
 	((not forms))
       (let ((form (car forms)))
@@ -1004,6 +1006,17 @@
 		 (do ((f (cdr forms) (cdr f)))
 		     ((atom (car f)) (setq forms f))
 		   (setq finally-forms (append finally-forms `(,(car f))))))
+		((string= sym "WITH")
+		 (when parvars
+		   (setq vars (cons parvars vars))
+		   (setq parvars nil))
+		 (setq var `(,(cadr forms) ,(cadddr forms)))
+		 (setq parvars (cons var parvars))
+		 (setq forms (cddddr forms)))
+		((string= sym "AND")
+		 (setq var `(,(cadr forms) ,(cadddr forms)))
+		 (setq parvars (cons var parvars))
+		 (setq forms (cddddr forms)))
 		((or (string= sym "DO")
 		     (string= sym "DOING"))
 		 (do ((f (cdr forms) (cdr f)))
@@ -1014,61 +1027,84 @@
 		 (setq forms (cddr forms)))
 		((or (string= sym "FOR")
 		     (string= sym "AS"))
-		 (setq var `(,(cadr forms) 0 nil 1 1))
-		 (setq vars (append vars `(,var)))
+		 (setq counter `(,(cadr forms) 0 nil 1 1))
+		 (setq counters (append counters `(,counter)))
 		 (setq forms (cddr forms)))
 		((string= sym "FROM")
-		 (setf (elt var 1) (cadr forms))
+		 (setf (elt counter 1) (cadr forms))
 		 (setq forms (cddr forms)))
 		((or (string= sym "DOWNFROM"))
-		 (setf (elt var 1) (cadr forms))
-		 (setf (elt var 3) -1)
+		 (setf (elt counter 1) (cadr forms))
+		 (setf (elt counter 3) -1)
 		 (setq forms (cddr forms)))
 		((or (string= sym "UPFROM"))
-		 (setf (elt var 1) (cadr forms))
-		 (setf (elt var 3) 1)
+		 (setf (elt counter 1) (cadr forms))
+		 (setf (elt counter 3) 1)
 		 (setq forms (cddr forms)))
 		((or (string= sym "TO"))
-		 (setf (elt var 2) (cadr forms))
+		 (setf (elt counter 2) (cadr forms))
 		 (setq forms (cddr forms)))
 		((or (string= sym "DOWNTO"))
-		 (setf (elt var 2) (cadr forms))
-		 (setf (elt var 3) -1)
+		 (setf (elt counter 2) (cadr forms))
+		 (setf (elt counter 3) -1)
 		 (setq forms (cddr forms)))
 		((or (string= sym "UPTO"))
-		 (setf (elt var 2) (cadr forms))
-		 (setf (elt var 3) 1)
+		 (setf (elt counter 2) (cadr forms))
+		 (setf (elt counter 3) 1)
 		 (setq forms (cddr forms)))
 		((or (string= sym "BELOW"))
-		 (setf (elt var 2) (1- (cadr forms)))
+		 (setf (elt counter 2) (1- (cadr forms)))
 		 (setq forms (cddr forms)))
 		((or (string= sym "ABOVE"))
-		 (setf (elt var 2) (1+ (cadr forms)))
+		 (setf (elt counter 2) (1+ (cadr forms)))
 		 (setq forms (cddr forms)))
 		((or (string= sym "BY"))
-		 (setf (elt var 4) (cadr forms))
+		 (setf (elt counter 4) (cadr forms))
 		 (setq forms (cddr forms)))))
 	    (progn
 	      (setq do-forms (append do-forms `(,form)))
 	      (setq forms (cdr forms))))))
+    (if parvars
+	(setq vars (cons parvars vars)))
+    (setq vars (reverse vars))
+    (dolist (v vars)
+      (if lets
+	  (progn
+	    (setf (car l)
+		  (if (consp (car v))
+		      `(let ,v nil)
+		      `(let (,v) nil)))
+	    (setq l (cddar l)))
+	  (progn
+	    (setq lets
+		  (if (consp (car v))
+		      `(let ,v nil)
+		      `(let (,v) nil)))
+	    (setq l (cddr lets)))))
     `(block ,block-name
-       (let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) vars)
-	 ,@initially-forms
-	 (block ,inner-block-name
-	   (tagbody
-	      ,tagname
-	      (if (or ,@(mapcar (lambda (x) (if (elt x 2)
-						(if (= (elt x 3) 1)
-						    `(> ,(elt x 0) ,(elt x 2))
-						    `(< ,(elt x 0) ,(elt x 2)))
-						nil)) vars))
-		  (return-from ,inner-block-name nil))
-	      ,@do-forms
+       ,(let ((inner-body
+	       `(let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) counters)
+		  ,@initially-forms
+		  (block ,inner-block-name
+		    (tagbody
+		       ,tagname
+		       (if (or ,@(mapcar (lambda (x) (if (elt x 2)
+							 (if (= (elt x 3) 1)
+							     `(> ,(elt x 0) ,(elt x 2))
+							     `(< ,(elt x 0) ,(elt x 2)))
+							 nil)) counters))
+			   (return-from ,inner-block-name nil))
+		       ,@do-forms
+		       (progn
+			 ,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) counters))
+		       (go ,tagname)))
+		  ,@finally-forms
+		  nil)))
+	  (if lets
 	      (progn
-		,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) vars))
-	      (go ,tagname)))
-	 ,@finally-forms
-	 nil))))
+		(setf (car l) inner-body)
+		lets)
+	      inner-body)))))
 
 
 (defun format (out fstr &rest args)
