@@ -911,6 +911,8 @@ standard_class
 {
   struct object *name;
 
+  struct object_list *parents;
+
   struct class_field_decl *fields;
 };
 
@@ -20936,9 +20938,10 @@ struct object *
 evaluate_defclass (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
-  struct object *name, *class;
+  struct object *name, *class, *cons;
   struct standard_class *sc;
   struct class_field_decl *f, *prev;
+  struct object_list *p;
 
   if (list_length (list) < 3)
     {
@@ -20973,6 +20976,40 @@ evaluate_defclass (struct object *list, struct environment *env,
 
   name->value_ptr.symbol->is_type = 1;
   name->value_ptr.symbol->typespec = class;
+
+
+  sc->parents = NULL;
+  cons = CAR (CDR (list));
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (cons)) || SYMBOL (CAR (cons)) == &nil_object)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (sc->parents)
+	p = p->next = malloc_and_check (sizeof (*p));
+      else
+	sc->parents = p = malloc_and_check (sizeof (*p));
+
+      p->obj = SYMBOL (CAR (cons));
+
+      cons = CDR (cons);
+    }
+
+  if (sc->parents)
+    {
+      p->next = NULL;
+    }
+  else
+    {
+      sc->parents = malloc_and_check (sizeof (*sc->parents));
+      sc->parents->obj = CREATE_BUILTIN_SYMBOL ("STANDARD-OBJECT");
+      sc->parents->next = NULL;
+    }
+
 
   sc->fields = NULL;
   list = CAR (CDR (CDR (list)));
