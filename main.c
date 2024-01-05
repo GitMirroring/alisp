@@ -368,6 +368,7 @@ outcome_type
     INVALID_TYPE_SPECIFIER,
     UNKNOWN_TYPE,
     CLASS_NOT_FOUND,
+    CLASS_DEFINITION_NOT_COMPLETE,
     INVALID_GO_TAG,
     TAG_NOT_FOUND,
     BLOCK_NOT_FOUND,
@@ -1596,6 +1597,8 @@ struct object *call_structure_accessor (struct object *struct_class,
 					struct environment *env,
 					struct outcome *outcome);
 
+int is_class_completely_defined (struct object *class);
+
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
 struct object *dispatch_generic_function_call (struct object *func,
@@ -2659,7 +2662,7 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 void
 add_standard_definitions (struct environment *env)
 {
-  struct object *cluser_package, *rs;
+  struct object *cluser_package, *rs, *stdobjsym, *stdobjcl;
   struct package_record *rec;
 
   env->keyword_package = create_package_from_c_strings ("KEYWORD", (char *)NULL);
@@ -3075,13 +3078,23 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
 		    (char *)NULL);
-  add_builtin_type ("STANDARD-OBJECT", env, type_standard_object, 1,
-		    (char *)NULL);
   add_builtin_type ("CLASS", env, type_class, 1, (char *)NULL);
   add_builtin_type ("STRUCTURE-CLASS", env, type_structure_class, 1,
 		    (char *)NULL);
   add_builtin_type ("STANDARD-CLASS", env, type_standard_class, 1,
 		    (char *)NULL);
+
+
+  stdobjcl = alloc_object ();
+  stdobjcl->type = TYPE_STANDARD_CLASS;
+  stdobjcl->value_ptr.standard_class =
+    malloc_and_check (sizeof (*stdobjcl->value_ptr.standard_class));
+  stdobjcl->value_ptr.standard_class->parents = NULL;
+  stdobjcl->value_ptr.standard_class->fields = NULL;
+
+  stdobjsym = CREATE_BUILTIN_SYMBOL ("STANDARD-OBJECT");
+  stdobjsym->value_ptr.symbol->is_type = 1;
+  stdobjsym->value_ptr.symbol->typespec = stdobjcl;
 
 
   add_builtin_condition ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL);
@@ -9957,6 +9970,39 @@ call_structure_accessor (struct object *struct_class, struct object *field,
 
 
 int
+is_class_completely_defined (struct object *class)
+{
+  struct object_list *p;
+
+  if (class->type == TYPE_STANDARD_CLASS)
+    {
+      p = class->value_ptr.standard_class->parents;
+    }
+  else if (IS_SYMBOL (class) && SYMBOL (class)->value_ptr.symbol->typespec
+	   && SYMBOL (class)->value_ptr.symbol->typespec->type
+	   == TYPE_STANDARD_CLASS)
+    {
+      p = SYMBOL (class)->value_ptr.symbol->typespec->value_ptr.standard_class->
+	parents;
+    }
+  else
+    {
+      return 0;
+    }
+
+  while (p)
+    {
+      if (!is_class_completely_defined (p->obj))
+	return 0;
+
+      p = p->next;
+    }
+
+  return 1;
+}
+
+
+int
 is_method_applicable (struct object *meth, struct object *args,
 		      struct environment *env, struct outcome *outcome)
 {
@@ -10116,8 +10162,10 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
 	{
 	  return obj->type == TYPE_STANDARD_OBJECT
-	    && obj->value_ptr.standard_object->class
-	    == sym->value_ptr.symbol->typespec;
+	    && (obj->value_ptr.standard_object->class
+		== sym->value_ptr.symbol->typespec
+		|| is_descendant (NULL, obj->value_ptr.standard_object->class->
+				  value_ptr.standard_class->parents, sym, NULL));
 	}
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
@@ -21103,6 +21151,11 @@ builtin_make_instance (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (!is_class_completely_defined (class))
+    {
+      outcome->type = CLASS_DEFINITION_NOT_COMPLETE;
+      return NULL;
+    }
 
   ret = alloc_object ();
   ret->type = TYPE_STANDARD_OBJECT;
@@ -23919,6 +23972,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == CLASS_NOT_FOUND)
     {
       printf ("eval error: class not found\n");
+    }
+  else if (err->type == CLASS_DEFINITION_NOT_COMPLETE)
+    {
+      printf ("eval error: class definition is not complete\n");
     }
   else if (err->type == INVALID_GO_TAG)
     {
