@@ -865,6 +865,7 @@ make_test ("(class-of inst)", "#<STANDARD-CLASS STARSHIP>");
 make_test ("(class-name (class-of inst))", "STARSHIP");
 make_test ("(type-of inst)", "STARSHIP");
 make_test ("(typep inst 'starship)", "T");
+make_test ("(typep inst 'standard-object)", "T");
 make_test ("(typep 0 'starship)", "NIL");
 make_test ("(setf (slot-value inst 'x) 0)", "0");
 make_test ("(setf (slot-value inst 'y) 2.5)", "2.5");
