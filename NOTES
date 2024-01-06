@@ -1,0 +1,50 @@
+Copyright (C) 2022-2024 Andrea G. Monaco
+
+Copying and distribution of this file, with or without modification, are
+permitted in any medium without royalty provided the copyright notice and this
+notice are preserved.  This file is offered as-is, without any warranty.
+
+
+
+
+Some notes on design choices, portability and ANSI conformance of alisp.
+
+
+
+__Floating point arithmetic__
+
+The four floating-point types of ANSI CL are all the same type and map to native
+C double.  This is allowed by ANSI and was done for speed of implementation.  Of
+course, it may change in the future.
+
+
+
+__Type checking__
+
+Arguments to standard functions and macros (or result of evaluating arguments,
+when applicable) are all type checked.
+
+Values assigned to standard variables (like *PACKAGE*, *READ-BASE* and so on)
+are not type checked, so assigning an object of the wrong type will likely crash
+the interpreter.
+
+Currently, these behavior can't be changed.
+
+
+
+__Stack overflows__
+
+alisp makes no attempt to intercept stack overflows of lisp code; if your code
+has an endless recursion, or a very high call depth, the interpreter will crash.
+
+Ideally, al should only crash in these two cases: for a stack overflow in lisp
+code, or after a wrong assignment to a standard variable (see "Type checking").
+
+
+
+__Builtin macros__
+
+Currently, al is non-conforming in this area.  Builtin macros are like special
+operators: they are treated specially by the interpreter (which is allowed by
+ANSI), but an alternate implementation of the macro in lisp is not provided
+(which is requested by ANSI instead).
