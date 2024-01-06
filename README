@@ -1,25 +1,25 @@
-Copyright (C) 2022-2023 Andrea G. Monaco
+Copyright (C) 2022-2024 Andrea G. Monaco
 
-Copying and distribution of this file, with or without modification,
-are permitted in any medium without royalty provided the copyright
-notice and this notice are preserved.  This file is offered as-is,
-without any warranty.
-
+Copying and distribution of this file, with or without modification, are
+permitted in any medium without royalty provided the copyright notice and this
+notice are preserved.  This file is offered as-is, without any warranty.
 
 
-al is a lisp implementation.  Right now it is just an interpreter, but
-I will add some compilation later.  I aim for Common Lisp conformance,
-but I'm not religious about it.
+
+
+al is a lisp implementation.  Right now it is just an interpreter, but I will
+add some compilation later.  I aim for Common Lisp conformance, but I'm not
+religious about it.
 
 It's written in C89 and it also compiles with the -ansi option of gcc.
 
-Currently it depends on GNU Readline (optionally) and on GNU Multiple
-Precision Arithmetic Library.  It uses autotools for building.
+Currently it depends on GNU Readline (optionally) and on GNU Multiple Precision
+Arithmetic Library.  It uses autotools for building.
 
 
-If you have a cloned git repository and the last commit is not a
-versioned release, you can execute set-version-from-git.sh to set a
-meaningful alisp version in the relevant line of configure.ac.
+If you have a cloned git repository and the last commit is not a versioned
+release, you can execute set-version-from-git.sh to set a meaningful alisp
+version in the relevant line of configure.ac.
 
 To build from a git snapshot, start with
 
@@ -29,9 +29,9 @@ To build from a git snapshot, start with
 
   $ ./configure
 
-configure only admits --with[out]-readline as options, to build with
-line editing or not; also note that the test suite will not work
-without readline, for some reasons.  Then
+configure only admits --with[out]-readline as options, to build with line
+editing or not; also note that the test suite will not work without readline,
+because the script is written around readline's unusual echo behavior.  Then
 
   $ make
 
@@ -39,10 +39,11 @@ plus optionally
 
   # make install
 
+will build and optionally install the program.
 
-A lisp file named cl.lisp contains many standard definitions.  By
-default, this file gets loaded at startup from the current directory,
-unless you pass -q or --dont-load-cl.  To load the file manually, run
+A lisp file named cl.lisp contains many standard definitions.  By default, this
+file gets loaded at startup from the current directory, unless you pass -q or
+--dont-load-cl.  To load the file manually, run
 
   [CL-USER]> (load "cl.lisp")
 
@@ -53,32 +54,21 @@ There's a test script too.  Run it with
 
   $ ./test.pl
 
-if you have perl on your machine.  You should expect a 100% success
-rate, or maybe some failures if floating-point operations yield
-slightly different results on your system.
+if you have perl on your machine.  You should expect a 100% success rate, or
+maybe some failures at floating-point operations if they yield slightly
+different results on your system.
 
-There's another test script called meta_test.pl that runs test.pl many
-times.  I wrote that script because I found that some memory bugs
-manifest only a fraction of the times.
+There's another test script called meta_test.pl that runs test.pl many times.  I
+wrote that script because I found that some memory bugs manifest only a fraction
+of the times.
 
 
 
 __Debugging__
 
-The file al_gdb_debug.py defines a gdb command called al_print_object.
-You can use it after importing the file in gdb with the 'source'
-command.
-
-If obj is a pointer to struct object, the command works like this
-
-  (gdb) al_print_object obj
-  ` (   + #<INTEGER>    , @ (LIST #<INTEGER> #<INTEGER>))
-  1  1(1)       1(1) 1(1) 1  1(1)       1(1)       1(1)
-
-The object gets printed nicely and below each component you see its
-refcount.  The refcount of a cons cell is printed as N(N) where the
-first number is the refcount of the cell and second is that of the
-car.
+The file al_gdb_debug.py defines a gdb command called al_print_object.  This
+command was written around the old reference counting algorithm of alisp, so it
+doesn't work right now.
 
 
 
@@ -90,6 +80,12 @@ lines available after crashes.
 
 The history file al_history can get quite big; if you delete it, test.pl and
 meta_test.pl will get much faster.
+
+
+
+
+See the NOTES file for some notes on design choices, portability and ANSI
+conformance.
 
 
 
