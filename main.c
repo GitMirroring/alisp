@@ -1450,6 +1450,8 @@ struct class_field_decl *create_class_field_decl
 struct condition_field_decl *create_condition_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
+void create_object_fields (struct object *stdobj, struct object *class);
+
 struct object *load_file (const char *filename, struct environment *env,
 			  struct outcome *outcome);
 
@@ -7461,6 +7463,34 @@ create_condition_field_decl (struct object *fieldform, struct environment *env,
   ret->next = NULL;
 
   return ret;
+}
+
+
+void
+create_object_fields (struct object *stdobj, struct object *class)
+{
+  struct class_field_decl *fd = class->value_ptr.standard_class->fields;
+  struct object_list *p = class->value_ptr.standard_class->parents;
+  struct class_field *f;
+
+  while (fd)
+    {
+      f = malloc_and_check (sizeof (*f));
+
+      f->name = fd->name;
+      f->value = NULL;
+      f->next = stdobj->value_ptr.standard_object->fields;
+      stdobj->value_ptr.standard_object->fields = f;
+
+      fd = fd->next;
+    }
+
+  while (p)
+    {
+      create_object_fields (stdobj, p->obj->value_ptr.symbol->typespec);
+
+      p = p->next;
+    }
 }
 
 
@@ -21118,8 +21148,6 @@ builtin_make_instance (struct object *list, struct environment *env,
 {
   struct object *class = NULL, *ret;
   struct standard_object *so;
-  struct class_field_decl *fd;
-  struct class_field *f;
 
   if (!list_length (list))
     {
@@ -21165,20 +21193,7 @@ builtin_make_instance (struct object *list, struct environment *env,
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
-  fd = class->value_ptr.standard_class->fields;
-
-  while (fd)
-    {
-      if (so->fields)
-	f = f->next = malloc_and_check (sizeof (*f));
-      else
-	so->fields = f = malloc_and_check (sizeof (*f));
-
-      f->name = fd->name;
-      f->value = NULL;
-
-      fd = fd->next;
-    }
+  create_object_fields (ret, class);
 
   return ret;
 }
