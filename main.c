@@ -24829,7 +24829,7 @@ free_list_structure (struct object *list)
 void
 print_welcome_message (void)
 {
-  puts ("al Copyright (C) 2022-2023 Andrea G. Monaco\n"
+  puts ("al Copyright (C) 2022-2023 Andrea Monaco\n"
 	"This program comes with ABSOLUTELY NO WARRANTY; for details type "
 	"`(al-print-no-warranty)'.\n"
 	"This is free software, and you are welcome to redistribute it\n"
@@ -24842,7 +24842,7 @@ void
 print_version (void)
 {
   puts ("al " PACKAGE_VERSION "\n"
-	"Copyright (C) 2022-2023 Andrea G. Monaco\n"
+	"Copyright (C) 2022-2023 Andrea Monaco\n"
 	"License GPLv3+: GNU GPL version 3 or later <https://gnu.org/licenses/"
 	"gpl.html>\n"
 	"This is free software: you are free to change and redistribute it.\n"
