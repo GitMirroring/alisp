@@ -28,7 +28,7 @@ Values assigned to standard variables (like *PACKAGE*, *READ-BASE* and so on)
 are not type checked, so assigning an object of the wrong type will likely crash
 the interpreter.
 
-Currently, these behavior can't be changed.
+Currently, these behaviors can't be changed.
 
 
 
@@ -48,3 +48,11 @@ Currently, al is non-conforming in this area.  Builtin macros are like special
 operators: they are treated specially by the interpreter (which is allowed by
 ANSI), but an alternate implementation of the macro in lisp is not provided
 (which is requested by ANSI instead).
+
+
+
+__Literal objects__
+
+In alisp, the reader always produces fresh objects.  Therefore modifying
+literals, albeit undefined by ANSI, works as expected.  Obviously, such
+undefined behavior should be avoided for best portability.
