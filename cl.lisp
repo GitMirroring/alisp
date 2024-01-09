@@ -1060,7 +1060,10 @@
 		 (setq forms (cddr forms)))
 		((or (string= sym "BY"))
 		 (setf (elt counter 4) (cadr forms))
-		 (setq forms (cddr forms)))))
+		 (setq forms (cddr forms)))
+		(t
+		 (setq do-forms (append do-forms `(,form)))
+		 (setq forms (cdr forms)))))
 	    (progn
 	      (setq do-forms (append do-forms `(,form)))
 	      (setq forms (cdr forms))))))
