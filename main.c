@@ -19930,15 +19930,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 
 	  while (l)
 	    {
-	      if (args == &nil_object)
-		{
-		  args = cons = alloc_empty_cons_pair ();
-		}
-	      else
-		{
-		  cons = cons->value_ptr.cons_pair->cdr =
-		    alloc_empty_cons_pair ();
-		}
+	      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
 	      cons->value_ptr.cons_pair->car = l->obj;
 
@@ -19959,7 +19951,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
   if (args != &nil_object)
     cons->value_ptr.cons_pair->cdr = &nil_object;
 
-  ret = call_function (fun, args, 1, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 0, env, outcome);
 
   decrement_refcount (args);
 
