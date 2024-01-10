@@ -10501,16 +10501,15 @@ apply_backquote (struct object *form, int backts_commas_balance,
     }
   else if (form->type == TYPE_BACKQUOTE)
     {
-      ret = apply_backquote (form->value_ptr.next, backts_commas_balance
-			     + (form->type == TYPE_BACKQUOTE), env, outcome,
-			     forbid_splicing, do_splice, last_pref);
+      ret = apply_backquote (form->value_ptr.next, backts_commas_balance+1, env,
+			     outcome, forbid_splicing, do_splice, last_pref);
 
       if (!ret)
 	return NULL;
 
       if (ret == form->value_ptr.next)
 	{
-	  if (form->type == TYPE_BACKQUOTE && !forbid_splicing)
+	  if (!forbid_splicing)
 	    *last_pref = ret;
 
 	  increment_refcount (form);
@@ -10518,11 +10517,12 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	  return form;
 	}
 
-      retform = alloc_prefix (form->type == TYPE_BACKQUOTE ? '`' : '\'');
+      retform = alloc_prefix ('`');
       retform->value_ptr.next = ret;
-      set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
+      add_reference (retform, ret, 0);
+      decrement_refcount (ret);
 
-      if (form->type == TYPE_BACKQUOTE && !forbid_splicing)
+      if (!forbid_splicing)
 	*last_pref = ret;
 
       return retform;
@@ -10581,7 +10581,9 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 	  if (ret == form->value_ptr.next)
 	    {
-	      !forbid_splicing ? *last_pref = ret : NULL;
+	      if (!forbid_splicing)
+		*last_pref = ret;
+
 	      increment_refcount (form);
 	      decrement_refcount (form->value_ptr.next);
 	      return form;
@@ -10589,8 +10591,11 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 	  retform = alloc_prefix (',');
 	  retform->value_ptr.next = ret;
-	  set_reference_strength_factor (retform, 0, ret, 0, 0, 0);
-	  !forbid_splicing ? *last_pref = retform : NULL;
+	  add_reference (retform, ret, 0);
+	  decrement_refcount (ret);
+
+	  if (!forbid_splicing)
+	    *last_pref = retform;
 
 	  return retform;
 	}
