@@ -10612,8 +10612,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	  obj = reading_cons->type == TYPE_CONS_PAIR ? CAR (reading_cons)
 	    : reading_cons;
 
-	  ret = apply_backquote (obj, backts_commas_balance, env,
-				 outcome,
+	  ret = apply_backquote (obj, backts_commas_balance, env, outcome,
 				 reading_cons->type == TYPE_CONS_PAIR ? 0 : 2,
 				 &do_spl, &lastpr);
 
@@ -10646,9 +10645,13 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		  alloc_empty_cons_pair ();
 
 	      retcons->value_ptr.cons_pair->car = CAR (cons);
+	      add_reference (retcons, CAR (cons), 0);
+	      decrement_refcount (CAR (cons));
 
 	      cons = CDR (cons);
 	    }
+
+	  ret = NULL;
 
 	  while (SYMBOL (reading_cons) != &nil_object)
 	    {
@@ -10659,10 +10662,9 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		  obj = reading_cons->type == TYPE_CONS_PAIR ? CAR (reading_cons)
 		    : reading_cons;
 
-		  ret = apply_backquote (obj, backts_commas_balance, env,
-					 outcome, reading_cons->type
-					 == TYPE_CONS_PAIR ? 0 : 2, &do_spl,
-					 &lastpr);
+		  ret = apply_backquote (obj, backts_commas_balance, env, outcome,
+					 reading_cons->type == TYPE_CONS_PAIR
+					 ? 0 : 2, &do_spl, &lastpr);
 
 		  if (!ret)
 		    return NULL;
@@ -10679,9 +10681,15 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  alloc_empty_cons_pair ();
 
 		      retcons->value_ptr.cons_pair->car = ret;
+		      add_reference (retcons, ret, 0);
+		      decrement_refcount (ret);
 		    }
 		  else
-		    retcons->value_ptr.cons_pair->cdr = ret;
+		    {
+		      retcons->value_ptr.cons_pair->cdr = ret;
+		      add_reference (retcons, ret, 1);
+		      decrement_refcount (ret);
+		    }
 		}
 	      else if (SYMBOL (ret) != &nil_object
 		       && (!lastpr
