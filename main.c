@@ -23839,8 +23839,8 @@ print_error (struct outcome *err, struct environment *env)
     }
   else if (err->type == COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL)
     {
-      printf ("eval error: comma-at and comma-dot syntax are not allowed on "
-	      "top-level forms\n");
+      printf ("eval error: comma-at and comma-dot syntax are not allowed at "
+	      "top-level of a quasiquote form\n");
     }
   else if (err->type == CANT_SPLICE_AFTER_CONSING_DOT)
     {
