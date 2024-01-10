@@ -8170,22 +8170,24 @@ struct object *
 define_parameter (struct object *sym, struct object *form,
 		  struct environment *env, struct outcome *outcome)
 {
-  struct object *s;
   struct object *val = evaluate_object (form, env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!val)
     return NULL;
 
-  s = SYMBOL (sym);
+  if (sym->value_ptr.symbol->value_cell)
+    {
+      delete_reference (sym, sym->value_ptr.symbol->value_cell, 0);
+    }
 
-  s->value_ptr.symbol->is_parameter = 1;
-  s->value_ptr.symbol->value_cell = val;
-  add_reference (s, val, 0);
+  sym->value_ptr.symbol->is_parameter = 1;
+  sym->value_ptr.symbol->value_cell = val;
+  add_reference (sym, val, 0);
   decrement_refcount (val);
 
-  increment_refcount (s);
-  return s;
+  increment_refcount (sym);
+  return sym;
 }
 
 
@@ -20067,7 +20069,7 @@ evaluate_defparameter (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
+  return define_parameter (s, CAR (CDR (list)), env, outcome);
 }
 
 
@@ -20109,11 +20111,11 @@ evaluate_defvar (struct object *list, struct environment *env,
   else if (l == 2)
     {
       if (!s->value_ptr.symbol->value_cell)
-	return define_parameter (CAR (list), CAR (CDR (list)), env, outcome);
+	return define_parameter (s, CAR (CDR (list)), env, outcome);
     }
 
-  increment_refcount (CAR (list));
-  return CAR (list);
+  increment_refcount (s);
+  return s;
 }
 
 
