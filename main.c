@@ -19165,14 +19165,16 @@ create_binding_from_let_form (struct object *form, struct environment *env,
       return NULL;
     }
 
+  increment_refcount (sym);
+
   if (sym->value_ptr.symbol->is_parameter)
     {
       sym->value_ptr.symbol->value_dyn_bins_num++;
 
-      return create_binding (sym, val, DYNAMIC_BINDING, 1);
+      return create_binding (sym, val, DYNAMIC_BINDING, 0);
     }
   else
-    return create_binding (sym, val, LEXICAL_BINDING, 1);
+    return create_binding (sym, val, LEXICAL_BINDING, 0);
 }
 
 
