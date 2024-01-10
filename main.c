@@ -20102,11 +20102,7 @@ evaluate_defvar (struct object *list, struct environment *env,
 
   if (l == 1)
     {
-      if (!s->value_ptr.symbol->is_parameter)
-	{
-	  increment_refcount (s);
-	  s->value_ptr.symbol->is_parameter = 1;
-	}
+      s->value_ptr.symbol->is_parameter = 1;
     }
   else if (l == 2)
     {
