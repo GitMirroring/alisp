@@ -10493,13 +10493,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
     *tmp, *lp;
   int do_spl, must_copy;
 
-  if (!backts_commas_balance)
-    {
-      ret = evaluate_object (form, env, outcome);
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-      return ret;
-    }
-  else if (form->type == TYPE_BACKQUOTE)
+  if (form->type == TYPE_BACKQUOTE)
     {
       ret = apply_backquote (form->value_ptr.next, backts_commas_balance+1, env,
 			     outcome, forbid_splicing, do_splice, last_pref);
