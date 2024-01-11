@@ -19752,8 +19752,9 @@ evaluate_if (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
   struct object *if_clause, *ret;
+  int l = list_length (list);
 
-  if (!list)
+  if (l < 2 || l > 3)
     {
       outcome->type = MALFORMED_IF;
       return NULL;
@@ -19767,24 +19768,18 @@ evaluate_if (struct object *list, struct environment *env,
 
   if (SYMBOL (if_clause) != &nil_object)
     {
-      if (SYMBOL (CDR (list)) == &nil_object)
-	{
-	  outcome->type = MALFORMED_IF;
-	  return NULL;
-	}
-
       ret = evaluate_object (CAR (CDR (list)), env, outcome);
       return ret;
     }
   else
     {
-      if (!nth (2, list))
+      if (l == 2)
 	{
 	  return &nil_object;
 	}
       else
 	{
-	  ret = evaluate_object (nth (2, list), env, outcome);
+	  ret = evaluate_object (CAR (CDR (CDR (list))), env, outcome);
 	  return ret;
 	}
     }
@@ -23845,6 +23840,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == WRONG_NUMBER_OF_ARGUMENTS)
     {
       printf ("eval error: wrong number of arguments\n");
+    }
+  else if (err->type == MALFORMED_IF)
+    {
+      printf ("eval error: incorrect syntax in IF\n");
     }
   else if (err->type == INCORRECT_SYNTAX_IN_LET)
     {
