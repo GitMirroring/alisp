@@ -8418,9 +8418,9 @@ struct object *
 copy_prefix (const struct object *begin, const struct object *end,
 	     struct object **last_prefix)
 {
-  struct object *out = NULL, *pr = NULL, *tmp;
+  struct object *out, *pr = NULL, *tmp;
 
-  while (begin && begin != end)
+  while (begin)
     {
       tmp = alloc_prefix (begin->type == TYPE_BACKQUOTE ? '`' :
 			  begin->type == TYPE_COMMA ? ',' :
@@ -8429,28 +8429,18 @@ copy_prefix (const struct object *begin, const struct object *end,
 			  : NONE);
 
       if (pr)
-	pr->value_ptr.next = tmp;
+	pr = pr->value_ptr.next = tmp;
       else
 	out = pr = tmp;
+
+      if (begin == end)
+	break;
 
       begin = begin->value_ptr.next;
     }
 
-  if (begin)
-    {
-      tmp = alloc_prefix (begin->type == TYPE_BACKQUOTE ? '`' :
-			  begin->type == TYPE_COMMA ? ',' :
-			  begin->type == TYPE_AT ? '@' :
-			  begin->type == TYPE_DOT ? '.' : NONE);
-    }
-
-  if (pr)
-    pr->value_ptr.next = tmp;
-  else
-    out = tmp;
-
   if (last_prefix)
-    *last_prefix = pr ? pr->value_ptr.next : out;
+    *last_prefix = pr;
 
   return out;
 }
@@ -10501,11 +10491,11 @@ apply_backquote (struct object *form, int backts_commas_balance,
       if (!ret)
 	return NULL;
 
+      if (do_splice && *do_splice)
+	return ret;
+
       if (ret == form->value_ptr.next)
 	{
-	  if (!forbid_splicing)
-	    *last_pref = ret;
-
 	  increment_refcount (form);
 	  decrement_refcount (form->value_ptr.next);
 	  return form;
@@ -10515,9 +10505,6 @@ apply_backquote (struct object *form, int backts_commas_balance,
       retform->value_ptr.next = ret;
       add_reference (retform, ret, 0);
       decrement_refcount (ret);
-
-      if (!forbid_splicing)
-	*last_pref = ret;
 
       return retform;
     }
@@ -10566,6 +10553,12 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	}
       else
 	{
+	  if (backts_commas_balance == 2
+	      && form->value_ptr.next->type == TYPE_COMMA)
+	    {
+	      *last_pref = form;
+	    }
+
 	  ret = apply_backquote (form->value_ptr.next, backts_commas_balance - 1,
 				 env, outcome, forbid_splicing, do_splice,
 				 last_pref);
@@ -10573,11 +10566,11 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	  if (!ret)
 	    return NULL;
 
+	  if (do_splice && *do_splice)
+	    return ret;
+
 	  if (ret == form->value_ptr.next)
 	    {
-	      if (!forbid_splicing)
-		*last_pref = ret;
-
 	      increment_refcount (form);
 	      decrement_refcount (form->value_ptr.next);
 	      return form;
@@ -10587,9 +10580,6 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	  retform->value_ptr.next = ret;
 	  add_reference (retform, ret, 0);
 	  decrement_refcount (ret);
-
-	  if (!forbid_splicing)
-	    *last_pref = retform;
 
 	  return retform;
 	}
@@ -10645,8 +10635,6 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	      cons = CDR (cons);
 	    }
 
-	  ret = NULL;
-
 	  while (SYMBOL (reading_cons) != &nil_object)
 	    {
 	      if (!ret)
@@ -10685,19 +10673,19 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		      decrement_refcount (ret);
 		    }
 		}
-	      else if (SYMBOL (ret) != &nil_object
-		       && (!lastpr
-			   || SYMBOL (lastpr->value_ptr.next) != &nil_object))
+	      else if (SYMBOL (ret) != &nil_object)
 		{
 		  if (do_spl == 2
 		      || (SYMBOL (CDR (reading_cons)) == &nil_object && !lastpr))
 		    {
 		      if (retform)
-			retcons = retcons->value_ptr.cons_pair->cdr =
-			  lastpr ? lastpr->value_ptr.next : ret;
+			{
+			  retcons->value_ptr.cons_pair->cdr = ret;
+			  add_reference (retcons, ret, 1);
+			  retcons = CDR (retcons);
+			}
 		      else
-			retform = retcons =
-			  lastpr ? lastpr->value_ptr.next : ret;
+			retform = retcons = ret;
 
 		      if (lastpr)
 			{
@@ -10705,8 +10693,10 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			    {
 			      tmp = CAR (retcons);
 			      retcons->value_ptr.cons_pair->car =
-				copy_prefix (ret, lastpr, &lp);
+				copy_prefix (CAR (reading_cons), lastpr, &lp);
+			      add_reference (retcons, CAR (retcons), 0);
 			      lp->value_ptr.next = tmp;
+			      add_reference (lp, tmp, 0);
 
 			      if (SYMBOL (CDR (retcons)) == &nil_object)
 				break;
@@ -10719,7 +10709,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		    }
 		  else
 		    {
-		      cons = lastpr ? lastpr->value_ptr.next : ret;
+		      cons = ret;
 
 		      while (SYMBOL (cons) != &nil_object)
 			{
@@ -10732,11 +10722,15 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  if (lastpr)
 			    {
 			      retcons->value_ptr.cons_pair->car =
-				copy_prefix (ret, lastpr, &lp);
+				copy_prefix (CAR (reading_cons), lastpr, &lp);
 			      lp->value_ptr.next = CAR (cons);
+			      add_reference (lp, CAR (cons), 0);
 			    }
 			  else
-			    retcons->value_ptr.cons_pair->car = CAR (cons);
+			    {
+			      retcons->value_ptr.cons_pair->car = CAR (cons);
+			      add_reference (retcons, CAR (cons), 0);
+			    }
 
 			  cons = CDR (cons);
 			}
