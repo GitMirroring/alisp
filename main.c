@@ -264,8 +264,14 @@ struct
 binding
 {
   enum binding_type type;
+
+  int refcount;
+
   struct object *sym;
   struct object *obj;
+
+  struct binding *closure_bin;
+
   struct binding *next;
 };
 
@@ -1377,9 +1383,10 @@ struct refcounted_object_list **clone_tailsharing_hash_table
 void free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
 				  size_t table_size);
 
-void clone_lexical_environment (struct binding **lex_vars,
-				struct binding **lex_funcs, struct binding *vars,
-				int var_num, struct binding *funcs, int func_num);
+void capture_lexical_environment (struct binding **lex_vars,
+				  struct binding **lex_funcs,
+				  struct binding *vars, int var_num,
+				  struct binding *funcs, int func_num);
 
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
@@ -6574,11 +6581,11 @@ free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
 
 
 void
-clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs,
-			   struct binding *vars, int var_num,
-			   struct binding *funcs, int func_num)
+capture_lexical_environment (struct binding **lex_vars,
+			     struct binding **lex_funcs, struct binding *vars,
+			     int var_num, struct binding *funcs, int func_num)
 {
-  struct binding *bin;
+  struct binding *bin, *b;
 
   *lex_vars = NULL;
   *lex_funcs = NULL;
@@ -6587,12 +6594,29 @@ clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs
     {
       if (vars->type == LEXICAL_BINDING)
 	{
+	  b = vars;
+
+	  while (!b->sym)
+	    {
+	      b = b->closure_bin;
+	    }
+
 	  if (!*lex_vars)
-	    *lex_vars = bin = create_binding (vars->sym, vars->obj,
-					      LEXICAL_BINDING, 1);
+	    *lex_vars = bin = malloc_and_check (sizeof (*bin));
 	  else
-	    bin = bin->next = create_binding (vars->sym, vars->obj,
-					      LEXICAL_BINDING, 1);
+	    bin = bin->next = malloc_and_check (sizeof (*bin));
+
+
+	  bin->type = LEXICAL_BINDING;
+	  bin->refcount = 0;
+	  bin->sym = NULL;
+	  bin->obj = NULL;
+	  bin->closure_bin = b;
+	  bin->next = NULL;
+
+	  increment_refcount (b->sym);
+	  increment_refcount (b->obj);
+	  b->refcount++;
 	}
 
       vars = vars->next;
@@ -6601,16 +6625,34 @@ clone_lexical_environment (struct binding **lex_vars, struct binding **lex_funcs
 	var_num--;
     }
 
+
   while (funcs && func_num)
     {
       if (funcs->type == LEXICAL_BINDING)
 	{
+	  b = funcs;
+
+	  while (!b->sym)
+	    {
+	      b = b->closure_bin;
+	    }
+
 	  if (!*lex_funcs)
-	    *lex_funcs = bin = create_binding (funcs->sym, funcs->obj,
-					       LEXICAL_BINDING, 1);
+	    *lex_funcs = bin = malloc_and_check (sizeof (*bin));
 	  else
-	    bin = bin->next = create_binding (funcs->sym, funcs->obj,
-					      LEXICAL_BINDING, 1);
+	    bin = bin->next = malloc_and_check (sizeof (*bin));
+
+
+	  bin->type = LEXICAL_BINDING;
+	  bin->refcount = 0;
+	  bin->sym = NULL;
+	  bin->obj = NULL;
+	  bin->closure_bin = b;
+	  bin->next = NULL;
+
+	  increment_refcount (b->sym);
+	  increment_refcount (b->obj);
+	  b->refcount++;
 	}
 
       funcs = funcs->next;
@@ -6641,9 +6683,11 @@ create_function (struct object *lambda_list, struct object *body,
     }
 
   if (!is_macro)
-    clone_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
-			       env->lex_env_vars_boundary, env->funcs,
-			       env->lex_env_funcs_boundary);
+    {
+      capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
+				   env->lex_env_vars_boundary, env->funcs,
+				   env->lex_env_funcs_boundary);
+    }
 
   f->body = body;
   add_reference (fun, body, 1);
@@ -7758,6 +7802,7 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type,
   struct binding *bin = malloc_and_check (sizeof (*bin));
 
   bin->type = type;
+  bin->refcount = 1;
   bin->sym = sym;
   bin->obj = obj;
   bin->next = NULL;
@@ -7831,7 +7876,10 @@ remove_bindings (struct binding *env, int num)
   decrement_refcount (env->sym);
   decrement_refcount (env->obj);
 
-  free (env);
+  env->refcount--;
+
+  if (!env->refcount)
+    free (env);
 
   if (num == 1)
     return b;
@@ -7846,12 +7894,14 @@ find_binding (struct symbol *sym, struct binding *bins, enum binding_type type,
 {
   while (bins && (type != LEXICAL_BINDING || bin_num))
     {
-      if (bins->sym->value_ptr.symbol == sym
-	  && (type == ANY_BINDING || bins->type & type)
+      if ((type == ANY_BINDING || bins->type & type)
 	  && (bins->type == DYNAMIC_BINDING || bin_num)
 	  && !(bins->type & DELETED_BINDING))
 	{
-	  return bins;
+	  if (!bins->sym && bins->closure_bin->sym->value_ptr.symbol == sym)
+	    return bins->closure_bin;
+	  else if (bins->sym && bins->sym->value_ptr.symbol == sym)
+	    return bins;
 	}
 
       bins = bins->next;
@@ -24735,6 +24785,7 @@ free_function_or_macro (struct object *obj)
 {
   struct parameter *n, *l = obj->value_ptr.function->lambda_list;
   struct method_list *nml, *ml = obj->value_ptr.function->methods;
+  struct binding *b, *nx;
   int i = 2;
 
   delete_reference (obj, obj->value_ptr.function->name, 0);
@@ -24765,6 +24816,43 @@ free_function_or_macro (struct object *obj)
       nml = ml->next;
       free (ml);
       ml = nml;
+    }
+
+
+  b = obj->value_ptr.function->lex_vars;
+
+  while (b)
+    {
+      nx = b->next;
+
+      decrement_refcount (b->closure_bin->sym);
+      decrement_refcount (b->closure_bin->obj);
+
+      b->closure_bin->refcount--;
+
+      if (!b->closure_bin->refcount)
+	free (b->closure_bin);
+
+      free (b);
+      b = nx;
+    }
+
+  b = obj->value_ptr.function->lex_funcs;
+
+  while (b)
+    {
+      nx = b->next;
+
+      decrement_refcount (b->closure_bin->sym);
+      decrement_refcount (b->closure_bin->obj);
+
+      b->closure_bin->refcount--;
+
+      if (!b->closure_bin->refcount)
+	free (b->closure_bin);
+
+      free (b);
+      b = nx;
     }
 
   free (obj->value_ptr.function);
