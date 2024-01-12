@@ -982,6 +982,57 @@
 
 
 
+(defun loop-parse-conditional (forms)
+  (let (out
+	docl
+	elsecl
+	(sym (string (car forms))))
+    (cond
+      ((or (string= sym "IF")
+	   (string= sym "WHEN"))
+       (setq out `(if ,(cadr forms) nil))
+       (setq forms (cddr forms)))
+      ((string= sym "UNLESS")
+       (setq out `(if (not ,(cadr forms)) nil))
+       (setq forms (cddr forms))))
+    (do ((f forms))
+	((not f) (setq forms f))
+      (if (atom (car f))
+	  (let ((sym (string (car f))))
+	    (cond
+	      ((or (string= sym "IF")
+		   (string= sym "WHEN")
+		   (string= sym "UNLESS"))
+	       (multiple-value-bind (res frm)
+		   (loop-parse-conditional f)
+		 (if (= (length out) 3)
+		     (setq docl (cons res docl))
+		     (setq elsecl (cons res elsecl)))
+		 (setq f frm)))
+	      ((string= sym "ELSE")
+	       (setq out (append out '(nil)))
+	       (setq f (cdr f)))
+	      ((or (string= sym "DO")
+		   (string= sym "DOING"))
+	       (setq f (cdr f)))
+	      (t
+	       (setq forms f)
+	       (return nil))))
+	  (progn
+	    (if (= (length out) 3)
+		(setq docl (cons (car f) docl))
+		(setq elsecl (cons (car f) elsecl)))
+	    (setq f (cdr f)))))
+    (setq docl (reverse docl))
+    (setq docl (cons 'progn docl))
+    (setf (elt out 2) docl)
+    (when (= (length out) 4)
+      (setq elsecl (reverse elsecl))
+      (setq elsecl (cons 'progn elsecl))
+      (setf (elt out 3) elsecl))
+    (values out forms)))
+
+
 (defmacro loop (&body forms)
   (let (block-name
 	(tagname (gensym))
@@ -1017,6 +1068,12 @@
 		 (setq var `(,(cadr forms) ,(cadddr forms)))
 		 (setq parvars (cons var parvars))
 		 (setq forms (cddddr forms)))
+		((or (string= sym "IF")
+		     (string= sym "WHEN")
+		     (string= sym "UNLESS"))
+		 (multiple-value-bind (res frm) (loop-parse-conditional forms)
+		   (setq do-forms (append do-forms `(,res)))
+		   (setq forms frm)))
 		((or (string= sym "DO")
 		     (string= sym "DOING"))
 		 (do ((f (cdr forms) (cdr f)))
@@ -1108,6 +1165,7 @@
 		(setf (car l) inner-body)
 		lets)
 	      inner-body)))))
+
 
 
 (defun format (out fstr &rest args)
