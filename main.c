@@ -8637,7 +8637,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && SYMBOL (obj) != &nil_object)
+  while (obj && obj->type == TYPE_CONS_PAIR)
     {
       car = CAR (obj);
 
@@ -9020,8 +9020,8 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 		   struct outcome *outcome, int *allow_other_keys)
 {
   struct parameter *first = NULL, *last = NULL;
-  struct object *car;
-  int found_amp_key = 0, l;
+  struct object *car, *restsym;
+  int found_amp_key = 0, dotted_ok = 0, l;
 
   *allow_other_keys = 0;
 
@@ -9055,33 +9055,46 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 	return NULL;
     }
 
-  if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
-      && (SYMBOL (car) == env->amp_rest_sym
-	  || SYMBOL (car) == env->amp_body_sym))
+  if (obj && ((obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+	       && (SYMBOL (car) == env->amp_rest_sym
+		   || SYMBOL (car) == env->amp_body_sym))
+	      || (obj->type != TYPE_CONS_PAIR && SYMBOL (obj) != &nil_object
+		  && allow_destructuring)))
     {
-      if (SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj))))
+      if (obj->type == TYPE_CONS_PAIR
+	  && (SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
 	}
 
-      if (SYMBOL (CAR (CDR (obj)))->value_ptr.symbol->is_const)
+      if (obj->type != TYPE_CONS_PAIR && !IS_SYMBOL (obj))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      restsym = obj->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (obj)))
+	: SYMBOL (obj);
+
+      if (restsym->value_ptr.symbol->is_const)
 	{
 	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
 	  return NULL;
 	}
 
       if (first)
-	last = last->next =
-	  alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+	last = last->next = alloc_parameter (REST_PARAM, restsym);
       else
-	last = first = alloc_parameter (REST_PARAM, SYMBOL (CAR (CDR (obj))));
+	last = first = alloc_parameter (REST_PARAM, restsym);
 
-      last->reference_strength_factor =
-	!STRENGTH_FACTOR_OF_OBJECT (SYMBOL (CAR (CDR (obj))));
-      INC_WEAK_REFCOUNT (SYMBOL (CAR (CDR (obj))));
+      last->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (restsym);
+      INC_WEAK_REFCOUNT (restsym);
 
-      obj = CDR (CDR (obj));
+      if (obj->type == TYPE_CONS_PAIR)
+	obj = CDR (CDR (obj));
+      else
+	dotted_ok = 1;
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
@@ -9191,7 +9204,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 	}
     }
 
-  if (SYMBOL (obj) != &nil_object)
+  if (SYMBOL (obj) != &nil_object && !dotted_ok)
     {
       outcome->type = INVALID_LAMBDA_LIST;
       return NULL;
