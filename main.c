@@ -2335,6 +2335,7 @@ int print_object (const struct object *obj, struct environment *env,
 
 void print_error (struct outcome *err, struct environment *env);
 
+struct parameter *parameter_by_index (struct parameter *par, int *ind);
 int is_reference_weak (struct object *src, int ind, struct object *dest);
 void set_reference_strength_factor (struct object *src, int ind,
 				    struct object *dest, int new_weakness,
@@ -2346,6 +2347,10 @@ void delete_reference (struct object *src, struct object *dest, int ind);
 void weakify_loops (struct object *root, int *depth);
 void restore_invariants_at_edge (struct object *src, struct object *dest,
 				 int ind, struct object *root, int *depth);
+void restore_invariants_at_lambda_list (struct parameter *par,
+					struct object *node,
+					size_t *i, struct object *root,
+					int *depth);
 void restore_invariants_at_node (struct object *node, struct object *root,
 				 int *depth);
 
@@ -2362,6 +2367,8 @@ void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
+void free_lambda_list_content (struct object *obj, struct parameter *par, int *i);
+void free_lambda_list_structure (struct parameter *par);
 void free_function_or_macro (struct object *obj);
 void free_method (struct object *obj);
 
@@ -24171,6 +24178,32 @@ print_error (struct outcome *err, struct environment *env)
 }
 
 
+struct parameter *
+parameter_by_index (struct parameter *par, int *ind)
+{
+  struct parameter *sp;
+
+  while (par && *ind > 7)
+    {
+      if (!par->name)
+	{
+	  sp = parameter_by_index (par->sub_lambda_list, ind);
+
+	  if (sp)
+	    return sp;
+	}
+      else
+	{
+	  *ind -= 8;
+	}
+
+      par = par->next;
+    }
+
+  return par;
+}
+
+
 int
 is_reference_weak (struct object *src, int ind, struct object *dest)
 {
@@ -24211,13 +24244,7 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
 
-      par = src->value_ptr.function->lambda_list;
-
-      while (ind > 7)
-	{
-	  ind -= 8;
-	  par = par->next;
-	}
+      par = parameter_by_index (src->value_ptr.function->lambda_list, &ind);
 
       return !(par->reference_strength_factor & (0x1 << ind))
 	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
@@ -24293,13 +24320,8 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 	    }
 	  else
 	    {
-	      par = src->value_ptr.function->lambda_list;
-
-	      while (ind > 7)
-		{
-		  ind -= 8;
-		  par = par->next;
-		}
+	      par = parameter_by_index (src->value_ptr.function->lambda_list,
+					&ind);
 
 	      par->reference_strength_factor = (par->reference_strength_factor
 						& ~(1 << ind))
@@ -24467,6 +24489,32 @@ restore_invariants_at_edge (struct object *src, struct object *dest, int ind,
 
 
 void
+restore_invariants_at_lambda_list (struct parameter *par, struct object *node,
+				   size_t *i, struct object *root, int *depth)
+{
+  while (par)
+    {
+      if (!par->name)
+	{
+	  restore_invariants_at_lambda_list (par->sub_lambda_list, node, i, root,
+					     depth);
+	}
+      else
+	{
+	  rest_inv_at_edge (par->name, (*i)++);
+	  rest_inv_at_edge (par->init_form, (*i)++);
+	  rest_inv_at_edge (par->supplied_p_param, (*i)++);
+	  rest_inv_at_edge (par->key, (*i)++);
+
+	  *i += 4;
+	}
+
+      par = par->next;
+    }
+}
+
+
+void
 restore_invariants_at_node (struct object *node, struct object *root, int *depth)
 {
   size_t sz, i;
@@ -24524,17 +24572,7 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
       par = node->value_ptr.function->lambda_list;
       i = 2;
 
-      while (par)
-	{
-	  rest_inv_at_edge (par->name, i++);
-	  rest_inv_at_edge (par->init_form, i++);
-	  rest_inv_at_edge (par->supplied_p_param, i++);
-	  rest_inv_at_edge (par->key, i++);
-
-	  i += 4;
-
-	  par = par->next;
-	}
+      restore_invariants_at_lambda_list (par, node, &i, root, depth);
 
       ml = node->value_ptr.function->methods;
       i = 6;
@@ -24794,9 +24832,51 @@ free_bytespec (struct object *obj)
 
 
 void
+free_lambda_list_content (struct object *obj, struct parameter *par, int *i)
+{
+  while (par)
+    {
+      if (par->name)
+	{
+	  delete_reference (obj, par->name, (*i)++);
+	  delete_reference (obj, par->init_form, (*i)++);
+	  delete_reference (obj, par->supplied_p_param, (*i)++);
+	  delete_reference (obj, par->key, (*i)++);
+
+	  *i += 4;
+	}
+      else
+	{
+	  free_lambda_list_content (obj, par->sub_lambda_list, i);
+	}
+
+      par = par->next;
+    }
+}
+
+
+void
+free_lambda_list_structure (struct parameter *par)
+{
+  struct parameter *n;
+
+  while (par)
+    {
+      if (!par->name)
+	{
+	  free_lambda_list_structure (par->sub_lambda_list);
+	}
+
+      n = par->next;
+      free (par);
+      par = n;
+    }
+}
+
+
+void
 free_function_or_macro (struct object *obj)
 {
-  struct parameter *n, *l = obj->value_ptr.function->lambda_list;
   struct method_list *nml, *ml = obj->value_ptr.function->methods;
   struct binding *b, *nx;
   int i = 2;
@@ -24804,19 +24884,8 @@ free_function_or_macro (struct object *obj)
   delete_reference (obj, obj->value_ptr.function->name, 0);
   delete_reference (obj, obj->value_ptr.function->body, 1);
 
-  while (l)
-    {
-      delete_reference (obj, l->name, i++);
-      delete_reference (obj, l->init_form, i++);
-      delete_reference (obj, l->supplied_p_param, i++);
-      delete_reference (obj, l->key, i++);
-
-      i += 4;
-
-      n = l->next;
-      free (l);
-      l = n;
-    }
+  free_lambda_list_content (obj, obj->value_ptr.function->lambda_list, &i);
+  free_lambda_list_structure (obj->value_ptr.function->lambda_list);
 
   i = 6;
 
