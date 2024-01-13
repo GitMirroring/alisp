@@ -20272,7 +20272,7 @@ evaluate_defmacro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1);
 
   if (!mac)
     return NULL;
