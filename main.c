@@ -20867,6 +20867,14 @@ evaluate_destructuring_bind (struct object *list, struct environment *env,
   if (!args)
     return NULL;
 
+  if (!IS_LIST (args))
+    {
+      decrement_refcount (fun);
+      decrement_refcount (args);
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
   ret = call_function (fun, args, 0, 0, 0, env, outcome);
 
   decrement_refcount (fun);
