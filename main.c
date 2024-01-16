@@ -4016,8 +4016,8 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 	  SET_READER_MACRO_FLAG (ob);
 
-	  increment_refcount (env->quote_sym);
 	  ob->value_ptr.cons_pair->car = env->quote_sym;
+	  add_reference (ob, env->quote_sym, 0);
 
 	  ob->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
@@ -4930,8 +4930,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     {
       ret = alloc_empty_cons_pair ();
 
-      increment_refcount (env->function_sym);
       ret->value_ptr.cons_pair->car = env->function_sym;
+      add_reference (ret, env->function_sym, 0);
 
       ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
       ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
