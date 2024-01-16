@@ -21,8 +21,8 @@ course, it may change in the future.
 
 __Type checking__
 
-Arguments to standard functions and macros (or result of evaluating arguments,
-when applicable) are all type checked.
+Arguments to standard functions and macros (or result of evaluating arguments to
+macros, when applicable) are all type checked.
 
 Values assigned to standard variables (like *PACKAGE*, *READ-BASE* and so on)
 are not type checked, so assigning an object of the wrong type will likely crash
@@ -44,15 +44,18 @@ code, or after a wrong assignment to a standard variable (see "Type checking").
 
 __Builtin macros__
 
-Currently, al is non-conforming in this area.  Builtin macros are like special
-operators: they are treated specially by the interpreter (which is allowed by
-ANSI), but an alternate implementation of the macro in lisp is not provided
-(which is requested by ANSI instead).
+Builtin macros are like special operators in al: they are treated specially by
+the interpreter (which is allowed by ANSI), but an alternate implementation of
+the macro in lisp is not provided (which is requested by ANSI instead).
+Currently, al is non-conforming in this area.
 
 
 
 __Literal objects__
 
 In alisp, the reader always produces fresh objects.  Therefore modifying
-literals, albeit undefined by ANSI, works as expected.  Obviously, such
-undefined behavior should be avoided for best portability.
+literals, albeit undefined by ANSI, works as expected.  You can also modify the
+result of a backquote expression.
+
+Of course, such undefined behavior should be avoided if you want best
+portability.
