@@ -10751,6 +10751,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			{
 			  retcons->value_ptr.cons_pair->cdr = ret;
 			  add_reference (retcons, ret, 1);
+			  decrement_refcount (ret);
 			  retcons = CDR (retcons);
 			}
 		      else
@@ -10764,6 +10765,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			      retcons->value_ptr.cons_pair->car =
 				copy_prefix (CAR (reading_cons), lastpr, &lp);
 			      add_reference (retcons, CAR (retcons), 0);
+			      decrement_refcount (CAR (retcons));
 			      lp->value_ptr.next = tmp;
 			      add_reference (lp, tmp, 0);
 
@@ -10792,6 +10794,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			    {
 			      retcons->value_ptr.cons_pair->car =
 				copy_prefix (CAR (reading_cons), lastpr, &lp);
+			      add_reference (retcons, CAR (retcons), 0);
+			      decrement_refcount (CAR (retcons));
 			      lp->value_ptr.next = CAR (cons);
 			      add_reference (lp, CAR (cons), 0);
 			    }
@@ -10803,6 +10807,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 			  cons = CDR (cons);
 			}
+
+		      decrement_refcount (ret);
 		    }
 		}
 
