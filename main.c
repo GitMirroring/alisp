@@ -6621,8 +6621,6 @@ capture_lexical_environment (struct binding **lex_vars,
 	  bin->closure_bin = b;
 	  bin->next = NULL;
 
-	  increment_refcount (b->sym);
-	  increment_refcount (b->obj);
 	  b->refcount++;
 	}
 
@@ -7880,18 +7878,19 @@ remove_bindings (struct binding *env, int num)
   if (env->type == DYNAMIC_BINDING && !(env->type & DELETED_BINDING))
     env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
-  decrement_refcount (env->sym);
-  decrement_refcount (env->obj);
-
   env->refcount--;
 
   if (!env->refcount)
-    free (env);
+    {
+      decrement_refcount (env->sym);
+      decrement_refcount (env->obj);
+      free (env);
+    }
 
   if (num == 1)
     return b;
   else
-    return remove_bindings (env->next, num-1);
+    return remove_bindings (b, num-1);
 }
 
 
@@ -24915,13 +24914,14 @@ free_function_or_macro (struct object *obj)
     {
       nx = b->next;
 
-      decrement_refcount (b->closure_bin->sym);
-      decrement_refcount (b->closure_bin->obj);
-
       b->closure_bin->refcount--;
 
       if (!b->closure_bin->refcount)
-	free (b->closure_bin);
+	{
+	  decrement_refcount (b->closure_bin->sym);
+	  decrement_refcount (b->closure_bin->obj);
+	  free (b->closure_bin);
+	}
 
       free (b);
       b = nx;
@@ -24933,13 +24933,14 @@ free_function_or_macro (struct object *obj)
     {
       nx = b->next;
 
-      decrement_refcount (b->closure_bin->sym);
-      decrement_refcount (b->closure_bin->obj);
-
       b->closure_bin->refcount--;
 
       if (!b->closure_bin->refcount)
-	free (b->closure_bin);
+	{
+	  decrement_refcount (b->closure_bin->sym);
+	  decrement_refcount (b->closure_bin->obj);
+	  free (b->closure_bin);
+	}
 
       free (b);
       b = nx;
