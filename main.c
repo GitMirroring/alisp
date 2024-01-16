@@ -11524,8 +11524,8 @@ builtin_list (struct object *list, struct environment *env,
     {
       cons = alloc_empty_cons_pair ();
 
-      increment_refcount (CAR (list));
       cons->value_ptr.cons_pair->car = CAR (list);
+      add_reference (cons, CAR (cons), 0);
 
       if (!l)
 	l = last_cons = cons;
@@ -11567,8 +11567,8 @@ builtin_list_star (struct object *list, struct environment *env,
     {
       cons = alloc_empty_cons_pair ();
 
-      increment_refcount (CAR (list));
       cons->value_ptr.cons_pair->car = CAR (list);
+      add_reference (cons, CAR (cons), 0);
 
       if (!l)
 	l = last_cons = cons;
@@ -11581,8 +11581,8 @@ builtin_list_star (struct object *list, struct environment *env,
 	break;
     }
 
-  increment_refcount (CAR (list));
   cons->value_ptr.cons_pair->cdr = CAR (list);
+  add_reference (cons, CDR (cons), 1);
 
   return l;
 }
