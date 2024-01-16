@@ -982,6 +982,77 @@
 
 
 
+(defun loop-parse-iteration (forms)
+  (let (iter)
+    (setq iter `(,(cadr forms)))
+    (setq forms (cddr forms))
+    (do ((f forms))
+	((not f) (setq forms f))
+      (if (atom (car f))
+	  (let ((sym (string (car f))))
+	    (cond
+	      ((string= sym "FROM")
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 2) (cadr f))
+	       (setq f (cddr f)))
+	      ((or (string= sym "DOWNFROM"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 2) (cadr f))
+	       (setf (elt iter 4) -1)
+	       (setq f (cddr f)))
+	      ((or (string= sym "UPFROM"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 2) (cadr f))
+	       (setf (elt iter 4) 1)
+	       (setq f (cddr f)))
+	      ((or (string= sym "TO"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 3) (cadr f))
+	       (setq f (cddr f)))
+	      ((or (string= sym "DOWNTO"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 3) (cadr f))
+	       (setf (elt iter 4) -1)
+	       (setq f (cddr f)))
+	      ((or (string= sym "UPTO"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 3) (cadr f))
+	       (setf (elt iter 4) 1)
+	       (setq f (cddr f)))
+	      ((or (string= sym "BELOW"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 3) (1- (cadr f)))
+	       (setq f (cddr f)))
+	      ((or (string= sym "ABOVE"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 3) (1+ (cadr f)))
+	       (setq f (cddr f)))
+	      ((or (string= sym "BY"))
+	       (if (= (length iter) 1)
+		   (setq iter `(,(car iter) nil 0 nil 1 1)))
+	       (setf (elt iter 5) (cadr f))
+	       (setq f (cddr f)))
+	      ((or (string= sym "IN"))
+	       (setq iter `(,(car iter) nil ,(cadr f) nil))
+	       (setq f (cddr f)))
+	      (t
+	       (setq forms f)
+	       (return nil))))
+	  (progn
+	    (setq forms f)
+	    (return nil))))
+    (setf (elt iter 1) (gensym))
+    (values iter forms)))
+
+
 (defun loop-parse-conditional (forms)
   (let (out
 	docl
@@ -1040,9 +1111,11 @@
 	initially-forms
 	finally-forms
 	do-forms
-	counters counter
+	iters
 	var vars parvars
-	lets l)
+	lets l
+	outdestbinds od
+	indestbinds id)
     (do ()
 	((not forms))
       (let ((form (car forms)))
@@ -1084,40 +1157,9 @@
 		 (setq forms (cddr forms)))
 		((or (string= sym "FOR")
 		     (string= sym "AS"))
-		 (setq counter `(,(cadr forms) 0 nil 1 1))
-		 (setq counters (append counters `(,counter)))
-		 (setq forms (cddr forms)))
-		((string= sym "FROM")
-		 (setf (elt counter 1) (cadr forms))
-		 (setq forms (cddr forms)))
-		((or (string= sym "DOWNFROM"))
-		 (setf (elt counter 1) (cadr forms))
-		 (setf (elt counter 3) -1)
-		 (setq forms (cddr forms)))
-		((or (string= sym "UPFROM"))
-		 (setf (elt counter 1) (cadr forms))
-		 (setf (elt counter 3) 1)
-		 (setq forms (cddr forms)))
-		((or (string= sym "TO"))
-		 (setf (elt counter 2) (cadr forms))
-		 (setq forms (cddr forms)))
-		((or (string= sym "DOWNTO"))
-		 (setf (elt counter 2) (cadr forms))
-		 (setf (elt counter 3) -1)
-		 (setq forms (cddr forms)))
-		((or (string= sym "UPTO"))
-		 (setf (elt counter 2) (cadr forms))
-		 (setf (elt counter 3) 1)
-		 (setq forms (cddr forms)))
-		((or (string= sym "BELOW"))
-		 (setf (elt counter 2) (1- (cadr forms)))
-		 (setq forms (cddr forms)))
-		((or (string= sym "ABOVE"))
-		 (setf (elt counter 2) (1+ (cadr forms)))
-		 (setq forms (cddr forms)))
-		((or (string= sym "BY"))
-		 (setf (elt counter 4) (cadr forms))
-		 (setq forms (cddr forms)))
+		 (multiple-value-bind (res frm) (loop-parse-iteration forms)
+		   (setq iters (append iters `(,res)))
+		   (setq forms frm)))
 		(t
 		 (setq do-forms (append do-forms `(,form)))
 		 (setq forms (cdr forms)))))
@@ -1141,23 +1183,92 @@
 		      `(let ,v nil)
 		      `(let (,v) nil)))
 	    (setq l (cddr lets)))))
+    (dolist (i iters)
+      (if outdestbinds
+	  (progn
+	    (setf (car od) `(destructuring-bind (,(cadr i))
+				,(if (= (length i) 6)
+				     `(list ,(caddr i))
+				     `(list ,(caddr i)))
+			      nil))
+	    (setq od (cdddar od))
+	    (when (/= (length i) 6)
+	      (setf (car od) `(progn
+				(if (endp ,(elt i 1))
+				    (return-from ,inner-block-name nil))
+				nil))
+	      (setq od (cddar od)))
+	    (setf (car od) `(destructuring-bind (,(car i))
+				,(if (= (length i) 6)
+				     `(list ,(caddr i))
+				     `(list (car ,(caddr i))))
+			      nil))
+	    (setq od (cdddar od))
+	    (setf (car id) `(destructuring-bind (,(car i))
+				,(if (= (length i) 6)
+				     `(list ,(cadr i))
+				     `(list (car ,(cadr i))))
+			      nil))
+	    (setq id (cdddar id)))
+	  (progn
+	    (setf outdestbinds `(destructuring-bind (,(cadr i))
+				    ,(if (= (length i) 6)
+					 `(list ,(caddr i))
+					 `(list ,(caddr i)))
+				  nil))
+	    (setq od (cdddr outdestbinds))
+	    (when (/= (length i) 6)
+	      (setf (car od) `(progn
+				(if (endp ,(elt i 1))
+				    (return-from ,inner-block-name nil))
+				nil))
+	      (setq od (cddar od)))
+	    (setf (car od) `(destructuring-bind (,(car i))
+				,(if (= (length i) 6)
+				     `(list ,(caddr i))
+				     `(list (car ,(caddr i))))
+			      nil))
+	    (setq od (cdddar od))
+	    (setf indestbinds `(destructuring-bind (,(car i))
+				   ,(if (= (length i) 6)
+					`(list ,(cadr i))
+					`(list (car ,(cadr i))))
+				 nil))
+	    (setq id (cdddr indestbinds)))))
     `(block ,block-name
        ,(let ((inner-body
-	       `(let ,(mapcar (lambda (x) `(,(car x) ,(cadr x))) counters)
-		  ,@initially-forms
+	       `(progn
 		  (block ,inner-block-name
-		    (tagbody
-		       ,tagname
-		       (if (or ,@(mapcar (lambda (x) (if (elt x 2)
-							 (if (= (elt x 3) 1)
-							     `(> ,(elt x 0) ,(elt x 2))
-							     `(< ,(elt x 0) ,(elt x 2)))
-							 nil)) counters))
-			   (return-from ,inner-block-name nil))
-		       ,@do-forms
-		       (progn
-			 ,@(mapcar (lambda (x) `(setq ,(elt x 0) (+ ,(elt x 0) ,(* (elt x 3) (elt x 4))))) counters))
-		       (go ,tagname)))
+		    ,(let ((pre-initially-forms-body
+			    `(progn
+			       ,@initially-forms
+			       (tagbody
+				  ,tagname
+				  (if (or ,@(mapcar (lambda (x) (if (= (length x) 6)
+								    (if (elt x 3)
+									(if (= (elt x 4) 1)
+									    `(> ,(elt x 1) ,(elt x 3))
+									    `(< ,(elt x 1) ,(elt x 3))))
+								    `(endp ,(elt x 1)))) iters))
+				      (return-from ,inner-block-name nil))
+				  ,(let ((post-initially-forms-body
+					  `(progn
+					     ,@do-forms
+					     (progn
+					       ,@(mapcar (lambda (x) (if (= (length x) 6)
+									 `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
+									 `(setq ,(elt x 1) (cdr ,(elt x 1))))) iters))
+					     (go ,tagname))))
+				     (if indestbinds
+					 (progn
+					   (setf (car id) post-initially-forms-body)
+					   indestbinds)
+					 post-initially-forms-body))))))
+		       (if outdestbinds
+			   (progn
+			     (setf (car od) pre-initially-forms-body)
+			     outdestbinds)
+			   pre-initially-forms-body)))
 		  ,@finally-forms
 		  nil)))
 	  (if lets
