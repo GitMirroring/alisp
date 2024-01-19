@@ -19791,6 +19791,7 @@ set_value (struct object *sym, struct object *value, int eval_value,
 
       if (b)
 	{
+	  decrement_refcount (b->obj);
 	  b->obj = val;
 	}
       else
