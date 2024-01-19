@@ -59,3 +59,20 @@ result of a backquote expression.
 
 Of course, such undefined behavior should be avoided if you want best
 portability.
+
+
+
+__Language of implementation__
+
+The alisp codebase should be valid C89, to the best of my knowledge.
+Unfortunately, the whole alisp is not C89, since libgmp, which is a required
+dependency, seemingly is not.  I will remove the dependency on libgmp at some
+point.  I don't know about libreadline, but you can still build without it.
+
+
+
+__Number bases__
+
+*READ-BASE* works correctly, so you can read numbers in any base from 2 to 36.
+*PRINT-BASE* instead only works with the bases 8, 10, 16, due to a limitation of
+libgmp.
