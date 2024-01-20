@@ -8296,7 +8296,8 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
     *num_commas = 0;
 
   while (prefix && (prefix->type == TYPE_BACKQUOTE
-		    || prefix->type == TYPE_COMMA))
+		    || prefix->type == TYPE_COMMA
+		    || prefix->type == TYPE_AT || prefix->type == TYPE_DOT))
     {
       if (last_prefix)
 	*last_prefix = prefix;
