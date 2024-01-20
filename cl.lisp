@@ -1084,7 +1084,8 @@
 	       (setq out (append out '(nil)))
 	       (setq f (cdr f)))
 	      ((or (string= sym "DO")
-		   (string= sym "DOING"))
+		   (string= sym "DOING")
+		   (string= sym "AND"))
 	       (setq f (cdr f)))
 	      (t
 	       (setq forms f)
