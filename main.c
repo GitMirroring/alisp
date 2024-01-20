@@ -4333,10 +4333,14 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
   if (out == UNCLOSED_EMPTY_LIST)
     {
       if (last_cons && last_cons->value_ptr.cons_pair->found_dot)
-	last_cons->value_ptr.cons_pair->empty_list_in_cdr = 1;
+	{
+	  last_cons->value_ptr.cons_pair->cdr = car;
+	  last_cons->value_ptr.cons_pair->empty_list_in_cdr = 1;
+	}
       else
 	{
 	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car = car;
 	  cons->value_ptr.cons_pair->empty_list_in_car = 1;
 
 	  if (last_cons)
