@@ -1038,10 +1038,12 @@
 	      ((or (string= sym "BY"))
 	       (if (= (length iter) 1)
 		   (setq iter `(,(car iter) nil 0 nil 1 1)))
-	       (setf (elt iter 5) (cadr f))
+	       (if (= (length iter) 6)
+		   (setf (elt iter 5) (cadr f))
+		   (setf (elt iter 3) (cadr f)))
 	       (setq f (cddr f)))
 	      ((or (string= sym "IN"))
-	       (setq iter `(,(car iter) nil ,(cadr f) nil))
+	       (setq iter `(,(car iter) nil ,(cadr f) #'cdr))
 	       (setq f (cddr f)))
 	      (t
 	       (setq forms f)
@@ -1188,9 +1190,7 @@
       (if outdestbinds
 	  (progn
 	    (setf (car od) `(destructuring-bind (,(cadr i))
-				,(if (= (length i) 6)
-				     `(list ,(caddr i))
-				     `(list ,(caddr i)))
+				(list ,(caddr i))
 			      nil))
 	    (setq od (cdddar od))
 	    (when (/= (length i) 6)
@@ -1213,9 +1213,7 @@
 	    (setq id (cdddar id)))
 	  (progn
 	    (setf outdestbinds `(destructuring-bind (,(cadr i))
-				    ,(if (= (length i) 6)
-					 `(list ,(caddr i))
-					 `(list ,(caddr i)))
+				    (list ,(caddr i))
 				  nil))
 	    (setq od (cdddr outdestbinds))
 	    (when (/= (length i) 6)
@@ -1258,7 +1256,7 @@
 					     (progn
 					       ,@(mapcar (lambda (x) (if (= (length x) 6)
 									 `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
-									 `(setq ,(elt x 1) (cdr ,(elt x 1))))) iters))
+									 `(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))) iters))
 					     (go ,tagname))))
 				     (if indestbinds
 					 (progn
