@@ -76,3 +76,13 @@ __Number bases__
 *READ-BASE* works correctly, so you can read numbers in any base from 2 to 36.
 *PRINT-BASE* instead only works with the bases 8, 10, 16, due to a limitation of
 libgmp.
+
+
+
+__Character encoding__
+
+al expects its input in UTF-8 and stores strings in the same encoding.  (Note
+that UTF-8 is compatible with ASCII).  If al gets input in a different encoding,
+it might still work somewhat, as long as it understands basic macro characters,
+except for things like counting the characters in a string or accessing specific
+characters.
