@@ -19491,7 +19491,8 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
       return NULL;
     }
 
-  return create_binding (sym, fun, LEXICAL_BINDING, 1);
+  increment_refcount (sym);
+  return create_binding (sym, fun, LEXICAL_BINDING, 0);
 }
 
 
