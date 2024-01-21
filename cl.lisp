@@ -1236,45 +1236,43 @@
 	    (setq id (cdddr indestbinds)))))
     `(block ,block-name
        ,(let ((inner-body
-	       `(progn
-		  (block ,inner-block-name
-		    ,(let ((pre-initially-forms-body
-			    `(progn
-			       ,@initially-forms
-			       (tagbody
-				  ,tagname
-				  (if (or ,@(mapcar (lambda (x) (if (= (length x) 6)
-								    (if (elt x 3)
-									(if (= (elt x 4) 1)
-									    `(> ,(elt x 1) ,(elt x 3))
-									    `(< ,(elt x 1) ,(elt x 3))))
-								    `(endp ,(elt x 1)))) iters))
-				      (return-from ,inner-block-name nil))
-				  ,(let ((post-initially-forms-body
-					  `(progn
-					     ,@do-forms
-					     (progn
-					       ,@(mapcar (lambda (x) (if (= (length x) 6)
-									 `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
-									 `(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))) iters))
-					     (go ,tagname))))
-				     (if indestbinds
-					 (progn
-					   (setf (car id) post-initially-forms-body)
-					   indestbinds)
-					 post-initially-forms-body))))))
-		       (if outdestbinds
-			   (progn
-			     (setf (car od) pre-initially-forms-body)
-			     outdestbinds)
-			   pre-initially-forms-body)))
-		  ,@finally-forms
-		  nil)))
+	       `(block ,inner-block-name
+		  ,(let ((pre-initially-forms-body
+			  `(progn
+			     ,@initially-forms
+			     (tagbody
+				,tagname
+				(if (or ,@(mapcar (lambda (x) (if (= (length x) 6)
+								  (if (elt x 3)
+								      (if (= (elt x 4) 1)
+									  `(> ,(elt x 1) ,(elt x 3))
+									  `(< ,(elt x 1) ,(elt x 3))))
+								  `(endp ,(elt x 1)))) iters))
+				    (return-from ,inner-block-name nil))
+				,(let ((post-initially-forms-body
+					`(progn
+					   ,@do-forms
+					   ,@(mapcar (lambda (x) (if (= (length x) 6)
+								     `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
+								     `(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))) iters)
+					   (go ,tagname))))
+				   (if indestbinds
+				       (progn
+					 (setf (car id) post-initially-forms-body)
+					 indestbinds)
+				       post-initially-forms-body))))))
+		     (if outdestbinds
+			 (progn
+			   (setf (car od) pre-initially-forms-body)
+			   outdestbinds)
+			 pre-initially-forms-body)))))
 	  (if lets
 	      (progn
 		(setf (car l) inner-body)
 		lets)
-	      inner-body)))))
+	      inner-body))
+       ,@finally-forms
+       nil)))
 
 
 
