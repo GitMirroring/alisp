@@ -982,6 +982,28 @@
 
 
 
+(defun loop-parse-accumulation (forms)
+  (let ((sym (string (car forms)))
+	var
+	out)
+    (if (string= (string (caddr forms)) "INTO")
+	(setq var (cadddr forms))
+	(setq var (gensym)))
+    (cond
+      ((or (string= sym "COLLECT")
+	   (string= sym "COLLECTING"))
+       (setq out `(setq ,var (append ,var `(,,(cadr forms))))))
+      ((or (string= sym "APPEND")
+	   (string= sym "APPENDING"))
+       (setq out `(setq ,var (append ,var ,(cadr forms)))))
+      ((or (string= sym "NCONC")
+	   (string= sym "NCONCING"))
+       (setq out `(setq ,var (nconc ,var ,(cadr forms))))))
+    (if (string= (string (caddr forms)) "INTO")
+	(values out var nil (cddddr forms))
+	(values out nil var (cddr forms)))))
+
+
 (defun loop-parse-iteration (forms)
   (let (iter)
     (setq iter `(,(cadr forms)))
@@ -1060,6 +1082,8 @@
 	docl
 	elsecl
 	retst
+	vars
+	returnvar
 	(sym (string (car forms))))
     (cond
       ((or (string= sym "IF")
@@ -1077,11 +1101,14 @@
 	      ((or (string= sym "IF")
 		   (string= sym "WHEN")
 		   (string= sym "UNLESS"))
-	       (multiple-value-bind (res frm)
+	       (multiple-value-bind (res frm vs rv)
 		   (loop-parse-conditional f loopname)
 		 (if (= (length out) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
+		 (setq vars (append vs vars))
+		 (if rv
+		     (setq returnvar rv))
 		 (setq f frm)))
 	      ((string= sym "ELSE")
 	       (setq out (append out '(nil)))
@@ -1096,6 +1123,23 @@
 		   (setq docl (cons retst docl))
 		   (setq elsecl (cons retst elsecl)))
 	       (setq f (cddr f)))
+	      ((or (string= sym "COLLECT")
+		   (string= sym "COLLECTING")
+		   (string= sym "APPEND")
+		   (string= sym "APPENDING")
+		   (string= sym "NCONC")
+		   (string= sym "NCONCING"))
+	       (multiple-value-bind (res var1 var2 frm) (loop-parse-accumulation forms)
+		 (if (= (length out) 3)
+		     (setq docl (cons res docl))
+		     (setq elsecl (cons res elsecl)))
+		 (setq vars (cons (list (or var1 var2)) vars))
+		 (if var2
+		     (setq returnvar var2))
+		 (setq f frm)))
+	      ((string= sym "END")
+	       (setq forms (cdr f))
+	       (return nil))
 	      (t
 	       (setq forms f)
 	       (return nil))))
@@ -1111,12 +1155,13 @@
       (setq elsecl (reverse elsecl))
       (setq elsecl (cons 'progn elsecl))
       (setf (elt out 3) elsecl))
-    (values out forms)))
+    (values out forms vars returnvar)))
 
 
 (defmacro loop (&body forms)
   (let (block-name
 	(tagname (gensym))
+	(middle-block-name (gensym))
 	(inner-block-name (gensym))
 	initially-forms
 	finally-forms
@@ -1125,7 +1170,8 @@
 	var vars parvars
 	lets l
 	outdestbinds od
-	indestbinds id)
+	indestbinds id
+	returnvar)
     (do ()
 	((not forms))
       (let ((form (car forms)))
@@ -1154,8 +1200,12 @@
 		((or (string= sym "IF")
 		     (string= sym "WHEN")
 		     (string= sym "UNLESS"))
-		 (multiple-value-bind (res frm) (loop-parse-conditional forms block-name)
+		 (multiple-value-bind (res frm vs rv)
+		     (loop-parse-conditional forms block-name)
 		   (setq do-forms (append do-forms `(,res)))
+		   (setq vars (append vs vars))
+		   (if rv
+		       (setq returnvar rv))
 		   (setq forms frm)))
 		((or (string= sym "DO")
 		     (string= sym "DOING"))
@@ -1171,6 +1221,18 @@
 		 (multiple-value-bind (res frm) (loop-parse-iteration forms)
 		   (setq iters (append iters `(,res)))
 		   (setq forms frm)))
+		((or (string= sym "COLLECT")
+		     (string= sym "COLLECTING")
+		     (string= sym "APPEND")
+		     (string= sym "APPENDING")
+		     (string= sym "NCONC")
+		     (string= sym "NCONCING"))
+		 (multiple-value-bind (res var1 var2 frm) (loop-parse-accumulation forms)
+		   (setq do-forms (append do-forms `(,res)))
+		   (setq vars (cons (list (or var1 var2)) vars))
+		   (if var2
+		       (setq returnvar var2))
+		   (setq forms frm)))
 		(t
 		 (setq do-forms (append do-forms `(,form)))
 		 (setq forms (cdr forms)))))
@@ -1183,16 +1245,10 @@
     (dolist (v vars)
       (if lets
 	  (progn
-	    (setf (car l)
-		  (if (consp (car v))
-		      `(let ,v nil)
-		      `(let (,v) nil)))
+	    (setf (car l) `(let ,v nil))
 	    (setq l (cddar l)))
 	  (progn
-	    (setq lets
-		  (if (consp (car v))
-		      `(let ,v nil)
-		      `(let (,v) nil)))
+	    (setq lets `(let ,v nil))
 	    (setq l (cddr lets)))))
     (dolist (i iters)
       (if outdestbinds
@@ -1204,7 +1260,7 @@
 	    (when (/= (length i) 6)
 	      (setf (car od) `(progn
 				(if (endp ,(elt i 1))
-				    (return-from ,inner-block-name nil))
+				    (return-from ,middle-block-name nil))
 				nil))
 	      (setq od (cddar od)))
 	    (setf (car od) `(destructuring-bind (,(car i))
@@ -1227,7 +1283,7 @@
 	    (when (/= (length i) 6)
 	      (setf (car od) `(progn
 				(if (endp ,(elt i 1))
-				    (return-from ,inner-block-name nil))
+				    (return-from ,middle-block-name nil))
 				nil))
 	      (setq od (cddar od)))
 	    (setf (car od) `(destructuring-bind (,(car i))
@@ -1244,42 +1300,48 @@
 	    (setq id (cdddr indestbinds)))))
     `(block ,block-name
        ,(let ((inner-body
-	       `(block ,inner-block-name
-		  ,(let ((pre-initially-forms-body
-			  `(progn
-			     ,@initially-forms
-			     (tagbody
-				,tagname
-				(if (or ,@(mapcar (lambda (x) (if (= (length x) 6)
-								  (if (elt x 3)
-								      (if (= (elt x 4) 1)
-									  `(> ,(elt x 1) ,(elt x 3))
-									  `(< ,(elt x 1) ,(elt x 3))))
-								  `(endp ,(elt x 1)))) iters))
-				    (return-from ,inner-block-name nil))
-				,(let ((post-initially-forms-body
-					`(progn
-					   ,@do-forms
-					   ,@(mapcar (lambda (x) (if (= (length x) 6)
-								     `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
-								     `(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))) iters)
-					   (go ,tagname))))
-				   (if indestbinds
-				       (progn
-					 (setf (car id) post-initially-forms-body)
-					 indestbinds)
-				       post-initially-forms-body))))))
-		     (if outdestbinds
-			 (progn
-			   (setf (car od) pre-initially-forms-body)
-			   outdestbinds)
-			 pre-initially-forms-body)))))
+	       `(progn
+		  (block ,middle-block-name
+		    ,(let ((pre-initially-forms-body
+			    `(progn
+			       ,@initially-forms
+			       (block ,inner-block-name
+				 (tagbody
+				    ,tagname
+				    (if (or ,@(mapcar (lambda (x) (if (= (length x) 6)
+								      (if (elt x 3)
+									  (if (= (elt x 4) 1)
+									      `(> ,(elt x 1) ,(elt x 3))
+									      `(< ,(elt x 1) ,(elt x 3))))
+								      `(endp ,(elt x 1)))) iters))
+					,(if returnvar
+					     `(return-from ,block-name ,returnvar)
+					     `(return-from ,inner-block-name nil)))
+				    ,(let ((post-initially-forms-body
+					    `(progn
+					       ,@do-forms
+					       ,@(mapcar (lambda (x) (if (= (length x) 6)
+									 `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
+									 `(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))) iters)
+					       (go ,tagname))))
+				       (if indestbinds
+					   (progn
+					     (setf (car id) post-initially-forms-body)
+					     indestbinds)
+					   post-initially-forms-body))))
+			       ,@finally-forms
+			       (return-from ,block-name nil))))
+		       (if outdestbinds
+			   (progn
+			     (setf (car od) pre-initially-forms-body)
+			     outdestbinds)
+			   pre-initially-forms-body)))
+		  ,@finally-forms)))
 	  (if lets
 	      (progn
 		(setf (car l) inner-body)
 		lets)
 	      inner-body))
-       ,@finally-forms
        nil)))
 
 
