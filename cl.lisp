@@ -1055,10 +1055,11 @@
     (values iter forms)))
 
 
-(defun loop-parse-conditional (forms)
+(defun loop-parse-conditional (forms loopname)
   (let (out
 	docl
 	elsecl
+	retst
 	(sym (string (car forms))))
     (cond
       ((or (string= sym "IF")
@@ -1077,7 +1078,7 @@
 		   (string= sym "WHEN")
 		   (string= sym "UNLESS"))
 	       (multiple-value-bind (res frm)
-		   (loop-parse-conditional f)
+		   (loop-parse-conditional f loopname)
 		 (if (= (length out) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
@@ -1089,6 +1090,12 @@
 		   (string= sym "DOING")
 		   (string= sym "AND"))
 	       (setq f (cdr f)))
+	      ((string= sym "RETURN")
+	       (setq retst `(return-from ,loopname ,(cadr f)))
+	       (if (= (length out) 3)
+		   (setq docl (cons retst docl))
+		   (setq elsecl (cons retst elsecl)))
+	       (setq f (cddr f)))
 	      (t
 	       (setq forms f)
 	       (return nil))))
@@ -1147,14 +1154,15 @@
 		((or (string= sym "IF")
 		     (string= sym "WHEN")
 		     (string= sym "UNLESS"))
-		 (multiple-value-bind (res frm) (loop-parse-conditional forms)
+		 (multiple-value-bind (res frm) (loop-parse-conditional forms block-name)
 		   (setq do-forms (append do-forms `(,res)))
 		   (setq forms frm)))
 		((or (string= sym "DO")
 		     (string= sym "DOING"))
-		 (do ((f (cdr forms) (cdr f)))
-		     ((atom (car f)) (setq forms f))
-		   (setq do-forms (append do-forms `(,(car f))))))
+		 (setq forms (cdr forms)))
+		((string= sym "RETURN")
+		 (setq do-forms (append do-forms `((return-from ,block-name ,(cadr forms)))))
+		 (setq forms (cddr forms)))
 		((string= sym "NAMED")
 		 (setq block-name (cadr forms))
 		 (setq forms (cddr forms)))
