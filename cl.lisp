@@ -1129,7 +1129,7 @@
 		   (string= sym "APPENDING")
 		   (string= sym "NCONC")
 		   (string= sym "NCONCING"))
-	       (multiple-value-bind (res var1 var2 frm) (loop-parse-accumulation forms)
+	       (multiple-value-bind (res var1 var2 frm) (loop-parse-accumulation f)
 		 (if (= (length out) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
