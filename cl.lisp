@@ -1111,7 +1111,7 @@
 		     (setq returnvar rv))
 		 (setq f frm)))
 	      ((string= sym "ELSE")
-	       (setq out (append out '(nil)))
+	       (setq out (append out (list nil)))
 	       (setq f (cdr f)))
 	      ((or (string= sym "DO")
 		   (string= sym "DOING")
