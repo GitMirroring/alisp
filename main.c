@@ -19914,18 +19914,16 @@ set_value (struct object *sym, struct object *value, int eval_value,
     {
       if (!s->value_dyn_bins_num)
 	{
+	  delete_reference (sym, s->value_cell, 0);
 	  add_reference (sym, val, 0);
-
-	  if (s->value_cell)
-	    delete_reference (sym, s->value_cell, 0);
-
 	  s->value_cell = val;
 	}
       else
 	{
 	  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
-
+	  decrement_refcount (b->obj);
 	  b->obj = val;
+	  increment_refcount (val);
 	}
     }
   else
@@ -19937,13 +19935,14 @@ set_value (struct object *sym, struct object *value, int eval_value,
 	{
 	  decrement_refcount (b->obj);
 	  b->obj = val;
+	  increment_refcount (val);
 	}
       else
 	{
 	  s->value_dyn_bins_num++;
-	  /*s->is_special++;*/
-	  increment_refcount (sym);
-	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING, 0),
+	  /*s->is_special++;
+	    increment_refcount (sym);*/
+	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING, 1),
 				   env->vars);
 	}
     }
@@ -20475,6 +20474,8 @@ evaluate_setq (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
+      decrement_refcount (ret);
+
       if (!IS_SYMBOL (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -20489,7 +20490,6 @@ evaluate_setq (struct object *list, struct environment *env,
       list = CDR (CDR (list));
     }
 
-  increment_refcount (ret);
   return ret;
 }
 
@@ -20562,6 +20562,8 @@ evaluate_setf (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
+      decrement_refcount (val);
+
       if (IS_SYMBOL (CAR (list)))
 	{
 	  val = set_value (SYMBOL (CAR (list)), nth (1, list), 1, env, outcome);
@@ -20678,8 +20680,6 @@ evaluate_setf (struct object *list, struct environment *env,
 
 	      env->vars = remove_bindings (env->vars, binsnum);
 	      env->lex_env_vars_boundary -= binsnum;
-
-	      return val;
 	    }
 	  else if ((fun = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
 		    function_cell)
@@ -20702,8 +20702,6 @@ evaluate_setf (struct object *list, struct environment *env,
 					     env, outcome);
 
 	      decrement_refcount (args);
-
-	      return val;
 	    }
 	  else
 	    {
@@ -20730,8 +20728,6 @@ evaluate_setf (struct object *list, struct environment *env,
 	      cons1->value_ptr.cons_pair->cdr = args;
 
 	      val = call_function (fun, cons1, 0, 0, 0, env, outcome);
-
-	      return val;
 	    }
 	}
       else
@@ -20744,7 +20740,6 @@ evaluate_setf (struct object *list, struct environment *env,
       list = CDR (CDR (list));
     }
 
-  increment_refcount (val);
   return val;
 }
 
