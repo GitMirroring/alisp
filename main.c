@@ -1436,6 +1436,7 @@ struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *create_character_from_char (char ch);
 struct object *get_nth_character (struct object *str, int ind);
+fixnum get_nth_character_offset (struct object *str, int ind);
 int set_nth_character (struct object *str, int ind, char *ch);
 
 struct object *create_file_stream (enum stream_type type,
@@ -1791,6 +1792,8 @@ struct object *builtin_array_has_fill_pointer_p
 struct object *builtin_array_dimensions
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_array_row_major_index
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_adjust_array
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_hash_table
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2770,6 +2773,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ARRAY-ROW-MAJOR-INDEX", env, builtin_array_row_major_index,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ADJUST-ARRAY", env, builtin_adjust_array, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("MAKE-HASH-TABLE", env, builtin_make_hash_table,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("HASH-TABLE-SIZE", env, builtin_hash_table_size,
@@ -7328,6 +7333,24 @@ get_nth_character (struct object *str, int ind)
     }
 
   return create_character_from_utf8 (ch, s);
+}
+
+
+fixnum
+get_nth_character_offset (struct object *str, int ind)
+{
+  fixnum i;
+
+  for (i = 0; i < str->value_ptr.string->used_size; i++)
+    {
+      if (!ind)
+	return i;
+
+      if (IS_LOWEST_BYTE_IN_UTF8 (str->value_ptr.string->value [i]))
+	ind--;
+    }
+
+  return -1;
 }
 
 
@@ -12552,6 +12575,114 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
     }
 
   return create_integer_from_long (tot);
+}
+
+
+struct object *
+builtin_adjust_array (struct object *list, struct environment *env,
+		      struct outcome *outcome)
+{
+  fixnum newsz, oldsz, i, newchsz;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if ((CAR (CDR (list))->type != TYPE_CONS_PAIR
+       || CAR (CAR (CDR (list)))->type != TYPE_INTEGER)
+      && CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  newsz = CAR (CDR (list))->type == TYPE_CONS_PAIR
+    ? mpz_get_si (CAR (CAR (CDR (list)))->value_ptr.integer)
+    : mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      oldsz = string_utf8_length (CAR (list));
+
+      if (oldsz > newsz)
+	{
+	  if (!newsz)
+	    {
+	      newchsz = 0;
+	    }
+	  else
+	    {
+	      newchsz = get_nth_character_offset (CAR (list), newsz);
+	    }
+	}
+
+      if (newsz > oldsz)
+	{
+	  newchsz = CAR (list)->value_ptr.string->used_size + (newsz-oldsz);
+	}
+
+      if (newchsz > CAR (list)->value_ptr.string->alloc_size)
+	{
+	  CAR (list)->value_ptr.string->value =
+	    realloc_and_check (CAR (list)->value_ptr.string->value, newchsz);
+	  CAR (list)->value_ptr.string->alloc_size = newchsz;
+	}
+
+      CAR (list)->value_ptr.string->used_size = newchsz;
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      if (!CAR (list)->value_ptr.array->alloc_size)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (CAR (list)->value_ptr.array->alloc_size->size > newsz)
+	{
+	  for (i = newsz; i < CAR (list)->value_ptr.array->alloc_size->size; i++)
+	    {
+	      delete_reference (CAR (list), CAR (list)->value_ptr.array->value [i],
+				i);
+	    }
+	}
+
+      CAR (list)->value_ptr.array->value =
+	realloc_and_check (CAR (list)->value_ptr.array->value, newsz);
+
+      if (CAR (list)->value_ptr.array->alloc_size->size < newsz)
+	{
+	  for (i = CAR (list)->value_ptr.array->alloc_size->size; i < newsz; i++)
+	    {
+	      CAR (list)->value_ptr.array->value [i] = &nil_object;
+	    }
+	}
+
+      CAR (list)->value_ptr.array->alloc_size->size = newsz;
+
+      CAR (list)->value_ptr.array->reference_strength_factor =
+	realloc_and_check (CAR (list)->value_ptr.array->reference_strength_factor,
+			   newsz);
+    }
+  else if (CAR (list)->type == TYPE_BITARRAY)
+    {
+      if (!CAR (list)->value_ptr.array->alloc_size)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
