@@ -15026,9 +15026,11 @@ accessor_symbol_plist (struct object *list, struct object *newval,
       return NULL;
     }
 
+  delete_reference (SYMBOL (CAR (list)),
+		    SYMBOL (CAR (list))->value_ptr.symbol->plist, 5);
   SYMBOL (CAR (list))->value_ptr.symbol->plist = newval;
+  add_reference (SYMBOL (CAR (list)), newval, 5);
 
-  increment_refcount (newval);
   return newval;
 }
 
@@ -20375,7 +20377,14 @@ evaluate_defun (struct object *list, struct environment *env,
     }
   else
     {
+      if (sym->value_ptr.symbol->setf_func_cell)
+	{
+	  delete_reference (sym, sym->value_ptr.symbol->setf_func_cell, 2);
+	}
+
       sym->value_ptr.symbol->setf_func_cell = fun;
+      add_reference (sym, fun, 2);
+      decrement_refcount (fun);
     }
 
   fun->value_ptr.function->name = sym;
@@ -21036,7 +21045,7 @@ struct object *
 evaluate_deftype (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *typename;
+  struct object *typename, *fun;
 
   if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
       || !IS_LIST (CAR (CDR (list))))
@@ -21054,11 +21063,15 @@ evaluate_deftype (struct object *list, struct environment *env,
       return NULL;
     }
 
-  typename->value_ptr.symbol->typespec =
-    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
 
-  if (!typename->value_ptr.symbol->typespec)
+  if (!fun)
     return NULL;
+
+  delete_reference (typename, typename->value_ptr.symbol->typespec, 4);
+  typename->value_ptr.symbol->typespec = fun;
+  add_reference (typename, fun, 4);
+  decrement_refcount (fun);
 
   typename->value_ptr.symbol->is_type = 1;
   typename->value_ptr.symbol->is_standard_type = 0;
@@ -21072,6 +21085,8 @@ struct object *
 evaluate_define_setf_expander (struct object *list, struct environment *env,
 			       struct outcome *outcome)
 {
+  struct object *fun;
+
   if (list_length (list) < 2)
     {
       outcome->type = TOO_FEW_ARGUMENTS;
@@ -21084,11 +21099,17 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
       return NULL;
     }
 
-  SYMBOL (CAR (list))->value_ptr.symbol->setf_expander =
-    create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
 
-  if (!SYMBOL (CAR (list))->value_ptr.symbol->setf_expander)
+  if (!fun)
     return NULL;
+
+  delete_reference (SYMBOL (CAR (list)),
+		    SYMBOL (CAR (list))->value_ptr.symbol->setf_expander, 3);
+
+  SYMBOL (CAR (list))->value_ptr.symbol->setf_expander = fun;
+  add_reference (SYMBOL (CAR (list)), fun, 3);
+  decrement_refcount (fun);
 
   increment_refcount (SYMBOL (CAR (list)));
   return SYMBOL (CAR (list));
@@ -24685,6 +24706,10 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
     {
       rest_inv_at_edge (node->value_ptr.symbol->value_cell, 0);
       rest_inv_at_edge (node->value_ptr.symbol->function_cell, 1);
+      rest_inv_at_edge (node->value_ptr.symbol->setf_func_cell, 2);
+      rest_inv_at_edge (node->value_ptr.symbol->setf_expander, 3);
+      rest_inv_at_edge (node->value_ptr.symbol->typespec, 4);
+      rest_inv_at_edge (node->value_ptr.symbol->plist, 5);
     }
   else if (node->type == TYPE_CONS_PAIR)
     {
@@ -24872,6 +24897,10 @@ free_symbol (struct object *obj)
 
   delete_reference (obj, s->value_cell, 0);
   delete_reference (obj, s->function_cell, 1);
+  delete_reference (obj, s->setf_func_cell, 2);
+  delete_reference (obj, s->setf_expander, 3);
+  delete_reference (obj, s->typespec, 4);
+  delete_reference (obj, s->plist, 5);
 
   if (p != &nil_object)
     unintern_symbol (obj, p);
