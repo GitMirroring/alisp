@@ -12630,6 +12630,11 @@ builtin_adjust_array (struct object *list, struct environment *env,
 	  CAR (list)->value_ptr.string->alloc_size = newchsz;
 	}
 
+      for (i = CAR (list)->value_ptr.string->used_size; i < newchsz; i++)
+	{
+	  CAR (list)->value_ptr.string->value [i] = 0;
+	}
+
       CAR (list)->value_ptr.string->used_size = newchsz;
     }
   else if (CAR (list)->type == TYPE_ARRAY)
