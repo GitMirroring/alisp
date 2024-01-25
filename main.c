@@ -11494,10 +11494,9 @@ builtin_rplaca (struct object *list, struct environment *env,
       return NULL;
     }
 
-  add_reference (CAR (list), CAR (CDR (list)), 0);
   delete_reference (CAR (list), CAR (CAR (list)), 0);
-
   CAR (list)->value_ptr.cons_pair->car = CAR (CDR (list));
+  add_reference (CAR (list), CAR (CDR (list)), 0);
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -11520,10 +11519,9 @@ builtin_rplacd (struct object *list, struct environment *env,
       return NULL;
     }
 
-  add_reference (CAR (list), CAR (CDR (list)), 1);
   delete_reference (CAR (list), CDR (CAR (list)), 1);
-
   CAR (list)->value_ptr.cons_pair->cdr = CAR (CDR (list));
+  add_reference (CAR (list), CAR (CDR (list)), 1);
 
   increment_refcount (CAR (list));
   return CAR (list);
