@@ -12665,7 +12665,8 @@ builtin_adjust_array (struct object *list, struct environment *env,
 	}
 
       CAR (list)->value_ptr.array->value =
-	realloc_and_check (CAR (list)->value_ptr.array->value, newsz);
+	realloc_and_check (CAR (list)->value_ptr.array->value, newsz
+			   * sizeof (*CAR (list)->value_ptr.array->value));
 
       if (CAR (list)->value_ptr.array->alloc_size->size < newsz)
 	{
@@ -12679,7 +12680,7 @@ builtin_adjust_array (struct object *list, struct environment *env,
 
       CAR (list)->value_ptr.array->reference_strength_factor =
 	realloc_and_check (CAR (list)->value_ptr.array->reference_strength_factor,
-			   newsz);
+			   newsz * sizeof (int));
     }
   else if (CAR (list)->type == TYPE_BITARRAY)
     {
