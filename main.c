@@ -4945,6 +4945,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
       ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
 
       ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = obj;
+      add_reference (ret->value_ptr.cons_pair->cdr, obj, 0);
 
       return ret;
     }
@@ -5032,6 +5033,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
       unintern_symbol (SYMBOL (obj),
 		       SYMBOL (obj)->value_ptr.symbol->home_package);
 
+      increment_refcount (obj);
       return obj;
     }
   else if (macro_call->dispatch_ch == 'c' || macro_call->dispatch_ch == 'C')
@@ -5055,7 +5057,10 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
   else if (macro_call->dispatch_ch == '+' || macro_call->dispatch_ch == '-')
     {
       if (macro_call->feat_test_result == (macro_call->dispatch_ch == '+'))
-	return obj;
+	{
+	  increment_refcount (obj);
+	  return obj;
+	}
       else
 	{
 	  outcome->type = SKIPPED_OBJECT;
@@ -5063,7 +5068,10 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	}
     }
   else if (strchr ("*bBoOxXrR", macro_call->dispatch_ch))
-    return obj;
+    {
+      increment_refcount (obj);
+      return obj;
+    }
 
   return NULL;
 }
@@ -5960,6 +5968,9 @@ alloc_sharp_macro_call (void)
   call->feat_test_is_empty_list = 0;
 
   call->is_empty_list = 0;
+
+  call->feature_test = NULL;
+  call->obj = NULL;
 
   return obj;
 }
@@ -25158,6 +25169,9 @@ free_method (struct object *obj)
 void
 free_sharp_macro_call (struct object *macro)
 {
+  decrement_refcount (macro->value_ptr.sharp_macro_call->feature_test);
+  decrement_refcount (macro->value_ptr.sharp_macro_call->obj);
+
   free (macro->value_ptr.sharp_macro_call);
   free (macro);
 }
