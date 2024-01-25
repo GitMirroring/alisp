@@ -7182,22 +7182,23 @@ create_vector_from_list (struct object *list)
   struct array_size *sz = malloc_and_check (sizeof (*sz));
   fixnum i;
 
+  obj->type = TYPE_ARRAY;
+
   sz->size = list_length (list);
   sz->next = NULL;
 
   vec->alloc_size = sz;
   vec->fill_pointer = -1;
   vec->value = calloc_and_check (sz->size, sizeof (*vec->value));
-  vec->reference_strength_factor = malloc_and_check (sz->size * sizeof (int));
+  vec->reference_strength_factor = calloc_and_check (sz->size, sizeof (int));
+
+  obj->value_ptr.array = vec;
 
   for (i = 0; i < sz->size; i++)
     {
       vec->value [i] = nth (i, list);
       add_reference (obj, vec->value [i], i);
     }
-
-  obj->type = TYPE_ARRAY;
-  obj->value_ptr.array = vec;
 
   return obj;
 }
