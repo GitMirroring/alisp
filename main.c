@@ -14770,14 +14770,10 @@ accessor_car (struct object *list, struct object *newval,
       return NULL;
     }
 
-  add_reference (CAR (list), newval, 0);
-  decrement_refcount (newval);
-
   delete_reference (CAR (list), CAR (CAR (list)), 0);
-
   CAR (list)->value_ptr.cons_pair->car = newval;
+  add_reference (CAR (list), newval, 0);
 
-  increment_refcount (newval);
   return newval;
 }
 
@@ -14805,14 +14801,10 @@ accessor_cdr (struct object *list, struct object *newval,
       return NULL;
     }
 
-  add_reference (CAR (list), newval, 1);
-  decrement_refcount (newval);
-
   delete_reference (CAR (list), CDR (CAR (list)), 1);
-
   CAR (list)->value_ptr.cons_pair->cdr = newval;
+  add_reference (CAR (list), newval, 1);
 
-  increment_refcount (newval);
   return newval;
 }
 
@@ -14883,10 +14875,9 @@ accessor_aref (struct object *list, struct object *newval,
 
       if (CAR (list)->type == TYPE_ARRAY)
 	{
-	  add_reference (CAR (list), newval, ind);
 	  delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
 			    ind);
-
+	  add_reference (CAR (list), newval, ind);
 	  CAR (list)->value_ptr.array->value [ind] = newval;
 	}
       else
@@ -14903,8 +14894,6 @@ accessor_aref (struct object *list, struct object *newval,
 	    mpz_setbit (CAR (list)->value_ptr.bitarray->value, ind);
 	}
     }
-
-  decrement_refcount (list);
 
   return newval;
 }
@@ -14959,10 +14948,9 @@ accessor_elt (struct object *list, struct object *newval,
 	  return NULL;
 	}
 
-      add_reference (CAR (list), newval, ind);
       delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
 			ind);
-
+      add_reference (CAR (list), newval, ind);
       CAR (list)->value_ptr.array->value [ind] = newval;
     }
   else
@@ -14975,13 +14963,10 @@ accessor_elt (struct object *list, struct object *newval,
 
       cons = nthcdr (ind, CAR (list));
 
-      add_reference (cons, newval, 0);
       delete_reference (cons, CAR (cons), 0);
-
+      add_reference (cons, newval, 0);
       cons->value_ptr.cons_pair->car = newval;
     }
-
-  decrement_refcount (list);
 
   return newval;
 }
@@ -20604,6 +20589,8 @@ evaluate_setf (struct object *list, struct environment *env,
 
 	      val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
 		(args, val, env, outcome);
+
+	      decrement_refcount (args);
 
 	      if (!val)
 		return NULL;
