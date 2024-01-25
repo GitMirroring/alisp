@@ -119,11 +119,10 @@ typedef long fixnum;
 #define IS_PACKAGE_DESIGNATOR(s) (IS_STRING_DESIGNATOR(s) \
 				  || (s)->type == TYPE_PACKAGE)
 
-#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_FIXNUM	\
+/*#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_FIXNUM	\
 					   | TYPE_RATIO | TYPE_FLOAT \
 					   | TYPE_BYTESPEC | TYPE_STRING \
-					   | TYPE_CHARACTER | TYPE_BITARRAY \
-					   | TYPE_FILENAME))
+					   | TYPE_CHARACTER | TYPE_BITARRAY)*/
 
 
 
@@ -7130,9 +7129,10 @@ create_filename (struct object *string)
 
   obj->type = TYPE_FILENAME;
 
-  fn->value = string;
-
   obj->value_ptr.filename = fn;
+
+  fn->value = string;
+  add_reference (obj, string, 0);
 
   return obj;
 }
@@ -24733,6 +24733,10 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 	  rest_inv_at_edge (node->value_ptr.hashtable->table [i], i);
 	}
     }
+  else if (node->type == TYPE_FILENAME)
+    {
+      rest_inv_at_edge (node->value_ptr.filename->value, 0);
+    }
   else if (node->type == TYPE_STREAM)
     {
       if (node->value_ptr.stream->medium == STRING_STREAM)
@@ -24804,7 +24808,7 @@ free_object (struct object *obj)
     free_cons_pair (obj);
   else if (obj->type == TYPE_FILENAME)
     {
-      free_string (obj->value_ptr.filename->value);
+      delete_reference (obj, obj->value_ptr.filename->value, 0);
       free (obj->value_ptr.filename);
       free (obj);
     }
