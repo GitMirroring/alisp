@@ -14528,7 +14528,8 @@ builtin_mapcar (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
   int i, l = list_length (list), finished = 0;
-  struct object *cdrlist, *cdrlistcons, *args, *argscons, *ret, *retcons, *val;
+  struct object *fun, *cdrlist, *cdrlistcons, *args, *argscons, *ret, *retcons,
+    *val;
 
   if (l < 2)
     {
@@ -14536,11 +14537,27 @@ builtin_mapcar (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FUNCTION)
+  if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
+    {
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+
+      if (!fun)
+	{
+	  outcome->type = UNKNOWN_FUNCTION;
+	  outcome->obj = SYMBOL (CAR (list));
+	  return NULL;
+	}
+    }
+  else if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      fun = CAR (list);
+    }
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+
 
   for (i = 1; i < l; i++)
     {
@@ -14577,7 +14594,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	  cdrlistcons = CDR (cdrlistcons);
 	}
 
-      val = call_function (CAR (list), args, 0, 0, 0, env, outcome);
+      val = call_function (fun, args, 0, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!val)
