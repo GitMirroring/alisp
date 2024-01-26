@@ -1019,6 +1019,7 @@ make_test ("(let ((s 0)) (write (mapcar (lambda (s) s) '(1 2 3))) s)", "(1 2 3)\
 make_test ("(remove 3 '(1 2 3 4 3 2 1))", "(1 2 4 2 1)");
 make_test ("(remove #\\e \"abcdefg\")", "\"abcdfg\"");
 make_test ("(remove-if #'numberp #(1 2 3))", "#()");
+make_test ("(remove-if 'numberp #(1 2 3))", "#()");
 make_test ("(remove-if-not #'listp #(()))", "#(NIL)");
 make_test ("(remove-duplicates \"abcaadeabfc\")", "\"deabfc\"");
 make_test ("(remove-duplicates '(0 1 2 3 4 3 3 5 6 8 6))", "(0 1 2 4 3 5 8 6)");
