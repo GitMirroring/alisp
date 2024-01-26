@@ -4642,6 +4642,32 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	  return out;
 	}
 
+      if (call->dispatch_ch == ':')
+	{
+	  prevpack = inspect_variable (env->package_sym, env);
+
+	  set_value (env->package_sym, NULL, 0, env, outcome);
+
+	  call->obj = NULL;
+	  out = read_object_continued (&call->obj, 0, call->is_empty_list, input,
+				       size, stream, preserve_whitespace,
+				       ends_with_eof, env, outcome, &obj_b,
+				       macro_end);
+
+	  set_value (env->package_sym, prevpack, 0, env, outcome);
+
+	  if (out == UNCLOSED_EMPTY_LIST)
+	    call->is_empty_list = 1;
+	  else
+	    call->is_empty_list = 0;
+
+	  if (IS_INCOMPLETE_OBJECT (out))
+	    return INCOMPLETE_SHARP_MACRO_CALL;
+
+	  return out;
+	}
+
+
       out = read_object_continued (&call->obj, 0, call->is_empty_list, input,
 				   size, stream, preserve_whitespace,
 				   ends_with_eof, env, outcome, &obj_b,
@@ -4913,6 +4939,26 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
       return COMPLETE_OBJECT;
     }
+  else if (call->dispatch_ch == ':')
+    {
+      prevpack = inspect_variable (env->package_sym, env);
+
+      set_value (env->package_sym, NULL, 0, env, outcome);
+
+      call->obj = NULL;
+      out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
+			 ends_with_eof, env, outcome, &obj_b, macro_end);
+
+      set_value (env->package_sym, prevpack, 0, env, outcome);
+
+      if (out == UNCLOSED_EMPTY_LIST)
+	call->is_empty_list = 1;
+
+      if (IS_INCOMPLETE_OBJECT (out))
+	return INCOMPLETE_SHARP_MACRO_CALL;
+
+      return out;
+    }
 
   call->obj = NULL;
   out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
@@ -5031,9 +5077,6 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 
 	  return NULL;
 	}
-
-      unintern_symbol (SYMBOL (obj),
-		       SYMBOL (obj)->value_ptr.symbol->home_package);
 
       increment_refcount (obj);
       return obj;
@@ -7762,6 +7805,14 @@ intern_symbol_name (struct object *symname, struct environment *env,
 {
   struct symbol_name *s = symname->value_ptr.symbol_name;
   struct object *pack = inspect_variable (env->package_sym, env);
+
+  if (!pack)
+    {
+      s->sym = create_symbol (s->value, s->used_size, 1);
+      s->sym->value_ptr.symbol->home_package = &nil_object;
+      return s->sym;
+    }
+
 
   if (s->packname_present || pack == env->keyword_package)
     {
