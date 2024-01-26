@@ -13793,8 +13793,9 @@ struct object *
 builtin_concatenate (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
-  int l = list_length (list), i;
-  struct object *ret;
+  int l = list_length (list), i, j, k;
+  struct object *ret, *retcons, *cons;
+  fixnum len = 0;
 
   if (!l)
     {
@@ -13823,27 +13824,105 @@ builtin_concatenate (struct object *list, struct environment *env,
 	}
     }
 
-  if (symbol_equals (CAR (list), "STRING", env))
+  if (is_subtype_by_char_vector (CAR (list), "STRING", env))
     {
-      ret = alloc_string (0);
+      for (i = 1; i < l; i++)
+	{
+	  if (nth (i, list)->type != TYPE_STRING)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  len += nth (i, list)->value_ptr.string->used_size;
+	}
+
+      ret = alloc_string (len);
+      list = CDR (list);
 
       for (i = 1; i < l; i++)
 	{
-	  resize_string_allocation (ret, ret->value_ptr.string->alloc_size
-				    + nth (i, list)->value_ptr.string->used_size);
-
 	  memcpy (ret->value_ptr.string->value + ret->value_ptr.string->used_size,
-		  nth (i, list)->value_ptr.string->value,
-		  nth(i, list)->value_ptr.string->used_size);
+		  CAR (list)->value_ptr.string->value,
+		  CAR (list)->value_ptr.string->used_size);
+	  ret->value_ptr.string->used_size +=
+	    CAR (list)->value_ptr.string->used_size;
 
-	  ret->value_ptr.string->used_size += nth (i, list)->
-	    value_ptr.string->used_size;
+	  list = CDR (list);
 	}
 
       return ret;
     }
+  else if (is_subtype_by_char_vector (CAR (list), "VECTOR", env))
+    {
+      for (i = 1; i < l; i++)
+	{
+	  if (nth (i, list)->type != TYPE_ARRAY || !IS_VECTOR (nth (i, list)))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
 
-  return &nil_object;
+	  len += nth (i, list)->value_ptr.array->alloc_size->size;
+	}
+
+      ret = alloc_vector (len, 0, 0);
+      list = CDR (list);
+      k = 0;
+
+      for (i = 1; i < l; i++)
+	{
+	  for (j = 0; j < CAR (list)->value_ptr.array->alloc_size->size; j++)
+	    {
+	      ret->value_ptr.array->value [k++]
+		= CAR (list)->value_ptr.array->value [j];
+	      add_reference (ret, CAR (list)->value_ptr.array->value [j], k-1);
+	    }
+
+	  list = CDR (list);
+	}
+
+      return ret;
+    }
+  else
+    {
+      for (i = 1; i < l; i++)
+	{
+	  if (!IS_LIST (nth (i, list)))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+	}
+
+      ret = NULL;
+      list = CDR (list);
+
+      for (i = 1; i < l; i++)
+	{
+	  cons = CAR (list);
+
+	  while (SYMBOL (cons) != &nil_object)
+	    {
+	      if (ret)
+		retcons = retcons->value_ptr.cons_pair->cdr =
+		  alloc_empty_cons_pair ();
+	      else
+		ret = retcons = alloc_empty_cons_pair ();
+
+	      retcons->value_ptr.cons_pair->car = CAR (cons);
+	      add_reference (retcons, CAR (retcons), 0);
+
+	      cons = CDR (cons);
+	    }
+
+	  list = CDR (list);
+	}
+
+      retcons->value_ptr.cons_pair->cdr = &nil_object;
+
+      return ret;
+    }
 }
 
 
