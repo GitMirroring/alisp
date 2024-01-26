@@ -1879,6 +1879,8 @@ struct object *accessor_car (struct object *list, struct object *newval,
 			     struct environment *env, struct outcome *outcome);
 struct object *accessor_cdr (struct object *list, struct object *newval,
 			     struct environment *env, struct outcome *outcome);
+struct object *accessor_nth (struct object *list, struct object *newval,
+			     struct environment *env, struct outcome *outcome);
 struct object *accessor_aref (struct object *list, struct object *newval,
 			      struct environment *env, struct outcome *outcome);
 struct object *accessor_elt (struct object *list, struct object *newval,
@@ -2750,7 +2752,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LIST*", env, builtin_list_star, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NCONC", env, builtin_nconc, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, accessor_nth, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
   add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, accessor_elt, 0);
@@ -11742,6 +11744,7 @@ builtin_nth (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_INTEGER
+      || mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
@@ -11770,6 +11773,7 @@ builtin_nthcdr (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_INTEGER
+      || mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR
 	  && SYMBOL (CAR (CDR (list))) != &nil_object))
     {
@@ -14884,6 +14888,43 @@ accessor_cdr (struct object *list, struct object *newval,
   delete_reference (CAR (list), CDR (CAR (list)), 1);
   CAR (list)->value_ptr.cons_pair->cdr = newval;
   add_reference (CAR (list), newval, 1);
+
+  return newval;
+}
+
+
+struct object *
+accessor_nth (struct object *list, struct object *newval,
+	      struct environment *env, struct outcome *outcome)
+{
+  struct object *cons;
+  int i;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER
+      || (i = mpz_cmp_si (CAR (list)->value_ptr.integer, 0)) < 0
+      || (CAR (CDR (list))->type != TYPE_CONS_PAIR))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (i >= list_length (CAR (CDR (list))))
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  cons = nthcdr (i, CAR (CDR (list)));
+
+  delete_reference (cons, CAR (cons), 0);
+  add_reference (cons, newval, 0);
+  cons->value_ptr.cons_pair->car = newval;
 
   return newval;
 }
