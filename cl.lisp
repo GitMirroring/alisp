@@ -578,6 +578,46 @@
   (remove-if (complement pred) seq))
 
 
+(defun remove-duplicates (seq &key from-end test test-not (start 0) end (key #'identity))
+  (let* ((len (length seq))
+	 (n (if end (- end start) len))
+	 (removed (make-array len))
+	 leftnum
+	 (out (if from-end (reverse seq)
+		  (concatenate (if (stringp seq)
+				   'string
+				   (if (arrayp seq)
+				       'vector
+				       'list)) seq)))
+	 (tst (or test
+		  (if test-not (complement test-not) nil)
+		  #'eql)))
+    (dotimes (i n)
+      (dotimes (l (- n i 1))
+	(when (funcall tst (funcall key (elt out (+ start i)))
+		       (funcall key (elt out (+ start i l 1))))
+	  (setf (aref removed (+ start i)) t)
+	  (return nil))))
+    (setq leftnum (count-if #'not removed))
+    (fresh-line)
+    (dotimes (i len)
+      (dotimes (l (- len i))
+	(unless (aref removed (+ l i))
+	  (setf (elt out i) (elt out (+ l i)))
+	  (setf (aref removed (+ l i)) t)
+	  (return nil))))
+    (if (arrayp seq)
+	(adjust-array out leftnum)
+	(rplacd (nthcdr (1- leftnum) out) nil))
+    (if from-end
+	(reverse out)
+	out)))
+
+
+(defun delete-duplicates (&rest args)
+  (apply 'remove-duplicates args))
+
+
 (defun nreverse (seq)
   (reverse seq))
 
@@ -1404,18 +1444,18 @@
 	  member member-if member-if-not find find-if find-if-not assoc assoc-if
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  nreverse adjoin fill push pop array-rank array-dimension
-	  array-total-size array-in-bounds-p upgraded-array-element-type
-	  adjustable-array-p get get-properties char string/= char-equal
-	  digit-char digit-char-p char-int string-upcase string-downcase
-	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
-	  string-left-trim string-right-trim string-trim defpackage signed-byte
-	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp random-state-p characterp standard-char-p
-	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
-	  numberp macroexpand equal equalp fdefinition complement mapc terpri
-	  write-line write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  remove-duplicates delete-duplicates nreverse adjoin fill push pop
+	  array-rank array-dimension array-total-size array-in-bounds-p
+	  upgraded-array-element-type adjustable-array-p get get-properties char
+	  string/= char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp arrayp sequencep stringp
+	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
+	  fdefinition complement mapc terpri write-line write-sequence prin1
+	  princ print do-all-symbols loop format encode-universal-time))
 
 
 
