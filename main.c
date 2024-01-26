@@ -14651,13 +14651,33 @@ builtin_remove_if (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FUNCTION || !IS_SEQUENCE (CAR (CDR (list))))
+  if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
+    {
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+
+      if (!fun)
+	{
+	  outcome->type = UNKNOWN_FUNCTION;
+	  outcome->obj = SYMBOL (CAR (list));
+	  return NULL;
+	}
+    }
+  else if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      fun = CAR (list);
+    }
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  fun = CAR (list);
+  if (!IS_SEQUENCE (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
   seq = CAR (CDR (list));
 
   if (SYMBOL (seq) == &nil_object)
