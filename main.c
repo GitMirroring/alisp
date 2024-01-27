@@ -14062,7 +14062,8 @@ builtin_concatenate (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
+  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env)
+      || SYMBOL (CAR (list)) == &nil_object)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -14172,7 +14173,10 @@ builtin_concatenate (struct object *list, struct environment *env,
 	  list = CDR (list);
 	}
 
-      retcons->value_ptr.cons_pair->cdr = &nil_object;
+      if (ret)
+	retcons->value_ptr.cons_pair->cdr = &nil_object;
+      else
+	ret = &nil_object;
 
       return ret;
     }
