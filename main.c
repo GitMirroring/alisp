@@ -18559,7 +18559,7 @@ builtin_rename_package (struct object *list, struct environment *env,
   struct object *cons, *pack, *dbl;
   struct package *p;
   struct name_list *nicks;
-  char *name;
+  char *name, *newname;
 
   if (l < 2 || l > 3)
     {
@@ -18633,12 +18633,13 @@ builtin_rename_package (struct object *list, struct environment *env,
 
   p = pack->value_ptr.package;
 
-  free (p->name);
   free_name_list (p->nicks);
   p->nicks = NULL;
 
-  p->name = malloc_and_check (len);
-  memcpy (p->name, name, len);
+  newname = malloc_and_check (len);
+  memcpy (newname, name, len);
+  free (p->name);
+  p->name = newname;
   p->name_len = len;
 
   if (l == 3)
