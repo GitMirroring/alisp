@@ -797,9 +797,19 @@ bitarray
 
 #define LISP_HASHTABLE_SIZE 1024
 
+
+enum
+hashtable_type
+  {
+    HT_NONE, HT_EQ, HT_EQL, HT_EQUAL, HT_EQUALP
+  };
+
+
 struct
 hashtable
 {
+  enum hashtable_type type;
+
   struct object **table;
 
   int *reference_strength_factor;
@@ -1362,6 +1372,7 @@ int unuse_package (struct object *used, struct object *pack);
 
 int hash_object (const struct object *object, size_t table_size);
 int hash_char_vector (const char *str, size_t sz, size_t table_size);
+int hash_number (const struct object *num, size_t table_size);
 int hash_symbol_name (const struct object *symname, size_t table_size);
 int hash_symbol (const struct object *sym, size_t table_size);
 
@@ -1552,6 +1563,10 @@ fixnum array_rank (const struct array_size *sz);
 fixnum array_total_size (const struct array_size *sz);
 
 int hash_object_respecting_eq (const struct object *object, size_t table_size);
+int hash_object_respecting_eql (const struct object *object, size_t table_size);
+int hash_object_respecting_equal (const struct object *object, size_t table_size);
+int hash_object_respecting_equalp (const struct object *object,
+				   size_t table_size);
 int hash_table_count (const struct hashtable *hasht);
 
 struct parameter *alloc_parameter (enum parameter_type type,
@@ -6482,6 +6497,29 @@ hash_char_vector (const char *str, size_t sz, size_t table_size)
 
 
 int
+hash_number (const struct object *num, size_t table_size)
+{
+  mpz_t numer, denom;
+
+  if (num->type == TYPE_INTEGER)
+    return mpz_get_si (num->value_ptr.integer) % table_size;
+  else if (num->type == TYPE_RATIO)
+    {
+      mpq_get_num (numer, num->value_ptr.ratio);
+      mpq_get_den (denom, num->value_ptr.ratio);
+
+      return (mpz_get_si (numer) + mpz_get_si (denom)) % table_size;
+    }
+  else if (num->type == TYPE_FLOAT)
+    return (long) num->value_ptr.floating % table_size;  /* FIXME */
+  else
+    return (hash_number (num->value_ptr.complex->real, table_size)
+	    + hash_number (num->value_ptr.complex->imag, table_size))
+      % table_size;
+}
+
+
+int
 hash_symbol_name (const struct object *symname, size_t table_size)
 {
   struct symbol_name *s = symname->value_ptr.symbol_name;
@@ -8691,6 +8729,55 @@ hash_object_respecting_eq (const struct object *object, size_t table_size)
 		      platforms, but is not allowed by ansi.
 		      we should probably change to a hash
 		      function on object fields */
+}
+
+
+int
+hash_object_respecting_eql (const struct object *object, size_t table_size)
+{
+  if (object->type == TYPE_CHARACTER)
+    {
+      return hash_char_vector (object->value_ptr.character,
+			       strlen (object->value_ptr.character), table_size);
+    }
+  else if (object->type == TYPE_INTEGER || object->type == TYPE_RATIO
+	   || object->type == TYPE_FLOAT || object->type == TYPE_COMPLEX)
+    {
+      return hash_number (object, table_size);
+    }
+  else
+    {
+      return hash_object_respecting_eq (object, table_size);
+    }
+}
+
+
+int
+hash_object_respecting_equal (const struct object *object, size_t table_size)
+{
+  if (object->type == TYPE_CONS_PAIR)
+    {
+      return (hash_object_respecting_equal (object->value_ptr.cons_pair->car,
+					    table_size)
+	      + hash_object_respecting_equal (object->value_ptr.cons_pair->cdr,
+					      table_size)) % table_size;
+    }
+  else if (object->type == TYPE_STRING)
+    {
+      return hash_char_vector (object->value_ptr.string->value,
+			       object->value_ptr.string->used_size, table_size);
+    }
+  else
+    {
+      return hash_object_respecting_eql (object, table_size);
+    }
+}
+
+
+int
+hash_object_respecting_equalp (const struct object *object, size_t table_size)
+{
+  return 0;
 }
 
 
@@ -12763,16 +12850,62 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 {
   struct object *ret;
   struct hashtable *ht;
+  enum hashtable_type type = HT_NONE;
 
-  if (SYMBOL (list) != &nil_object)
+  while (SYMBOL (list) != &nil_object)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      if (symbol_equals (CAR (list), ":TEST", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (symbol_equals (CAR (CDR (list)), "EQ", env))
+	    {
+	      if (!type)
+		type = HT_EQ;
+	    }
+	  else if (symbol_equals (CAR (CDR (list)), "EQL", env))
+	    {
+	      if (!type)
+		type = HT_EQL;
+	    }
+	  else if (symbol_equals (CAR (CDR (list)), "EQUAL", env))
+	    {
+	      if (!type)
+		type = HT_EQUAL;
+	    }
+	  else if (symbol_equals (CAR (CDR (list)), "EQUALP", env))
+	    {
+	      if (!type)
+		type = HT_EQUALP;
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+	  return NULL;
+	}
+
+      list = CDR (list);
     }
+
+  if (type == HT_NONE)
+    type = HT_EQL;
 
   ret = alloc_object ();
   ht = malloc_and_check (sizeof (*ht));
 
+  ht->type = type;
   ht->table = calloc_and_check (LISP_HASHTABLE_SIZE, sizeof (*ht->table));
   ht->reference_strength_factor =
     malloc_and_check (LISP_HASHTABLE_SIZE * sizeof (int));
@@ -12830,6 +12963,7 @@ builtin_hash_table_test (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
   struct object *ret;
+  enum hashtable_type t;
 
   if (list_length (list) != 1)
     {
@@ -12843,8 +12977,30 @@ builtin_hash_table_test (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = intern_symbol_by_char_vector ("EQ", strlen ("EQ"), 1,
-				      EXTERNAL_VISIBILITY, 1, env->cl_package);
+  t = CAR (list)->value_ptr.hashtable->type;
+
+  switch (t)
+    {
+    case HT_EQ:
+      ret = intern_symbol_by_char_vector ("EQ", strlen ("EQ"), 1,
+					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+      break;
+    case HT_EQL:
+      ret = intern_symbol_by_char_vector ("EQL", strlen ("EQL"), 1,
+					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+      break;
+    case HT_EQUAL:
+      ret = intern_symbol_by_char_vector ("EQUAL", strlen ("EQUAL"), 1,
+					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+      break;
+    case HT_EQUALP:
+      ret = intern_symbol_by_char_vector ("EQUALP", strlen ("EQUALP"), 1,
+					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+      break;
+    default:
+      break;
+    }
+
   increment_refcount (ret);
 
   return ret;
@@ -12856,6 +13012,8 @@ builtin_gethash (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
   struct object *ret, *pres = &t_object;
+  enum hashtable_type t;
+  int ind;
 
   if (list_length (list) != 2)
     {
@@ -12869,8 +13027,27 @@ builtin_gethash (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = CAR (CDR (list))->value_ptr.hashtable->table
-    [hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE)];
+  t = CAR (CDR (list))->value_ptr.hashtable->type;
+
+  switch (t)
+    {
+    case HT_EQ:
+      ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQL:
+      ind = hash_object_respecting_eql (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUAL:
+      ind = hash_object_respecting_equal (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUALP:
+      ind = hash_object_respecting_equalp (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    default:
+      break;
+    }
+
+  ret = CAR (CDR (list))->value_ptr.hashtable->table [ind];
 
   if (!ret)
     {
@@ -12889,7 +13066,8 @@ builtin_remhash (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
   struct object *cell;
-  int ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
+  enum hashtable_type t;
+  int ind;
 
   if (list_length (list) != 2)
     {
@@ -12901,6 +13079,26 @@ builtin_remhash (struct object *list, struct environment *env,
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
+    }
+
+  t = CAR (CDR (list))->value_ptr.hashtable->type;
+
+  switch (t)
+    {
+    case HT_EQ:
+      ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQL:
+      ind = hash_object_respecting_eql (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUAL:
+      ind = hash_object_respecting_equal (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUALP:
+      ind = hash_object_respecting_equalp (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    default:
+      break;
     }
 
   cell = CAR (CDR (list))->value_ptr.hashtable->table [ind];
@@ -15186,6 +15384,7 @@ accessor_gethash (struct object *list, struct object *newval,
 		  struct environment *env, struct outcome *outcome)
 {
   int ind;
+  enum hashtable_type t;
 
   if (list_length (list) != 2)
     {
@@ -15199,17 +15398,31 @@ accessor_gethash (struct object *list, struct object *newval,
       return NULL;
     }
 
-  ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
+  t = CAR (CDR (list))->value_ptr.hashtable->type;
 
-  add_reference (CAR (CDR (list)), newval, ind);
-  decrement_refcount (newval);
+  switch (t)
+    {
+    case HT_EQ:
+      ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQL:
+      ind = hash_object_respecting_eql (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUAL:
+      ind = hash_object_respecting_equal (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUALP:
+      ind = hash_object_respecting_equalp (CAR (list), LISP_HASHTABLE_SIZE);
+      break;
+    default:
+      break;
+    }
 
   delete_reference (CAR (CDR (list)),
 		    CAR (CDR (list))->value_ptr.hashtable->table [ind], ind);
-
+  add_reference (CAR (CDR (list)), newval, ind);
   CAR (CDR (list))->value_ptr.hashtable->table [ind] = newval;
 
-  increment_refcount (newval);
   return newval;
 }
 
@@ -24005,11 +24218,43 @@ print_object (const struct object *obj, struct environment *env,
 	return print_bitarray (obj->value_ptr.bitarray, env, str);
       else if (obj->type == TYPE_HASHTABLE)
 	{
-	  if (write_to_stream (str, "#<HASH-TABLE EQ ",
-			       strlen ("#<HASH-TABLE EQ ")) < 0
-	      || write_long_to_stream (str,
-				       hash_table_count
-				       (obj->value_ptr.hashtable)) < 0
+	  if (write_to_stream (str, "#<HASH-TABLE ",
+			       strlen ("#<HASH-TABLE ")) < 0)
+	    {
+	      return -1;
+	    }
+
+	  if (obj->value_ptr.hashtable->type == HT_EQ)
+	    {
+	      if (write_to_stream (str, "EQ ", strlen ("EQ ")) < 0)
+		{
+		  return -1;
+		}
+	    }
+	  else if (obj->value_ptr.hashtable->type == HT_EQL)
+	    {
+	      if (write_to_stream (str, "EQL ", strlen ("EQL ")) < 0)
+		{
+		  return -1;
+		}
+	    }
+	  else if (obj->value_ptr.hashtable->type == HT_EQUAL)
+	    {
+	      if (write_to_stream (str, "EQUAL ", strlen ("EQUAL ")) < 0)
+		{
+		  return -1;
+		}
+	    }
+	  else
+	    {
+	      if (write_to_stream (str, "EQUALP ", strlen ("EQUALP ")) < 0)
+		{
+		  return -1;
+		}
+	    }
+
+	  if (write_long_to_stream (str,
+				    hash_table_count (obj->value_ptr.hashtable)) < 0
 	      || write_to_stream (str, "/", 1) < 0
 	      || write_long_to_stream (str, LISP_HASHTABLE_SIZE) < 0
 	      || write_to_stream (str, ">", 1) < 0)
