@@ -18830,11 +18830,11 @@ builtin_make_package (struct object *list, struct environment *env,
 {
   char *name;
   int len;
-  struct object *ret;
+  struct object *ret, *nicks = NULL, *args;
 
-  if (list_length (list) != 1)
+  if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
 
@@ -18867,9 +18867,55 @@ builtin_make_package (struct object *list, struct environment *env,
       return NULL;
     }
 
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":NICKNAMES", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!nicks)
+	    nicks = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+	  return NULL;
+	}
+
+      list = CDR (list);
+    }
+
   ret = create_package (name, len);
 
   prepend_object_to_obj_list (ret, &env->packages);
+
+  if (nicks)
+    {
+      args = alloc_empty_cons_pair ();
+      args->value_ptr.cons_pair->car = ret;
+      args->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = ret;
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr =
+	alloc_empty_cons_pair ();
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->car = nicks;
+      increment_refcount (nicks);
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->cdr = &nil_object;
+
+      if (!builtin_rename_package (args, env, outcome))
+	return NULL;
+
+      decrement_refcount (args);
+    }
 
   return ret;
 }
