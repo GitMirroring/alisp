@@ -1041,6 +1041,7 @@ make_test ("(remove-if #'not '(nil))", "NIL");
 make_test ("(remove-if-not #'listp #(()))", "#(NIL)");
 make_test ("(remove-duplicates \"abcaadeabfc\")", "\"deabfc\"");
 make_test ("(remove-duplicates '(0 1 2 3 4 3 3 5 6 8 6))", "(0 1 2 4 3 5 8 6)");
+make_test ("(remove-duplicates nil)", "NIL");
 make_test ("(remove-duplicates #(0 1 2 4 5 3 4 6 9 3) :start 1 :end 7 :test #'=)", "#(0 1 2 5 3 4 6 9 3)");
 make_test ("(delete-duplicates #(0 1 2 4 5 3 4 6 9 3) :from-end t :test #'=)", "#(0 1 2 4 5 3 6 9)");
 make_test ("(reverse '(0 1 2 3))", "(3 2 1 0)");
