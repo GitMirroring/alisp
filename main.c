@@ -21310,7 +21310,8 @@ evaluate_funcall (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  outcome->type = UNKNOWN_FUNCTION;
+	  outcome->obj = SYMBOL (CAR (list));
 	  return NULL;
 	}
     }
