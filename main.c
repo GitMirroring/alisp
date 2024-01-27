@@ -14965,7 +14965,8 @@ builtin_remove_if (struct object *list, struct environment *env,
 	  seq = CDR (seq);
 	}
 
-      cons->value_ptr.cons_pair->cdr = &nil_object;
+      if (SYMBOL (ret) != &nil_object)
+	cons->value_ptr.cons_pair->cdr = &nil_object;
     }
   else if (seq->type == TYPE_STRING)
     {
