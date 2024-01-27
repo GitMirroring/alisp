@@ -1155,6 +1155,7 @@ make_test ("(in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(use-package 'cl)", "T");
 make_test ("(make-package \"newtest\")", "#<PACKAGE \"newtest\">");
+make_test ("(rename-package (find-package '|newtest|) (find-package '|newtest|))", "#<PACKAGE \"newtest\">");
 make_test ("(in-package \"newtest\")", "#<PACKAGE \"newtest\">");
 make_test ("'a", "A");
 make_test ("'b", "B");
