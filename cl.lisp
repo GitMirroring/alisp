@@ -599,7 +599,6 @@
 	  (setf (aref removed (+ start i)) t)
 	  (return nil))))
     (setq leftnum (count-if #'not removed))
-    (fresh-line)
     (dotimes (i len)
       (dotimes (l (- len i))
 	(unless (aref removed (+ l i))
@@ -608,7 +607,8 @@
 	  (return nil))))
     (if (arrayp seq)
 	(adjust-array out leftnum)
-	(rplacd (nthcdr (1- leftnum) out) nil))
+	(if (consp seq)
+	    (rplacd (nthcdr (1- leftnum) out) nil)))
     (if from-end
 	(reverse out)
 	out)))
