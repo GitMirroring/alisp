@@ -1186,6 +1186,8 @@ make_test ("(defpackage \"aaa\" (:nicknames \"bbb\" |ccc|) (:use cl-user) (:expo
 make_test ("(package-nicknames \"aaa\")", "(\"bbb\" \"ccc\")");
 make_test ("(package-use-list \"aaa\")", "(#<PACKAGE \"COMMON-LISP-USER\">)");
 make_test ("'|aaa|:|sym|", "|aaa|:|sym|");
+make_test ("(make-package 'whatever :nicknames '(\"APPLE\" pear))", "#<PACKAGE \"WHATEVER\">");
+make_test ("(package-nicknames 'whatever)", "(\"APPLE\" \"PEAR\")");
 make_test ("(defpackage \"aaa\" (:nicknames \"bbb\" |ccc|) (:use cl-user) (:export \"sym\") (:intern \"eee\" \"fff\") (:import-from \"CL\" car caar) (:import-from \"CL-USER\" al-argc))", "#<PACKAGE \"aaa\">");
 
 
