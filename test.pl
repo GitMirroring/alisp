@@ -1014,6 +1014,7 @@ make_test ("(concatenate 'string \"\")", "\"\"");
 make_test ("(concatenate 'string \"aa\" \"bb\")", "\"aabb\"");
 make_test ("(concatenate 'vector #(0 1 2) #(3) #(4 5))", "#(0 1 2 3 4 5)");
 make_test ("(concatenate 'list '(0 1 2) nil '(3 4 5))", "(0 1 2 3 4 5)");
+make_test ("(concatenate 'list nil)", "NIL");
 make_test ("(do (x (y 0) (z 0 (1+ z))) ((>= z 10) (values x y z)) (write z))", "0123456789\nNIL\n0\n10");
 make_test ("(do ((x 0 (1+ x)) (y 0 (1+ x))) ((>= y 10)) (write y))", "0123456789\nNIL");
 make_test ("(do ((dd 0 (1+ dd))) (nil) (if (> dd 5) (return 10) (write dd)))", "012345\n10");
