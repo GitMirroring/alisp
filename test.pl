@@ -1059,6 +1059,8 @@ make_test ("(push (1+ 0) ll)", "(1)");
 make_test ("ll", "(1)");
 make_test ("(pop ll)", "1");
 make_test ("ll", "NIL");
+make_test ("(set-difference '(0 1 1 2) nil)", "(0 1 1 2)");
+make_test ("(nset-difference '(0 1 1 2) '(3 1 5) :test #'=)", "(0 2)");
 make_test ("(cond (t (+ 1 2)))", "3");
 make_test ("(cond (nil 2) (t 3) (nil 4))", "3");
 make_test ("(cond ((= 2 (+ 1 2)) (+ 0 10)) ((= 3 (+ 1 2)) (+ 12) (+ 0 11)))", "11");
