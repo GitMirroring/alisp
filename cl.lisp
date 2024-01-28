@@ -1127,13 +1127,20 @@
 	      ((or (string= sym "IN"))
 	       (setq iter `(,(car iter) nil ,(cadr f) #'cdr))
 	       (setq f (cddr f)))
+	      ((or (string= sym "="))
+	       (setq iter `(,(car iter) ,(cadr f) nil))
+	       (setq f (cddr f)))
+	      ((or (string= sym "THEN"))
+	       (setf (elt iter 2) (cadr f))
+	       (setq f (cddr f)))
 	      (t
 	       (setq forms f)
 	       (return nil))))
 	  (progn
 	    (setq forms f)
 	    (return nil))))
-    (setf (elt iter 1) (gensym))
+    (if (/= (length iter) 3)
+	(setf (elt iter 1) (gensym)))
     (values iter forms)))
 
 
@@ -1311,9 +1318,13 @@
 	    (setq lets `(let ,v nil))
 	    (setq l (cddr lets)))))
     (dolist (i iters)
-      (let ((outdb `(destructuring-bind (,(cadr i))
-			(list ,(caddr i))
-		      nil))
+      (let ((outdb (if (= (length i) 3)
+		       `(destructuring-bind (,(car i))
+			    (list ,(cadr i))
+			  nil)
+		       `(destructuring-bind (,(cadr i))
+			    (list ,(caddr i))
+			  nil)))
 	    (listcheck `(progn
 			  (if (endp ,(elt i 1))
 			      (return-from ,middle-block-name nil))
@@ -1332,23 +1343,25 @@
 	    (progn
 	      (setf (car od) outdb)
 	      (setq od (cdddar od))
-	      (when (/= (length i) 6)
-		(setf (car od) listcheck)
-		(setq od (cddar od)))
-	      (setf (car od) middb)
-	      (setq od (cdddar od))
-	      (setf (car id) indb)
-	      (setq id (cdddar id)))
+	      (when (/= (length i) 3)
+	      	(when (/= (length i) 6)
+		  (setf (car od) listcheck)
+		  (setq od (cddar od)))
+		(setf (car od) middb)
+		(setq od (cdddar od))
+		(setf (car id) indb)
+		(setq id (cdddar id))))
 	    (progn
 	      (setf outdestbinds outdb)
 	      (setq od (cdddr outdestbinds))
-	      (when (/= (length i) 6)
-		(setf (car od) listcheck)
-		(setq od (cddar od)))
-	      (setf (car od) middb)
-	      (setq od (cdddar od))
-	      (setf indestbinds indb)
-	      (setq id (cdddr indestbinds))))))
+	      (when (/= (length i) 3)
+		(when (/= (length i) 6)
+		  (setf (car od) listcheck)
+		  (setq od (cddar od)))
+		(setf (car od) middb)
+		(setq od (cdddar od))
+		(setf indestbinds indb)
+		(setq id (cdddr indestbinds)))))))
     `(block ,block-name
        ,(let ((inner-body
 	       `(progn
@@ -1359,21 +1372,26 @@
 			       (block ,inner-block-name
 				 (tagbody
 				    ,tagname
-				    (if (or ,@(mapcar (lambda (x) (if (= (length x) 6)
-								      (if (elt x 3)
-									  (if (= (elt x 4) 1)
-									      `(> ,(elt x 1) ,(elt x 3))
-									      `(< ,(elt x 1) ,(elt x 3))))
-								      `(endp ,(elt x 1)))) iters))
+				    (if (or ,@(mapcar (lambda (x) (when (/= (length x) 3)
+								    (if (= (length x) 6)
+									(if (elt x 3)
+									    (if (= (elt x 4) 1)
+										`(> ,(elt x 1) ,(elt x 3))
+										`(< ,(elt x 1) ,(elt x 3))))
+									`(endp ,(elt x 1))))) iters))
 					,(if returnvar
 					     `(return-from ,block-name ,returnvar)
 					     `(return-from ,inner-block-name nil)))
 				    ,(let ((post-initially-forms-body
 					    `(progn
 					       ,@do-forms
-					       ,@(mapcar (lambda (x) (if (= (length x) 6)
-									 `(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5))))
-									 `(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))) iters)
+					       ,@(mapcar (lambda (x) (cond
+								       ((= (length x) 3)
+									`(setq ,(elt x 0) ,(or (elt x 2) (elt x 1))))
+								       ((= (length x) 6)
+									`(setq ,(elt x 1) (+ ,(elt x 0) ,(* (elt x 4) (elt x 5)))))
+								       (t
+									`(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1)))))) iters)
 					       (go ,tagname))))
 				       (if indestbinds
 					   (progn
