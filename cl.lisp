@@ -642,6 +642,22 @@
      c))
 
 
+(defun set-difference (l1 l2 &key (key #'identity) test test-not)
+  (let ((out (concatenate 'list l1))
+	(tst (or test
+		 (if test-not (complement test-not) nil)
+		 #'eql)))
+    (dolist (l l2)
+      (setq out (remove-if (lambda (o) (funcall tst (funcall key o)
+						(funcall key l)))
+			   out)))
+    out))
+
+
+(defun nset-difference (&rest args)
+  (apply 'set-difference args))
+
+
 (defun array-rank (array)
   (length (array-dimensions array)))
 
@@ -1445,17 +1461,18 @@
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  remove-duplicates delete-duplicates nreverse adjoin fill push pop
-	  array-rank array-dimension array-total-size array-in-bounds-p
-	  upgraded-array-element-type adjustable-array-p get get-properties char
-	  string/= char-equal digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp arrayp sequencep stringp
-	  hash-table-p pathnamep streamp realp numberp macroexpand equal equalp
-	  fdefinition complement mapc terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  set-difference nset-difference array-rank array-dimension
+	  array-total-size array-in-bounds-p upgraded-array-element-type
+	  adjustable-array-p get get-properties char string/= char-equal
+	  digit-char digit-char-p char-int string-upcase string-downcase
+	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
+	  string-left-trim string-right-trim string-trim defpackage signed-byte
+	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp random-state-p characterp standard-char-p
+	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
+	  numberp macroexpand equal equalp fdefinition complement mapc terpri
+	  write-line write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
