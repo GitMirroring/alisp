@@ -3145,17 +3145,25 @@ add_standard_definitions (struct environment *env)
   stdobjsym->value_ptr.symbol->typespec = stdobjcl;
 
 
-  add_builtin_condition ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL);
-  add_builtin_condition ("FILE-ERROR", env, 1, "ERROR", (char *)NULL);
-  add_builtin_condition ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
+  add_builtin_condition ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL, "DATUM",
+			 "EXPECTED-TYPE", (char *)NULL);
+  add_builtin_condition ("FILE-ERROR", env, 1, "ERROR", (char *)NULL, "PATHNAME",
 			 (char *)NULL);
-  add_builtin_condition ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL);
-  add_builtin_condition ("ERROR", env, 1, "SERIOUS-CONDITION", (char *)NULL);
-  add_builtin_condition ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL);
-  add_builtin_condition ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL);
-  add_builtin_condition ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL);
-  add_builtin_condition ("WARNING", env, 1, "CONDITION", (char *)NULL);
-  add_builtin_condition ("CONDITION", env, 1, (char *)NULL);
+  add_builtin_condition ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
+			 (char *)NULL, (char *)NULL);
+  add_builtin_condition ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL,
+			 "OPERATION", "OPERANDS", (char *)NULL);
+  add_builtin_condition ("ERROR", env, 1, "SERIOUS-CONDITION", (char *)NULL,
+			 (char *)NULL);
+  add_builtin_condition ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL,
+			 (char *)NULL);
+  add_builtin_condition ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL,
+			 "FORMAT-CONTROL", "FORMAT-ARGUMENTS", (char *)NULL);
+  add_builtin_condition ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL,
+			 (char *)NULL);
+  add_builtin_condition ("WARNING", env, 1, "CONDITION", (char *)NULL,
+			 (char *)NULL);
+  add_builtin_condition ("CONDITION", env, 1, (char *)NULL, (char *)NULL);
 
 
   add_builtin_type ("RESTART", env, type_restart, 1, (char *)NULL);
@@ -8257,6 +8265,7 @@ add_builtin_condition (char *name, struct environment *env, int is_standard, ...
 						     pack);
   struct object *par;
   struct condition_class *cc;
+  struct condition_field_decl *f, *prev;
 
   va_start (valist, is_standard);
 
@@ -8276,10 +8285,25 @@ add_builtin_condition (char *name, struct environment *env, int is_standard, ...
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_by_char_vector (s, strlen (s), 1,
-					  EXTERNAL_VISIBILITY, 1, pack);
+      par = intern_symbol_by_char_vector (s, strlen (s), 1, EXTERNAL_VISIBILITY,
+					  1, pack);
 
       prepend_object_to_obj_list (par, &cc->parents);
+    }
+
+  cc->fields = NULL;
+
+  while ((s = va_arg (valist, char *)))
+    {
+      par = intern_symbol_by_char_vector (s, strlen (s), 1, INTERNAL_VISIBILITY,
+					  1, pack);
+
+      f = create_condition_field_decl (par, env, NULL);
+
+      if (cc->fields)
+	prev = prev->next = f;
+      else
+	cc->fields = prev = f;
     }
 
   sym->value_ptr.symbol->typespec = condcl;
