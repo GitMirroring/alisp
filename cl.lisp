@@ -1127,6 +1127,9 @@
 	      ((or (string= sym "IN"))
 	       (setq iter `(,(car iter) nil ,(cadr f) #'cdr))
 	       (setq f (cddr f)))
+	      ((or (string= sym "ON"))
+	       (setq iter `(,(car iter) ,(cadr f)))
+	       (setq f (cddr f)))
 	      ((or (string= sym "="))
 	       (setq iter `(,(car iter) ,(cadr f) nil))
 	       (setq f (cddr f)))
@@ -1139,7 +1142,7 @@
 	  (progn
 	    (setq forms f)
 	    (return nil))))
-    (if (/= (length iter) 3)
+    (if (> (length iter) 3)
 	(setf (elt iter 1) (gensym)))
     (values iter forms)))
 
@@ -1318,7 +1321,7 @@
 	    (setq lets `(let ,v nil))
 	    (setq l (cddr lets)))))
     (dolist (i iters)
-      (let ((outdb (if (= (length i) 3)
+      (let ((outdb (if (<= (length i) 3)
 		       `(destructuring-bind (,(car i))
 			    (list ,(cadr i))
 			  nil)
@@ -1343,7 +1346,7 @@
 	    (progn
 	      (setf (car od) outdb)
 	      (setq od (cdddar od))
-	      (when (/= (length i) 3)
+	      (when (> (length i) 3)
 	      	(when (/= (length i) 6)
 		  (setf (car od) listcheck)
 		  (setq od (cddar od)))
@@ -1354,7 +1357,7 @@
 	    (progn
 	      (setf outdestbinds outdb)
 	      (setq od (cdddr outdestbinds))
-	      (when (/= (length i) 3)
+	      (when (> (length i) 3)
 		(when (/= (length i) 6)
 		  (setf (car od) listcheck)
 		  (setq od (cddar od)))
@@ -1378,7 +1381,9 @@
 									    (if (= (elt x 4) 1)
 										`(> ,(elt x 1) ,(elt x 3))
 										`(< ,(elt x 1) ,(elt x 3))))
-									`(endp ,(elt x 1))))) iters))
+									(if (= (length x) 2)
+									    `(endp ,(elt x 0))
+									    `(endp ,(elt x 1)))))) iters))
 					,(if returnvar
 					     `(return-from ,block-name ,returnvar)
 					     `(return-from ,inner-block-name nil)))
@@ -1386,6 +1391,8 @@
 					    `(progn
 					       ,@do-forms
 					       ,@(mapcar (lambda (x) (cond
+								       ((= (length x) 2)
+									`(setq ,(elt x 0) (cdr ,(elt x 0))))
 								       ((= (length x) 3)
 									`(setq ,(elt x 0) ,(or (elt x 2) (elt x 1))))
 								       ((= (length x) 6)
