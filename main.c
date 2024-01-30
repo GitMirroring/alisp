@@ -108,6 +108,8 @@ typedef long fixnum;
 
 #define IS_RATIONAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_RATIO)
 
+#define IS_NUMBER(s) (IS_REAL (s) || (s)->type == TYPE_COMPLEX)
+
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :			\
 		   (s)->type == TYPE_SYMBOL_NAME ?			\
 		   (s)->value_ptr.symbol_name->sym :			\
@@ -1056,45 +1058,44 @@ bytespec
 enum
 object_type
   {
-    TYPE_BACKQUOTE = 1 << 1,
-    TYPE_COMMA = 1 << 2,
-    TYPE_AT = 1 << 3,
-    TYPE_DOT = 1 << 4,
-    TYPE_SYMBOL_NAME = 1 << 5,
-    TYPE_SYMBOL = 1 << 6,
-    TYPE_INTEGER = 1 << 7,
-    TYPE_FIXNUM = 1 << 8,
-    TYPE_RATIO = 1 << 9,
-    TYPE_FLOAT = 1 << 10,
-    TYPE_COMPLEX = 1 << 11,
-    TYPE_RANDOM_STATE = 1 << 27,
-    TYPE_BYTESPEC = 0,
-    TYPE_CONS_PAIR = 1 << 13,
-    TYPE_STRING = 1 << 14,
-    TYPE_CHARACTER = 1 << 15,
-    TYPE_ARRAY = 1 << 16,
-    TYPE_BITARRAY = 1 << 12,
-    TYPE_HASHTABLE = 1 << 17,
-    TYPE_ENVIRONMENT = 1 << 18,
-    TYPE_PACKAGE = 1 << 19,
-    TYPE_FILENAME = 1 << 20,
-    TYPE_STREAM = 1 << 21,
-    TYPE_STRUCTURE_CLASS = 1,
-    TYPE_STRUCTURE = 1 << 22,
-    TYPE_STANDARD_CLASS = 1 << 28,
-    TYPE_STANDARD_OBJECT = 1 << 29,
-    TYPE_CONDITION_CLASS = 1 << 31,
-    TYPE_CONDITION = 1 << 23,
-    TYPE_FUNCTION = 1 << 24,
-    TYPE_MACRO = 1 << 25,
-    TYPE_METHOD = 1 << 30,
-    TYPE_SHARP_MACRO_CALL = 1 << 26,
+    TYPE_BACKQUOTE,
+    TYPE_COMMA,
+    TYPE_AT,
+    TYPE_DOT,
+    TYPE_SYMBOL_NAME,
+    TYPE_SYMBOL,
+    TYPE_INTEGER,
+    TYPE_FIXNUM,
+    TYPE_RATIO,
+    TYPE_FLOAT,
+    TYPE_COMPLEX,
+    TYPE_RANDOM_STATE,
+    TYPE_BYTESPEC,
+    TYPE_CONS_PAIR,
+    TYPE_STRING,
+    TYPE_CHARACTER,
+    TYPE_ARRAY,
+    TYPE_BITARRAY,
+    TYPE_HASHTABLE,
+    TYPE_ENVIRONMENT,
+    TYPE_PACKAGE,
+    TYPE_FILENAME,
+    TYPE_STREAM,
+    TYPE_STRUCTURE_CLASS,
+    TYPE_STRUCTURE,
+    TYPE_STANDARD_CLASS,
+    TYPE_STANDARD_OBJECT,
+    TYPE_CONDITION_CLASS,
+    TYPE_CONDITION,
+    TYPE_FUNCTION,
+    TYPE_MACRO,
+    TYPE_METHOD,
+    TYPE_SHARP_MACRO_CALL
   };
 
 
-#define TYPE_PREFIX (TYPE_BACKQUOTE | TYPE_COMMA | TYPE_AT | TYPE_DOT)
-#define TYPE_REAL (TYPE_INTEGER | TYPE_FIXNUM | TYPE_RATIO | TYPE_FLOAT)
-#define TYPE_NUMBER (TYPE_REAL | TYPE_COMPLEX)
+#define IS_PREFIX(t) ((t) == TYPE_BACKQUOTE || (t) == TYPE_COMMA \
+		      || (t) == TYPE_AT || (t) == TYPE_DOT)
 
 
 union
@@ -15569,7 +15570,7 @@ compare_any_numbers (struct object *list, struct environment *env,
 
   if (l == 1)
     {
-      if (CAR (list)->type & TYPE_NUMBER
+      if (IS_NUMBER (CAR (list))
 	  && (comp == EQUAL || CAR (list)->type != TYPE_COMPLEX))
 	{
 	  return &t_object;
@@ -15587,7 +15588,7 @@ compare_any_numbers (struct object *list, struct environment *env,
       first = CAR (list);
       second = CAR (CDR (list));
 
-      if (!(first->type & TYPE_NUMBER) || !(second->type & TYPE_NUMBER)
+      if (!IS_NUMBER (first) || !IS_NUMBER (second)
 	  || (comp != EQUAL && (first->type == TYPE_COMPLEX
 				|| second->type == TYPE_COMPLEX)))
 	{
@@ -16265,7 +16266,7 @@ builtin_plus (struct object *list, struct environment *env,
       return create_integer_from_long (0);
     }
 
-  if (!(CAR (list)->type & TYPE_NUMBER))
+  if (!IS_NUMBER (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -16282,7 +16283,7 @@ builtin_plus (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if (!(CAR (list)->type & TYPE_NUMBER))
+      if (!IS_NUMBER (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -16317,7 +16318,7 @@ builtin_minus (struct object *list, struct environment *env,
     }
   else
     {
-      if (!(CAR (list)->type & TYPE_NUMBER))
+      if (!IS_NUMBER (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -16330,7 +16331,7 @@ builtin_minus (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if (!(CAR (list)->type & TYPE_NUMBER))
+      if (!IS_NUMBER (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -16359,7 +16360,7 @@ builtin_multiply (struct object *list, struct environment *env,
       return create_integer_from_long (1);
     }
 
-  if (!(CAR (list)->type & TYPE_NUMBER))
+  if (!IS_NUMBER (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -16376,7 +16377,7 @@ builtin_multiply (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if (!(CAR (list)->type & TYPE_NUMBER))
+      if (!IS_NUMBER (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -16411,7 +16412,7 @@ builtin_divide (struct object *list, struct environment *env,
     }
   else
     {
-      if (!(CAR (list)->type & TYPE_NUMBER))
+      if (!IS_NUMBER (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -16424,7 +16425,7 @@ builtin_divide (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if (!(CAR (list)->type & TYPE_NUMBER))
+      if (!IS_NUMBER (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -16640,7 +16641,7 @@ builtin_realpart (struct object *list, struct environment *env,
       increment_refcount (num->value_ptr.complex->real);
       return num->value_ptr.complex->real;
     }
-  else if (num->type & TYPE_REAL)
+  else if (IS_REAL (num))
     {
       increment_refcount (num);
       return num;
@@ -16703,7 +16704,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
   int l = list_length (list), i, j;
   struct object *first, *second, *cons;
 
-  if (l == 1 && CAR (list)->type & TYPE_NUMBER)
+  if (l == 1 && IS_NUMBER (CAR (list)))
     return &t_object;
   else if (l == 1)
     {
@@ -16716,7 +16717,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
     {
       first = CAR (list);
 
-      if (!(first->type & TYPE_NUMBER))
+      if (!IS_NUMBER (first))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
@@ -16729,7 +16730,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
 	{
 	  second = CAR (cons);
 
-	  if (!(second->type & TYPE_NUMBER))
+	  if (!IS_NUMBER (second))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 
@@ -25197,7 +25198,7 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
   struct parameter *par;
   struct method_list *ml;
 
-  if (node->type & TYPE_PREFIX)
+  if (IS_PREFIX (node->type))
     rest_inv_at_edge (node->value_ptr.next, 0);
   else if (node->type == TYPE_SYMBOL_NAME)
     rest_inv_at_edge (node->value_ptr.symbol_name->sym, 0);
@@ -25302,7 +25303,7 @@ free_object (struct object *obj)
     free_symbol_name (obj);
   else if (obj->type == TYPE_SYMBOL)
     free_symbol (obj);
-  else if (obj->type & TYPE_PREFIX)
+  else if (IS_PREFIX (obj->type))
     {
       delete_reference (obj, obj->value_ptr.next, 0);
       free (obj);
