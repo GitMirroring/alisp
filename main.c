@@ -1479,6 +1479,7 @@ struct condition_field_decl *create_condition_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
 void create_object_fields (struct object *stdobj, struct object *class);
+void create_condition_fields (struct object *stdobj, struct object *class);
 
 struct object *load_file (const char *filename, struct environment *env,
 			  struct outcome *outcome);
@@ -7669,6 +7670,34 @@ create_object_fields (struct object *stdobj, struct object *class)
   while (p)
     {
       create_object_fields (stdobj, p->obj->value_ptr.symbol->typespec);
+
+      p = p->next;
+    }
+}
+
+
+void
+create_condition_fields (struct object *stdobj, struct object *class)
+{
+  struct condition_field_decl *fd = class->value_ptr.condition_class->fields;
+  struct object_list *p = class->value_ptr.condition_class->parents;
+  struct condition_field *f;
+
+  while (fd)
+    {
+      f = malloc_and_check (sizeof (*f));
+
+      f->name = fd->name;
+      f->value = &nil_object;
+      f->next = stdobj->value_ptr.condition->fields;
+      stdobj->value_ptr.condition->fields = f;
+
+      fd = fd->next;
+    }
+
+  while (p)
+    {
+      create_condition_fields (stdobj, p->obj->value_ptr.symbol->typespec);
 
       p = p->next;
     }
@@ -22782,8 +22811,6 @@ builtin_make_condition (struct object *list, struct environment *env,
 {
   struct object *ret;
   struct condition *c;
-  struct condition_field_decl *fd;
-  struct condition_field *f;
 
   if (list_length (list) != 1)
     {
@@ -22806,20 +22833,7 @@ builtin_make_condition (struct object *list, struct environment *env,
   c->fields = NULL;
   ret->value_ptr.condition = c;
 
-  fd = c->class->value_ptr.condition_class->fields;
-
-  while (fd)
-    {
-      if (c->fields)
-	f = f->next = malloc_and_check (sizeof (*f));
-      else
-	c->fields = f = malloc_and_check (sizeof (*f));
-
-      f->name = fd->name;
-      f->value = NULL;
-
-      fd = fd->next;
-    }
+  create_condition_fields (ret, c->class);
 
   return ret;
 }
