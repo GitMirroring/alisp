@@ -731,6 +731,10 @@ function
 
 
   struct object *struct_copyier_class;
+
+
+  struct object *condition_reader_class;
+  struct object *condition_reader_field;
 };
 
 
@@ -1424,6 +1428,8 @@ struct object *create_string_copying_c_string (char *str);
 void resize_string_allocation (struct object *string, fixnum size);
 char *copy_string_to_c_string (struct string *str);
 
+char *concatenate_char_vectors (size_t totsize, ...);
+
 struct object *alloc_symbol_name (size_t value_s, size_t actual_symname_s);
 void resize_symbol_name (struct object *symname, size_t value_s,
 			 size_t actual_symname_s);
@@ -1631,6 +1637,10 @@ struct object *call_structure_accessor (struct object *struct_class,
 					struct object *newval,
 					struct environment *env,
 					struct outcome *outcome);
+struct object *call_condition_reader (struct object *condition_class,
+				      struct object *field, struct object *args,
+				      struct environment *env,
+				      struct outcome *outcome);
 
 int is_class_completely_defined (struct object *class);
 
@@ -6026,6 +6036,7 @@ alloc_function (void)
   fun->struct_accessor_class = NULL;
   fun->struct_predicate_class = NULL;
   fun->struct_copyier_class = NULL;
+  fun->condition_reader_class = NULL;
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
@@ -6959,6 +6970,30 @@ copy_string_to_c_string (struct string *str)
   memcpy (ret, str->value, str->used_size);
 
   ret [str->used_size] = 0;
+
+  return ret;
+}
+
+
+char *
+concatenate_char_vectors (size_t totsize, ...)
+{
+  va_list valist;
+  char *s, *ret = malloc_and_check (totsize);
+  size_t sz, i = 0;
+
+  va_start (valist, totsize);
+
+  while ((s = va_arg (valist, char *)))
+    {
+      sz = va_arg (valist, size_t);
+
+      memcpy (ret+i, s, sz);
+
+      i += sz;
+    }
+
+  va_end (valist);
 
   return ret;
 }
@@ -8258,12 +8293,10 @@ void
 add_builtin_condition (char *name, struct environment *env, int is_standard, ...)
 {
   va_list valist;
-  char *s;
-  struct object *condcl, *pack = inspect_variable (env->package_sym, env);
-  struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
-						     EXTERNAL_VISIBILITY, 1,
-						     pack);
-  struct object *par;
+  char *s, *rn;
+  struct object *condcl, *pack = inspect_variable (env->package_sym, env),
+    *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+					 EXTERNAL_VISIBILITY, 1, pack), *par, *rs;
   struct condition_class *cc;
   struct condition_field_decl *f, *prev;
 
@@ -8304,6 +8337,25 @@ add_builtin_condition (char *name, struct environment *env, int is_standard, ...
 	prev = prev->next = f;
       else
 	cc->fields = prev = f;
+
+      rn = concatenate_char_vectors (sym->value_ptr.symbol->name_len + 1
+				     + par->value_ptr.symbol->name_len,
+				     sym->value_ptr.symbol->name,
+				     sym->value_ptr.symbol->name_len, "-", 1,
+				     par->value_ptr.symbol->name,
+				     par->value_ptr.symbol->name_len,
+				     (char *)NULL);
+
+      rs = intern_symbol_by_char_vector (rn, sym->value_ptr.symbol->name_len+1+
+					 par->value_ptr.symbol->name_len, 0,
+					 EXTERNAL_VISIBILITY, 1, pack);
+      increment_refcount (rs);
+      rs->value_ptr.symbol->function_cell = alloc_function ();
+      rs->value_ptr.symbol->function_cell->value_ptr.function->
+	condition_reader_class = condcl;
+      rs->value_ptr.symbol->function_cell->value_ptr.function->
+	condition_reader_field = par;
+      rs->value_ptr.symbol->function_cell->value_ptr.function->name = rs;
     }
 
   sym->value_ptr.symbol->typespec = condcl;
@@ -10167,6 +10219,22 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       return ret;
     }
+  else if (func->value_ptr.function->condition_reader_class)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	return NULL;
+
+      ret = call_condition_reader (func->value_ptr.function->
+				   condition_reader_class,
+				   func->value_ptr.function->
+				   condition_reader_field, args, env, outcome);
+
+      decrement_refcount (args);
+
+      return ret;
+    }
 
 
   if (func->value_ptr.function->is_generic)
@@ -10292,6 +10360,43 @@ call_structure_accessor (struct object *struct_class, struct object *field,
 	  if (newval)
 	    f->value = newval;
 
+	  increment_refcount (f->value);
+	  return f->value;
+	}
+
+      f = f->next;
+    }
+
+  return NULL;
+}
+
+
+struct object *
+call_condition_reader (struct object *condition_class, struct object *field,
+		       struct object *args, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct condition_field *f;
+
+  if (list_length (args) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (args)->type != TYPE_CONDITION
+      || CAR (args)->value_ptr.condition->class != condition_class)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (args)->value_ptr.condition->fields;
+
+  while (f)
+    {
+      if (f->name == field)
+	{
 	  increment_refcount (f->value);
 	  return f->value;
 	}
@@ -21730,10 +21835,11 @@ evaluate_defstruct (struct object *list, struct environment *env,
       list = CDR (list);
     }
 
-  constr_name = malloc_and_check (5 + name->value_ptr.symbol->name_len);
-  memcpy (constr_name, "MAKE-", 5);
-  memcpy (constr_name+5, name->value_ptr.symbol->name,
-	  name->value_ptr.symbol->name_len);
+  constr_name =
+    concatenate_char_vectors (5 + name->value_ptr.symbol->name_len, "MAKE-", 5,
+			      name->value_ptr.symbol->name,
+			      name->value_ptr.symbol->name_len, (char *)NULL);
+
   funcname = intern_symbol_by_char_vector (constr_name,
 					   5+name->value_ptr.symbol->name_len, 0,
 					   EXTERNAL_VISIBILITY, 1, pack);
