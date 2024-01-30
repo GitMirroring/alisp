@@ -240,6 +240,15 @@ handler_binding
 
 
 struct
+handler_binding_frame
+{
+  struct handler_binding *frame;
+
+  struct handler_binding_frame *next;
+};
+
+
+struct
 restart_binding
 {
   struct object *name;
@@ -523,7 +532,7 @@ environment
 
   struct object_list *catches;
 
-  struct handler_binding *handlers;
+  struct handler_binding_frame *handlers;
 
   struct restart_binding *restarts;
 
@@ -22391,7 +22400,8 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 {
   int handlers = 0;
   struct object *cons, *ret = NULL, *res, *hret;
-  struct handler_binding *b, *prev = NULL, *first = NULL;
+  struct handler_binding *b, *prev, *first = NULL;
+  struct handler_binding_frame *f;
   struct object arg;
   struct cons_pair c;
 
@@ -22437,23 +22447,29 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 
       if (!first)
 	{
-	  prev = env->handlers;
-	  first = b;
+	  first = prev = b;
 	}
-
-      if (env->handlers)
-	env->handlers->next = b;
-
-      env->handlers = b;
+      else
+	{
+	  prev = prev->next = b;
+	}
 
       handlers++;
 
       cons = CDR (cons);
     }
 
+  if (first)
+    {
+      f = malloc_and_check (sizeof (*f));
+      f->frame = first;
+      f->next = env->handlers;
+      env->handlers = f;
+    }
+
   ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
 
-  if (!ret)
+  if (!ret && first)
     {
       b = first;
 
@@ -22480,15 +22496,19 @@ evaluate_handler_bind (struct object *list, struct environment *env,
     }
 
  cleanup_and_leave:
-  for (; handlers; handlers--)
+  if (first)
     {
-      b = first->next;
-      decrement_refcount (first->handler);
-      free (first);
-      first = b;
-    }
+      for (; handlers; handlers--)
+	{
+	  b = first->next;
+	  decrement_refcount (first->handler);
+	  free (first);
+	  first = b;
+	}
 
-  env->handlers = prev;
+      env->handlers = f->next;
+      free (f);
+    }
 
   return ret;
 }
