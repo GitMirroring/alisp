@@ -484,7 +484,11 @@ outcome
   struct object *tag_to_jump_to;
 
   struct object *block_to_leave;
+
   struct object *object_to_catch;
+
+  struct object *condition;
+
   struct object *return_value;
   int return_no_value;
   struct object_list *return_other_values;
@@ -2321,6 +2325,8 @@ struct object *evaluate_unwind_protect
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_signal
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_error
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_define_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_condition
@@ -2564,7 +2570,24 @@ main (int argc, char *argv [])
 	    }
 
 	  if (!result)
-	    print_error (&eval_out, &env);
+	    {
+	      if (eval_out.condition)
+		{
+		  if (is_subtype_by_char_vector
+		      (eval_out.condition->value_ptr.condition->class->
+		       value_ptr.condition_class->name, "SIMPLE-CONDITION", &env))
+		    {
+		      print_object (eval_out.condition->value_ptr.condition->fields->
+				    value, &env, c_stdout->value_ptr.stream);
+		      fresh_line (c_stdout->value_ptr.stream);
+		    }
+
+		  decrement_refcount (eval_out.condition);
+		  eval_out.condition = NULL;
+		}
+	      else
+		print_error (&eval_out, &env);
+	    }
 	  else if (eval_out.no_value)
 	    eval_out.no_value = 0;
 	  else
@@ -2997,6 +3020,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
 		    NULL, 1);
   add_builtin_form ("SIGNAL", env, builtin_signal, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("ERROR", env, builtin_error, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
@@ -3178,6 +3202,8 @@ add_standard_definitions (struct environment *env)
 			 (char *)NULL);
   add_builtin_condition ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL,
 			 "FORMAT-ARGUMENTS", "FORMAT-CONTROL", (char *)NULL);
+  add_builtin_condition ("SIMPLE-ERROR", env, 1, "SIMPLE-CONDITION", (char *)NULL,
+			 (char *)NULL);
   add_builtin_condition ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL,
 			 (char *)NULL);
   add_builtin_condition ("WARNING", env, 1, "CONDITION", (char *)NULL,
@@ -22999,6 +23025,12 @@ builtin_signal (struct object *list, struct environment *env,
     {
       cond = CAR (list);
     }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
 
   ret = handle_condition (cond, env, outcome);
 
@@ -23009,6 +23041,65 @@ builtin_signal (struct object *list, struct environment *env,
     return NULL;
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_error (struct object *list, struct environment *env,
+	       struct outcome *outcome)
+{
+  struct object *cond, *ret;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      cond = create_condition_by_c_string ("SIMPLE-ERROR", env, CAR (list),
+					   CDR (list), (struct object *)NULL);
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+	  != TYPE_CONDITION_CLASS)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      cond =
+	create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
+				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
+				   : CAR (CDR (list)),
+				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
+				   : CDR (CDR (list)), (struct object *)NULL);
+    }
+  else if (CAR (list)->type == TYPE_CONDITION)
+    {
+      cond = CAR (list);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      if (CAR (list)->type != TYPE_CONDITION)
+	decrement_refcount (cond);
+
+      return NULL;
+    }
+
+  outcome->condition = cond;
+  return NULL;
 }
 
 
