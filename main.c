@@ -553,7 +553,7 @@ environment
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
     *amp_allow_other_keys_sym, *amp_aux_sym;
 
-  struct object *not_sym, *and_sym, *or_sym, *star_sym;
+  struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym, *star_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *print_escape_sym, *print_readably_sym, *print_base_sym, *print_array_sym,
@@ -3239,6 +3239,8 @@ add_standard_definitions (struct environment *env)
   env->not_sym = CREATE_BUILTIN_SYMBOL ("NOT");
   env->and_sym = CREATE_BUILTIN_SYMBOL ("AND");
   env->or_sym = CREATE_BUILTIN_SYMBOL ("OR");
+  env->eql_sym = CREATE_BUILTIN_SYMBOL ("EQL");
+  env->member_sym = CREATE_BUILTIN_SYMBOL ("MEMBER");
   env->star_sym = CREATE_BUILTIN_SYMBOL ("*");
 
 
@@ -10730,6 +10732,31 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 
 	      if (ret)
 		return ret;
+
+	      args = CDR (args);
+	    }
+
+	  return 0;
+	}
+      else if (sym == env->eql_sym)
+	{
+	  if (list_length (args) != 1)
+	    {
+	      outcome->type = INVALID_TYPE_SPECIFIER;
+	      return -1;
+	    }
+
+	  if (eql_objects (CAR (args), obj) == &t_object)
+	    return 1;
+	  else
+	    return 0;
+	}
+      else if (sym == env->member_sym)
+	{
+	  while (SYMBOL (args) != &nil_object)
+	    {
+	      if (eql_objects (CAR (args), obj) == &t_object)
+		return 1;
 
 	      args = CDR (args);
 	    }
