@@ -1522,11 +1522,16 @@ struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 struct object_list *add_block (struct object *name, struct object_list *blocks);
 struct object_list *remove_block (struct object_list *blocks);
 
+struct object *create_condition (struct object *type, ...);
+struct object *create_condition_by_c_string (char *type,
+					     struct environment *env, ...);
 int does_condition_include_outcome_type (struct object *cond,
 					 enum outcome_type type,
 					 struct environment *env);
 void add_builtin_condition (char *name, struct environment *env, int is_standard,
 			    ...);
+struct object *handle_condition (struct object *cond, struct environment *env,
+				 struct outcome *outcome);
 
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
@@ -2313,6 +2318,8 @@ struct object *builtin_invoke_restart
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_unwind_protect
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_signal
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_define_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_condition
@@ -2988,6 +2995,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
 		    NULL, 1);
+  add_builtin_form ("SIGNAL", env, builtin_signal, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
@@ -8270,6 +8278,36 @@ remove_block (struct object_list *blocks)
 }
 
 
+struct object *
+create_condition (struct object *type, ...)
+{
+  struct object *ret = alloc_object ();
+  struct condition *c;
+
+  ret->type = TYPE_CONDITION;
+
+  c = malloc_and_check (sizeof (*c));
+  c->class = type;
+  c->fields = NULL;
+  ret->value_ptr.condition = c;
+
+  create_condition_fields (ret, c->class);
+
+  return ret;
+}
+
+
+struct object *
+create_condition_by_c_string (char *type, struct environment *env, ...)
+{
+  struct object *sym = intern_symbol_by_char_vector (type, strlen (type), 1,
+						     EXTERNAL_VISIBILITY, 0,
+						     env->cl_package);
+
+  return create_condition (sym->value_ptr.symbol->typespec);
+}
+
+
 int
 does_condition_include_outcome_type (struct object *cond, enum outcome_type type,
 				     struct environment *env)
@@ -8361,6 +8399,53 @@ add_builtin_condition (char *name, struct environment *env, int is_standard, ...
   sym->value_ptr.symbol->typespec = condcl;
 
   va_end (valist);
+}
+
+
+struct object *
+handle_condition (struct object *cond, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct handler_binding *b;
+  struct handler_binding_frame *f;
+  struct object *hret;
+  struct object arg;
+  struct cons_pair c;
+
+  if (!env->handlers)
+    return &nil_object;
+
+  b = env->handlers->frame;
+
+  arg.type = TYPE_CONS_PAIR;
+  arg.value_ptr.cons_pair = &c;
+  arg.refcount1 = 0;
+  arg.refcount2 = 1;
+  c.car = cond;
+  c.cdr = &nil_object;
+
+  while (b)
+    {
+      if (is_subtype (cond->value_ptr.condition->class->
+		      value_ptr.condition_class->name, b->condition, NULL))
+	{
+	  f = env->handlers;
+	  env->handlers = env->handlers->next;
+
+	  hret = call_function (b->handler, &arg, 1, 0, 0, env, outcome);
+
+	  env->handlers = f;
+
+	  if (!hret)
+	    return NULL;
+
+	  decrement_refcount (hret);
+	}
+
+      b = b->next;
+    }
+
+  return &t_object;
 }
 
 
@@ -22844,6 +22929,29 @@ evaluate_unwind_protect (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_signal (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *cond, *ret;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  cond = create_condition_by_c_string ("SIMPLE-CONDITION", env);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    return NULL;
+
+  return &nil_object;
+}
+
+
+struct object *
 evaluate_define_condition (struct object *list, struct environment *env,
 			   struct outcome *outcome)
 {
@@ -22939,9 +23047,6 @@ struct object *
 builtin_make_condition (struct object *list, struct environment *env,
 			struct outcome *outcome)
 {
-  struct object *ret;
-  struct condition *c;
-
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -22955,17 +23060,7 @@ builtin_make_condition (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = alloc_object ();
-  ret->type = TYPE_CONDITION;
-
-  c = malloc_and_check (sizeof (*c));
-  c->class = SYMBOL (CAR (list))->value_ptr.symbol->typespec;
-  c->fields = NULL;
-  ret->value_ptr.condition = c;
-
-  create_condition_fields (ret, c->class);
-
-  return ret;
+  return create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec);
 }
 
 
