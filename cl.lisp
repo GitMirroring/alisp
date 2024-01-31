@@ -925,6 +925,11 @@
   (typep obj 'number))
 
 
+(defmacro check-type (place type &optional str)
+  `(unless (typep ,place ',type)
+     (error 'type-error)))
+
+
 
 (defun macroexpand (form)
   (do ((ret (list form t))
@@ -1490,9 +1495,9 @@
 	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
 	  rationalp floatp complexp random-state-p characterp standard-char-p
 	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
-	  numberp macroexpand equal equalp fdefinition complement mapc terpri
-	  write-line write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  numberp check-type macroexpand equal equalp fdefinition complement
+	  mapc terpri write-line write-sequence prin1 princ print do-all-symbols
+	  loop format encode-universal-time))
 
 
 
