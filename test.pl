@@ -988,6 +988,11 @@ make_test ("(restart-bind ((rest (lambda () (write 10)))) (invoke-restart 'rest)
 make_test ("(block test (unwind-protect 0 (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
+make_test ("(signal \"blah\")", "NIL");
+make_test ("(handler-bind ((simple-condition (lambda (e) (write 'oh)))) (signal \"blah\"))", "OH\nNIL");
+make_test ("(handler-bind ((condition (lambda (e) (write 'ah))) (simple-condition (lambda (e) (write 'oh)))) (signal \"blah\"))", "AHOH\nNIL");
+make_test ("(handler-bind ((condition (lambda (e) (write (signal \"w\"))))) (signal \"blah\"))", "NIL\nNIL");
+make_test ("(block nil (handler-bind ((condition (lambda (e) (return 0)))) (signal \"blah\")))", "0");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
