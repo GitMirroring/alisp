@@ -508,6 +508,7 @@ make_test ("(subtypep 'character 'bit)", "NIL\nT");
 make_test ("(deftype not-integer () `(not integer))", "NOT-INTEGER");
 make_test ("(typep 0 'not-integer)", "NIL");
 make_test ("(typep \"\" 'not-integer)", "T");
+make_test ("(let ((i 0)) (check-type i integer))", "NIL");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
 make_test ("(defun (setf foo2) (a1 a2) (list a1 a2))", "(SETF FOO2)");
