@@ -995,6 +995,7 @@ make_test ("(handler-bind ((condition (lambda (e) (write (signal \"w\"))))) (sig
 make_test ("(block nil (handler-bind ((condition (lambda (e) (return 0)))) (signal \"blah\")))", "0");
 make_test ("(handler-bind ((condition (lambda (e) (write (simple-condition-format-control e))))) (signal \"blah\"))", "\"blah\"\nNIL");
 make_test ("(handler-bind ((arithmetic-error (lambda (e) (write 'oh)))) (signal 'arithmetic-error))", "OH\nNIL");
+make_test ("(error \"bah\")", "\"bah\"");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
