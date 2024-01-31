@@ -1522,7 +1522,8 @@ struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 struct object_list *add_block (struct object *name, struct object_list *blocks);
 struct object_list *remove_block (struct object_list *blocks);
 
-struct object *create_condition (struct object *type, ...);
+struct object *create_condition (struct object *type, va_list valist);
+struct object *create_condition_by_class (struct object *type, ...);
 struct object *create_condition_by_c_string (char *type,
 					     struct environment *env, ...);
 int does_condition_include_outcome_type (struct object *cond,
@@ -3176,7 +3177,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_condition ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL,
 			 (char *)NULL);
   add_builtin_condition ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL,
-			 "FORMAT-CONTROL", "FORMAT-ARGUMENTS", (char *)NULL);
+			 "FORMAT-ARGUMENTS", "FORMAT-CONTROL", (char *)NULL);
   add_builtin_condition ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL,
 			 (char *)NULL);
   add_builtin_condition ("WARNING", env, 1, "CONDITION", (char *)NULL,
@@ -8279,10 +8280,11 @@ remove_block (struct object_list *blocks)
 
 
 struct object *
-create_condition (struct object *type, ...)
+create_condition (struct object *type, va_list valist)
 {
-  struct object *ret = alloc_object ();
+  struct object *ret = alloc_object (), *n;
   struct condition *c;
+  struct condition_field *f;
 
   ret->type = TYPE_CONDITION;
 
@@ -8293,6 +8295,31 @@ create_condition (struct object *type, ...)
 
   create_condition_fields (ret, c->class);
 
+  f = ret->value_ptr.condition->fields;
+
+  while ((n = va_arg (valist, struct object *)))
+    {
+      f->value = n;
+      increment_refcount (n);
+      f = f->next;
+    }
+
+  return ret;
+}
+
+
+struct object *
+create_condition_by_class (struct object *type, ...)
+{
+  struct object *ret;
+  va_list valist;
+
+  va_start (valist, type);
+
+  ret = create_condition (type, valist);
+
+  va_end (valist);
+
   return ret;
 }
 
@@ -8302,9 +8329,16 @@ create_condition_by_c_string (char *type, struct environment *env, ...)
 {
   struct object *sym = intern_symbol_by_char_vector (type, strlen (type), 1,
 						     EXTERNAL_VISIBILITY, 0,
-						     env->cl_package);
+						     env->cl_package), *ret;
+  va_list valist;
 
-  return create_condition (sym->value_ptr.symbol->typespec);
+  va_start (valist, env);
+
+  ret = create_condition (sym->value_ptr.symbol->typespec, valist);
+
+  va_end (valist);
+
+  return ret;
 }
 
 
@@ -22940,9 +22974,36 @@ builtin_signal (struct object *list, struct environment *env,
       return NULL;
     }
 
-  cond = create_condition_by_c_string ("SIMPLE-CONDITION", env);
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      cond = create_condition_by_c_string ("SIMPLE-CONDITION", env, CAR (list),
+					   CDR (list), (struct object *)NULL);
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+	  != TYPE_CONDITION_CLASS)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      cond =
+	create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
+				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
+				   : CAR (CDR (list)),
+				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
+				   : CDR (CDR (list)), (struct object *)NULL);
+    }
+  else if (CAR (list)->type == TYPE_CONDITION)
+    {
+      cond = CAR (list);
+    }
 
   ret = handle_condition (cond, env, outcome);
+
+  if (CAR (list)->type != TYPE_CONDITION)
+    decrement_refcount (cond);
 
   if (!ret)
     return NULL;
@@ -23060,7 +23121,8 @@ builtin_make_condition (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec);
+  return create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
+				    (struct object *)NULL);
 }
 
 
