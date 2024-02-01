@@ -1866,6 +1866,8 @@ struct object *builtin_gethash
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_remhash
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_maphash
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_line
@@ -2871,6 +2873,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION,
 		    accessor_gethash, 0);
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
@@ -13509,6 +13512,78 @@ builtin_remhash (struct object *list, struct environment *env,
 
       return &t_object;
     }
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_maphash (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  struct object *fun, *args, *ret;
+  size_t i;
+  struct hashtable_record *r;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
+    {
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+
+      if (!fun)
+	{
+	  outcome->type = UNKNOWN_FUNCTION;
+	  outcome->obj = SYMBOL (CAR (list));
+	  return NULL;
+	}
+    }
+  else if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      fun = CAR (list);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  args = alloc_empty_list (2);
+
+  for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
+    {
+      r = CAR (CDR (list))->value_ptr.hashtable->table [i];
+
+      while (r)
+	{
+	  args->value_ptr.cons_pair->car = r->key;
+	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = r->value;
+
+	  ret = call_function (fun, args, 0, 0, 0, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!ret)
+	    return NULL;
+
+	  decrement_refcount (ret);
+
+	  r = r->next;
+	}
+    }
+
+  args->value_ptr.cons_pair->car = NULL;
+  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = NULL;
+  decrement_refcount (args);
 
   return &nil_object;
 }
