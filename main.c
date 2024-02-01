@@ -825,13 +825,23 @@ hashtable_type
 
 
 struct
+hashtable_record
+{
+  struct object *key;
+  struct object *value;
+
+  int reference_strength_factor;
+
+  struct hashtable_record *next;
+};
+
+
+struct
 hashtable
 {
   enum hashtable_type type;
 
-  struct object **table;
-
-  int *reference_strength_factor;
+  struct hashtable_record **table;
 };
 
 
@@ -1393,6 +1403,10 @@ int hash_char_vector (const char *str, size_t sz, size_t table_size);
 int hash_number (const struct object *num, size_t table_size);
 int hash_symbol_name (const struct object *symname, size_t table_size);
 int hash_symbol (const struct object *sym, size_t table_size);
+struct hashtable_record *find_hashtable_record (struct object *obj,
+						const struct object *tbl,
+						int *ind, int *j,
+						struct hashtable_record **prev);
 
 struct object_list **alloc_empty_hash_table (size_t table_size);
 int is_object_in_hash_table (const struct object *object,
@@ -2346,7 +2360,10 @@ int symbol_equals (const struct object *sym, const char *str,
 		   struct environment *env);
 int symbol_is_among (const struct object *sym, struct environment *env, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
+struct object *eq_objects (const struct object *obj1, const struct object *obj2);
 struct object *eql_objects (struct object *obj1, struct object *obj2);
+struct object *equal_objects (struct object *obj1, struct object *obj2);
+struct object *equalp_objects (struct object *obj1, struct object *obj2);
 
 struct object *fresh_line (struct stream *str);
 
@@ -6609,6 +6626,76 @@ hash_symbol (const struct object *sym, size_t table_size)
 }
 
 
+struct hashtable_record *
+find_hashtable_record (struct object *obj, const struct object *tbl,
+		       int *ind, int *j, struct hashtable_record **prev)
+{
+  enum hashtable_type t = tbl->value_ptr.hashtable->type;
+  struct hashtable_record *r;
+
+  switch (t)
+    {
+    case HT_EQ:
+      *ind = hash_object_respecting_eq (obj, LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQL:
+      *ind = hash_object_respecting_eql (obj, LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUAL:
+      *ind = hash_object_respecting_equal (obj, LISP_HASHTABLE_SIZE);
+      break;
+    case HT_EQUALP:
+      *ind = hash_object_respecting_equalp (obj, LISP_HASHTABLE_SIZE);
+      break;
+    default:
+      break;
+    }
+
+  r = tbl->value_ptr.hashtable->table [*ind];
+
+  if (j)
+    *j = 0;
+
+  if (prev)
+    *prev = NULL;
+
+  while (r)
+    {
+      switch (t)
+	{
+	case HT_EQ:
+	  if (eq_objects (obj, r->key))
+	    return r;
+	  break;
+	case HT_EQL:
+	  if (eql_objects (obj, r->key))
+	    return r;
+	  break;
+	case HT_EQUAL:
+	  if (equal_objects (obj, r->key))
+	    return r;
+	  break;
+	case HT_EQUALP:
+	  if (equalp_objects (obj, r->key))
+	    return r;
+	  break;
+	default:
+	  break;
+	}
+
+      if (prev)
+	*prev = r;
+
+      if (j)
+	(*j)++;
+
+      r = r->next;
+    }
+
+  return NULL;
+}
+
+
 struct object_list **
 alloc_empty_hash_table (size_t table_size)
 {
@@ -9047,11 +9134,17 @@ int
 hash_table_count (const struct hashtable *hasht)
 {
   int i, cnt = 0;
+  struct hashtable_record *r;
 
   for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
     {
-      if (hasht->table [i])
-	cnt++;
+      r = hasht->table [i];
+
+      while (r)
+	{
+	  cnt++;
+	  r = r->next;
+	}
     }
 
   return cnt;
@@ -13247,8 +13340,6 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 
   ht->type = type;
   ht->table = calloc_and_check (LISP_HASHTABLE_SIZE, sizeof (*ht->table));
-  ht->reference_strength_factor =
-    malloc_and_check (LISP_HASHTABLE_SIZE * sizeof (int));
 
   ret->type = TYPE_HASHTABLE;
   ret->value_ptr.hashtable = ht;
@@ -13352,7 +13443,7 @@ builtin_gethash (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
   struct object *ret, *pres = &t_object;
-  enum hashtable_type t;
+  struct hashtable_record *r;
   int ind;
 
   if (list_length (list) != 2)
@@ -13367,33 +13458,15 @@ builtin_gethash (struct object *list, struct environment *env,
       return NULL;
     }
 
-  t = CAR (CDR (list))->value_ptr.hashtable->type;
+  r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, NULL, NULL);
 
-  switch (t)
-    {
-    case HT_EQ:
-      ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQL:
-      ind = hash_object_respecting_eql (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQUAL:
-      ind = hash_object_respecting_equal (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQUALP:
-      ind = hash_object_respecting_equalp (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    default:
-      break;
-    }
-
-  ret = CAR (CDR (list))->value_ptr.hashtable->table [ind];
-
-  if (!ret)
+  if (!r)
     {
       ret = &nil_object;
       pres = &nil_object;
     }
+  else
+    ret = r->value;
 
   increment_refcount (ret);
   prepend_object_to_obj_list (pres, &outcome->other_values);
@@ -13405,9 +13478,8 @@ struct object *
 builtin_remhash (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  struct object *cell;
-  enum hashtable_type t;
-  int ind;
+  struct hashtable_record *r, *prev;
+  int ind, j;
 
   if (list_length (list) != 2)
     {
@@ -13421,32 +13493,19 @@ builtin_remhash (struct object *list, struct environment *env,
       return NULL;
     }
 
-  t = CAR (CDR (list))->value_ptr.hashtable->type;
+  r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, &j, &prev);
 
-  switch (t)
+  if (r)
     {
-    case HT_EQ:
-      ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQL:
-      ind = hash_object_respecting_eql (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQUAL:
-      ind = hash_object_respecting_equal (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQUALP:
-      ind = hash_object_respecting_equalp (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    default:
-      break;
-    }
+      delete_reference (CAR (CDR (list)), r->key, ind+j*2*LISP_HASHTABLE_SIZE);
+      delete_reference (CAR (CDR (list)), r->value, ind+(j*2+1)*LISP_HASHTABLE_SIZE);
 
-  cell = CAR (CDR (list))->value_ptr.hashtable->table [ind];
+      if (prev)
+	prev->next = r->next;
+      else
+	CAR (CDR (list))->value_ptr.hashtable->table [ind] = NULL;
 
-  if (cell)
-    {
-      delete_reference (CAR (CDR (list)), cell, ind);
-      CAR (CDR (list))->value_ptr.hashtable->table [ind] = NULL;
+      free (r);
 
       return &t_object;
     }
@@ -14326,28 +14385,13 @@ struct object *
 builtin_eq (struct object *list, struct environment *env,
 	    struct outcome *outcome)
 {
-  struct object *arg1, *arg2;
-
   if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (IS_SYMBOL (CAR (list)))
-    arg1 = SYMBOL (CAR (list));
-  else
-    arg1 = CAR (list);
-
-  if (IS_SYMBOL (CAR (CDR (list))))
-    arg2 = SYMBOL (CAR (CDR (list)));
-  else
-    arg2 = CAR (CDR (list));
-
-  if (arg1 == arg2)
-    return &t_object;
-
-  return &nil_object;
+  return eq_objects (CAR (list), CAR (CDR (list)));
 }
 
 
@@ -15728,8 +15772,8 @@ struct object *
 accessor_gethash (struct object *list, struct object *newval,
 		  struct environment *env, struct outcome *outcome)
 {
-  int ind;
-  enum hashtable_type t;
+  int ind, j;
+  struct hashtable_record *r;
 
   if (list_length (list) != 2)
     {
@@ -15743,30 +15787,30 @@ accessor_gethash (struct object *list, struct object *newval,
       return NULL;
     }
 
-  t = CAR (CDR (list))->value_ptr.hashtable->type;
+  r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, &j, NULL);
 
-  switch (t)
+  if (r)
     {
-    case HT_EQ:
-      ind = hash_object_respecting_eq (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQL:
-      ind = hash_object_respecting_eql (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQUAL:
-      ind = hash_object_respecting_equal (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    case HT_EQUALP:
-      ind = hash_object_respecting_equalp (CAR (list), LISP_HASHTABLE_SIZE);
-      break;
-    default:
-      break;
+      delete_reference (CAR (CDR (list)), r->value, ind+(j*2+1)*LISP_HASHTABLE_SIZE);
+      r->value = newval;
+      r->reference_strength_factor = (r->reference_strength_factor & 1) |
+	(!STRENGTH_FACTOR_OF_OBJECT (newval) << 1);
+      INC_WEAK_REFCOUNT (newval);
     }
+  else
+    {
+      r = malloc_and_check (sizeof (*r));
 
-  delete_reference (CAR (CDR (list)),
-		    CAR (CDR (list))->value_ptr.hashtable->table [ind], ind);
-  add_reference (CAR (CDR (list)), newval, ind);
-  CAR (CDR (list))->value_ptr.hashtable->table [ind] = newval;
+      r->key = CAR (list);
+      INC_WEAK_REFCOUNT (CAR (list));
+      r->value = newval;
+      INC_WEAK_REFCOUNT (newval);
+      r->reference_strength_factor = (!STRENGTH_FACTOR_OF_OBJECT (CAR (list)))
+	| (!STRENGTH_FACTOR_OF_OBJECT (newval) << 1);
+
+      r->next = CAR (CDR (list))->value_ptr.hashtable->table [ind];
+      CAR (CDR (list))->value_ptr.hashtable->table [ind] = r;
+    }
 
   return newval;
 }
@@ -23951,6 +23995,22 @@ equal_strings (const struct string *s1, const struct string *s2)
 
 
 struct object *
+eq_objects (const struct object *obj1, const struct object *obj2)
+{
+  if (IS_SYMBOL (obj1))
+    obj1 = SYMBOL (obj1);
+
+  if (IS_SYMBOL (obj2))
+    obj2 = SYMBOL (obj2);
+
+  if (obj1 == obj2)
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
 eql_objects (struct object *obj1, struct object *obj2)
 {
   if (IS_SYMBOL (obj1))
@@ -23978,6 +24038,20 @@ eql_objects (struct object *obj1, struct object *obj2)
     }
 
   return &nil_object;
+}
+
+
+struct object *
+equal_objects (struct object *obj1, struct object *obj2)
+{
+  return &t_object;
+}
+
+
+struct object *
+equalp_objects (struct object *obj1, struct object *obj2)
+{
+  return &t_object;
 }
 
 
@@ -25324,6 +25398,7 @@ int
 is_reference_weak (struct object *src, int ind, struct object *dest)
 {
   struct parameter *par;
+  struct hashtable_record *r;
   struct method_list *ml;
 
   if (src->type == TYPE_ARRAY)
@@ -25333,7 +25408,15 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
     }
   else if (src->type == TYPE_HASHTABLE)
     {
-      return !src->value_ptr.hashtable->reference_strength_factor [ind]
+      r = src->value_ptr.hashtable->table [ind % LISP_HASHTABLE_SIZE];
+
+      while (ind >= LISP_HASHTABLE_SIZE * 2)
+	{
+	  r = r->next;
+	  ind -= LISP_HASHTABLE_SIZE * 2;
+	}
+
+      return !(r->reference_strength_factor & (1 << (ind / LISP_HASHTABLE_SIZE)))
 	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
     }
   else if (src->type == TYPE_FUNCTION || src->type == TYPE_MACRO)
@@ -25398,6 +25481,7 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 			       int decrease_other_refcount)
 {
   struct parameter *par;
+  struct hashtable_record *r;
   struct method_list *ml;
 
   if (src->type == TYPE_ARRAY)
@@ -25407,8 +25491,18 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
     }
   else if (src->type == TYPE_HASHTABLE)
     {
-      src->value_ptr.hashtable->reference_strength_factor [ind] =
-	!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest);
+      r = src->value_ptr.hashtable->table [ind % LISP_HASHTABLE_SIZE];
+
+      while (ind >= LISP_HASHTABLE_SIZE * 2)
+	{
+	  r = r->next;
+	  ind -= LISP_HASHTABLE_SIZE * 2;
+	}
+
+      r->reference_strength_factor = (r->reference_strength_factor
+				      & ~(1 << (ind / LISP_HASHTABLE_SIZE)))
+	| ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest))
+	   << (1 << (ind / LISP_HASHTABLE_SIZE)));
     }
   else if (src->type == TYPE_FUNCTION || src->type == TYPE_MACRO)
     {
@@ -25633,8 +25727,9 @@ restore_invariants_at_lambda_list (struct parameter *par, struct object *node,
 void
 restore_invariants_at_node (struct object *node, struct object *root, int *depth)
 {
-  size_t sz, i;
+  size_t sz, i, j;
   struct parameter *par;
+  struct hashtable_record *r;
   struct method_list *ml;
 
   if (IS_PREFIX (node->type))
@@ -25673,7 +25768,17 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
     {
       for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
 	{
-	  rest_inv_at_edge (node->value_ptr.hashtable->table [i], i);
+	  r = node->value_ptr.hashtable->table [i];
+	  j = 0;
+
+	  while (r)
+	    {
+	      rest_inv_at_edge (r->key, i+j*2*LISP_HASHTABLE_SIZE);
+	      rest_inv_at_edge (r->value, i+(j*2+1)*LISP_HASHTABLE_SIZE);
+
+	      r = r->next;
+	      j++;
+	    }
 	}
     }
   else if (node->type == TYPE_FILENAME)
@@ -25910,15 +26015,25 @@ free_bitarray (struct object *obj)
 void
 free_hashtable (struct object *obj)
 {
-  size_t i;
+  size_t i, j;
+  struct hashtable_record *r;
 
   for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
     {
-      delete_reference (obj, obj->value_ptr.hashtable->table [i], i);
+      r = obj->value_ptr.hashtable->table [i];
+      j = 0;
+
+      while (r)
+	{
+	  delete_reference (obj, r->key, i+j*2*LISP_HASHTABLE_SIZE);
+	  delete_reference (obj, r->value, i+(j*2+1)*LISP_HASHTABLE_SIZE);
+
+	  r = r->next;
+	  j++;
+	}
     }
 
   free (obj->value_ptr.hashtable->table);
-  free (obj->value_ptr.hashtable->reference_strength_factor);
   free (obj->value_ptr.hashtable);
   free (obj);
 }
