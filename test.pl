@@ -645,6 +645,7 @@ make_test ("(car '(1 2))", "1");
 make_test ("(cdr '(1 2))", "(2)");
 make_test ("(car ())", "NIL");
 make_test ("(cdr ())", "NIL");
+make_test ("(cdar '((0 . 1)))", "1");
 make_test ("(setf tt (list 'a 'b 'd))", "(A B D)");
 make_test ("(rplaca tt 'f)", "(F B D)");
 make_test ("tt", "(F B D)");
