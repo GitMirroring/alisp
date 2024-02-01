@@ -289,7 +289,7 @@
 
 (defun caar (list) (car (car list)))
 (defun cadr (list) (nth 1 list))
-(defun cdar (list) (cdr (car (list))))
+(defun cdar (list) (cdr (car list)))
 (defun cddr (list) (nthcdr 2 list))
 (defun caaar (list) (car (car (car list))))
 (defun caadr (list) (car (nth 1 list)))
