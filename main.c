@@ -6664,19 +6664,19 @@ find_hashtable_record (struct object *obj, const struct object *tbl,
       switch (t)
 	{
 	case HT_EQ:
-	  if (eq_objects (obj, r->key))
+	  if (eq_objects (obj, r->key) == &t_object)
 	    return r;
 	  break;
 	case HT_EQL:
-	  if (eql_objects (obj, r->key))
+	  if (eql_objects (obj, r->key) == &t_object)
 	    return r;
 	  break;
 	case HT_EQUAL:
-	  if (equal_objects (obj, r->key))
+	  if (equal_objects (obj, r->key) == &t_object)
 	    return r;
 	  break;
 	case HT_EQUALP:
-	  if (equalp_objects (obj, r->key))
+	  if (equalp_objects (obj, r->key) == &t_object)
 	    return r;
 	  break;
 	default:
@@ -23982,7 +23982,7 @@ int
 equal_strings (const struct string *s1, const struct string *s2)
 {
   fixnum i;
-  
+
   if (s1->used_size != s2->used_size)
     return 0;
 
@@ -24044,7 +24044,29 @@ eql_objects (struct object *obj1, struct object *obj2)
 struct object *
 equal_objects (struct object *obj1, struct object *obj2)
 {
-  return &t_object;
+  if (eql_objects (obj1, obj2) == &t_object)
+    return &t_object;
+
+  if (obj1->type == TYPE_STRING && obj2->type == TYPE_STRING)
+    {
+      if (equal_strings (obj1->value_ptr.string, obj2->value_ptr.string))
+	return &t_object;
+
+      return &nil_object;
+    }
+
+  if (obj1->type == TYPE_CONS_PAIR && obj2->type == TYPE_CONS_PAIR)
+    {
+      if (equal_objects (CAR (obj1), CAR (obj2)) == &t_object
+	  && equal_objects (CDR (obj1), CDR (obj2)) == &t_object)
+	{
+	  return &t_object;
+	}
+
+      return &nil_object;
+    }
+
+  return &nil_object;
 }
 
 
