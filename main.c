@@ -1609,6 +1609,7 @@ int hash_object_respecting_equal (const struct object *object, size_t table_size
 int hash_object_respecting_equalp (const struct object *object,
 				   size_t table_size);
 int hash_table_count (const struct hashtable *hasht);
+void clear_hash_table (struct object *hasht);
 
 struct parameter *alloc_parameter (enum parameter_type type,
 				   struct object *sym);
@@ -1865,6 +1866,8 @@ struct object *builtin_hash_table_test
 struct object *builtin_gethash
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_remhash
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_clrhash
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_maphash
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2873,6 +2876,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION,
 		    accessor_gethash, 0);
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CLRHASH", env, builtin_clrhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
@@ -9154,6 +9158,35 @@ hash_table_count (const struct hashtable *hasht)
 }
 
 
+void
+clear_hash_table (struct object *hasht)
+{
+  size_t i, j;
+  struct hashtable_record *r, *n;
+
+  for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
+    {
+      r = hasht->value_ptr.hashtable->table [i];
+      j = 0;
+
+      while (r)
+	{
+	  n = r->next;
+
+	  delete_reference (hasht, r->key, i+j*2*LISP_HASHTABLE_SIZE);
+	  delete_reference (hasht, r->value, i+(j*2+1)*LISP_HASHTABLE_SIZE);
+
+	  free (r);
+
+	  r = n;
+	  j++;
+	}
+
+      hasht->value_ptr.hashtable->table [i] = NULL;
+    }
+}
+
+
 struct parameter *
 alloc_parameter (enum parameter_type type, struct object *sym)
 {
@@ -13514,6 +13547,29 @@ builtin_remhash (struct object *list, struct environment *env,
     }
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_clrhash (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_HASHTABLE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  clear_hash_table (CAR (list));
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
@@ -26112,24 +26168,7 @@ free_bitarray (struct object *obj)
 void
 free_hashtable (struct object *obj)
 {
-  size_t i, j;
-  struct hashtable_record *r;
-
-  for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
-    {
-      r = obj->value_ptr.hashtable->table [i];
-      j = 0;
-
-      while (r)
-	{
-	  delete_reference (obj, r->key, i+j*2*LISP_HASHTABLE_SIZE);
-	  delete_reference (obj, r->value, i+(j*2+1)*LISP_HASHTABLE_SIZE);
-
-	  r = r->next;
-	  j++;
-	}
-    }
-
+  clear_hash_table (obj);
   free (obj->value_ptr.hashtable->table);
   free (obj->value_ptr.hashtable);
   free (obj);
