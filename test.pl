@@ -282,6 +282,7 @@ make_test ("(setf c (+ c 1))", "5");
 make_test ("c", "5");
 make_test ("(setq)", "NIL");
 make_test ("(setq b 9 c 4 c (+ c 1))", "5");
+make_test ("(let ((f 0)) (setq g 1) f)", "0");
 make_test ("(psetq)", "NIL");
 make_test ("(psetq xx 0)", "NIL");
 make_test ("(psetq xx 1 yy xx)", "NIL");
@@ -798,7 +799,7 @@ make_test ("(read-preserving-whitespace (make-string-input-stream \"hello\"))", 
 make_test ("(read-preserving-whitespace (make-string-input-stream \"123\"))", "123");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
-make_test ("(let ((var 12)) (eval 'var))", "10");
+make_test ("(let ((var 12)) (eval 'var))", "12");
 make_test ("(write \"\")", "\"\"\n\"\"");
 make_test ("(write-string \"aaa\\n\")", "aaan\n\"aaan\"");
 make_test ("(write-string \"\n" .
