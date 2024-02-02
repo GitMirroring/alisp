@@ -1584,9 +1584,12 @@ struct object *skip_prefix
 (struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
  struct object **last_prefix);
 
+struct object *elt (unsigned int ind, struct object *seq);
+void set_elt (unsigned int ind, struct object *seq, struct object *val);
+fixnum sequence_length (const struct object *seq);
+
 struct object *nth (unsigned int ind, struct object *list);
 struct object *nthcdr (unsigned int ind, struct object *list);
-
 fixnum list_length (const struct object *list);
 struct object *last_cons_pair (struct object *list);
 int is_dotted_list (const struct object *list);
@@ -1934,6 +1937,8 @@ struct object *builtin_dotimes
 struct object *builtin_dolist
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_mapcar
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_map
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_remove_if
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2927,6 +2932,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAP", env, builtin_map, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REMOVE-IF", env, builtin_remove_if, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REVERSE", env, builtin_reverse, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, NULL, 0);
@@ -8802,6 +8808,55 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
     *num_backticks_before_last_comma = num_backticks;
 
   return prefix;
+}
+
+
+struct object *
+elt (unsigned int ind, struct object *seq)
+{
+  if (IS_LIST (seq))
+    return nth (ind, seq);
+  else if (seq->type == TYPE_STRING)
+    return get_nth_character (seq, ind);
+  else if (seq->type == TYPE_ARRAY)
+    return seq->value_ptr.array->value [ind];
+  else
+    return NULL;
+}
+
+
+void
+set_elt (unsigned int ind, struct object *seq, struct object *val)
+{
+  struct object *cons;
+
+  if (IS_LIST (seq))
+    {
+      cons = nthcdr (ind, seq);
+      cons->value_ptr.cons_pair->car = val;
+      add_reference (cons, val, 0);
+    }
+  else if (seq->type == TYPE_STRING)
+    seq->value_ptr.string->value [ind] = val->value_ptr.character [0];
+  else if (seq->type == TYPE_ARRAY)
+    {
+      seq->value_ptr.array->value [ind] = val;
+      add_reference (seq, val, ind);
+    }
+}
+
+
+fixnum
+sequence_length (const struct object *seq)
+{
+  if (IS_LIST (seq))
+    return list_length (seq);
+  else if (seq->type == TYPE_STRING)
+    return seq->value_ptr.string->used_size;
+  else if (seq->type == TYPE_ARRAY)
+    return seq->value_ptr.array->alloc_size->size;
+  else
+    return -1;
 }
 
 
@@ -15400,6 +15455,124 @@ builtin_mapcar (struct object *list, struct environment *env,
   retcons->value_ptr.cons_pair->cdr = &nil_object;
 
   free_list_structure (cdrlist);
+  free_list_structure (args);
+
+  return ret;
+}
+
+
+struct object *
+builtin_map (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  int i, l = list_length (list), j, min = -1;
+  struct object *fun, *args, *argscons, *ret, *val;
+
+  if (l < 3)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) ||
+      !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (IS_SYMBOL (CAR (CDR (list))))
+    {
+      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 0, 0);
+
+      if (!fun)
+	{
+	  outcome->type = UNKNOWN_FUNCTION;
+	  outcome->obj = SYMBOL (CAR (CDR (list)));
+	  return NULL;
+	}
+    }
+  else if (CAR (CDR (list))->type == TYPE_FUNCTION)
+    {
+      fun = CAR (CDR (list));
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+
+  for (i = 2; i < l; i++)
+    {
+      if (!IS_SEQUENCE (nth (i, list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (min == -1 || (sequence_length (nth (i, list)) < min))
+	min = sequence_length (nth (i, list));
+
+      if (!min && is_subtype_by_char_vector (CAR (list), "LIST", env))
+	return &nil_object;
+    }
+
+  if (SYMBOL (CAR (list)) == &nil_object)
+    ret = &nil_object;
+  else if (is_subtype_by_char_vector (CAR (list), "LIST", env))
+    ret = alloc_empty_list (min);
+  else if (is_subtype_by_char_vector (CAR (list), "STRING", env))
+    ret = alloc_string (min);
+  else
+    ret = alloc_vector (min, 0, 0);
+
+  if (!min)
+    return ret;
+
+  args = alloc_empty_list (l-2);
+
+  for (i = 0; i < min; i++)
+    {
+      argscons = args;
+
+      for (j = 2; j < l; j++)
+	{
+	  argscons->value_ptr.cons_pair->car = elt (i, nth (j, list));
+	  argscons = CDR (argscons);
+	}
+
+      val = call_function (fun, args, 0, 0, 0, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!val)
+	{
+	  free_list_structure (args);
+	  return NULL;
+	}
+
+      if (CAR (list)->type == TYPE_STRING && val->type != TYPE_CHARACTER)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (SYMBOL (CAR (list)) != &nil_object)
+	set_elt (i, ret, val);
+    }
+
+  if (ret->type == TYPE_CONS_PAIR)
+    last_cons_pair (ret)->value_ptr.cons_pair->cdr = &nil_object;
+
+  if (ret->type == TYPE_STRING)
+    ret->value_ptr.string->used_size = min;
+
   free_list_structure (args);
 
   return ret;
