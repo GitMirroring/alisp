@@ -14,8 +14,8 @@ Some notes on design choices, portability and ANSI conformance of alisp.
 __Floating point arithmetic__
 
 The four floating-point types of ANSI CL are all the same type and map to native
-C double.  This is allowed by ANSI and was done for speed of implementation.  Of
-course, it may change in the future.
+C double.  This is allowed by ANSI and was done as a quick implementation
+strategy.  Of course, it may change in the future.
 
 
 
@@ -62,6 +62,14 @@ portability.
 
 
 
+__Setting an undefined variable__
+
+Doing SETQ or SETF on an undefined variable is undefined in ANSI, but it is
+accepted by many implementations.  In al, this causes the variable to be
+proclaimed special, so it is equivalent to a DEFPARAMETER.
+
+
+
 __Language of implementation__
 
 The alisp codebase should be valid C89, to the best of my knowledge.
@@ -84,5 +92,5 @@ __Character encoding__
 al expects its input in UTF-8 and stores strings in the same encoding.  (Note
 that UTF-8 is compatible with ASCII).  If al gets input in a different encoding,
 it might still work somewhat, as long as it understands basic macro characters,
-except for things like counting the characters in a string or accessing specific
-characters.
+except for things like counting the characters in a string or accessing
+characters by index.
