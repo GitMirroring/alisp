@@ -15474,14 +15474,8 @@ builtin_map (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) ||
-      !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
+  if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
+      || !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
