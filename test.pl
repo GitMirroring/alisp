@@ -753,6 +753,8 @@ make_test ("(hash-table-count tbl)", "2");
 make_test ("(remhash \"hello\" tbl)", "T");
 make_test ("(gethash \"hello\" tbl)", "NIL\nNIL");
 make_test ("(hash-table-count tbl)", "1");
+make_test ("(clrhash tbl)", "#<HASH-TABLE EQUAL 0/1024>");
+make_test ("(hash-table-count tbl)", "0");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "NIL");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
