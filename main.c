@@ -21091,11 +21091,9 @@ set_value (struct object *sym, struct object *value, int eval_value,
 	}
       else
 	{
-	  s->value_dyn_bins_num++;
-	  /*s->is_special++;
-	    increment_refcount (sym);*/
-	  env->vars = add_binding (create_binding (sym, val, DYNAMIC_BINDING, 1),
-				   env->vars);
+	  sym->value_ptr.symbol->is_parameter = 1;
+	  sym->value_ptr.symbol->value_cell = val;
+	  add_reference (sym, val, 0);
 	}
     }
 
