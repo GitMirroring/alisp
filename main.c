@@ -14577,7 +14577,8 @@ builtin_concatenate (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!is_subtype_by_char_vector (CAR (list), "SEQUENCE", env)
+  if (!SYMBOL (CAR (list))->value_ptr.symbol->is_type
+      || !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env)
       || SYMBOL (CAR (list)) == &nil_object)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
