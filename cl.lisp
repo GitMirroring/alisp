@@ -945,15 +945,16 @@
   (cond
     ((numberp x) (eql x y))
     ((characterp x) (eql x y))
+    ((and (stringp x) (stringp y))
+     (let ((l (length x)))
+       (if (= l (length y))
+	   (dotimes (i l t)
+	     (if (not (eql (elt x i) (elt y i)))
+		 (return-from equal nil))))))
     ((and (consp x) (consp y))
      (and
-      (let (l)
-	(= (setq l (length x)) (length y))
-	(dotimes (i l)
-	  (if (equal (car x) (car y))
-	      (setq x (cdr x) y (cdr y))
-	      (return-from equal nil)))
-	(equal x y))))
+      (equal (car x) (car y))
+      (equal (cdr x) (cdr y))))
     (t (eq x y))))
 
 
