@@ -936,7 +936,7 @@ structure_field
 struct
 structure
 {
-  struct object *class;
+  struct object *class_name;
 
   struct structure_field *fields;
 };
@@ -976,7 +976,7 @@ class_field
 struct
 standard_object
 {
-  struct object *class;
+  struct object *class_name;
 
   struct class_field *fields;
 };
@@ -1016,7 +1016,7 @@ condition_field
 struct
 condition
 {
-  struct object *class;
+  struct object *class_name;
 
   struct condition_field *fields;
 };
@@ -1655,17 +1655,17 @@ int parse_argument_list (struct object *arglist, struct parameter *par,
 struct object *call_function
 (struct object *func, struct object *arglist, int eval_args, int is_macro,
  int is_typespec, struct environment *env, struct outcome *outcome);
-struct object *call_structure_constructor (struct object *struct_class,
+struct object *call_structure_constructor (struct object *class_name,
 					   struct object *args,
 					   struct environment *env,
 					   struct outcome *outcome);
-struct object *call_structure_accessor (struct object *struct_class,
+struct object *call_structure_accessor (struct object *class_name,
 					struct object *field,
 					struct object *args,
 					struct object *newval,
 					struct environment *env,
 					struct outcome *outcome);
-struct object *call_condition_reader (struct object *condition_class,
+struct object *call_condition_reader (struct object *class_name,
 				      struct object *field, struct object *args,
 				      struct environment *env,
 				      struct outcome *outcome);
@@ -2601,8 +2601,8 @@ main (int argc, char *argv [])
 	      if (eval_out.condition)
 		{
 		  if (is_subtype_by_char_vector
-		      (eval_out.condition->value_ptr.condition->class->
-		       value_ptr.condition_class->name, "SIMPLE-CONDITION", &env))
+		      (eval_out.condition->value_ptr.condition->class_name,
+		       "SIMPLE-CONDITION", &env))
 		    {
 		      print_object (eval_out.condition->value_ptr.condition->fields->
 				    value, &env, c_stdout->value_ptr.stream);
@@ -8454,11 +8454,11 @@ create_condition (struct object *type, va_list valist)
   ret->type = TYPE_CONDITION;
 
   c = malloc_and_check (sizeof (*c));
-  c->class = type;
+  c->class_name = type->value_ptr.condition_class->name;
   c->fields = NULL;
   ret->value_ptr.condition = c;
 
-  create_condition_fields (ret, c->class);
+  create_condition_fields (ret, type);
 
   f = ret->value_ptr.condition->fields;
 
@@ -8589,7 +8589,7 @@ add_builtin_condition (char *name, struct environment *env, int is_standard, ...
       increment_refcount (rs);
       rs->value_ptr.symbol->function_cell = alloc_function ();
       rs->value_ptr.symbol->function_cell->value_ptr.function->
-	condition_reader_class = condcl;
+	condition_reader_class = sym;
       rs->value_ptr.symbol->function_cell->value_ptr.function->
 	condition_reader_field = par;
       rs->value_ptr.symbol->function_cell->value_ptr.function->name = rs;
@@ -8625,8 +8625,7 @@ handle_condition (struct object *cond, struct environment *env,
 
   while (b)
     {
-      if (is_subtype (cond->value_ptr.condition->class->
-		      value_ptr.condition_class->name, b->condition, NULL))
+      if (is_subtype (cond->value_ptr.condition->class_name, b->condition, NULL))
 	{
 	  f = env->handlers;
 	  env->handlers = env->handlers->next;
@@ -10563,8 +10562,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	return NULL;
 
       ret = call_structure_constructor (func->value_ptr.function->
-					struct_constructor_class, args, env,
-					outcome);
+					struct_constructor_class, args,
+					env, outcome);
 
       decrement_refcount (args);
 
@@ -10664,7 +10663,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
 struct object *
-call_structure_constructor (struct object *struct_class, struct object *args,
+call_structure_constructor (struct object *class_name, struct object *args,
 			    struct environment *env, struct outcome *outcome)
 {
   struct object *ret;
@@ -10676,11 +10675,11 @@ call_structure_constructor (struct object *struct_class, struct object *args,
   ret->type = TYPE_STRUCTURE;
 
   s = malloc_and_check (sizeof (*s));
-  s->class = struct_class;
+  s->class_name = class_name;
   s->fields = NULL;
   ret->value_ptr.structure = s;
 
-  fd = struct_class->value_ptr.structure_class->fields;
+  fd = class_name->value_ptr.symbol->typespec->value_ptr.structure_class->fields;
 
   while (fd)
     {
@@ -10700,7 +10699,7 @@ call_structure_constructor (struct object *struct_class, struct object *args,
 
 
 struct object *
-call_structure_accessor (struct object *struct_class, struct object *field,
+call_structure_accessor (struct object *class_name, struct object *field,
 			 struct object *args, struct object *newval,
 			 struct environment *env, struct outcome *outcome)
 {
@@ -10713,7 +10712,7 @@ call_structure_accessor (struct object *struct_class, struct object *field,
     }
 
   if (CAR (args)->type != TYPE_STRUCTURE
-      || CAR (args)->value_ptr.structure->class != struct_class)
+      || CAR (args)->value_ptr.structure->class_name != class_name)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -10740,7 +10739,7 @@ call_structure_accessor (struct object *struct_class, struct object *field,
 
 
 struct object *
-call_condition_reader (struct object *condition_class, struct object *field,
+call_condition_reader (struct object *class_name, struct object *field,
 		       struct object *args, struct environment *env,
 		       struct outcome *outcome)
 {
@@ -10753,7 +10752,8 @@ call_condition_reader (struct object *condition_class, struct object *field,
     }
 
   if (CAR (args)->type != TYPE_CONDITION
-      || CAR (args)->value_ptr.condition->class != condition_class)
+      || !is_subtype (CAR (args)->value_ptr.condition->class_name, class_name,
+		      NULL))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -10988,25 +10988,27 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STRUCTURE_CLASS)
 	{
 	  return obj->type == TYPE_STRUCTURE
-	    && obj->value_ptr.structure->class == sym->value_ptr.symbol->typespec;
+	    && obj->value_ptr.structure->class_name == sym;
 	}
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
 	{
 	  return obj->type == TYPE_STANDARD_OBJECT
-	    && (obj->value_ptr.standard_object->class
-		== sym->value_ptr.symbol->typespec
-		|| is_descendant (NULL, obj->value_ptr.standard_object->class->
-				  value_ptr.standard_class->parents, sym, NULL));
+	    && (obj->value_ptr.standard_object->class_name == sym
+		|| is_descendant (NULL, obj->value_ptr.standard_object->
+				  class_name->value_ptr.symbol->typespec->
+				  value_ptr.standard_class->parents,
+				  sym, NULL));
 	}
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
 	{
 	  return obj->type == TYPE_CONDITION
-	    && (obj->value_ptr.condition->class
-		== sym->value_ptr.symbol->typespec
-		|| is_descendant (NULL, obj->value_ptr.condition->class->
-				  value_ptr.condition_class->parents, sym, NULL));
+	    && (obj->value_ptr.condition->class_name == sym
+		|| is_descendant (NULL, obj->value_ptr.condition->class_name->
+				  value_ptr.symbol->typespec->
+				  value_ptr.condition_class->parents,
+				  sym, NULL));
 	}
       else if (sym->value_ptr.symbol->is_type)
 	{
@@ -18193,8 +18195,7 @@ builtin_type_of (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_STRUCTURE)
     {
-      ret = CAR (list)->value_ptr.structure->class->value_ptr.structure_class->
-	name;
+      ret = CAR (list)->value_ptr.structure->class_name;
     }
   else if (CAR (list)->type == TYPE_STANDARD_CLASS)
     {
@@ -18202,13 +18203,11 @@ builtin_type_of (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_STANDARD_OBJECT)
     {
-      ret = CAR (list)->value_ptr.standard_object->class->
-	value_ptr.standard_class->name;
+      ret = CAR (list)->value_ptr.standard_object->class_name;
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
-      ret = CAR (list)->value_ptr.condition->class->value_ptr.condition_class->
-	name;
+      ret = CAR (list)->value_ptr.condition->class_name;
     }
 
   increment_refcount (ret);
@@ -22396,7 +22395,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
   increment_refcount (funcname);
   funcname->value_ptr.symbol->function_cell = alloc_function ();
   funcname->value_ptr.symbol->function_cell->value_ptr.function->
-    struct_constructor_class = strcl;
+    struct_constructor_class = name;
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
 
   f = sc->fields;
@@ -22419,7 +22418,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
       increment_refcount (funcname);
       funcname->value_ptr.symbol->function_cell = alloc_function ();
       funcname->value_ptr.symbol->function_cell->value_ptr.function->
-	struct_accessor_class = strcl;
+	struct_accessor_class = name;
       funcname->value_ptr.symbol->function_cell->value_ptr.function->
 	struct_accessor_field = f->name;
       funcname->value_ptr.symbol->function_cell->value_ptr.function->name =
@@ -22610,7 +22609,7 @@ builtin_make_instance (struct object *list, struct environment *env,
   ret->type = TYPE_STANDARD_OBJECT;
 
   so = malloc_and_check (sizeof (*so));
-  so->class = class;
+  so->class_name = class->value_ptr.standard_class->name;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
@@ -22632,18 +22631,24 @@ builtin_class_of (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STANDARD_OBJECT)
     {
-      increment_refcount (CAR (list)->value_ptr.standard_object->class);
-      return CAR (list)->value_ptr.standard_object->class;
+      increment_refcount (CAR (list)->value_ptr.standard_object->class_name->
+			  value_ptr.symbol->typespec);
+      return CAR (list)->value_ptr.standard_object->class_name->
+	value_ptr.symbol->typespec;
     }
   else if (CAR (list)->type == TYPE_STRUCTURE)
     {
-      increment_refcount (CAR (list)->value_ptr.structure->class);
-      return CAR (list)->value_ptr.structure->class;
+      increment_refcount (CAR (list)->value_ptr.structure->class_name->
+			  value_ptr.symbol->typespec);
+      return CAR (list)->value_ptr.structure->class_name->value_ptr.symbol->
+	typespec;
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
-      increment_refcount (CAR (list)->value_ptr.condition->class);
-      return CAR (list)->value_ptr.condition->class;
+      increment_refcount (CAR (list)->value_ptr.condition->class_name->
+			  value_ptr.symbol->typespec);
+      return CAR (list)->value_ptr.condition->class_name->value_ptr.symbol->
+	typespec;
     }
   else
     {
@@ -25218,8 +25223,7 @@ print_object (const struct object *obj, struct environment *env,
 	{
 	  if (write_to_stream (str, "#<STRUCTURE OF CLASS ",
 			       strlen ("#<STRUCTURE OF CLASS ")) < 0
-	      || print_symbol (obj->value_ptr.structure->class->
-			       value_ptr.structure_class->name, env, str)
+	      || print_symbol (obj->value_ptr.structure->class_name, env, str)
 	      || write_to_stream (str, ">", 1))
 	    return -1;
 
@@ -25238,8 +25242,8 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_STANDARD_OBJECT)
 	{
 	  if (write_to_stream (str, "#<", strlen ("#<")) < 0
-	      || print_symbol (obj->value_ptr.standard_object->class
-			       ->value_ptr.standard_class->name, env, str)
+	      || print_symbol (obj->value_ptr.standard_object->class_name, env,
+			       str)
 	      || write_to_stream (str, " OBJECT ...>", strlen (" OBJECT ...>")) < 0)
 	    return -1;
 
@@ -25259,8 +25263,7 @@ print_object (const struct object *obj, struct environment *env,
 	{
 	  if (write_to_stream (str, "#<CONDITION OF CLASS ",
 			       strlen ("#<CONDITION OF CLASS ")) < 0
-	      || print_symbol (obj->value_ptr.condition->class->
-			       value_ptr.condition_class->name, env, str)
+	      || print_symbol (obj->value_ptr.condition->class_name, env, str)
 	      || write_to_stream (str, ">", 1))
 	    return -1;
 
