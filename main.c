@@ -7644,11 +7644,11 @@ int
 set_nth_character (struct object *str, int ind, char *ch)
 {
   char *c = str->value_ptr.string->value;
-  size_t s = str->value_ptr.string->used_size, off;
+  size_t s = str->value_ptr.string->used_size, off, csz, newsz;
 
   for (off = 0; ind; ind--)
     {
-      off = next_utf8_char (ch, s);
+      off = next_utf8_char (c, s);
 
       if (!off)
 	return 0;
@@ -7657,7 +7657,44 @@ set_nth_character (struct object *str, int ind, char *ch)
       s -= off;
     }
 
-  memcpy (c, ch, strlen (ch));
+  if (!(csz = next_utf8_char (c, s)))
+    csz = str->value_ptr.string->value + str->value_ptr.string->used_size - c;
+
+  if (csz == strlen (ch))
+    memcpy (c, ch, strlen (ch));
+  else
+    {
+      newsz = str->value_ptr.string->used_size + strlen (ch) - csz;
+
+      if (newsz > str->value_ptr.string->alloc_size)
+	{
+	  str->value_ptr.string->value =
+	    realloc_and_check (str->value_ptr.string->value, newsz);
+	  str->value_ptr.string->alloc_size = newsz;
+	}
+
+      if (csz < strlen (ch))
+	{
+	  for (off = newsz-1;
+	       off >= c - str->value_ptr.string->value + strlen (ch); off--)
+	    {
+	      str->value_ptr.string->value [off] =
+		str->value_ptr.string->value [off-strlen(ch)+csz];
+	    }
+	}
+      else
+	{
+	  for (off = c - str->value_ptr.string->value + strlen (ch);
+	       off < str->value_ptr.string->used_size; off++)
+	    {
+	      str->value_ptr.string->value [off] =
+		str->value_ptr.string->value [off-strlen(ch)+csz];
+	    }
+	}
+
+      memcpy (c, ch, strlen (ch));
+      str->value_ptr.string->used_size = newsz;
+    }
 
   return 1;
 }
