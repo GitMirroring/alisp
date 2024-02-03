@@ -964,13 +964,8 @@
     ((and (characterp x) (characterp y)) (char-equal x y))
     ((and (consp x) (consp y))
      (and
-      (let (l)
-	(= (setq l (length x)) (length y))
-	(dotimes (i l)
-	  (if (equalp (car x) (car y))
-	      (setq x (cdr x) y (cdr y))
-	      (return-from equalp nil)))
-	(equalp x y))))
+      (equalp (car x) (car y))
+      (equalp (cdr x) (cdr y))))
     ((and (arrayp x) (arrayp y)) (let ((dimsx (array-dimensions x))
 				       (dimsy (array-dimensions y)))
 				   (and
