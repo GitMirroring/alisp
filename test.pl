@@ -1060,6 +1060,8 @@ make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
 make_test ("(caar '((4) 1 2 3))", "4");
+make_test ("(let ((l '((0 1) 2))) (setf (caar l) 3) l)", "((3 1) 2)");
+make_test ("(let ((l '(((0 1 2))))) (setf (cadaar l) 3) l)", "(((0 3 2)))");
 make_test ("(incf c)", "6");
 make_test ("(incf c 3)", "9");
 make_test ("(let ((i 0)) (incf i))", "1");
