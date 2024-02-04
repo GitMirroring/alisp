@@ -317,6 +317,120 @@
 (defun cddddr (list) (nthcdr 4 list))
 
 
+(defun (setf caar) (newval list)
+  (let ((c (car list)))
+    (rplaca c newval)))
+
+(defun (setf cadr) (newval list)
+  (let ((c (cdr list)))
+    (rplaca c newval)))
+
+(defun (setf cdar) (newval list)
+  (let ((c (car list)))
+    (rplacd c newval)))
+
+(defun (setf cddr) (newval list)
+  (let ((c (cdr list)))
+    (rplacd c newval)))
+
+(defun (setf caaar) (newval list)
+  (let ((c (caar list)))
+    (rplaca c newval)))
+
+(defun (setf caadr) (newval list)
+  (let ((c (cadr list)))
+    (rplaca c newval)))
+
+(defun (setf cadar) (newval list)
+  (let ((c (cdar list)))
+    (rplaca c newval)))
+
+(defun (setf caddr) (newval list)
+  (let ((c (cddr list)))
+    (rplaca c newval)))
+
+(defun (setf cdaar) (newval list)
+  (let ((c (caar list)))
+    (rplacd c newval)))
+
+(defun (setf cdadr) (newval list)
+  (let ((c (cadr list)))
+    (rplacd c newval)))
+
+(defun (setf cddar) (newval list)
+  (let ((c (cdar list)))
+    (rplacd c newval)))
+
+(defun (setf cdddr) (newval list)
+  (let ((c (cddr list)))
+    (rplacd c newval)))
+
+(defun (setf caaaar) (newval list)
+  (let ((c (caaar list)))
+    (rplaca c newval)))
+
+(defun (setf caaadr) (newval list)
+  (let ((c (caadr list)))
+    (rplaca c newval)))
+
+(defun (setf caadar) (newval list)
+  (let ((c (cadar list)))
+    (rplaca c newval)))
+
+(defun (setf caaddr) (newval list)
+  (let ((c (caddr list)))
+    (rplaca c newval)))
+
+(defun (setf cadaar) (newval list)
+  (let ((c (cdaar list)))
+    (rplaca c newval)))
+
+(defun (setf cadadr) (newval list)
+  (let ((c (cdadr list)))
+    (rplaca c newval)))
+
+(defun (setf caddar) (newval list)
+  (let ((c (cddar list)))
+    (rplaca c newval)))
+
+(defun (setf cadddr) (newval list)
+  (let ((c (cdddr list)))
+    (rplaca c newval)))
+
+(defun (setf cdaaar) (newval list)
+  (let ((c (caaar list)))
+    (rplacd c newval)))
+
+(defun (setf cdaadr) (newval list)
+  (let ((c (caadr list)))
+    (rplacd c newval)))
+
+(defun (setf cdadar) (newval list)
+  (let ((c (cadar list)))
+    (rplacd c newval)))
+
+(defun (setf cdaddr) (newval list)
+  (let ((c (caddr list)))
+    (rplacd c newval)))
+
+(defun (setf cddaar) (newval list)
+  (let ((c (cdaar list)))
+    (rplacd c newval)))
+
+(defun (setf cddadr) (newval list)
+  (let ((c (cdadr list)))
+    (rplacd c newval)))
+
+(defun (setf cdddar) (newval list)
+  (let ((c (cddar list)))
+    (rplacd c newval)))
+
+(defun (setf cddddr) (newval list)
+  (let ((c (cdddr list)))
+    (rplacd c newval)))
+
+
+
 (defun make-list (len &key initial-element)
   (let (out)
     (dotimes (i len)
