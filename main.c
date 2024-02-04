@@ -2375,6 +2375,7 @@ struct object *eq_objects (const struct object *obj1, const struct object *obj2)
 struct object *eql_objects (struct object *obj1, struct object *obj2);
 struct object *equal_objects (struct object *obj1, struct object *obj2);
 struct object *equalp_objects (struct object *obj1, struct object *obj2);
+int arrays_have_equal_size (struct array *a1, struct array *a2);
 
 struct object *fresh_line (struct stream *str);
 
@@ -24444,6 +24445,8 @@ equal_objects (struct object *obj1, struct object *obj2)
 struct object *
 equalp_objects (struct object *obj1, struct object *obj2)
 {
+  int i;
+
   if (IS_NUMBER (obj1) && IS_NUMBER (obj2))
     {
       if (!compare_two_numbers (obj1, obj2))
@@ -24491,7 +24494,43 @@ equalp_objects (struct object *obj1, struct object *obj2)
       return &nil_object;
     }
 
+  if (obj1->type == TYPE_ARRAY && obj2->type == TYPE_ARRAY)
+    {
+      if (!arrays_have_equal_size (obj1->value_ptr.array, obj2->value_ptr.array))
+	return &nil_object;
+
+      for (i = 0; i < array_total_size (obj1->value_ptr.array->alloc_size); i++)
+	{
+	  if (equalp_objects (obj1->value_ptr.array->value [i],
+			      obj2->value_ptr.array->value [i]) == &nil_object)
+	    return &nil_object;
+	}
+
+      return &t_object;
+    }
+
   return &nil_object;
+}
+
+
+int
+arrays_have_equal_size (struct array *a1, struct array *a2)
+{
+  struct array_size *s1 = a1->alloc_size, *s2 = a2->alloc_size;
+
+  while (s1)
+    {
+      if (!s2 || s1->size != s2->size)
+	return 0;
+
+      s1 = s1->next;
+      s2 = s2->next;
+    }
+
+  if (s2)
+    return 0;
+
+  return 1;
 }
 
 
