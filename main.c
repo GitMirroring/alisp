@@ -2370,6 +2370,7 @@ int symbol_equals (const struct object *sym, const char *str,
 		   struct environment *env);
 int symbol_is_among (const struct object *sym, struct environment *env, ...);
 int equal_strings (const struct string *s1, const struct string *s2);
+int equalp_strings (const struct string *s1, const struct string *s2);
 struct object *eq_objects (const struct object *obj1, const struct object *obj2);
 struct object *eql_objects (struct object *obj1, struct object *obj2);
 struct object *equal_objects (struct object *obj1, struct object *obj2);
@@ -24333,6 +24334,37 @@ equal_strings (const struct string *s1, const struct string *s2)
 }
 
 
+int
+equalp_strings (const struct string *s1, const struct string *s2)
+{
+  fixnum i;
+  int single_byte = 1;
+
+  if (s1->used_size != s2->used_size)
+    return 0;
+
+  for (i = 0; i < s1->used_size; i++)
+    {
+      if (IS_LOWEST_BYTE_IN_UTF8 (s1->value [i]) && single_byte)
+	{
+	  if (toupper (s1->value [i]) != toupper (s2->value [i]))
+	    return 0;
+
+	  single_byte = 1;
+	}
+      else
+	{
+	  if (s1->value [i] != s2->value [i])
+	    return 0;
+
+	  single_byte = 0;
+	}
+    }
+
+  return 1;
+}
+
+
 struct object *
 eq_objects (const struct object *obj1, const struct object *obj2)
 {
@@ -24412,7 +24444,54 @@ equal_objects (struct object *obj1, struct object *obj2)
 struct object *
 equalp_objects (struct object *obj1, struct object *obj2)
 {
-  return &t_object;
+  if (IS_NUMBER (obj1) && IS_NUMBER (obj2))
+    {
+      if (!compare_two_numbers (obj1, obj2))
+	return &t_object;
+      else
+	return &nil_object;
+    }
+
+  if (obj1->type == TYPE_CHARACTER && obj2->type == TYPE_CHARACTER)
+    {
+      if (strlen (obj1->value_ptr.character) != strlen (obj2->value_ptr.character))
+	return &t_object;
+
+      if (strlen (obj1->value_ptr.character) == 1)
+	{
+	  if (toupper (*obj1->value_ptr.character)
+	      == toupper (*obj2->value_ptr.character))
+	    return &t_object;
+
+	  return &nil_object;
+	}
+
+      if (!strcmp (obj1->value_ptr.character, obj2->value_ptr.character))
+	return &t_object;
+
+      return &nil_object;
+    }
+
+  if (obj1->type == TYPE_CONS_PAIR && obj2->type == TYPE_CONS_PAIR)
+    {
+      if (equalp_objects (CAR (obj1), CAR (obj2)) == &t_object
+	  && equalp_objects (CDR (obj1), CDR (obj2)) == &t_object)
+	{
+	  return &t_object;
+	}
+
+      return &nil_object;
+    }
+
+  if (obj1->type == TYPE_STRING && obj2->type == TYPE_STRING)
+    {
+      if (equalp_strings (obj1->value_ptr.string, obj2->value_ptr.string))
+	return &t_object;
+
+      return &nil_object;
+    }
+
+  return &nil_object;
 }
 
 
