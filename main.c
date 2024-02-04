@@ -2863,7 +2863,7 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FILL-POINTER", env, builtin_fill_pointer, TYPE_FUNCTION,
-		    NULL, 0);
+		    accessor_fill_pointer, 0);
   add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("VECTOR", env, builtin_vector, TYPE_FUNCTION, NULL, 0);
@@ -13029,19 +13029,67 @@ struct object *
 builtin_make_array (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  int indx, tot = 1;
-  struct object *ret, *cons;
+  int indx, tot = 1, fillp = -1;
+  struct object *ret, *cons, *dims, *fp = NULL;
   struct array_size *size = NULL, *sz;
 
-  if (list_length (list) != 1)
+  if (!list_length (list))
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_INTEGER)
+  dims = CAR (list);
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
     {
-      indx = mpz_get_si (CAR (list)->value_ptr.integer);
+      if (symbol_equals (CAR (list), ":FILL-POINTER", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (list))->type == TYPE_INTEGER
+	      || SYMBOL (CAR (CDR (list))) == &t_object
+	      || SYMBOL (CAR (CDR (list))) == &nil_object)
+	    {
+	      if (!fp)
+		fp = CAR (CDR (list));
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+	  return NULL;
+	}
+
+      list = CDR (list);
+    }
+
+  if (fp && fp->type == TYPE_INTEGER)
+    {
+      fillp = mpz_get_si (fp->value_ptr.integer);
+
+      if (fillp < 0)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+
+  if (dims->type == TYPE_INTEGER)
+    {
+      indx = mpz_get_si (dims->value_ptr.integer);
 
       if (indx < 0)
 	{
@@ -13049,11 +13097,25 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      return alloc_vector (indx, 1, 0);
+      if (fp && fillp > indx)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      ret = alloc_vector (indx, 1, 0);
+      ret->value_ptr.array->fill_pointer = fillp;
+      return ret;
     }
-  else if (CAR (list)->type == TYPE_CONS_PAIR)
+  else if (dims->type == TYPE_CONS_PAIR)
     {
-      cons = CAR (list);
+      cons = dims;
+
+      if (fp && list_length (dims) != 1)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
 
       while (SYMBOL (cons) != &nil_object)
 	{
@@ -13082,12 +13144,25 @@ builtin_make_array (struct object *list, struct environment *env,
 	  cons = CDR (cons);
 	}
 
+      if (fp && fillp > sz->size)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
       ret = alloc_vector (tot, 1, 1);
+      ret->value_ptr.array->fill_pointer = fillp;
       sz->next = NULL;
       ret->value_ptr.array->alloc_size = size;
     }
-  else if (SYMBOL (CAR (list)) == &nil_object)
+  else if (SYMBOL (dims) == &nil_object)
     {
+      if (fp)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
       ret = alloc_vector (1, 1, 1);
       ret->value_ptr.array->alloc_size = 0;
     }
