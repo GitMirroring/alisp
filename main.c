@@ -12599,7 +12599,9 @@ builtin_elt (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (ind >= CAR (list)->value_ptr.array->alloc_size->size)
+      if (ind >= (CAR (list)->value_ptr.array->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.array->fill_pointer
+		  : CAR (list)->value_ptr.array->alloc_size->size))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
@@ -16156,7 +16158,9 @@ accessor_elt (struct object *list, struct object *newval,
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
-      if (ind >= CAR (list)->value_ptr.array->alloc_size->size)
+      if (ind >= (CAR (list)->value_ptr.array->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.array->fill_pointer
+		  : CAR (list)->value_ptr.array->alloc_size->size))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
