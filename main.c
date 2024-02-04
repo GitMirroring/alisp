@@ -1955,6 +1955,9 @@ struct object *accessor_aref (struct object *list, struct object *newval,
 			      struct environment *env, struct outcome *outcome);
 struct object *accessor_elt (struct object *list, struct object *newval,
 			     struct environment *env, struct outcome *outcome);
+struct object *accessor_fill_pointer (struct object *list, struct object *newval,
+				      struct environment *env,
+				      struct outcome *outcome);
 struct object *accessor_gethash (struct object *list, struct object *newval,
 				 struct environment *env, struct outcome *outcome);
 struct object *accessor_symbol_plist (struct object *list, struct object *newval,
@@ -16102,6 +16105,58 @@ accessor_elt (struct object *list, struct object *newval,
       delete_reference (cons, CAR (cons), 0);
       add_reference (cons, newval, 0);
       cons->value_ptr.cons_pair->car = newval;
+    }
+
+  return newval;
+}
+
+
+struct object *
+accessor_fill_pointer (struct object *list, struct object *newval,
+		       struct environment *env, struct outcome *outcome)
+{
+  int fp;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_VECTOR (CAR (list)) || !HAS_FILL_POINTER (CAR (list))
+      || newval->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  fp = mpz_get_si (newval->value_ptr.integer);
+
+  if (fp < 0)
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      if (fp > CAR (list)->value_ptr.string->used_size)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      CAR (list)->value_ptr.string->fill_pointer = fp;
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      if (fp > CAR (list)->value_ptr.array->alloc_size->size)
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      CAR (list)->value_ptr.array->fill_pointer = fp;
     }
 
   return newval;
