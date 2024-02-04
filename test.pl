@@ -779,6 +779,8 @@ make_test ("(gethash '(\"a\") tbl)", "10\nT");
 make_test ("(defparameter tbl (make-hash-table :test 'equalp))", "TBL");
 make_test ("(setf (gethash \"ab\" tbl) 10)", "10");
 make_test ("(gethash \"Ab\" tbl)", "10\nT");
+make_test ("(setf (gethash #(0 1 2) tbl) 11)", "11");
+make_test ("(gethash #(0 1 2) tbl)", "11\nT");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "NIL");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
