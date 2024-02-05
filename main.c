@@ -11591,7 +11591,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	      form = CDR (form);
 
 	      if (form->type != TYPE_CONS_PAIR)
-		break;
+		decrement_refcount (form);
 	    }
 
 	  increment_refcount (retform);
