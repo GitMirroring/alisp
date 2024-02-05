@@ -7159,7 +7159,9 @@ alloc_symbol_name (size_t value_s, size_t actual_symname_s)
 
   s->packname_present = 0;
 
-  s->actual_symname = malloc_and_check (actual_symname_s);
+  if (actual_symname_s)
+    s->actual_symname = malloc_and_check (actual_symname_s);
+
   s->actual_symname_alloc_s = actual_symname_s;
   s->actual_symname_used_s = 0;
   s->sym = NULL;
@@ -26543,7 +26545,7 @@ free_symbol_name (struct object *obj)
 
   free (s->value);
 
-  if (s->packname_present)
+  if (s->actual_symname_alloc_s)
     free (s->actual_symname);
 
   free (s);
