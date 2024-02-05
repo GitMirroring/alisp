@@ -11604,7 +11604,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 	  if (!retform)
 	    retform = &nil_object;
-	  else if (retcons->type == TYPE_CONS_PAIR
+	  else if (retform->type == TYPE_CONS_PAIR
+		   && retcons->type == TYPE_CONS_PAIR
 		   && !retcons->value_ptr.cons_pair->cdr)
 	    retcons->value_ptr.cons_pair->cdr = &nil_object;
 	}
