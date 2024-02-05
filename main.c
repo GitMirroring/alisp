@@ -11538,13 +11538,18 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			{
 			  while (SYMBOL (retcons) != &nil_object)
 			    {
+			      increment_refcount (CAR (retcons));
+			      delete_reference (retcons, CAR (retcons), 0);
 			      tmp = CAR (retcons);
+
 			      retcons->value_ptr.cons_pair->car =
 				copy_prefix (CAR (reading_cons), lastpr, &lp);
 			      add_reference (retcons, CAR (retcons), 0);
 			      decrement_refcount (CAR (retcons));
+
 			      lp->value_ptr.next = tmp;
 			      add_reference (lp, tmp, 0);
+			      decrement_refcount (tmp);
 
 			      if (SYMBOL (CDR (retcons)) == &nil_object)
 				break;
@@ -11552,7 +11557,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 				retcons = CDR (retcons);
 			    }
 			}
-		      else if (ret->type == TYPE_CONS_PAIR)
+		      else
 			retcons = last_cons_pair (ret);
 		    }
 		  else
