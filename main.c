@@ -7998,6 +7998,9 @@ load_file (const char *filename, struct environment *env,
 
 		  return NULL;
 		}
+
+	      decrement_refcount (res);
+	      decrement_refcount (obj);
 	    }
 
 	  out = read_object (&obj, 0, in, sz, NULL, 0, 1, env, outcome, &obj_b,
