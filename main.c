@@ -11504,6 +11504,21 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		      decrement_refcount (ret);
 		    }
 		}
+	      else if (!IS_LIST (ret))
+		{
+		  if (lastpr)
+		    {
+		      tmp = copy_prefix (CAR (reading_cons), lastpr, &lp);
+		      lp->value_ptr.next = ret;
+		    }
+		  else
+		    tmp = ret;
+
+		  if (retform)
+		    retcons->value_ptr.cons_pair->cdr = tmp;
+		  else
+		    retform = tmp;
+		}
 	      else if (SYMBOL (ret) != &nil_object)
 		{
 		  if (do_spl == 2
