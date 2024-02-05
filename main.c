@@ -345,6 +345,7 @@ outcome_type
     ODD_NUMBER_OF_KEYWORD_ARGUMENTS,
     DOTTED_LIST_NOT_ALLOWED_HERE,
     COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
+    CANT_SPLICE_AN_ATOM_HERE,
     CANT_SPLICE_AFTER_CONSING_DOT,
     SPLICING_OF_ATOM_NOT_ALLOWED_HERE,
     NOTHING_EXPANDED_BEFORE_CONSING_DOT,
@@ -11425,6 +11426,13 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 	  if (!ret)
 	    return NULL;
+
+	  if (do_spl && !IS_LIST (ret) &&
+	      SYMBOL (CDR (reading_cons)) != &nil_object)
+	    {
+	      outcome->type = CANT_SPLICE_AN_ATOM_HERE;
+	      return NULL;
+	    }
 
 	  if (ret != obj)
 	    {
@@ -25701,6 +25709,11 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: comma-at and comma-dot syntax are not allowed at "
 	      "top-level of a quasiquote form\n");
+    }
+  else if (err->type == CANT_SPLICE_AN_ATOM_HERE)
+    {
+      printf ("eval error: splicing an atom is only allowed at last position of "
+	      "a list\n");
     }
   else if (err->type == CANT_SPLICE_AFTER_CONSING_DOT)
     {
