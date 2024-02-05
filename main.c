@@ -4269,7 +4269,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
     last_pref->value_ptr.next = ob;
   else
     *obj = ob;
-    
+
   return out;
 }
 
@@ -8005,6 +8005,7 @@ load_file (const char *filename, struct environment *env,
 	      decrement_refcount (obj);
 	    }
 
+	  obj = NULL;
 	  out = read_object (&obj, 0, in, sz, NULL, 0, 1, env, outcome, &obj_b,
 			     &obj_e);
 	  sz = sz - (obj_e + 1 - in);
