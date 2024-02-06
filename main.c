@@ -11668,14 +11668,14 @@ evaluate_list (struct object *list, struct environment *env,
 
       fun = bind->obj;
     }
-  else if ((fun = sym->value_ptr.symbol->function_cell));
+  else if ((bind = find_binding (sym->value_ptr.symbol, env->funcs,
+				 LEXICAL_BINDING, env->lex_env_funcs_boundary)))
+    {
+      fun = bind->obj;
+    }
   else
     {
-      bind = find_binding (sym->value_ptr.symbol, env->funcs, LEXICAL_BINDING,
-			   env->lex_env_funcs_boundary);
-
-      if (bind)
-	fun = bind->obj;
+      fun = sym->value_ptr.symbol->function_cell;
     }
 
   if (fun && fun->type == TYPE_FUNCTION)
