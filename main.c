@@ -1456,7 +1456,6 @@ void resize_symbol_name (struct object *symname, size_t value_s,
 const char *find_end_of_symbol_name (const char *input, size_t size,
 				     int ends_with_eof, int preserve_whitespace,
 				     int already_begun, int found_package_sep,
-				     size_t *new_size,
 				     const char **start_of_package_separator,
 				     enum package_record_visibility *sym_visibility,
 				     size_t *name_length,
@@ -4564,7 +4563,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 		  struct outcome *out)
 {
   struct symbol_name *sym;
-  size_t name_l, act_name_l, new_size;
+  size_t name_l, act_name_l;
   struct object *ob = *obj;
   const char *start_of_pack_sep;
   enum package_record_visibility visib;
@@ -4575,7 +4574,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   *symname_end = find_end_of_symbol_name
     (input, size, got_eof, preserve_whitespace, ob != NULL,
      ob && ob->value_ptr.symbol_name->packname_present ? 1 : 0,
-     &new_size, &start_of_pack_sep, &visib, &name_l, &act_name_l, out);
+     &start_of_pack_sep, &visib, &name_l, &act_name_l, out);
 
   if (IS_READ_OR_EVAL_ERROR (out->type))
     return out->type;
@@ -7200,7 +7199,7 @@ resize_symbol_name (struct object *symname, size_t value_s,
 const char *
 find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
 			 int preserve_whitespace, int already_begun,
-			 int found_package_sep, size_t *new_size,
+			 int found_package_sep,
 			 const char **start_of_package_separator,
 			 enum package_record_visibility *sym_visibility,
 			 size_t *name_length, size_t *act_name_length,
@@ -7290,8 +7289,6 @@ find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
 		       && (input + i == *start_of_package_separator + colons))
 		out->type = CANT_END_WITH_PACKAGE_SEPARATOR;
 
-	      *new_size = size - i + (!isspace ((unsigned char)input [i])
-				      || !!preserve_whitespace);
 	      return input + i - (!isspace ((unsigned char)input [i])
 				  || !!preserve_whitespace);
 	    }
