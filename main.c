@@ -21347,11 +21347,15 @@ evaluate_if (struct object *list, struct environment *env,
 
   if (SYMBOL (if_clause) != &nil_object)
     {
+      decrement_refcount (if_clause);
+
       ret = evaluate_object (CAR (CDR (list)), env, outcome);
       return ret;
     }
   else
     {
+      decrement_refcount (if_clause);
+
       if (l == 2)
 	{
 	  return &nil_object;
