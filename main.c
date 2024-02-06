@@ -21905,7 +21905,7 @@ evaluate_psetq (struct object *list, struct environment *env,
       last = last->next;
     }
 
-  free_object_list_structure (ls);
+  free_object_list (ls);
 
   return &nil_object;
 }
