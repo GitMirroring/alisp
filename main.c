@@ -21533,6 +21533,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
   ret = call_function (fun, args, 0, 0, 0, env, outcome);
 
   decrement_refcount (args);
+  decrement_refcount (fun);
 
   return ret;
 }
