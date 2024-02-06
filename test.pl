@@ -231,6 +231,7 @@ make_test ("(list 1 2 3)", "(1 2 3)");
 make_test ("(list* 0)", "0");
 make_test ("(list* 0 1 2)", "(0 1 . 2)");
 make_test ("(append ())", "NIL");
+make_test ("(append 0)", "0");
 make_test ("(append nil nil 0)", "0");
 make_test ("(append '(1 2) '(3 4))", "(1 2 3 4)");
 make_test ("(append '(1) (values))", "(1)");
