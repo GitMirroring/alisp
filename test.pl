@@ -264,6 +264,8 @@ make_test ("(let ((i 0)) (flet ((fun () (setq i 1))) (fun)) i)", "1");
 make_test ("(labels ((a NIL (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a () (b)) (b () (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(let ((i 0)) (labels ((fun () (setq i 1))) (fun)) i)", "1");
+make_test ("(defun funfoo (x) x)", "FUNFOO");
+make_test ("(labels ((funfoo () 0)) (funfoo))", "0");
 make_test ("(macrolet ((w (a) `(write ,a))) (w \"\"))", "\"\"\n\"\"");
 make_test ("(eval-when (:compile-toplevel compile) 0)", "NIL");
 make_test ("(eval-when (:load-toplevel load) 0)", "NIL");
