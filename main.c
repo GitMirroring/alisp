@@ -12424,9 +12424,10 @@ builtin_append (struct object *list, struct environment *env,
       add_reference (last, CDR (last), 1);
     }
   else
-    ret = obj;
-
-  increment_refcount (obj);
+    {
+      ret = obj;
+      increment_refcount (obj);
+    }
 
   return ret;
 }
