@@ -22185,7 +22185,7 @@ struct object *
 evaluate_apply (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *s, *fun, *last, *l, *args;
+  struct object *s, *fun, *last, *l, *args, *ret;
   int length = list_length (list);
 
   if (length < 2)
@@ -22236,9 +22236,15 @@ evaluate_apply (struct object *list, struct environment *env,
     {
       args = copy_list_structure (list, NULL, length - 1, &l);
       l->value_ptr.cons_pair->cdr = last;
+      add_reference (l, last, 1);
     }
 
-  return call_function (fun, args, 0, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 0, env, outcome);
+
+  if (length != 1)
+    decrement_refcount (args);
+
+  return ret;
 }
 
 
