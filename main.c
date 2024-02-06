@@ -13145,7 +13145,12 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
 
       ret = alloc_vector (indx, 1, 0);
-      ret->value_ptr.array->fill_pointer = fillp;
+
+      if (fp && SYMBOL (fp) == &t_object)
+	ret->value_ptr.array->fill_pointer = indx;
+      else
+	ret->value_ptr.array->fill_pointer = fillp;
+
       return ret;
     }
   else if (dims->type == TYPE_CONS_PAIR)
@@ -13192,7 +13197,12 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
 
       ret = alloc_vector (tot, 1, 1);
-      ret->value_ptr.array->fill_pointer = fillp;
+
+      if (fp && SYMBOL (fp) == &t_object)
+	ret->value_ptr.array->fill_pointer = indx;
+      else
+	ret->value_ptr.array->fill_pointer = fillp;
+
       sz->next = NULL;
       ret->value_ptr.array->alloc_size = size;
     }
