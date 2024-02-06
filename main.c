@@ -7187,7 +7187,8 @@ resize_symbol_name (struct object *symname, size_t value_s,
 
   s->alloc_size = value_s;
 
-  s->actual_symname = realloc_and_check (s->actual_symname, actual_symname_s);
+  if (actual_symname_s)
+    s->actual_symname = realloc_and_check (s->actual_symname, actual_symname_s);
 
   if (actual_symname_s < s->actual_symname_used_s)
     s->actual_symname_used_s = actual_symname_s;
