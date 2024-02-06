@@ -5804,9 +5804,12 @@ convert_to_integer_if_possible (struct object *rat)
       mpz_init (obj->value_ptr.integer);
       mpz_set (obj->value_ptr.integer, mpq_numref (rat->value_ptr.ratio));
 
+      mpz_clear (den);
       decrement_refcount (rat);
       return obj;
     }
+
+  mpz_clear (den);
 
   return rat;
 }
