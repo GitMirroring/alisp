@@ -10246,7 +10246,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 		     int *argsnum)
 {
   struct parameter *findk;
-  struct object *val, *args = NULL;
+  struct object *val, *args = NULL, *as;
   struct binding *subbins, *lastbin = NULL;
   int rest_found = 0, subargs;
 
@@ -10386,6 +10386,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       rest_found = 1;
     }
 
+  as = args;
+
   if (par && par->type == KEYWORD_PARAM)
     {
       findk = par;
@@ -10397,13 +10399,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	  findk = findk->next;
 	}
 
-      while (SYMBOL (args) != &nil_object)
+      while (SYMBOL (as) != &nil_object)
 	{
 	  findk = par;
 
 	  while (findk && findk->type == KEYWORD_PARAM)
 	    {
-	      if (findk->key == SYMBOL (CAR (args)))
+	      if (findk->key == SYMBOL (CAR (as)))
 		break;
 
 	      findk = findk->next;
@@ -10413,15 +10415,15 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    {
 	      if (allow_other_keys)
 		{
-		  args = CDR (args);
+		  as = CDR (as);
 
-		  if (SYMBOL (args) == &nil_object)
+		  if (SYMBOL (as) == &nil_object)
 		    {
 		      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 		      return 0;
 		    }
 
-		  args = CDR (args);
+		  as = CDR (as);
 		  continue;
 		}
 
@@ -10429,9 +10431,9 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	      return 0;
 	    }
 
-	  args = CDR (args);
+	  as = CDR (as);
 
-	  if (SYMBOL (args) == &nil_object)
+	  if (SYMBOL (as) == &nil_object)
 	    {
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 	      return 0;
@@ -10439,14 +10441,14 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!findk->key_passed)
 	    {
-	      increment_refcount (CAR (args));
+	      increment_refcount (CAR (as));
 
-	      *bins = bind_variable (findk->name, CAR (args), *bins);
+	      *bins = bind_variable (findk->name, CAR (as), *bins);
 	      findk->key_passed = 1;
 	      (*argsnum)++;
 	    }
 
-	  args = CDR (args);
+	  as = CDR (as);
 	}
 
       findk = par;
