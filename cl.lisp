@@ -588,24 +588,29 @@
   (not (apply 'every pred sequences)))
 
 
-(defun member (obj list)
-  (let ((subl list))
+(defun member (obj list &key key test test-not)
+  (let ((tst (or test
+	      (if test-not (complement test-not))
+	       #'eql)))
+    (unless key
+      (setq key #'identity))
     (dotimes (i (length list))
-      (if (eql obj (car subl))
-	  (return-from member subl))
-      (setq subl (cdr subl)))))
+      (if (funcall tst obj (funcall key (car list)))
+	  (return-from member list))
+      (setq list (cdr list)))))
 
 
-(defun member-if (pred list)
-  (let ((subl list))
-    (dotimes (i (length list))
-      (if (funcall pred (car subl))
-	  (return-from member-if subl))
-      (setq subl (cdr subl)))))
+(defun member-if (pred list &key key)
+  (unless key
+    (setq key #'identity))
+  (dotimes (i (length list))
+    (if (funcall pred (funcall key (car list)))
+	(return-from member-if list))
+    (setq list (cdr list))))
 
 
-(defun member-if-not (pred list)
-  (member-if (complement pred) list))
+(defun member-if-not (pred list &key key)
+  (member-if (complement pred) list :key key))
 
 
 (defun find (obj seq)
