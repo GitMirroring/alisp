@@ -726,6 +726,8 @@ make_test ("(setf (fill-pointer arr) 4)", "4");
 make_test ("arr", "#(NIL NIL NIL NIL)");
 make_test ("(fill-pointer arr)", "4");
 make_test ("(array-has-fill-pointer-p arr)", "T");
+make_test ("(let ((arr (make-array 5 :fill-pointer nil))) (array-has-fill-pointer-p arr))", "NIL");
+make_test ("(let ((arr (make-array 7 :fill-pointer t))) (fill-pointer arr))", "7");
 make_test ("(length arr)", "4");
 make_test ("(vector)", "#()");
 make_test ("(vector 'a 'b \"\")", "#(A B \"\")");
