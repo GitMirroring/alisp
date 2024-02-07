@@ -392,6 +392,13 @@ make_test ("(defmacro f () (f))", "F");
 make_test ("(defmacro f () (f))", "F");
 make_test ("(defmacro mac (x (y (z))) `(list ,x ,y ,z))", "MAC");
 make_test ("(mac 0 (1 (2)))", "(0 1 2)");
+make_test ("(defmacro mac (&whole wh f g h) `(list ,wh ,f ,g ,h))", "MAC");
+make_test ("(macroexpand-1 '(mac x y z))", "(LIST (MAC X Y Z) X Y Z)\nT");
+make_test ("(defmacro mac (z (&whole wh f g)) `(list ,wh ,f ,g))", "MAC");
+make_test ("(macroexpand-1 '(mac x (y z)))", "(LIST (Y Z) Y Z)\nT");
+make_test ("(defmacro mac (&whole wh f g h) `(list ',wh ',f ',g ',h))", "MAC");
+make_test ("(mac 0 1 2)", "((MAC 0 1 2) 0 1 2)");
+
 make_test ("(load \"cl.lisp\")", "T");
 make_test ("(open-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-input*)", "T");
