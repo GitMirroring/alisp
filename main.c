@@ -741,6 +741,9 @@ function
 
   struct object *condition_reader_class;
   struct object *condition_reader_field;
+
+
+  struct object *function_macro;
 };
 
 
@@ -2135,6 +2138,9 @@ struct object *builtin_fmakunbound (struct object *list, struct environment *env
 struct object *builtin_macroexpand_1 (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *builtin_macro_function (struct object *list,
+				       struct environment *env,
+				       struct outcome *outcome);
 struct object *builtin_string (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_string_eq (struct object *list, struct environment *env,
@@ -3101,6 +3107,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("FMAKUNBOUND", env, builtin_fmakunbound, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
@@ -6119,6 +6127,7 @@ alloc_function (void)
   fun->struct_predicate_class = NULL;
   fun->struct_copyier_class = NULL;
   fun->condition_reader_class = NULL;
+  fun->function_macro = NULL;
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
@@ -10674,6 +10683,11 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       decrement_refcount (args);
 
       return ret;
+    }
+  else if (func->value_ptr.function->function_macro)
+    {
+      return call_function (func->value_ptr.function->function_macro,
+			    CAR (arglist), 0, 1, 1, 0, 0, env, outcome);
     }
 
 
@@ -19122,6 +19136,40 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
     }
 
   prepend_object_to_obj_list (ret2, &outcome->other_values);
+  return ret;
+}
+
+
+struct object *
+builtin_macro_function (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  struct object *sym, *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  if (!sym->value_ptr.symbol->function_cell
+      || sym->value_ptr.symbol->function_cell->type != TYPE_MACRO
+      || sym->value_ptr.symbol->function_cell->value_ptr.function->builtin_form)
+    {
+      return &nil_object;
+    }
+
+  ret = alloc_function ();
+  ret->value_ptr.function->function_macro = sym->value_ptr.symbol->function_cell;
+
   return ret;
 }
 
