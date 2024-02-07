@@ -778,6 +778,28 @@
   (apply 'set-difference args))
 
 
+(defun union (list-1 list-2 &key (key #'identity) test test-not)
+  (remove-duplicates (append list-1 list-2) :key key :test test :test-not test-not))
+
+
+(defun nunion (&rest args)
+  (apply 'union args))
+
+
+(defun intersection (list-1 list-2 &key key test test-not)
+  (unless key
+    (setq key #'identity))
+  (let (out)
+    (dolist (l list-1)
+      (if (member (funcall key l) list-2 :key key :test test :test-not test-not)
+	  (setq out (cons l out))))
+    out))
+
+
+(defun nintersection (&rest args)
+  (apply 'intersection args))
+
+
 (defun array-rank (array)
   (length (array-dimensions array)))
 
@@ -1654,18 +1676,19 @@
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  remove-duplicates delete-duplicates nreverse adjoin fill push pop
-	  set-difference nset-difference array-rank array-dimension
-	  array-total-size array-in-bounds-p upgraded-array-element-type
-	  adjustable-array-p get get-properties char string/= char-equal
-	  digit-char digit-char-p char-int string-upcase string-downcase
-	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
-	  string-left-trim string-right-trim string-trim defpackage signed-byte
-	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp random-state-p characterp standard-char-p
-	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
-	  numberp check-type macroexpand equal equalp fdefinition complement
-	  mapc terpri write-line write-sequence prin1 princ print do-all-symbols
-	  loop format encode-universal-time))
+	  set-difference nset-difference union nunion intersection nintersection
+	  array-rank array-dimension array-total-size array-in-bounds-p
+	  upgraded-array-element-type adjustable-array-p get get-properties char
+	  string/= char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp arrayp sequencep stringp
+	  hash-table-p pathnamep streamp realp numberp check-type macroexpand
+	  equal equalp fdefinition complement mapc terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
