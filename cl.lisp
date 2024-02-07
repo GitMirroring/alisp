@@ -697,7 +697,7 @@
   (remove-if (complement pred) seq))
 
 
-(defun remove-duplicates (seq &key from-end test test-not (start 0) end (key #'identity))
+(defun remove-duplicates (seq &key from-end test test-not (start 0) end key)
   (let* ((len (length seq))
 	 (n (if end (- end start) len))
 	 (removed (make-array len))
@@ -709,12 +709,13 @@
 				       'vector
 				       'list)) seq)))
 	 (tst (or test
-		  (if test-not (complement test-not) nil)
-		  #'eql)))
+		  (if test-not (complement test-not))
+		  #'eql))
+	 (k (or key #'identity)))
     (dotimes (i n)
       (dotimes (l (- n i 1))
-	(when (funcall tst (funcall key (elt out (+ start i)))
-		       (funcall key (elt out (+ start i l 1))))
+	(when (funcall tst (funcall k (elt out (+ start i)))
+		       (funcall k (elt out (+ start i l 1))))
 	  (setf (aref removed (+ start i)) t)
 	  (return nil))))
     (setq leftnum (count-if #'not removed))
