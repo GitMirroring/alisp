@@ -65,7 +65,7 @@
 
 
 
-(defconstant lambda-list-keywords '(&optional &rest &body &key &allow-other-keys))
+(defconstant lambda-list-keywords '(&optional &rest &body &key &allow-other-keys &aux &whole))
 
 
 
