@@ -15800,7 +15800,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 	{
 	  arg->value_ptr.cons_pair->car = CAR (seq);
 
-	  res = call_function (fun, arg, 1, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -15843,7 +15843,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
 	  arg->value_ptr.cons_pair->car = create_character_from_utf8 (s, sz);
 
-	  res = call_function (fun, arg, 1, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -15876,7 +15876,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
 	  increment_refcount (CAR (arg));
 
-	  res = call_function (fun, arg, 1, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
