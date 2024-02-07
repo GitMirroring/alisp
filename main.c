@@ -552,7 +552,7 @@ environment
     *safety_sym, *space_sym, *speed_sym, *special_sym, *type_sym, *ftype_sym;
 
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
-    *amp_allow_other_keys_sym, *amp_aux_sym;
+    *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym;
 
   struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym, *star_sym;
 
@@ -673,7 +673,8 @@ parameter_type
     OPTIONAL_PARAM,
     REST_PARAM,
     KEYWORD_PARAM,
-    AUXILIARY_VAR
+    AUXILIARY_VAR,
+    WHOLE_PARAM
   };
 
 
@@ -1648,13 +1649,15 @@ struct object *evaluate_body
 (struct object *body, int is_tagbody, struct object *block_name,
  struct environment *env, struct outcome *outcome);
 int parse_argument_list (struct object *arglist, struct parameter *par,
-			 int eval_args, int is_macro, int is_typespec,
+			 int eval_args, int also_pass_name, int is_typespec,
 			 int allow_other_keys, struct environment *env,
 			 struct outcome *outcome, struct binding **bins,
 			 int *argsnum);
-struct object *call_function
-(struct object *func, struct object *arglist, int eval_args, int is_macro,
- int is_typespec, struct environment *env, struct outcome *outcome);
+struct object *call_function (struct object *func, struct object *arglist,
+			      int eval_args, int also_pass_name,
+			      int create_new_lex_env, int expand_and_eval,
+			      int is_typespec, struct environment *env,
+			      struct outcome *outcome);
 struct object *call_structure_constructor (struct object *class_name,
 					   struct object *args,
 					   struct environment *env,
@@ -3270,6 +3273,10 @@ add_standard_definitions (struct environment *env)
 						   strlen ("&AUX"), 1,
 						   EXTERNAL_VISIBILITY, 1,
 						   env->cl_package);
+  env->amp_whole_sym = intern_symbol_by_char_vector ("&WHOLE",
+						     strlen ("&WHOLE"), 1,
+						     EXTERNAL_VISIBILITY, 1,
+						     env->cl_package);
 
   env->not_sym = CREATE_BUILTIN_SYMBOL ("NOT");
   env->and_sym = CREATE_BUILTIN_SYMBOL ("AND");
@@ -8643,7 +8650,7 @@ handle_condition (struct object *cond, struct environment *env,
 	  f = env->handlers;
 	  env->handlers = env->handlers->next;
 
-	  hret = call_function (b->handler, &arg, 1, 0, 0, env, outcome);
+	  hret = call_function (b->handler, &arg, 1, 0, 1, 0, 0, env, outcome);
 
 	  env->handlers = f;
 
@@ -9700,8 +9707,8 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 		   int is_specialized, struct environment *env,
 		   struct outcome *outcome, int *allow_other_keys)
 {
-  struct parameter *first = NULL, *last = NULL;
-  struct object *car, *restsym;
+  struct parameter *first = NULL, *last = NULL, *p, *ls;
+  struct object *car, *restsym, *wholesym;
   int found_amp_key = 0, dotted_ok = 0, l;
 
   *allow_other_keys = 0;
@@ -9717,8 +9724,40 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       return NULL;
     }
 
-  first = parse_required_parameters (obj, &last, &obj, allow_destructuring,
-				     is_specialized, env, outcome);
+  if (allow_destructuring && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_whole_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      wholesym = SYMBOL (CAR (CDR (obj)));
+
+      if (wholesym->value_ptr.symbol->is_const)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      last = first = alloc_parameter (WHOLE_PARAM, wholesym);
+
+      last->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (wholesym);
+      INC_WEAK_REFCOUNT (wholesym);
+
+      obj = CDR (CDR (obj));
+    }
+
+  p = parse_required_parameters (obj, &ls, &obj, allow_destructuring,
+				 is_specialized, env, outcome);
+
+  if (first)
+    last->next = p;
+  else
+    first = last = p;
+
+  last = ls;
 
   if (outcome->type != EVAL_OK)
     return NULL;
@@ -9726,11 +9765,14 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_optional_sym)
     {
+      p = parse_optional_parameters (CDR (obj), &ls, &obj, env, outcome);
+
       if (first)
-	last->next =
-	  parse_optional_parameters (CDR (obj), &last, &obj, env, outcome);
+	last->next = p;
       else
-	first = parse_optional_parameters (CDR (obj), &last, &obj, env, outcome);
+	first = last = p;
+
+      last = ls;
 
       if (outcome->type != EVAL_OK)
 	return NULL;
@@ -9783,12 +9825,14 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
     {
       found_amp_key = 1;
 
+      p = parse_keyword_parameters (CDR (obj), &ls, &obj, env, outcome);
+
       if (first)
-	last->next =
-	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
+	last->next = p;
       else
-	first =
-	  parse_keyword_parameters (CDR (obj), &last, &obj, env, outcome);
+	first = last = p;
+
+      last = ls;
 
       if (outcome->type != EVAL_OK)
 	return NULL;
@@ -10238,7 +10282,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 
 int
 parse_argument_list (struct object *arglist, struct parameter *par,
-		     int eval_args, int is_macro, int is_typespec,
+		     int eval_args, int also_pass_name, int is_typespec,
 		     int allow_other_keys, struct environment *env,
 		     struct outcome *outcome, struct binding **bins,
 		     int *argsnum)
@@ -10249,6 +10293,20 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   int rest_found = 0, subargs;
 
   *bins = NULL, *argsnum = 0;
+
+
+  if (par && par->type == WHOLE_PARAM)
+    {
+      increment_refcount (arglist);
+      *bins = bind_variable (par->name, arglist, *bins);
+
+      (*argsnum)++;
+
+      par = par->next;
+    }
+
+  if (also_pass_name)
+    arglist = CDR (arglist);
 
   while (SYMBOL (arglist) != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
@@ -10262,7 +10320,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    }
 
 	  if (!parse_argument_list (CAR (arglist), par->sub_lambda_list,
-				    eval_args, is_macro, is_typespec,
+				    eval_args, 0, is_typespec,
 				    par->sub_allow_other_keys, env, outcome,
 				    &subbins, &subargs))
 	    {
@@ -10542,8 +10600,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 struct object *
 call_function (struct object *func, struct object *arglist, int eval_args,
-	       int is_macro, int is_typespec, struct environment *env,
-	       struct outcome *outcome)
+	       int also_pass_name, int create_new_lex_env, int expand_and_eval,
+	       int is_typespec, struct environment *env, struct outcome *outcome)
 {
   struct binding *bins, *b;
   struct object *ret, *ret2, *args = NULL;
@@ -10626,14 +10684,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
-			   eval_args, is_macro, is_typespec,
+			   eval_args, also_pass_name, is_typespec,
 			   func->value_ptr.function->allow_other_keys, env,
 			   outcome, &bins, &argsnum))
     {
       env->vars = chain_bindings (func->value_ptr.function->lex_vars, env->vars,
 				  &closnum, NULL);
 
-      if (is_macro)
+      if (!create_new_lex_env)
 	env->lex_env_vars_boundary += closnum;
       else
 	env->lex_env_vars_boundary = closnum;
@@ -10664,7 +10722,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
 
-  if (ret && is_macro)
+  if (ret && expand_and_eval)
     {
       ret2 = evaluate_object (ret, env, outcome);
 
@@ -10882,8 +10940,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     }
 
 
-  if (parse_argument_list (args, applm->meth->value_ptr.method->lambda_list, 0,
-			   0, 0, 0, env, outcome, &bins, &argsnum))
+  if (parse_argument_list (args, applm->meth->value_ptr.method->lambda_list, 0, 0,
+			   0, 0, env, outcome, &bins, &argsnum))
     {
       env->vars = chain_bindings (bins, env->vars, NULL, NULL);
       env->lex_env_vars_boundary += argsnum;
@@ -11027,8 +11085,8 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	}
       else if (sym->value_ptr.symbol->is_type)
 	{
-	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, 1,
-			       env, outcome);
+	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, 0, 0,
+			       1, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -11679,9 +11737,11 @@ evaluate_list (struct object *list, struct environment *env,
     }
 
   if (fun && fun->type == TYPE_FUNCTION)
-    return call_function (fun, CDR (list), 1, 0, 0, env, outcome);
+    return call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
+  else if (fun && fun->value_ptr.macro->builtin_form)
+    return call_function (fun, CDR (list), 0, 0, 0, 0, 0, env, outcome);
   else if (fun)
-    return call_function (fun, CDR (list), 0, 1, 0, env, outcome);
+    return call_function (fun, list, 0, 1, 0, 1, 0, env, outcome);
 
   outcome->type = UNKNOWN_FUNCTION;
   outcome->obj = CAR (list);
@@ -13850,7 +13910,7 @@ builtin_maphash (struct object *list, struct environment *env,
 	  args->value_ptr.cons_pair->car = r->key;
 	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = r->value;
 
-	  ret = call_function (fun, args, 0, 0, 0, env, outcome);
+	  ret = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!ret)
@@ -15588,7 +15648,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	  cdrlistcons = CDR (cdrlistcons);
 	}
 
-      val = call_function (fun, args, 0, 0, 0, env, outcome);
+      val = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!val)
@@ -15712,7 +15772,7 @@ builtin_map (struct object *list, struct environment *env,
 	  argscons = CDR (argscons);
 	}
 
-      val = call_function (fun, args, 0, 0, 0, env, outcome);
+      val = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!val)
@@ -15800,7 +15860,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 	{
 	  arg->value_ptr.cons_pair->car = CAR (seq);
 
-	  res = call_function (fun, arg, 0, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -15843,7 +15903,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
 	  arg->value_ptr.cons_pair->car = create_character_from_utf8 (s, sz);
 
-	  res = call_function (fun, arg, 0, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -15876,7 +15936,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
 	  increment_refcount (CAR (arg));
 
-	  res = call_function (fun, arg, 0, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -19047,7 +19107,7 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
       && (mac = get_function (CAR (CAR (list)), env, 0, 0, 0, 0))
       && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
-      ret = call_function (mac, CDR (CAR (list)), 0, 0, 0, env, outcome);
+      ret = call_function (mac, CAR (list), 0, 1, 1, 0, 0, env, outcome);
 
       if (!ret)
 	return NULL;
@@ -21545,7 +21605,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
   if (args != &nil_object)
     cons->value_ptr.cons_pair->cdr = &nil_object;
 
-  ret = call_function (fun, args, 0, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
 
   decrement_refcount (args);
   decrement_refcount (fun);
@@ -21979,8 +22039,8 @@ evaluate_setf (struct object *list, struct environment *env,
 	  else if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
 	    {
 	      exp = call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
-				   setf_expander, CDR (CAR (list)), 0, 0, 0, env,
-				   outcome);
+				   setf_expander, CDR (CAR (list)), 0, 0, 0, 0,
+				   0, env, outcome);
 
 	      if (!exp)
 		return NULL;
@@ -22105,7 +22165,7 @@ evaluate_setf (struct object *list, struct environment *env,
 	      cons1->value_ptr.cons_pair->car = val;
 	      cons1->value_ptr.cons_pair->cdr = args;
 
-	      val = call_function (fun, cons1, 0, 0, 0, env, outcome);
+	      val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
 	    }
 	}
       else
@@ -22249,7 +22309,7 @@ evaluate_apply (struct object *list, struct environment *env,
       add_reference (l, last, 1);
     }
 
-  ret = call_function (fun, args, 0, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
 
   if (length != 1)
     decrement_refcount (args);
@@ -22285,7 +22345,7 @@ evaluate_funcall (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return call_function (fun, CDR (list), 0, 0, 0, env, outcome);
+  return call_function (fun, CDR (list), 0, 0, 1, 0, 0, env, outcome);
 }
 
 
@@ -22412,7 +22472,7 @@ evaluate_destructuring_bind (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ret = call_function (fun, args, 0, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 0, 0, 0, env, outcome);
 
   decrement_refcount (fun);
   decrement_refcount (args);
@@ -22520,7 +22580,8 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
     }
 
   return call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
-			setf_expander, CDR (CAR (list)), 0, 0, 0, env, outcome);
+			setf_expander, CDR (CAR (list)), 0, 0, 0, 0, 0, env,
+			outcome);
 }
 
 
@@ -23395,7 +23456,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 	  if (does_condition_include_outcome_type (b->condition, outcome->type,
 						   env))
 	    {
-	      hret = call_function (b->handler, &arg, 1, 0, 0, env, outcome);
+	      hret = call_function (b->handler, &arg, 1, 0, 1, 0, 0, env, outcome);
 
 	      if (!hret)
 		goto cleanup_and_leave;
@@ -23556,7 +23617,7 @@ builtin_invoke_restart (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return call_function (fun, CDR (list), 1, 0, 0, env, outcome);
+  return call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
 }
 
 
