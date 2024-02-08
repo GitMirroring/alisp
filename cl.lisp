@@ -989,7 +989,7 @@
 
 (deftype unsigned-byte (&optional s)
   (if (eq s '*)
-      'integer
+      '(integer 0 *)
       `(integer 0 ,(1- (expt 2 s)))))
 
 
