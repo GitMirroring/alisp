@@ -26682,6 +26682,11 @@ free_object (struct object *obj)
       free (obj->value_ptr.complex);
       free (obj);
     }
+  else if (obj->type == TYPE_RANDOM_STATE)
+    {
+      gmp_randclear (obj->value_ptr.random_state);
+      free (obj);
+    }
   else if (obj->type == TYPE_BYTESPEC)
     free_bytespec (obj);
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
