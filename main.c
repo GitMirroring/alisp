@@ -22221,6 +22221,8 @@ evaluate_setf (struct object *list, struct environment *env,
 	      cons1->value_ptr.cons_pair->cdr = args;
 
 	      val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
+
+	      decrement_refcount (cons1);
 	    }
 	}
       else
