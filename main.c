@@ -11109,7 +11109,11 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	  if (!res)
 	    return -1;
 
-	  return check_type (obj, res, env, outcome);
+	  ret = check_type (obj, res, env, outcome);
+
+	  decrement_refcount (res);
+
+	  return ret;
 	}
       else
 	{
