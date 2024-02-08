@@ -22133,7 +22133,11 @@ evaluate_setf (struct object *list, struct environment *env,
 		  binsnum++;
 
 		  cons1 = CDR (cons1);
+		  cons2 = CDR (cons2);
 		}
+
+	      decrement_refcount (exp);
+	      decrement_refcount (expvals->obj);
 
 	      val = evaluate_object (CAR (CDR (list)), env, outcome);
 
@@ -22169,9 +22173,19 @@ evaluate_setf (struct object *list, struct environment *env,
 		  cons1 = CDR (cons1);
 		}
 
+	      decrement_refcount (expvals->next->obj);
+
+	      free_object_list_structure (outcome->other_values);
+	      outcome->other_values = NULL;
+
 	      env->lex_env_vars_boundary += binsnum;
 
 	      val = evaluate_object (expvals->next->next->obj, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      free_object_list (expvals->next->next);
+	      expvals->next->next = NULL;
+	      free_object_list_structure (expvals);
 
 	      env->vars = remove_bindings (env->vars, binsnum);
 	      env->lex_env_vars_boundary -= binsnum;
