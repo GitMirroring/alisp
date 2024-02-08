@@ -14726,6 +14726,7 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
 
   CAR (list)->value_ptr.stream->string = alloc_string (0);
   add_reference (CAR (list), CAR (list)->value_ptr.stream->string, 0);
+  decrement_refcount (CAR (list)->value_ptr.stream->string);
 
   return ret;
 }
