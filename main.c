@@ -10406,6 +10406,9 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	}
       else
 	{
+	  if (is_typespec)
+	    increment_refcount (env->star_sym);
+
 	  *bins = bind_variable (par->name, is_typespec ? env->star_sym
 				 : &nil_object, *bins);
 
