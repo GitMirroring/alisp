@@ -12374,11 +12374,11 @@ builtin_cons (struct object *list, struct environment *env,
 
   cons = alloc_empty_cons_pair ();
 
-  increment_refcount (CAR (list));
   cons->value_ptr.cons_pair->car = CAR (list);
+  add_reference (cons, CAR (list), 0);
 
-  increment_refcount (CAR (CDR (list)));
   cons->value_ptr.cons_pair->cdr = CAR (CDR (list));
+  add_reference (cons, CAR (CDR (list)), 1);
 
   return cons;
 }
