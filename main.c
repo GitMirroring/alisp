@@ -15545,6 +15545,7 @@ builtin_dolist (struct object *list, struct environment *env,
       if (!ret)
 	{
 	  env->blocks = remove_block (env->blocks);
+	  decrement_refcount (lst);
 
 	  if (outcome->block_to_leave == &nil_object)
 	    {
