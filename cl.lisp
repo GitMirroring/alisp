@@ -1162,8 +1162,13 @@
 
 
 (defun mapc (fun &rest lists)
-  (apply #'mapcar (cons fun lists))
+  (apply #'mapcar fun lists)
   (car lists))
+
+
+
+(defun mapcan (fun &rest lists)
+  (apply #'nconc (apply 'mapcar fun lists)))
 
 
 
@@ -1176,6 +1181,17 @@
       (setq out (cons (apply fun lists) out))
       (setq lists (mapcar #'cdr lists)))
     (reverse out)))
+
+
+
+(defun mapl (fun &rest lists)
+  (apply #'maplist fun lists)
+  (car lists))
+
+
+
+(defun mapcon (fun &rest lists)
+  (apply #'nconc (apply 'maplist fun lists)))
 
 
 
@@ -1726,9 +1742,9 @@
 	  functionp packagep integerp rationalp floatp complexp random-state-p
 	  characterp standard-char-p vectorp arrayp sequencep stringp
 	  hash-table-p pathnamep streamp realp numberp check-type macroexpand
-	  equal equalp fdefinition complement mapc maplist terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  equal equalp fdefinition complement mapc mapcan maplist mapl mapcon
+	  terpri write-line write-sequence prin1 princ print do-all-symbols loop
+	  format encode-universal-time))
 
 
 
