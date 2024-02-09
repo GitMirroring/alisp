@@ -15084,6 +15084,8 @@ builtin_do (struct object *list, struct environment *env,
 
   while (SYMBOL (testres) == &nil_object)
     {
+      decrement_refcount (testres);
+
       bodyres = evaluate_body (body, 1, NULL, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
@@ -15149,11 +15151,10 @@ builtin_do (struct object *list, struct environment *env,
 	    set_value (SYMBOL (CAR (CAR (bind_forms))), lastincr->obj, 0, env,
 		       outcome);
 
+	  decrement_refcount (lastincr->obj);
 	  bind_forms = CDR (bind_forms);
 	  lastincr = lastincr->next;
 	}
-
-      decrement_refcount (testres);
 
       testres = evaluate_object (test_form, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
@@ -15269,6 +15270,8 @@ builtin_do_star (struct object *list, struct environment *env,
 
   while (SYMBOL (testres) == &nil_object)
     {
+      decrement_refcount (testres);
+
       bodyres = evaluate_body (body, 1, NULL, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
@@ -15315,12 +15318,12 @@ builtin_do_star (struct object *list, struct environment *env,
 
 		  goto cleanup_and_leave;
 		}
+
+	      decrement_refcount (res);
 	    }
 
 	  bind_forms = CDR (bind_forms);
 	}
-
-      decrement_refcount (testres);
 
       testres = evaluate_object (test_form, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
