@@ -15684,7 +15684,8 @@ builtin_mapcar (struct object *list, struct environment *env,
 	}
 
       retcons->value_ptr.cons_pair->car = val;
-      set_reference_strength_factor (retcons, 0, val, 1, 0, 0);
+      add_reference (retcons, val, 0);
+      decrement_refcount (val);
 
       cdrlistcons = cdrlist;
 
@@ -15702,7 +15703,6 @@ builtin_mapcar (struct object *list, struct environment *env,
       if (!finished)
 	{
 	  retcons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-	  set_reference_strength_factor (retcons, 1, CDR (retcons), 0, 0, 0);
 	  retcons = CDR (retcons);
 	}
     }
