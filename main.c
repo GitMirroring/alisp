@@ -17132,12 +17132,12 @@ perform_division_with_remainder (struct object *args,
   num = promote_number (CAR (args), op_type);
   div = promote_number (div_, op_type);
 
+  if (l != 2)
+    decrement_refcount (div_);
+
   if (op_type == TYPE_INTEGER)
     {
-      ret = alloc_number (quotient_type);
-
       ret2 = alloc_number (TYPE_INTEGER);
-      mpz_init (ret2->value_ptr.integer);
 
       mpz_init (tmp);
 
@@ -17151,15 +17151,14 @@ perform_division_with_remainder (struct object *args,
 	mpz_tdiv_qr (tmp, ret2->value_ptr.integer, num->value_ptr.integer,
 		     div->value_ptr.integer);
 
+      ret = alloc_number (quotient_type);
+
       if (quotient_type == TYPE_INTEGER)
 	{
-	  mpz_init (ret->value_ptr.integer);
 	  mpz_set (ret->value_ptr.integer, tmp);
 	}
       else
 	{
-	  ret->value_ptr.floating = malloc_and_check
-	    (sizeof (*ret->value_ptr.floating));
 	  *ret->value_ptr.floating = mpz_get_si (tmp);
 	}
 
