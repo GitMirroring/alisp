@@ -1167,6 +1167,18 @@
 
 
 
+(defun maplist (fun &rest lists)
+  (let (out)
+    (do nil
+	(nil)
+      (if (member nil lists)
+	  (return nil))
+      (setq out (cons (apply fun lists) out))
+      (setq lists (mapcar #'cdr lists)))
+    (reverse out)))
+
+
+
 (defun terpri (&optional (out *standard-output*))
   (write-char #\newline out)
   nil)
@@ -1714,7 +1726,7 @@
 	  functionp packagep integerp rationalp floatp complexp random-state-p
 	  characterp standard-char-p vectorp arrayp sequencep stringp
 	  hash-table-p pathnamep streamp realp numberp check-type macroexpand
-	  equal equalp fdefinition complement mapc terpri write-line
+	  equal equalp fdefinition complement mapc maplist terpri write-line
 	  write-sequence prin1 princ print do-all-symbols loop format
 	  encode-universal-time))
 
