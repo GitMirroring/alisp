@@ -430,6 +430,8 @@ make_test ("(macroexpand '(+ 1 2))", "(+ 1 2)\nNIL");
 make_test ("(let ((mf (macro-function 'decf))) (funcall mf '(decf i) nil))", "(SETF I (- I 1))");
 make_test ("(macro-function 'foo)", "NIL");
 make_test ("(macro-function 'car)", "NIL");
+make_test ("(setf (macro-function 'foo) (lambda (form env) `(incf ,(cadr form))))", "#<FUNCTION ?>");
+make_test ("(let ((mf (macro-function 'foo))) (funcall mf '(foo var) nil))", "(INCF VAR)");
 
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep () 'atom)", "T");
