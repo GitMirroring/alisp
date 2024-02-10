@@ -12732,6 +12732,25 @@ builtin_elt (struct object *list, struct environment *env,
       increment_refcount (ret);
       return ret;
     }
+  else if (CAR (list)->type == TYPE_BITARRAY)
+    {
+      if (array_rank (CAR (list)->value_ptr.bitarray->alloc_size) != 1)
+	{
+	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  return NULL;
+	}
+
+      if (ind >= (CAR (list)->value_ptr.bitarray->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.bitarray->fill_pointer
+		  : CAR (list)->value_ptr.bitarray->alloc_size->size))
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      return create_integer_from_long
+	(mpz_tstbit (CAR (list)->value_ptr.bitarray->value, ind));
+    }
   else if (CAR (list)->type == TYPE_CONS_PAIR
 	   || SYMBOL (CAR (list)) == &nil_object)
     {
