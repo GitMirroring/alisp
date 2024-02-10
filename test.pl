@@ -1149,6 +1149,13 @@ make_test ("(map 'vector #'+ #(1 2 3 4) '(10 11 12) #(20 21 22))", "#(31 34 37)"
 make_test ("(map 'list #'+ #(1 2 3 4) '(10 11 12) #(20 21 22))", "(31 34 37)");
 make_test ("(map nil #'+ '(1 2 3 4) '(10 11 12) '(20 21 22))", "NIL");
 make_test ("(map 'vector #'+ #(1 2 3 4) nil #(20 21 22))", "#()");
+make_test ("(reduce #'* '(2 3 5 7))", "210");
+make_test ("(reduce #'* #(2 3 5 7) :start 1 :end 1)", "1");
+make_test ("(reduce (lambda (f s) (write f)) '(2 3 5 7) :from-end t)", "532\n2");
+make_test ("(reduce #'* '(2 3 5 7) :from-end t :initial-value 0)", "0");
+make_test ("(reduce #'+ '(\"\"))", "\"\"");
+make_test ("(reduce #'+ nil)", "0");
+make_test ("(reduce #'+ nil :initial-value 1)", "1");
 make_test ("(remove 3 '(1 2 3 4 3 2 1))", "(1 2 4 2 1)");
 make_test ("(remove #\\e \"abcdefg\")", "\"abcdfg\"");
 make_test ("(remove-if #'numberp #(1 2 3))", "#()");
