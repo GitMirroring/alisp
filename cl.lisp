@@ -1195,6 +1195,37 @@
 
 
 
+(defun reduce (fun seq &key key from-end (start 0) end (initial-value nil initvalprov))
+  (unless end
+    (setq end (length seq)))
+  (unless key
+    (setq key #'identity))
+  (cond
+    ((= (- end start) 0)
+     (if initvalprov
+	 initial-value
+	 (funcall fun)))
+    ((and (= (- end start) 1)
+	  (not initvalprov))
+     (funcall key (elt seq start)))
+    (t
+     (let (out)
+       (dotimes (i (- end start))
+	 (let ((j (if from-end
+		      (- end i 1)
+		      (+ start i))))
+	   (if (= i 0)
+	       (if initvalprov
+		   (setq out (funcall fun initial-value (funcall key (elt seq j))))
+		   (progn
+		     (setq out (funcall key (elt seq j)))))
+	       (if from-end
+		   (setq out (funcall fun (funcall key (elt seq j)) out))
+		   (setq out (funcall fun out (funcall key (elt seq j))))))))
+       out))))
+
+
+
 (defun terpri (&optional (out *standard-output*))
   (write-char #\newline out)
   nil)
@@ -1743,8 +1774,8 @@
 	  characterp standard-char-p vectorp arrayp sequencep stringp
 	  hash-table-p pathnamep streamp realp numberp check-type macroexpand
 	  equal equalp fdefinition complement mapc mapcan maplist mapl mapcon
-	  terpri write-line write-sequence prin1 princ print do-all-symbols loop
-	  format encode-universal-time))
+	  reduce terpri write-line write-sequence prin1 princ print
+	  do-all-symbols loop format encode-universal-time))
 
 
 
