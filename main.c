@@ -744,6 +744,9 @@ function
 
 
   struct object *function_macro;
+
+
+  struct object *macro_function;
 };
 
 
@@ -1972,6 +1975,10 @@ struct object *accessor_symbol_plist (struct object *list, struct object *newval
 struct object *accessor_slot_value (struct object *list, struct object *newval,
 				    struct environment *env,
 				    struct outcome *outcome);
+struct object *accessor_macro_function (struct object *list,
+					struct object *newval,
+					struct environment *env,
+					struct outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -3109,7 +3116,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
-		    NULL, 0);
+		    accessor_macro_function, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
@@ -6128,6 +6135,7 @@ alloc_function (void)
   fun->struct_copyier_class = NULL;
   fun->condition_reader_class = NULL;
   fun->function_macro = NULL;
+  fun->macro_function = NULL;
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
@@ -10691,6 +10699,11 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       return call_function (func->value_ptr.function->function_macro,
 			    CAR (arglist), 0, 1, 1, 0, 0, env, outcome);
+    }
+  else if (func->value_ptr.function->macro_function)
+    {
+      return call_function (func->value_ptr.function->macro_function,
+			    CAR (arglist), 0, 1, 0, 1, 0, env, outcome);
     }
 
 
@@ -16508,6 +16521,50 @@ accessor_slot_value (struct object *list, struct object *newval,
 }
 
 
+struct object *
+accessor_macro_function (struct object *list, struct object *newval,
+			 struct environment *env, struct outcome *outcome)
+{
+  struct object *sym;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (newval->type != TYPE_FUNCTION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  if (sym->value_ptr.symbol->function_cell)
+    {
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+    }
+
+  sym->value_ptr.symbol->function_cell = alloc_function ();
+  sym->value_ptr.symbol->function_cell->type = TYPE_MACRO;
+  add_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+  decrement_refcount (sym->value_ptr.symbol->function_cell);
+
+  sym->value_ptr.symbol->function_cell->value_ptr.function->macro_function =
+    newval;
+  increment_refcount (newval);
+
+  return newval;
+}
+
+
 int
 compare_two_numbers (struct object *num1, struct object *num2)
 {
@@ -19198,8 +19255,20 @@ builtin_macro_function (struct object *list, struct environment *env,
       return &nil_object;
     }
 
-  ret = alloc_function ();
-  ret->value_ptr.function->function_macro = sym->value_ptr.symbol->function_cell;
+  if (sym->value_ptr.symbol->function_cell->value_ptr.function->macro_function)
+    {
+      ret = sym->value_ptr.symbol->function_cell->value_ptr.function->
+	macro_function;
+
+      increment_refcount (ret);
+    }
+  else
+    {
+      ret = alloc_function ();
+
+      ret->value_ptr.function->function_macro =
+	sym->value_ptr.symbol->function_cell;
+    }
 
   return ret;
 }
