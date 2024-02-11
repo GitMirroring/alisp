@@ -16346,6 +16346,27 @@ accessor_elt (struct object *list, struct object *newval,
       add_reference (CAR (list), newval, ind);
       CAR (list)->value_ptr.array->value [ind] = newval;
     }
+  else if (CAR (list)->type == TYPE_BITARRAY)
+    {
+      if (newval->type != TYPE_INTEGER || !is_bit (newval))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (ind >= (CAR (list)->value_ptr.bitarray->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.bitarray->fill_pointer
+		  : CAR (list)->value_ptr.bitarray->alloc_size->size))
+	{
+	  outcome->type = OUT_OF_BOUND_INDEX;
+	  return NULL;
+	}
+
+      if (is_zero (newval))
+	mpz_clrbit (CAR (list)->value_ptr.bitarray->value, ind);
+      else
+	mpz_setbit (CAR (list)->value_ptr.bitarray->value, ind);
+    }
   else
     {
       if (ind >= list_length (CAR (list)))
