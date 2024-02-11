@@ -12477,7 +12477,7 @@ builtin_append (struct object *list, struct environment *env,
 {
   int length = list_length (list), i;
   struct object *obj;
-  struct object *ret = &nil_object, *last = NULL;
+  struct object *ret = &nil_object, *last = NULL, *l;
 
   if (!length)
     return &nil_object;
@@ -12503,8 +12503,9 @@ builtin_append (struct object *list, struct environment *env,
       if (last)
 	{
 	  last->value_ptr.cons_pair->cdr = copy_list_structure (obj, NULL, -1,
-								&last);
+								&l);
 	  add_reference (last, CDR (last), 1);
+	  last = l;
 	}
       else
 	ret = copy_list_structure (obj, NULL, -1, &last);
