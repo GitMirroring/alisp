@@ -235,6 +235,7 @@ make_test ("(append 0)", "0");
 make_test ("(append nil nil 0)", "0");
 make_test ("(append '(1 2) '(3 4))", "(1 2 3 4)");
 make_test ("(append '(1) (values))", "(1)");
+make_test ("(append '(0) '(1) '(2))", "(0 1 2)");
 make_test ("(nconc)", "NIL");
 make_test ("(nconc 0)", "0");
 make_test ("(nconc (list 'a 'b 'c) (list 'd 'e))", "(A B C D E)");
