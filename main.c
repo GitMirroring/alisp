@@ -12504,7 +12504,6 @@ builtin_append (struct object *list, struct environment *env,
 	{
 	  last->value_ptr.cons_pair->cdr = copy_list_structure (obj, NULL, -1,
 								&l);
-	  add_reference (last, CDR (last), 1);
 	  last = l;
 	}
       else
