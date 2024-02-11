@@ -10929,12 +10929,16 @@ is_method_applicable (struct object *meth, struct object *args,
 
   while (par && par->type == REQUIRED_PARAM)
     {
+      if (args->type != TYPE_CONS_PAIR)
+	return 0;
+
       ret = check_type (CAR (args), par->typespec, env, outcome);
 
       if (ret <= 0)
 	return ret;
 
       par = par->next;
+      args = CDR (args);
     }
 
   return 1;
