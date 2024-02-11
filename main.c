@@ -10702,8 +10702,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
   else if (func->value_ptr.function->macro_function)
     {
-      return call_function (func->value_ptr.function->macro_function,
-			    CAR (arglist), 0, 1, 0, 1, 0, env, outcome);
+      args = alloc_empty_list (2);
+      args->value_ptr.cons_pair->car = arglist;
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+
+      ret = call_function (func->value_ptr.macro->macro_function, args, 0, 0, 0,
+			   1, 0, env, outcome);
+
+      free_list_structure (args);
+
+      return ret;
     }
 
 
@@ -19197,7 +19205,7 @@ struct object *
 builtin_macroexpand_1 (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *ret, *ret2, *mac;
+  struct object *ret, *ret2, *mac, *args;
 
   if (list_length (list) != 1)
     {
@@ -19209,7 +19217,21 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
       && (mac = get_function (CAR (CAR (list)), env, 0, 0, 0, 0))
       && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
-      ret = call_function (mac, CAR (list), 0, 1, 1, 0, 0, env, outcome);
+      if (mac->value_ptr.macro->macro_function)
+	{
+	  args = alloc_empty_list (2);
+	  args->value_ptr.cons_pair->car = CAR (list);
+	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+
+	  ret = call_function (mac->value_ptr.macro->macro_function, args,
+			       0, 0, 0, 0, 0, env, outcome);
+
+	  free_list_structure (args);
+	}
+      else
+	{
+	  ret = call_function (mac, CAR (list), 0, 1, 1, 0, 0, env, outcome);
+	}
 
       if (!ret)
 	return NULL;
