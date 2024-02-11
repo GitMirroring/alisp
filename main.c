@@ -3450,7 +3450,7 @@ al_readline (const char prompt [])
   char *line = malloc_and_check (sz);
   int i = 0, c;
 
-  printf (prompt);
+  printf ("%s", prompt);
 
   c = getchar ();
 
