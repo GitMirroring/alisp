@@ -1683,6 +1683,7 @@ int is_class_completely_defined (struct object *class);
 
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
+int is_method_more_specific (struct object *first, struct object *second);
 struct object *dispatch_generic_function_call (struct object *func,
 					       struct object *arglist,
 					       struct environment *env,
@@ -10945,16 +10946,47 @@ is_method_applicable (struct object *meth, struct object *args,
 }
 
 
+int
+is_method_more_specific (struct object *first, struct object *second)
+{
+  struct parameter *par = first->value_ptr.method->lambda_list,
+    *par2 = second->value_ptr.method->lambda_list;
+  int ret1, ret2;
+
+  while (par && par->type == REQUIRED_PARAM)
+    {
+      ret1 = is_subtype (par->typespec, par2->typespec, NULL);
+      ret2 = is_subtype (par2->typespec, par->typespec, NULL);
+
+      if (ret1 && !ret2)
+	{
+	  return -1;
+	}
+
+      if (!ret1 && ret2)
+	{
+	  return 1;
+	}
+
+      par = par->next;
+      par2 = par2->next;
+    }
+
+  return 0;
+}
+
+
 struct object *
 dispatch_generic_function_call (struct object *func, struct object *arglist,
 				struct environment *env,
 				struct outcome *outcome)
 {
-  struct object *args = evaluate_through_list (arglist, env, outcome), *ret;
+  struct object *args = evaluate_through_list (arglist, env, outcome), *ret,
+    *tmp;
   struct method_list *applm = NULL, *lapplm,
     *ml = func->value_ptr.function->methods;
   struct binding *bins;
-  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary, applnum = 0, i;
 
   if (!args)
     return NULL;
@@ -10970,6 +11002,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
 	  lapplm->meth = ml->meth;
 	  lapplm->next = NULL;
+
+	  applnum++;
 	}
 
       ml = ml->next;
@@ -10979,6 +11013,26 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     {
       outcome->type = NO_APPLICABLE_METHOD;
       return NULL;
+    }
+
+
+  while (applnum > 1)
+    {
+      lapplm = applm;
+
+      for (i = 0; i < applnum-1; i++)
+	{
+	  if (is_method_more_specific (lapplm->meth, lapplm->next->meth) == 1)
+	    {
+	      tmp = lapplm->meth;
+	      lapplm->meth = lapplm->next->meth;
+	      lapplm->next->meth = tmp;
+	    }
+
+	  lapplm = lapplm->next;
+	}
+
+      applnum--;
     }
 
 
