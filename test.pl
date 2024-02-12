@@ -1244,6 +1244,7 @@ make_test ("(position-if 'evenp '(3 2 1 0))", "1");
 make_test ("(position-if 'evenp '(3 1))", "NIL");
 make_test ("(position-if-not #'evenp '(3 1))", "0");
 make_test ("(count #\\a \"abcabc\")", "2");
+make_test ("(count #\\a \"abcabc\" :start 3 :end 4 :from-end t)", "1");
 make_test ("(count 2 '(1 2 3))", "1");
 make_test ("(count-if #'upper-case-p \"aAbBcCdD\")", "4");
 make_test ("(count-if-not #'evenp #(0 1 2))", "1");
