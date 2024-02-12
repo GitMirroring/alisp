@@ -671,18 +671,28 @@
   (assoc-if (complement pred) alist))
 
 
-(defun position (obj seq)
-  (position-if (lambda (x) (eql obj x)) seq))
+(defun position (obj seq &key from-end test test-not (start 0) end key)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (position-if (lambda (x) (funcall tst obj x)) seq :from-end from-end :start start :end end :key key)))
 
 
-(defun position-if (pred seq)
-  (dotimes (i (length seq) nil)
-    (if (funcall pred (elt seq i))
-	(return-from position-if i))))
+(defun position-if (pred seq &key from-end (start 0) end key)
+  (unless end
+    (setq end (length seq)))
+  (unless key
+    (setq key #'identity))
+  (dotimes (i (- end start))
+    (let ((j (if from-end
+		 (- end i 1)
+		 (+ start i))))
+      (if (funcall pred (elt seq j))
+	  (return-from position-if j)))))
 
 
-(defun position-if-not (pred seq)
-  (position-if (complement pred) seq))
+(defun position-if-not (pred seq &key from-end (start 0) end key)
+  (position-if (complement pred) seq :from-end from-end :start start :end end :key key))
 
 
 (defun count (obj seq &key from-end (start 0) end key test test-not)
