@@ -1856,6 +1856,8 @@ struct object *builtin_aref
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_row_major_aref
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_copy_seq
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_subseq
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_list_length
@@ -2885,6 +2887,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, accessor_aref, 0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("COPY-SEQ", env, builtin_copy_seq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SUBSEQ", env, builtin_subseq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
 		    0);
@@ -13002,6 +13005,70 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 
   return create_integer_from_long
     (mpz_tstbit (CAR (list)->value_ptr.bitarray->value, ind));
+}
+
+
+struct object *
+builtin_copy_seq (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *ret, *cons, *retcons;
+  int i;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SEQUENCE (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      ret = alloc_string (CAR (list)->value_ptr.string->used_size);
+      ret->value_ptr.string->used_size = CAR (list)->value_ptr.string->used_size;
+
+      for (i = 0; i < ret->value_ptr.string->used_size; i++)
+	{
+	  ret->value_ptr.string->value [i] =
+	    CAR (list)->value_ptr.string->value [i];
+	}
+    }
+  else if (CAR (list)->type == TYPE_ARRAY)
+    {
+      ret = alloc_vector (CAR (list)->value_ptr.array->alloc_size->size, 0, 0);
+
+      for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
+	{
+	  ret->value_ptr.array->value [i] =
+	    CAR (list)->value_ptr.array->value [i];
+
+	  add_reference (ret, ret->value_ptr.array->value [i], i);
+	}
+    }
+  else
+    {
+      if (SYMBOL (CAR (list)) == &nil_object)
+	return &nil_object;
+
+      cons = CAR (list);
+      retcons = ret = alloc_empty_list (list_length (CAR (list)));
+
+      while (SYMBOL (cons) != &nil_object)
+	{
+	  retcons->value_ptr.cons_pair->car = CAR (cons);
+	  add_reference (retcons, CAR (retcons), 0);
+
+	  cons = CDR (cons);
+	  retcons = CDR (retcons);
+	}
+    }
+
+  return ret;
 }
 
 
