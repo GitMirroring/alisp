@@ -1185,7 +1185,8 @@ object
 
 
 #define DONT_REFCOUNT(obj) (!(obj) || (obj) == &nil_object	\
-			    || (obj) == &t_object || (obj)->type == TYPE_PACKAGE)
+			    || (obj) == &t_object || (obj)->type == TYPE_PACKAGE \
+			    || IS_CONSTANT (obj))
 
 #define STRENGTH_FACTOR_OF_OBJECT(x) ((x)->flags & 0x100)
 #define FLIP_STRENGTH_FACTOR_OF_OBJECT(x) ((x)->flags ^= 0x100)
@@ -1212,6 +1213,13 @@ object
 
 #define SET_READER_MACRO_FLAG(obj) ((obj)->flags =	\
 				    WITH_CHANGED_BIT ((obj)->flags, 9, 1))
+
+
+#define IS_CONSTANT(obj) ((obj)->flags & 0x400)
+
+#define SET_CONSTANT_FLAG(obj) ((obj)->flags =				\
+				WITH_CHANGED_BIT ((obj)->flags, 10, 1))
+
 
 
 struct
@@ -2437,6 +2445,8 @@ int print_object (const struct object *obj, struct environment *env,
 		  struct stream *str);
 
 void print_error (struct outcome *err, struct environment *env);
+
+void mark_as_constant (struct object *obj);
 
 struct parameter *parameter_by_index (struct parameter *par, int *ind);
 int is_reference_weak (struct object *src, int ind, struct object *dest);
@@ -8782,6 +8792,7 @@ define_constant (struct object *sym, struct object *form,
   sym->value_ptr.symbol->value_cell = val;
   add_reference (sym, val, 0);
   decrement_refcount (val);
+  mark_as_constant (val);
 
   increment_refcount (sym);
   return sym;
@@ -9326,6 +9337,7 @@ alloc_parameter (enum parameter_type type, struct object *sym)
   par->init_form = NULL;
   par->supplied_p_param = NULL;
   par->key = NULL;
+  par->typespec = NULL;
   par->next = NULL;
 
   return par;
@@ -26367,6 +26379,114 @@ print_error (struct outcome *err, struct environment *env)
     }
 
   std_out->value_ptr.stream->dirty_line = 0;
+}
+
+
+void
+mark_as_constant (struct object *obj)
+{
+  struct parameter *p;
+  struct method_list *m;
+  struct hashtable_record *r;
+  int i;
+
+  if (DONT_REFCOUNT (obj))
+    return;
+
+  SET_CONSTANT_FLAG (obj);
+
+  if (obj->type == TYPE_SYMBOL_NAME)
+    mark_as_constant (obj->value_ptr.symbol_name->sym);
+  else if (obj->type == TYPE_SYMBOL)
+    {
+      mark_as_constant (obj->value_ptr.symbol->typespec);
+      mark_as_constant (obj->value_ptr.symbol->value_cell);
+      mark_as_constant (obj->value_ptr.symbol->function_cell);
+      mark_as_constant (obj->value_ptr.symbol->plist);
+      mark_as_constant (obj->value_ptr.symbol->setf_expander);
+      mark_as_constant (obj->value_ptr.symbol->setf_func_cell);
+    }
+  else if (IS_PREFIX (obj->type))
+    mark_as_constant (obj->value_ptr.next);
+  else if (obj->type == TYPE_CONS_PAIR)
+    {
+      mark_as_constant (obj->value_ptr.cons_pair->car);
+      mark_as_constant (obj->value_ptr.cons_pair->cdr);
+    }
+  else if (obj->type == TYPE_FILENAME)
+    mark_as_constant (obj->value_ptr.filename->value);
+  else if (obj->type == TYPE_ARRAY)
+    {
+      for (i = 0; i < array_total_size (obj->value_ptr.array->alloc_size); i++)
+	{
+	  mark_as_constant (obj->value_ptr.array->value [i]);
+	}
+    }
+  else if (obj->type == TYPE_HASHTABLE)
+    {
+      for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
+	{
+	  r = obj->value_ptr.hashtable->table [i];
+
+	  while (r)
+	    {
+	      mark_as_constant (r->key);
+	      mark_as_constant (r->value);
+	    }
+	}
+    }
+  else if (obj->type == TYPE_COMPLEX)
+    {
+      mark_as_constant (obj->value_ptr.complex->real);
+      mark_as_constant (obj->value_ptr.complex->imag);
+    }
+  else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+    {
+      mark_as_constant (obj->value_ptr.function->name);
+
+      p = obj->value_ptr.function->lambda_list;
+
+      while (p)
+	{
+	  mark_as_constant (p->name);
+	  mark_as_constant (p->key);
+	  mark_as_constant (p->init_form);
+	  mark_as_constant (p->supplied_p_param);
+	  p = p->next;
+	}
+
+      mark_as_constant (obj->value_ptr.function->body);
+
+      m = obj->value_ptr.function->methods;
+
+      while (m)
+	{
+	  mark_as_constant (m->meth);
+	  m = m->next;
+	}
+    }
+  else if (obj->type == TYPE_METHOD)
+    {
+      mark_as_constant (obj->value_ptr.method->generic_func);
+
+      p = obj->value_ptr.method->lambda_list;
+
+      while (p)
+	{
+	  mark_as_constant (p->name);
+	  mark_as_constant (p->key);
+	  mark_as_constant (p->init_form);
+	  mark_as_constant (p->supplied_p_param);
+	  p = p->next;
+	}
+
+      mark_as_constant (obj->value_ptr.method->body);
+    }
+  else if (obj->type == TYPE_STREAM)
+    {
+      if (obj->value_ptr.stream->medium == STRING_STREAM)
+	mark_as_constant (obj->value_ptr.stream->string);
+    }
 }
 
 
