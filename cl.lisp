@@ -685,24 +685,41 @@
   (position-if (complement pred) seq))
 
 
-(defun count (obj seq)
-  (let ((ret 0))
-    (dotimes (i (length seq))
-      (if (eql (elt seq i) obj)
-	  (setq ret (+ 1 ret))))
+(defun count (obj seq &key from-end (start 0) end key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql))
+	(ret 0))
+    (unless end
+      (setq end (length seq)))
+    (unless key
+      (setq key #'identity))
+    (dotimes (i (- end start))
+      (let ((j (if from-end
+		   (- end i 1)
+		   (+ start i))))
+	(if (funcall tst obj (funcall key (elt seq j)))
+	    (setq ret (+ 1 ret)))))
     ret))
 
 
-(defun count-if (pred seq)
+(defun count-if (pred seq &key from-end (start 0) end key)
+  (unless end
+    (setq end (length seq)))
+  (unless key
+    (setq key #'identity))
   (let ((ret 0))
-    (dotimes (i (length seq))
-      (if (funcall pred (elt seq i))
-	  (setq ret (+ 1 ret))))
+    (dotimes (i (- end start))
+      (let ((j (if from-end
+		   (- end i 1)
+		   (+ start i))))
+	(if (funcall pred (funcall key (elt seq j)))
+	    (setq ret (+ 1 ret)))))
     ret))
 
 
-(defun count-if-not (pred seq)
-  (count-if (complement pred) seq))
+(defun count-if-not (pred seq &key from-end (start 0) end key)
+  (count-if (complement pred) seq :from-end from-end :start start :end end :key key))
 
 
 (defun remove (obj seq)
@@ -793,7 +810,7 @@
 (defun set-difference (l1 l2 &key (key #'identity) test test-not)
   (let ((out (concatenate 'list l1))
 	(tst (or test
-		 (if test-not (complement test-not) nil)
+		 (if test-not (complement test-not))
 		 #'eql)))
     (dolist (l l2)
       (setq out (remove-if (lambda (o) (funcall tst (funcall key o)
