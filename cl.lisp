@@ -793,6 +793,48 @@
   (apply 'remove-duplicates args))
 
 
+(defun substitute (newobj oldobj seq &key from-end test test-not (start 0) end count key)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (substitute-if newobj (lambda (x) (funcall tst oldobj x)) seq :from-end from-end :start start :end end :count count :key key)))
+
+
+(defun substitute-if (newobj pred seq &key from-end (start 0) end count key)
+  (unless end
+    (setq end (length seq)))
+  (unless key
+    (setq key #'identity))
+  (let ((out (copy-seq seq)))
+    (dotimes (i (- end start))
+      (let ((j (if from-end
+		   (- end i 1)
+		   (+ start i))))
+	(if (and count (= 0 count))
+	    (return-from substitute-if out))
+	(when (funcall pred (funcall key (elt out j)))
+	  (setf (elt out j) newobj)
+	  (if count
+	      (decf count)))))
+    out))
+
+
+(defun substitute-if-not (newobj pred seq &key from-end (start 0) end count key)
+  (substitute-if newobj (complement pred) seq :from-end from-end :start start :end end :count count :key key))
+
+
+(defun nsubstitute (&rest args)
+  (apply 'substitute args))
+
+
+(defun nsubstitute-if (&rest args)
+  (apply 'substitute-if args))
+
+
+(defun nsubstitute-if-not (&rest args)
+  (apply 'substitute-if-not args))
+
+
 (defun nreverse (seq)
   (reverse seq))
 
@@ -1789,20 +1831,22 @@
 	  member member-if member-if-not find find-if find-if-not assoc assoc-if
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  remove-duplicates delete-duplicates nreverse adjoin fill push pop
-	  set-difference nset-difference union nunion intersection nintersection
-	  array-rank array-dimension array-total-size array-in-bounds-p
-	  upgraded-array-element-type adjustable-array-p get get-properties char
-	  string/= char-equal digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp arrayp sequencep stringp
-	  hash-table-p pathnamep streamp realp numberp check-type macroexpand
-	  equal equalp fdefinition complement mapc mapcan maplist mapl mapcon
-	  reduce terpri write-line write-sequence prin1 princ print
-	  do-all-symbols loop format encode-universal-time))
+	  remove-duplicates delete-duplicates substitute substitute-if
+	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not
+	  nreverse adjoin fill push pop set-difference nset-difference union
+	  nunion intersection nintersection array-rank array-dimension
+	  array-total-size array-in-bounds-p upgraded-array-element-type
+	  adjustable-array-p get get-properties char string/= char-equal
+	  digit-char digit-char-p char-int string-upcase string-downcase
+	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
+	  string-left-trim string-right-trim string-trim defpackage signed-byte
+	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp random-state-p characterp standard-char-p
+	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
+	  numberp check-type macroexpand equal equalp fdefinition complement
+	  mapc mapcan maplist mapl mapcon reduce terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
