@@ -1856,6 +1856,8 @@ struct object *builtin_aref
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_row_major_aref
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_copy_list
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_copy_seq
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_subseq
@@ -2887,6 +2889,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, accessor_aref, 0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("COPY-LIST", env, builtin_copy_list, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COPY-SEQ", env, builtin_copy_seq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SUBSEQ", env, builtin_subseq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
@@ -13005,6 +13008,29 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 
   return create_integer_from_long
     (mpz_tstbit (CAR (list)->value_ptr.bitarray->value, ind));
+}
+
+
+struct object *
+builtin_copy_list (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (SYMBOL (CAR (list)) == &nil_object)
+    return &nil_object;
+
+  return copy_list_structure (CAR (list), NULL, -1, NULL);
 }
 
 
