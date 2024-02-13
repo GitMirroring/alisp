@@ -2128,6 +2128,8 @@ struct object *builtin_unintern (struct object *list, struct environment *env,
 				 struct outcome *outcome);
 struct object *builtin_make_symbol (struct object *list, struct environment *env,
 				    struct outcome *outcome);
+struct object *builtin_copy_symbol (struct object *list, struct environment *env,
+				    struct outcome *outcome);
 struct object *builtin_boundp (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_symbol_value (struct object *list,
@@ -3110,6 +3112,8 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("UNINTERN", env, builtin_unintern, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("COPY-SYMBOL", env, builtin_copy_symbol, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION,
@@ -19034,6 +19038,52 @@ builtin_make_symbol (struct object *list, struct environment *env,
   ret = create_symbol (s->value, s->used_size, 1);
 
   ret->value_ptr.symbol->home_package = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
+builtin_copy_symbol (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *sym, *ret;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  ret = create_symbol (sym->value_ptr.symbol->name,
+		       sym->value_ptr.symbol->name_len, 1);
+  ret->value_ptr.symbol->home_package = &nil_object;
+
+  if (l == 2 && SYMBOL (CAR (CDR (list))) != &nil_object)
+    {
+      ret->value_ptr.symbol->value_cell = sym->value_ptr.symbol->value_cell;
+      add_reference (ret, ret->value_ptr.symbol->value_cell, 0);
+
+      ret->value_ptr.symbol->function_cell = sym->value_ptr.symbol->function_cell;
+      add_reference (ret, ret->value_ptr.symbol->function_cell, 1);
+
+      if (SYMBOL (sym->value_ptr.symbol->plist) != &nil_object)
+	{
+	  ret->value_ptr.symbol->plist =
+	    copy_list_structure (sym->value_ptr.symbol->plist, NULL, -1, NULL);
+	  add_reference (ret, ret->value_ptr.symbol->plist, 5);
+	  decrement_refcount (ret->value_ptr.symbol->plist);
+	}
+    }
 
   return ret;
 }
