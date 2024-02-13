@@ -466,6 +466,19 @@
     out))
 
 
+(defun copy-alist (alist)
+  (let (out)
+    (dolist (c alist)
+      (setq out (cons (cons (car c) (cdr c)) out)))
+    (reverse out)))
+
+
+(defun copy-tree (tree)
+  (if (atom tree)
+      tree
+      (cons (car tree) (cdr tree))))
+
+
 (defun endp (l) (null l))
 
 
@@ -1825,28 +1838,28 @@
 	  first second third fourth fifth sixth seventh eighth ninth tenth rest
 	  caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
 	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
-	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list endp butlast
-	  nbutlast acons pairlis when unless incf decf and or cond otherwise
-	  case return multiple-value-bind prog prog* every some notany notevery
-	  member member-if member-if-not find find-if find-if-not assoc assoc-if
-	  assoc-if-not position position-if position-if-not count count-if
-	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  remove-duplicates delete-duplicates substitute substitute-if
-	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not
-	  nreverse adjoin fill push pop set-difference nset-difference union
-	  nunion intersection nintersection array-rank array-dimension
-	  array-total-size array-in-bounds-p upgraded-array-element-type
-	  adjustable-array-p get get-properties char string/= char-equal
-	  digit-char digit-char-p char-int string-upcase string-downcase
-	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
-	  string-left-trim string-right-trim string-trim defpackage signed-byte
-	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp random-state-p characterp standard-char-p
-	  vectorp arrayp sequencep stringp hash-table-p pathnamep streamp realp
-	  numberp check-type macroexpand equal equalp fdefinition complement
-	  mapc mapcan maplist mapl mapcon reduce terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list copy-alist
+	  copy-tree endp butlast nbutlast acons pairlis when unless incf decf
+	  and or cond otherwise case return multiple-value-bind prog prog* every
+	  some notany notevery member member-if member-if-not find find-if
+	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not remove-duplicates delete-duplicates
+	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
+	  nsubstitute-if-not nreverse adjoin fill push pop set-difference
+	  nset-difference union nunion intersection nintersection array-rank
+	  array-dimension array-total-size array-in-bounds-p
+	  upgraded-array-element-type adjustable-array-p get get-properties char
+	  string/= char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp arrayp sequencep stringp
+	  hash-table-p pathnamep streamp realp numberp check-type macroexpand
+	  equal equalp fdefinition complement mapc mapcan maplist mapl mapcon
+	  reduce terpri write-line write-sequence prin1 princ print
+	  do-all-symbols loop format encode-universal-time))
 
 
 
