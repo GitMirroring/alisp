@@ -1781,12 +1781,18 @@ int type_standard_char (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
 int type_vector (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
+int type_simple_vector (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome);
 int type_array (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome);
+int type_simple_array (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome);
 int type_sequence (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct outcome *outcome);
 int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
+int type_simple_string (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome);
 int type_hash_table (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome);
 int type_pathname (const struct object *obj, const struct object *typespec,
@@ -3228,12 +3234,22 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("CONS", env, type_cons, 1, "LIST", "SEQUENCE", (char *)NULL);
   add_builtin_type ("ATOM", env, type_atom, 1, (char *)NULL);
   add_builtin_type ("ARRAY", env, type_array, 1, (char *)NULL);
+  add_builtin_type ("SIMPLE-ARRAY", env, type_simple_array, 1, "ARRAY",
+		    (char *)NULL);
   add_builtin_type ("VECTOR", env, type_vector, 1, "ARRAY", "SEQUENCE",
 		    (char *)NULL);
+  add_builtin_type ("SIMPLE-VECTOR", env, type_simple_vector, 1, "VECTOR",
+		    "SIMPLE-ARRAY", "ARRAY", "SEQUENCE", (char *)NULL);
   add_builtin_type ("STRING", env, type_string, 1, "VECTOR", "ARRAY", "SEQUENCE",
 		    "BASE-STRING", (char *)NULL);
+  add_builtin_type ("SIMPLE-STRING", env, type_string, 1, "STRING", "VECTOR",
+		    "SIMPLE-ARRAY", "ARRAY", "SEQUENCE", "BASE-STRING",
+		    "SIMPLE-BASE-STRING", (char *)NULL);
   add_builtin_type ("BASE-STRING", env, type_string, 1, "VECTOR", "ARRAY",
 		    "SEQUENCE", "STRING", (char *)NULL);
+  add_builtin_type ("SIMPLE-BASE-STRING", env, type_simple_string, 1, "STRING",
+		    "VECTOR", "SIMPLE-ARRAY", "ARRAY", "SEQUENCE", "BASE-STRING",
+		    "SIMPLE-STRING", (char *)NULL);
   add_builtin_type ("HASH-TABLE", env, type_hash_table, 1, (char *)NULL);
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
 		    (char *)NULL);
@@ -12183,10 +12199,29 @@ type_vector (const struct object *obj, const struct object *typespec,
 
 
 int
+type_simple_vector (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_ARRAY && obj->value_ptr.array->fill_pointer < 0;
+}
+
+
+int
 type_array (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING;
+  return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING
+    || obj->type == TYPE_BITARRAY;
+}
+
+
+int
+type_simple_array (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct outcome *outcome)
+{
+  return (obj->type == TYPE_ARRAY && obj->value_ptr.array->fill_pointer < 0)
+    || (obj->type == TYPE_STRING && obj->value_ptr.string->fill_pointer < 0)
+    || (obj->type == TYPE_BITARRAY && obj->value_ptr.bitarray->fill_pointer < 0);
 }
 
 
@@ -12204,6 +12239,14 @@ type_string (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_STRING;
+}
+
+
+int
+type_simple_string (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STRING && obj->value_ptr.string->fill_pointer < 0;
 }
 
 
