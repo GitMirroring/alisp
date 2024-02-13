@@ -976,6 +976,8 @@ make_test ("(second '(0))", "NIL");
 make_test ("(fifth '(0 1 2 3 4))", "4");
 make_test ("(make-list 3)", "(NIL NIL NIL)");
 make_test ("(make-list 4 :initial-element 0)", "(0 0 0 0)");
+make_test ("(copy-alist '((1 . 10) (2 . \"a\") (3 . 'a)))", "((1 . 10) (2 . \"a\") (3 QUOTE A))");
+make_test ("(copy-tree '(1 (2 (3 4 (5)) 6) 7))", "(1 (2 (3 4 (5)) 6) 7)");
 make_test ("(endp '(1 . 2))", "NIL");
 make_test ("(endp ())", "T");
 make_test ("(butlast '(0 1 2))", "(0 1)");
