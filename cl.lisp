@@ -479,6 +479,18 @@
       (cons (car tree) (cdr tree))))
 
 
+(defun tree-equal (t1 t2 &key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (if (and (atom t1) (atom t2))
+	(funcall tst t1 t2)
+	(if (and (consp t1) (consp t2))
+	    (and
+	     (tree-equal (car t1) (car t2) :test test :test-not test-not)
+	     (tree-equal (cdr t1) (cdr t2) :test test :test-not test-not))))))
+
+
 (defun endp (l) (null l))
 
 
@@ -1839,10 +1851,10 @@
 	  caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
 	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
 	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list copy-alist
-	  copy-tree endp butlast nbutlast acons pairlis when unless incf decf
-	  and or cond otherwise case return multiple-value-bind prog prog* every
-	  some notany notevery member member-if member-if-not find find-if
-	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  copy-tree tree-equal endp butlast nbutlast acons pairlis when unless
+	  incf decf and or cond otherwise case return multiple-value-bind prog
+	  prog* every some notany notevery member member-if member-if-not find
+	  find-if find-if-not assoc assoc-if assoc-if-not position position-if
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not remove-duplicates delete-duplicates
 	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
