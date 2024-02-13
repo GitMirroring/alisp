@@ -1179,6 +1179,12 @@
 (defun simple-string-p (obj)
   (typep obj 'simple-string))
 
+(defun bit-vector-p (obj)
+  (typep obj 'bit-vector))
+
+(defun simple-bit-vector-p (obj)
+  (typep obj 'simple-bit-vector))
+
 (defun hash-table-p (obj)
   (typep obj 'hash-table))
 
@@ -1874,10 +1880,11 @@
 	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
 	  functionp packagep integerp rationalp floatp complexp random-state-p
 	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p hash-table-p pathnamep streamp realp numberp
-	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+	  pathnamep streamp realp numberp check-type macroexpand equal equalp
+	  fdefinition complement mapc mapcan maplist mapl mapcon reduce terpri
+	  write-line write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 

@@ -1793,6 +1793,11 @@ int type_string (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
 int type_simple_string (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
+int type_bit_vector (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct outcome *outcome);
+int type_simple_bit_vector (const struct object *obj,
+			    const struct object *typespec,
+			    struct environment *env, struct outcome *outcome);
 int type_hash_table (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome);
 int type_pathname (const struct object *obj, const struct object *typespec,
@@ -3250,6 +3255,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("SIMPLE-BASE-STRING", env, type_simple_string, 1, "STRING",
 		    "VECTOR", "SIMPLE-ARRAY", "ARRAY", "SEQUENCE", "BASE-STRING",
 		    "SIMPLE-STRING", (char *)NULL);
+  add_builtin_type ("BIT-VECTOR", env, type_bit_vector, 1, "VECTOR", "ARRAY",
+		    "SEQUENCE", (char *)NULL);
+  add_builtin_type ("SIMPLE-BIT-VECTOR", env, type_simple_bit_vector, 1,
+		    "BIT-VECTOR", "SIMPLE-ARRAY", (char *)NULL);
   add_builtin_type ("HASH-TABLE", env, type_hash_table, 1, (char *)NULL);
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
 		    (char *)NULL);
@@ -12247,6 +12256,22 @@ type_simple_string (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_STRING && obj->value_ptr.string->fill_pointer < 0;
+}
+
+
+int
+type_bit_vector (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct outcome *outcome)
+{
+  return IS_VECTOR (obj) && obj->type == TYPE_BITARRAY;
+}
+
+
+int
+type_simple_bit_vector (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome)
+{
+  return IS_VECTOR (obj) && obj->type == TYPE_BITARRAY && !HAS_FILL_POINTER (obj);
 }
 
 
