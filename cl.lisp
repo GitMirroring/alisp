@@ -978,6 +978,28 @@
 (defun char (str ind)
   (aref str ind))
 
+(defun (setf char) (newval str ind)
+  (setf (aref str ind) newval))
+
+(defun schar (str ind)
+  (aref str ind))
+
+(defun (setf schar) (newval str ind)
+  (setf (aref str ind) newval))
+
+(defun bit (arr &rest subs)
+  (apply 'aref arr subs))
+
+(defun (setf bit) (newval arr &rest subs)
+  (apply #'(setf aref) newval arr subs))
+
+(defun sbit (arr &rest subs)
+  (apply 'aref arr subs))
+
+(defun (setf sbit) (newval arr &rest subs)
+  (apply #'(setf aref) newval arr subs))
+
+
 
 (defun string/= (str1 str2)
   (not (string= str1 str2)))
@@ -1874,17 +1896,17 @@
 	  nset-difference union nunion intersection nintersection array-rank
 	  array-dimension array-total-size array-in-bounds-p
 	  upgraded-array-element-type adjustable-array-p get get-properties char
-	  string/= char-equal digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type macroexpand equal equalp
-	  fdefinition complement mapc mapcan maplist mapl mapcon reduce terpri
-	  write-line write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  schar bit sbit string/= char-equal digit-char digit-char-p char-int
+	  string-upcase string-downcase string-capitalize nstring-upcase
+	  nstring-downcase nstring-capitalize string-left-trim string-right-trim
+	  string-trim defpackage signed-byte unsigned-byte consp listp symbolp
+	  keywordp functionp packagep integerp rationalp floatp complexp
+	  random-state-p characterp standard-char-p vectorp simple-vector-p
+	  arrayp sequencep stringp simple-string-p bit-vector-p
+	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
+	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
+	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
+	  princ print do-all-symbols loop format encode-universal-time))
 
 
 
