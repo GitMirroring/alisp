@@ -622,11 +622,6 @@ symbol
   struct object *typespec;
   struct object_list *parent_types;
 
-  struct object *(*builtin_accessor) (struct object *list,
-				      struct object *newval,
-				      struct environment *env,
-				      struct outcome *outcome);
-
   int is_const;
   int is_parameter;
   int is_special;
@@ -1577,9 +1572,8 @@ struct object *add_builtin_form (char *name, struct environment *env,
 				 (struct object *list, struct environment *env,
 				  struct outcome *outcome),
 				 enum object_type type,
-				  struct object *(*builtin_accessor)
-				 (struct object *list, struct object *newval,
-				  struct environment *env,
+				  struct object *(*builtin_setf_func)
+				 (struct object *list, struct environment *env,
 				  struct outcome *outcome),
 				 int is_special_operator);
 
@@ -1978,31 +1972,31 @@ struct object *builtin_remove_if
 struct object *builtin_reverse
 (struct object *list, struct environment *env, struct outcome *outcome);
 
-struct object *accessor_car (struct object *list, struct object *newval,
-			     struct environment *env, struct outcome *outcome);
-struct object *accessor_cdr (struct object *list, struct object *newval,
-			     struct environment *env, struct outcome *outcome);
-struct object *accessor_nth (struct object *list, struct object *newval,
-			     struct environment *env, struct outcome *outcome);
-struct object *accessor_aref (struct object *list, struct object *newval,
-			      struct environment *env, struct outcome *outcome);
-struct object *accessor_elt (struct object *list, struct object *newval,
-			     struct environment *env, struct outcome *outcome);
-struct object *accessor_fill_pointer (struct object *list, struct object *newval,
-				      struct environment *env,
-				      struct outcome *outcome);
-struct object *accessor_gethash (struct object *list, struct object *newval,
-				 struct environment *env, struct outcome *outcome);
-struct object *accessor_symbol_plist (struct object *list, struct object *newval,
-				      struct environment *env,
-				      struct outcome *outcome);
-struct object *accessor_slot_value (struct object *list, struct object *newval,
-				    struct environment *env,
-				    struct outcome *outcome);
-struct object *accessor_macro_function (struct object *list,
-					struct object *newval,
+struct object *builtin_setf_car (struct object *list, struct environment *env,
+				 struct outcome *outcome);
+struct object *builtin_setf_cdr (struct object *list, struct environment *env,
+				 struct outcome *outcome);
+struct object *builtin_setf_nth (struct object *list, struct environment *env,
+				 struct outcome *outcome);
+struct object *builtin_setf_aref (struct object *list, struct environment *env,
+				  struct outcome *outcome);
+struct object *builtin_setf_elt (struct object *list, struct environment *env,
+				 struct outcome *outcome);
+struct object *builtin_setf_fill_pointer (struct object *list,
+					  struct environment *env,
+					  struct outcome *outcome);
+struct object *builtin_setf_gethash (struct object *list,
+				     struct environment *env,
+				     struct outcome *outcome);
+struct object *builtin_setf_symbol_plist (struct object *list,
+					  struct environment *env,
+					  struct outcome *outcome);
+struct object *builtin_setf_slot_value (struct object *list,
 					struct environment *env,
 					struct outcome *outcome);
+struct object *builtin_setf_macro_function (struct object *list,
+					    struct environment *env,
+					    struct outcome *outcome);
 
 int compare_two_numbers (struct object *num1, struct object *num2);
 struct object *compare_any_numbers (struct object *list, struct environment *env,
@@ -2511,12 +2505,12 @@ void print_help (void);
 
 
 
-struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, NULL, 1};
+struct symbol nil_symbol = {"NIL", 3, 1, 1, type_nil, NULL, NULL, 1};
 
 struct object nil_object = {0, 0, 0, 0, TYPE_SYMBOL, {&nil_symbol}};
 
 
-struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, NULL, 1};
+struct symbol t_symbol = {"T", 1, 1, 1, type_t, NULL, NULL, 1};
 
 struct object t_object = {0, 0, 0, 0, TYPE_SYMBOL, {&t_symbol}};
 
@@ -2886,8 +2880,8 @@ add_standard_definitions (struct environment *env)
   env->random_state_sym->value_ptr.symbol->value_cell = rs;
 
 
-  add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, accessor_car, 0);
-  add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, accessor_cdr, 0);
+  add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, builtin_setf_car, 0);
+  add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, builtin_setf_cdr, 0);
   add_builtin_form ("RPLACA", env, builtin_rplaca, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("RPLACD", env, builtin_rplacd, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, NULL, 0);
@@ -2895,11 +2889,12 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LIST*", env, builtin_list_star, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NCONC", env, builtin_nconc, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, accessor_nth, 0);
+  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, builtin_setf_nth, 0);
   add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, accessor_elt, 0);
-  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, accessor_aref, 0);
+  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, builtin_setf_elt, 0);
+  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, builtin_setf_aref,
+		    0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("COPY-LIST", env, builtin_copy_list, TYPE_FUNCTION, NULL, 0);
@@ -2909,7 +2904,7 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FILL-POINTER", env, builtin_fill_pointer, TYPE_FUNCTION,
-		    accessor_fill_pointer, 0);
+		    builtin_setf_fill_pointer, 0);
   add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("VECTOR", env, builtin_vector, TYPE_FUNCTION, NULL, 0);
@@ -2930,7 +2925,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("HASH-TABLE-TEST", env, builtin_hash_table_test,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION,
-		    accessor_gethash, 0);
+		    builtin_setf_gethash, 0);
   add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLRHASH", env, builtin_clrhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
@@ -3080,7 +3075,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CLASS-NAME", env, builtin_class_name, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
-		    accessor_slot_value, 0);
+		    builtin_setf_slot_value, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DECLAIM", env, evaluate_declaim, TYPE_MACRO, NULL, 0);
@@ -3138,7 +3133,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("SYMBOL-PLIST", env, builtin_symbol_plist, TYPE_FUNCTION,
-		    accessor_symbol_plist, 0);
+		    builtin_setf_symbol_plist, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKUNBOUND", env, builtin_makunbound, TYPE_FUNCTION, NULL,
@@ -3148,7 +3143,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
-		    accessor_macro_function, 0);
+		    builtin_setf_macro_function, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
@@ -6164,11 +6159,11 @@ alloc_function (void)
   struct function *fun = malloc_and_check (sizeof (*fun));
 
   fun->name = NULL;
+  fun->is_setf_func = 0;
   fun->is_special_operator = 0;
 
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
-  fun->is_setf_func = 0;
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
   fun->body = NULL;
@@ -7465,7 +7460,6 @@ create_symbol (char *name, size_t size, int do_copy)
   sym->builtin_type = NULL;
   sym->typespec = NULL;
   sym->parent_types = NULL;
-  sym->builtin_accessor = NULL;
   sym->is_const = 0;
   sym->is_parameter = 0;
   sym->is_special = 0;
@@ -8769,10 +8763,9 @@ add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form)
 		  (struct object *list, struct environment *env,
 		   struct outcome *outcome), enum object_type type,
-		  struct object *(*builtin_accessor)
-		  (struct object *list, struct object *newval,
-		   struct environment *env, struct outcome *outcome),
-		  int is_special_operator)
+		  struct object *(*builtin_setf_func)
+		  (struct object *list, struct environment *env,
+		   struct outcome *outcome), int is_special_operator)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
@@ -8783,12 +8776,25 @@ add_builtin_form (char *name, struct environment *env,
 
   fun->type = type;
 
+  sym->value_ptr.symbol->function_cell = fun;
+
   f->name = sym;
+  add_reference (fun, sym, 0);
+
   f->is_special_operator = is_special_operator;
   f->builtin_form = builtin_form;
 
-  sym->value_ptr.symbol->function_cell = fun;
-  sym->value_ptr.symbol->builtin_accessor = builtin_accessor;
+  if (builtin_setf_func)
+    {
+      fun = alloc_function ();
+      sym->value_ptr.symbol->setf_func_cell = fun;
+
+      fun->value_ptr.function->name = sym;
+      add_reference (fun, sym, 0);
+
+      fun->value_ptr.function->is_setf_func = 1;
+      fun->value_ptr.function->builtin_form = builtin_setf_func;
+    }
 
   return sym;
 }
@@ -16337,14 +16343,19 @@ builtin_reverse (struct object *list, struct environment *env,
 
 
 struct object *
-accessor_car (struct object *list, struct object *newval,
-	      struct environment *env, struct outcome *outcome)
+builtin_setf_car (struct object *list, struct environment *env,
+		  struct outcome *outcome)
 {
-  if (list_length (list) != 1)
+  struct object *newval;
+
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   /*if (IS_SYMBOL (CAR (CDR (list)))
       && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
@@ -16368,14 +16379,19 @@ accessor_car (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_cdr (struct object *list, struct object *newval,
-	      struct environment *env, struct outcome *outcome)
+builtin_setf_cdr (struct object *list, struct environment *env,
+		  struct outcome *outcome)
 {
-  if (list_length (list) != 1)
+  struct object *newval;
+
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   /*if (IS_SYMBOL (CAR (CDR (list)))
       && SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_const)
@@ -16399,17 +16415,20 @@ accessor_cdr (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_nth (struct object *list, struct object *newval,
-	      struct environment *env, struct outcome *outcome)
+builtin_setf_nth (struct object *list, struct environment *env,
+		  struct outcome *outcome)
 {
-  struct object *cons;
+  struct object *cons, *newval;
   int i;
 
-  if (list_length (list) != 2)
+  if (list_length (list) != 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (CAR (list)->type != TYPE_INTEGER
       || (i = mpz_cmp_si (CAR (list)->value_ptr.integer, 0)) < 0
@@ -16436,17 +16455,20 @@ accessor_nth (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_aref (struct object *list, struct object *newval,
-	       struct environment *env, struct outcome *outcome)
+builtin_setf_aref (struct object *list, struct environment *env,
+		   struct outcome *outcome)
 {
-  struct object *lin_ind;
+  struct object *lin_ind, *newval;
   int l = list_length (list), ind;
 
-  if (!l)
+  if (l < 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (!IS_ARRAY (CAR (list)))
     {
@@ -16456,7 +16478,7 @@ accessor_aref (struct object *list, struct object *newval,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      if (l != 2)
+      if (l != 3)
 	{
 	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
 	  return NULL;
@@ -16526,17 +16548,20 @@ accessor_aref (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_elt (struct object *list, struct object *newval,
-	      struct environment *env, struct outcome *outcome)
+builtin_setf_elt (struct object *list, struct environment *env,
+		  struct outcome *outcome)
 {
-  struct object *cons;
+  struct object *cons, *newval;
   int ind;
 
-  if (list_length (list) != 2)
+  if (list_length (list) != 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (!IS_SEQUENCE (CAR (list)) || CAR (CDR (list))->type != TYPE_INTEGER)
     {
@@ -16622,16 +16647,20 @@ accessor_elt (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_fill_pointer (struct object *list, struct object *newval,
-		       struct environment *env, struct outcome *outcome)
+builtin_setf_fill_pointer (struct object *list, struct environment *env,
+			   struct outcome *outcome)
 {
   int fp;
+  struct object *newval;
 
-  if (list_length (list) != 1)
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (!IS_VECTOR (CAR (list)) || !HAS_FILL_POINTER (CAR (list))
       || newval->type != TYPE_INTEGER)
@@ -16674,17 +16703,21 @@ accessor_fill_pointer (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_gethash (struct object *list, struct object *newval,
-		  struct environment *env, struct outcome *outcome)
+builtin_setf_gethash (struct object *list, struct environment *env,
+		      struct outcome *outcome)
 {
   int ind, j;
   struct hashtable_record *r;
+  struct object *newval;
 
-  if (list_length (list) != 2)
+  if (list_length (list) != 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
@@ -16722,14 +16755,19 @@ accessor_gethash (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_symbol_plist (struct object *list, struct object *newval,
-		       struct environment *env, struct outcome *outcome)
+builtin_setf_symbol_plist (struct object *list, struct environment *env,
+			   struct outcome *outcome)
 {
-  if (list_length (list) != 1)
+  struct object *newval;
+
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (!IS_SYMBOL (CAR (list)))
     {
@@ -16747,17 +16785,20 @@ accessor_symbol_plist (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_slot_value (struct object *list, struct object *newval,
-		     struct environment *env, struct outcome *outcome)
+builtin_setf_slot_value (struct object *list, struct environment *env,
+			 struct outcome *outcome)
 {
   struct class_field *f;
-  struct object *req;
+  struct object *req, *newval;
 
-  if (list_length (list) != 2)
+  if (list_length (list) != 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
     {
@@ -16786,16 +16827,19 @@ accessor_slot_value (struct object *list, struct object *newval,
 
 
 struct object *
-accessor_macro_function (struct object *list, struct object *newval,
-			 struct environment *env, struct outcome *outcome)
+builtin_setf_macro_function (struct object *list, struct environment *env,
+			     struct outcome *outcome)
 {
-  struct object *sym;
+  struct object *sym, *newval;
 
-  if (list_length (list) != 1)
+  if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
+
+  newval = CAR (list);
+  list = CDR (list);
 
   if (!IS_SYMBOL (CAR (list)))
     {
@@ -22487,28 +22531,7 @@ evaluate_setf (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor)
-	    {
-	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
-
-	      if (!args)
-		return NULL;
-
-	      val = evaluate_object (CAR (CDR (list)), env, outcome);
-	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	      if (!val)
-		return NULL;
-
-	      val = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->builtin_accessor
-		(args, val, env, outcome);
-
-	      decrement_refcount (args);
-
-	      if (!val)
-		return NULL;
-	    }
-	  else if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
+	  if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
 	    {
 	      exp = call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
 				   setf_expander, CDR (CAR (list)), 0, 0, 0, 0,
@@ -22653,6 +22676,10 @@ evaluate_setf (struct object *list, struct environment *env,
 
 	      val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
 
+	      if (!val)
+		return NULL;
+
+	      increment_refcount (val);
 	      decrement_refcount (cons1);
 	    }
 	}
@@ -25831,13 +25858,7 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 {
   if (obj->type == TYPE_FUNCTION)
     {
-      if (obj->value_ptr.function->is_setf_func)
-	{
-	  if (write_to_stream (str, "#<FUNCTION (SETF ",
-			       strlen ("#<FUNCTION (SETF ")) < 0)
-	    return -1;
-	}
-      else if (obj->value_ptr.function->is_generic)
+      if (obj->value_ptr.function->is_generic)
 	{
 	  if (write_to_stream (str, "#<STANDARD-GENERIC-FUNCTION ",
 			       strlen ("#<STANDARD-GENERIC-FUNCTION ")) < 0)
@@ -25849,6 +25870,13 @@ print_function_or_macro (const struct object *obj, struct environment *env,
       if (obj->value_ptr.function->builtin_form
 	  && write_to_stream (str, "BUILTIN ", strlen ("BUILTIN ")) < 0)
 	return -1;
+
+      if (obj->value_ptr.function->is_setf_func)
+	{
+	  if (write_to_stream (str, "(SETF ",
+			       strlen ("(SETF ")) < 0)
+	    return -1;
+	}
 
       if (obj->value_ptr.function->name)
 	{
