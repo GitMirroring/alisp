@@ -325,6 +325,7 @@ make_test ("(defun f ())", "F");
 make_test ("#'f", "#<FUNCTION F>");
 make_test ("#'car", "#<FUNCTION BUILTIN CAR>");
 make_test ("#'(lambda nil nil)", "#<FUNCTION ?>");
+make_test ("#'(setf car)", "#<FUNCTION BUILTIN (SETF CAR)>");
 make_test ("(flet ((foo ())) #'foo)", "#<FUNCTION ?>");
 make_test ("(function f)", "#<FUNCTION F>");
 make_test ("(flet ((foo ())) (function foo))", "#<FUNCTION ?>");
