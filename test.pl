@@ -1276,8 +1276,12 @@ make_test ("(member-if #'evenp '((1 . 5) (3 . 6) (2 . 7) (4 . 8)) :key #'car)", 
 make_test ("(member-if-not #'evenp '(0 2 4))", "NIL");
 make_test ("(find #\\3 \"012\")", "NIL");
 make_test ("(find #\\3 \"0123\")", "#\\3");
+make_test ("(find 2 '(0 1 2 3 4) :end 2 :key #'=)", "NIL");
 make_test ("(find-if 'digit-char-p \"0123\")", "#\\0");
+make_test ("(find-if 'digit-char-p \"0123\" :from-end t)", "#\\3");
+make_test ("(find-if 'digit-char-p \"0123a\" :from-end t :start 4)", "NIL");
 make_test ("(find-if-not 'digit-char-p \"0123\")", "NIL");
+make_test ("(find-if-not #'oddp #(1 2 5 4 7) :from-end t)", "4");
 make_test ("(assoc 2 '((0 . 10) (1 . 11) (2 . 12)))", "(2 . 12)");
 make_test ("(assoc 3 '((0 . 10) (1 . 11) (2 . 12)))", "NIL");
 make_test ("(assoc-if 'zerop '((0 . 10) (1 . 11) (2 . 12)))", "(0 . 10)");
