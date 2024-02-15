@@ -932,6 +932,26 @@
   (apply 'intersection args))
 
 
+
+(defun sort (seq pred &key key)
+  (stable-sort seq pred :key key))
+
+
+(defun stable-sort (seq pred &key key)
+  (unless key
+    (setq key #'identity))
+  (let ((len (length seq)))
+    (dotimes (i len)
+      (dotimes (j (- len i 1))
+	(if (funcall pred (funcall key (elt seq (+ j 1)))
+		     (funcall key (elt seq j)))
+	    (let ((tmp (elt seq j)))
+	      (setf (elt seq j) (elt seq (+ j 1)))
+	      (setf (elt seq (+ j 1)) tmp))))))
+  seq)
+
+
+
 (defun array-rank (array)
   (length (array-dimensions array)))
 
@@ -1903,16 +1923,16 @@
 	  delete delete-if delete-if-not remove-duplicates delete-duplicates
 	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
 	  nsubstitute-if-not nreverse adjoin fill push pop set-difference
-	  nset-difference union nunion intersection nintersection array-rank
-	  array-dimension array-total-size array-in-bounds-p
-	  upgraded-array-element-type adjustable-array-p get get-properties char
-	  schar bit sbit string/= char-equal digit-char digit-char-p char-int
-	  string-upcase string-downcase string-capitalize nstring-upcase
-	  nstring-downcase nstring-capitalize string-left-trim string-right-trim
-	  string-trim defpackage signed-byte unsigned-byte consp listp symbolp
-	  keywordp functionp packagep integerp rationalp floatp complexp
-	  random-state-p characterp standard-char-p vectorp simple-vector-p
-	  arrayp sequencep stringp simple-string-p bit-vector-p
+	  nset-difference union nunion intersection nintersection sort
+	  stable-sort array-rank array-dimension array-total-size
+	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
+	  get-properties char schar bit sbit string/= char-equal digit-char
+	  digit-char-p char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage signed-byte unsigned-byte
+	  consp listp symbolp keywordp functionp packagep integerp rationalp
+	  floatp complexp random-state-p characterp standard-char-p vectorp
+	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
 	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
 	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
 	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
