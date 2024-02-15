@@ -2351,6 +2351,10 @@ struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_name
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_slot_exists_p
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_slot_boundp
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_slot_value
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defgeneric
@@ -3073,6 +3077,10 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLASS-NAME", env, builtin_class_name, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("SLOT-EXISTS-P", env, builtin_slot_exists_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("SLOT-BOUNDP", env, builtin_slot_boundp, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
 		    builtin_setf_slot_value, 0);
@@ -23460,6 +23468,82 @@ builtin_class_name (struct object *list, struct environment *env,
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+}
+
+
+struct object *
+builtin_slot_exists_p (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *req;
+  struct class_field *f;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.standard_object->fields;
+  req = SYMBOL (CAR (CDR (list)));
+
+  while (f)
+    {
+      if (f->name == req)
+	{
+	  return &t_object;
+	}
+
+      f = f->next;
+    }
+
+  return &nil_object;
+}
+
+
+struct object *
+builtin_slot_boundp (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  struct object *req;
+  struct class_field *f;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.standard_object->fields;
+  req = SYMBOL (CAR (CDR (list)));
+
+  while (f)
+    {
+      if (f->name == req)
+	{
+	  if (f->value)
+	    return &t_object;
+	  else
+	    return &nil_object;
+	}
+
+      f = f->next;
+    }
+
+  outcome->type = SLOT_NOT_FOUND;
+  return NULL;
 }
 
 
