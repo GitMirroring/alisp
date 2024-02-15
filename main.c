@@ -2357,6 +2357,8 @@ struct object *builtin_slot_boundp
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_slot_value
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_slot_makunbound
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defgeneric
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defmethod
@@ -3084,6 +3086,8 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
 		    builtin_setf_slot_value, 0);
+  add_builtin_form ("SLOT-MAKUNBOUND", env, builtin_slot_makunbound,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DECLAIM", env, evaluate_declaim, TYPE_MACRO, NULL, 0);
@@ -23581,6 +23585,47 @@ builtin_slot_value (struct object *list, struct environment *env,
 
 	  increment_refcount (f->value);
 	  return f->value;
+	}
+
+      f = f->next;
+    }
+
+  outcome->type = SLOT_NOT_FOUND;
+  return NULL;
+}
+
+
+struct object *
+builtin_slot_makunbound (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  struct class_field *f;
+  struct object *req;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.standard_object->fields;
+  req = SYMBOL (CAR (CDR (list)));
+
+  while (f)
+    {
+      if (f->name == req)
+	{
+	  decrement_refcount (f->value);
+	  f->value = NULL;
+
+	  increment_refcount (CAR (list));
+	  return CAR (list);
 	}
 
       f = f->next;
