@@ -1053,6 +1053,8 @@ make_test ("(setf (slot-value inst 'y) 2.5)", "2.5");
 make_test ("(slot-value inst 'x)", "0");
 make_test ("(slot-value inst 'y)", "2.5");
 make_test ("(slot-boundp inst 'x)", "T");
+make_test ("(slot-makunbound inst 'x)", "#<STARSHIP OBJECT ...>");
+make_test ("(slot-boundp inst 'x)", "NIL");
 make_test ("(defclass animal nil (leg-number))", "#<STANDARD-CLASS ANIMAL>");
 make_test ("(defclass dog (animal) (hair-length))", "#<STANDARD-CLASS DOG>");
 make_test ("(defparameter d (make-instance 'dog))", "D");
