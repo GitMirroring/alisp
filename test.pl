@@ -1251,6 +1251,8 @@ make_test ("(union '(1 2 3) '(3 4 5) :test #'=)", "(1 2 3 4 5)");
 make_test ("(nunion '((1 . 2) (2 . 3)) '((2 . 5) (3 . 6)) :key #'car)", "((1 . 2) (2 . 5) (3 . 6))");
 make_test ("(intersection '(1 2 3) '(3 4 5) :test #'=)", "(3)");
 make_test ("(nintersection '((1 . 2) (2 . 3)) '((2 . 5) (3 . 6)) :key #'car)", "((2 . 3))");
+make_test ("(subsetp '(1 4 nil 5) '(3 2 1 nil 4 5) :key #'identity :test #'equal)", "T");
+make_test ("(subsetp '(1 4 nil 5) '(3 2 1 4 5) :key #'identity :test #'equal)", "NIL");
 make_test ("(sort '(0 4 2 7 1 8 9 6 3 6) #'<)", "(0 1 2 3 4 6 6 7 8 9)");
 make_test ("(stable-sort #((0 . 1) (4 . 2) (7 . 0) (1 . 0) (6 . 2) (3 . 9) (6 . 1)) #'< :key #'car)", "#((0 . 1) (1 . 0) (3 . 9) (4 . 2) (6 . 2) (6 . 1) (7 . 0))");
 make_test ("(cond (t (+ 1 2)))", "3");
