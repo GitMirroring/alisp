@@ -491,6 +491,26 @@
 	     (tree-equal (cdr t1) (cdr t2) :test test :test-not test-not))))))
 
 
+(defun sublis (alist tree &key key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql))
+	(tr (copy-tree tree)))
+    (dolist (c alist)
+      (nsubst (cdr c) (car c) tr :key key :test tst))
+    tr))
+
+
+(defun nsublis (alist tree &key key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (dolist (c alist)
+      (nsubst (cdr c) (car c) tree :key key :test tst))
+    tree))
+
+
+
 (defun endp (l) (null l))
 
 
@@ -1971,29 +1991,29 @@
 	  caar cadr cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr
 	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
 	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list copy-alist
-	  copy-tree tree-equal endp butlast nbutlast acons pairlis when unless
-	  incf decf and or cond otherwise case return multiple-value-bind prog
-	  prog* every some notany notevery member member-if member-if-not find
-	  find-if find-if-not assoc assoc-if assoc-if-not position position-if
-	  position-if-not count count-if count-if-not remove remove-if-not
-	  delete delete-if delete-if-not remove-duplicates delete-duplicates
-	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
-	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
-	  nsubst-if-not nreverse adjoin fill push pop set-difference
-	  nset-difference union nunion intersection nintersection subsetp sort
-	  stable-sort array-rank array-dimension array-total-size
-	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit svref string/= char-equal
-	  digit-char digit-char-p char-int string-upcase string-downcase
-	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
-	  string-left-trim string-right-trim string-trim defpackage signed-byte
-	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp random-state-p characterp standard-char-p
-	  vectorp simple-vector-p arrayp sequencep stringp simple-string-p
-	  bit-vector-p simple-bit-vector-p hash-table-p pathnamep streamp realp
-	  numberp check-type macroexpand equal equalp fdefinition complement
-	  mapc mapcan maplist mapl mapcon reduce terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
+	  copy-tree tree-equal sublis nsublis endp butlast nbutlast acons
+	  pairlis when unless incf decf and or cond otherwise case return
+	  multiple-value-bind prog prog* every some notany notevery member
+	  member-if member-if-not find find-if find-if-not assoc assoc-if
+	  assoc-if-not position position-if position-if-not count count-if
+	  count-if-not remove remove-if-not delete delete-if delete-if-not
+	  remove-duplicates delete-duplicates substitute substitute-if
+	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
+	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin
+	  fill push pop set-difference nset-difference union nunion intersection
+	  nintersection subsetp sort stable-sort array-rank array-dimension
+	  array-total-size array-in-bounds-p upgraded-array-element-type
+	  adjustable-array-p get get-properties char schar bit sbit svref
+	  string/= char-equal digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
+	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+	  pathnamep streamp realp numberp check-type macroexpand equal equalp
+	  fdefinition complement mapc mapcan maplist mapl mapcon reduce terpri
+	  write-line write-sequence prin1 princ print do-all-symbols loop format
 	  encode-universal-time))
 
 
