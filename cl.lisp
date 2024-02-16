@@ -971,6 +971,18 @@
   (apply 'intersection args))
 
 
+(defun subsetp (l1 l2 &key key test test-not)
+  (unless key
+    (setq key #'identity))
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (dolist (l l1)
+      (unless (member (funcall key l) l2 :test tst)
+	(return-from subsetp nil)))
+    t))
+
+
 
 (defun sort (seq pred &key key)
   (stable-sort seq pred :key key))
@@ -1963,7 +1975,7 @@
 	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
 	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
 	  nsubst-if-not nreverse adjoin fill push pop set-difference
-	  nset-difference union nunion intersection nintersection sort
+	  nset-difference union nunion intersection nintersection subsetp sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
 	  get-properties char schar bit sbit string/= char-equal digit-char
