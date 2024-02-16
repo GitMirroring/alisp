@@ -996,6 +996,8 @@ make_test ("(copy-alist '((1 . 10) (2 . \"a\") (3 . 'a)))", "((1 . 10) (2 . \"a\
 make_test ("(copy-tree '(1 (2 (3 4 (5)) 6) 7))", "(1 (2 (3 4 (5)) 6) 7)");
 make_test ("(tree-equal '(1 (2 (3))) '(1 (2)))", "NIL");
 make_test ("(tree-equal '(1 (2 (3))) '(1 (2 (3))) :test 'equal)", "T");
+make_test ("(sublis '((1 . -1) (2 . -2)) '(1 2 (3 4 2 (1))))", "(-1 -2 (3 4 -2 (-1)))");
+make_test ("(nsublis '((1 . -1) (2 . -2)) '(1 2 (3 4 2 (1))))", "(-1 -2 (3 4 -2 (-1)))");
 make_test ("(endp '(1 . 2))", "NIL");
 make_test ("(endp ())", "T");
 make_test ("(butlast '(0 1 2))", "(0 1)");
