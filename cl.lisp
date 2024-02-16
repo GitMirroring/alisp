@@ -872,15 +872,15 @@
 
 
 (defun subst (new old tree &key key test test-not)
-  (nsubst new old (copy-seq tree) :key key :test test :test-not test-not))
+  (nsubst new old (copy-tree tree) :key key :test test :test-not test-not))
 
 
 (defun subst-if (new pred tree &key key)
-  (nsubst-if new pred (copy-seq tree) :key key))
+  (nsubst-if new pred (copy-tree tree) :key key))
 
 
 (defun subst-if-not (new pred tree &key key)
-  (nsubst-if-not new pred (copy-seq tree) :key key))
+  (nsubst-if-not new pred (copy-tree tree) :key key))
 
 
 (defun nsubst (new old tree &key key test test-not)
