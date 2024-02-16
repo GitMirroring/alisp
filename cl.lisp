@@ -1080,6 +1080,11 @@
 (defun (setf sbit) (newval arr &rest subs)
   (apply #'(setf aref) newval arr subs))
 
+(defun svref (vec ind)
+  (aref vec ind))
+
+(defun (setf svref) (newval vec ind)
+  (setf (aref vec ind) newval))
 
 
 (defun string/= (str1 str2)
@@ -1978,17 +1983,18 @@
 	  nset-difference union nunion intersection nintersection subsetp sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit string/= char-equal digit-char
-	  digit-char-p char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  consp listp symbolp keywordp functionp packagep integerp rationalp
-	  floatp complexp random-state-p characterp standard-char-p vectorp
-	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
-	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
-	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  get-properties char schar bit sbit svref string/= char-equal
+	  digit-char digit-char-p char-int string-upcase string-downcase
+	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
+	  string-left-trim string-right-trim string-trim defpackage signed-byte
+	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp random-state-p characterp standard-char-p
+	  vectorp simple-vector-p arrayp sequencep stringp simple-string-p
+	  bit-vector-p simple-bit-vector-p hash-table-p pathnamep streamp realp
+	  numberp check-type macroexpand equal equalp fdefinition complement
+	  mapc mapcan maplist mapl mapcon reduce terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
