@@ -870,6 +870,45 @@
   (apply 'substitute-if-not args))
 
 
+
+(defun subst (new old tree &key key test test-not)
+  (nsubst new old (copy-seq tree) :key key :test test :test-not test-not))
+
+
+(defun subst-if (new pred tree &key key)
+  (nsubst-if new pred (copy-seq tree) :key key))
+
+
+(defun subst-if-not (new pred tree &key key)
+  (nsubst-if-not new pred (copy-seq tree) :key key))
+
+
+(defun nsubst (new old tree &key key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (nsubst-if new (lambda (x) (funcall tst old x)) tree :key key)))
+
+
+(defun nsubst-if (new pred tree &key key)
+  (unless key
+    (setq key #'identity))
+  (cond
+    ((funcall pred (funcall key tree))
+     new)
+    ((atom tree)
+     tree)
+    (t
+     (rplaca tree (nsubst-if new pred (car tree)))
+     (rplacd tree (nsubst-if new pred (cdr tree)))
+     tree)))
+
+
+(defun nsubst-if-not (new pred tree &key key)
+  (nsubst-if new (complement pred) tree :key key))
+
+
+
 (defun nreverse (seq)
   (reverse seq))
 
@@ -1922,7 +1961,8 @@
 	  position-if-not count count-if count-if-not remove remove-if-not
 	  delete delete-if delete-if-not remove-duplicates delete-duplicates
 	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
-	  nsubstitute-if-not nreverse adjoin fill push pop set-difference
+	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
+	  nsubst-if-not nreverse adjoin fill push pop set-difference
 	  nset-difference union nunion intersection nintersection sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
