@@ -552,7 +552,8 @@ environment
     *safety_sym, *space_sym, *speed_sym, *special_sym, *type_sym, *ftype_sym;
 
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
-    *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym;
+    *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym,
+    *key_allow_other_keys_sym;
 
   struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym, *star_sym;
 
@@ -3345,6 +3346,10 @@ add_standard_definitions (struct environment *env)
 						     strlen ("&WHOLE"), 1,
 						     EXTERNAL_VISIBILITY, 1,
 						     env->cl_package);
+  env->key_allow_other_keys_sym =
+    intern_symbol_by_char_vector ("ALLOW-OTHER-KEYS",
+				  strlen ("ALLOW-OTHER-KEYS"), 1,
+				  EXTERNAL_VISIBILITY, 1, env->keyword_package);
 
   env->not_sym = CREATE_BUILTIN_SYMBOL ("NOT");
   env->and_sym = CREATE_BUILTIN_SYMBOL ("AND");
@@ -10371,9 +10376,9 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 		     int *argsnum)
 {
   struct parameter *findk;
-  struct object *val, *args = NULL, *as;
+  struct object *val, *args = NULL, *as, *key_allow_other_k = NULL;
   struct binding *subbins, *lastbin = NULL;
-  int rest_found = 0, subargs;
+  int rest_found = 0, subargs, found_unknown_key = 0;
 
   *bins = NULL, *argsnum = 0;
 
@@ -10555,22 +10560,22 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!findk || findk->type != KEYWORD_PARAM)
 	    {
-	      if (allow_other_keys)
+	      if (SYMBOL (CDR (as)) == &nil_object)
 		{
-		  as = CDR (as);
-
-		  if (SYMBOL (as) == &nil_object)
-		    {
-		      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
-		      return 0;
-		    }
-
-		  as = CDR (as);
-		  continue;
+		  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+		  return 0;
 		}
 
-	      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	      return 0;
+	      found_unknown_key = 1;
+
+	      if (SYMBOL (CAR (as)) == env->key_allow_other_keys_sym
+		  && !key_allow_other_k)
+		{
+		  key_allow_other_k = CAR (CDR (as));
+		}
+
+	      as = CDR (CDR (as));
+	      continue;
 	    }
 
 	  as = CDR (as);
@@ -10588,6 +10593,12 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	      *bins = bind_variable (findk->name, CAR (as), *bins);
 	      findk->key_passed = 1;
 	      (*argsnum)++;
+
+	      if (findk->key == env->key_allow_other_keys_sym
+		  && !key_allow_other_k)
+		{
+		  key_allow_other_k = CAR (as);
+		}
 	    }
 
 	  as = CDR (as);
@@ -10634,6 +10645,14 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
   if (args && !rest_found)
     decrement_refcount (args);
+
+  if (found_unknown_key && !allow_other_keys
+      && (!key_allow_other_k || SYMBOL (key_allow_other_k) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return 0;
+    }
+
 
   if (par && par->type == AUXILIARY_VAR)
     {
