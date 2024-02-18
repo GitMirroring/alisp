@@ -953,7 +953,9 @@
      c))
 
 
-(defun set-difference (l1 l2 &key (key #'identity) test test-not)
+(defun set-difference (l1 l2 &key key test test-not)
+  (unless key
+    (setq key #'identity))
   (let ((out (concatenate 'list l1))
 	(tst (or test
 		 (if test-not (complement test-not))
@@ -969,7 +971,7 @@
   (apply 'set-difference args))
 
 
-(defun union (list-1 list-2 &key (key #'identity) test test-not)
+(defun union (list-1 list-2 &key key test test-not)
   (remove-duplicates (append list-1 list-2) :key key :test test :test-not test-not))
 
 
@@ -989,6 +991,15 @@
 
 (defun nintersection (&rest args)
   (apply 'intersection args))
+
+
+(defun set-exclusive-or (list-1 list-2 &key key test test-not)
+  (union (set-difference list-1 list-2 :key key :test test :test-not test-not)
+	 (set-difference list-2 list-1 :key key :test test :test-not test-not)))
+
+
+(defun nset-exclusive-or (&rest args)
+  (apply 'set-exclusive-or args))
 
 
 (defun subsetp (l1 l2 &key key test test-not)
@@ -2033,20 +2044,21 @@
 	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
 	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin
 	  fill push pop set-difference nset-difference union nunion intersection
-	  nintersection subsetp search sort stable-sort array-rank
-	  array-dimension array-total-size array-in-bounds-p
-	  upgraded-array-element-type adjustable-array-p get get-properties char
-	  schar bit sbit svref string/= char-equal digit-char digit-char-p
-	  char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  consp listp symbolp keywordp functionp packagep integerp rationalp
-	  floatp complexp random-state-p characterp standard-char-p vectorp
-	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
-	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
-	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
+	  stable-sort array-rank array-dimension array-total-size
+	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
+	  get-properties char schar bit sbit svref string/= char-equal
+	  digit-char digit-char-p char-int string-upcase string-downcase
+	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
+	  string-left-trim string-right-trim string-trim defpackage signed-byte
+	  unsigned-byte consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp random-state-p characterp standard-char-p
+	  vectorp simple-vector-p arrayp sequencep stringp simple-string-p
+	  bit-vector-p simple-bit-vector-p hash-table-p pathnamep streamp realp
+	  numberp check-type macroexpand equal equalp fdefinition complement
+	  mapc mapcan maplist mapl mapcon reduce terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
