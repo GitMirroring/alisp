@@ -1261,6 +1261,8 @@ make_test ("(union '(1 2 3) '(3 4 5) :test #'=)", "(1 2 3 4 5)");
 make_test ("(nunion '((1 . 2) (2 . 3)) '((2 . 5) (3 . 6)) :key #'car)", "((1 . 2) (2 . 5) (3 . 6))");
 make_test ("(intersection '(1 2 3) '(3 4 5) :test #'=)", "(3)");
 make_test ("(nintersection '((1 . 2) (2 . 3)) '((2 . 5) (3 . 6)) :key #'car)", "((2 . 3))");
+make_test ("(set-exclusive-or '(1 2 3 4 5) '(8 7 6 5 4 1) :key #'identity :test #'=)", "(2 3 8 7 6)");
+make_test ("(nset-exclusive-or '(1 2 3 4 5) '(8 7 6 5 4 1) :key #'identity :test #'=)", "(2 3 8 7 6)");
 make_test ("(subsetp '(1 4 nil 5) '(3 2 1 nil 4 5) :key #'identity :test #'equal)", "T");
 make_test ("(subsetp '(1 4 nil 5) '(3 2 1 4 5) :key #'identity :test #'equal)", "NIL");
 make_test ("(search \"hello\" \"hey hello\" :test 'char-equal)", "4");
