@@ -1004,6 +1004,38 @@
 
 
 
+(defun search (seq1 seq2 &key from-end test test-not key (start1 0) (start2 0) end1 end2)
+  (unless key
+    (setq key #'identity))
+  (unless end1
+    (setq end1 (length seq1)))
+  (unless end2
+    (setq end2 (length seq2)))
+  (if (<= (- end1 start1) 1)
+      (return-from search nil))
+  (when from-end
+    (setq seq1 (reverse seq1))
+    (let ((tmp end1))
+      (setq end1 (- (length seq1) start1))
+      (setq start1 (- (length seq1) tmp)))
+    (setq seq2 (reverse seq2))
+    (let ((tmp end2))
+      (setq end2 (- (length seq2) start2))
+      (setq start2 (- (length seq2) tmp))))
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (dotimes (i (+ 1 (- end2 start2 (length seq1))))
+      (when (funcall tst (funcall key (elt seq1 start1))
+		     (funcall key (elt seq2 (+ start2 i))))
+	(dotimes (j (- end1 start1) (if from-end (return-from search (- (length seq2) i (- end1 start1)))
+					(return-from search i)))
+	  (unless (funcall tst (funcall key (elt seq1 (+ start1 j)))
+			   (funcall key (elt seq2 (+ start2 i j))))
+	    (return nil)))))))
+
+
+
 (defun sort (seq pred &key key)
   (stable-sort seq pred :key key))
 
@@ -2001,20 +2033,20 @@
 	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
 	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin
 	  fill push pop set-difference nset-difference union nunion intersection
-	  nintersection subsetp sort stable-sort array-rank array-dimension
-	  array-total-size array-in-bounds-p upgraded-array-element-type
-	  adjustable-array-p get get-properties char schar bit sbit svref
-	  string/= char-equal digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type macroexpand equal equalp
-	  fdefinition complement mapc mapcan maplist mapl mapcon reduce terpri
-	  write-line write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  nintersection subsetp search sort stable-sort array-rank
+	  array-dimension array-total-size array-in-bounds-p
+	  upgraded-array-element-type adjustable-array-p get get-properties char
+	  schar bit sbit svref string/= char-equal digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage signed-byte unsigned-byte
+	  consp listp symbolp keywordp functionp packagep integerp rationalp
+	  floatp complexp random-state-p characterp standard-char-p vectorp
+	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
+	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
+	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
+	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
+	  princ print do-all-symbols loop format encode-universal-time))
 
 
 
