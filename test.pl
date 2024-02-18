@@ -1189,6 +1189,7 @@ make_test ("(do* ((x 0 (1+ x)) (y x (1+ x))) ((>= y 10)) (write y))", "023456789
 make_test ("(do* ((dd 0 (1+ dd))) (nil) (if (> dd 5) (return 10) (write dd)))", "012345\n10");
 make_test ("(dotimes (i 0 i))", "0");
 make_test ("(dotimes (tmp 10 tmp))", "10");
+make_test ("(dotimes (j 1) (+ 1) 1)", "NIL");
 make_test ("(dotimes (i 10) (write i) (if (= i 5) (return (values 11 12))))", "012345\n11\n12");
 make_test ("(dolist (i nil) (write i))", "NIL");
 make_test ("(dolist (i nil (values 0 1)))", "0\n1");
