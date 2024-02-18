@@ -10301,6 +10301,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
   while (SYMBOL (body) != &nil_object)
     {
       decrement_refcount (res);
+      res = &nil_object;
 
       if (!is_tagbody
 	  || (CAR (body)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (body))))
