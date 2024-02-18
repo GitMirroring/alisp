@@ -20657,7 +20657,9 @@ builtin_export (struct object *list, struct environment *env,
       if (cons)
 	{
 	  cons = CDR (cons);
-	  sym = SYMBOL (CAR (cons));
+
+	  if (SYMBOL (cons) != &nil_object)
+	    sym = SYMBOL (CAR (cons));
 	}
     } while (cons && SYMBOL (cons) != &nil_object);
 
@@ -20740,7 +20742,9 @@ builtin_unexport (struct object *list, struct environment *env,
       if (cons)
 	{
 	  cons = CDR (cons);
-	  sym = SYMBOL (CAR (cons));
+
+	  if (SYMBOL (cons) != &nil_object)
+	    sym = SYMBOL (CAR (cons));
 	}
     } while (cons && SYMBOL (cons) != &nil_object);
 
