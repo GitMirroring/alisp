@@ -42,12 +42,16 @@ code, or after a wrong assignment to a standard variable (see "Type checking").
 
 
 
-__Builtin macros__
+__Builtin functions and macros__
 
 Builtin macros are like special operators in al: they are treated specially by
 the interpreter (which is allowed by ANSI), but an alternate implementation of
 the macro in lisp is not provided (which is requested by ANSI instead).
 Currently, al is non-conforming in this area.
+
+You can freely redefine standard functions and macros.  If you redefine a
+builtin with your lisp code though, there's no way to get the C definition back.
+Be careful, you can easily make your image unusable this way.
 
 
 
@@ -90,10 +94,13 @@ libgmp.
 __Character encoding__
 
 al expects its input in UTF-8 and stores strings in the same encoding.  (Note
-that UTF-8 is compatible with ASCII).  If al gets input in a different encoding,
-it might still work somewhat, as long as it understands basic macro characters,
-except for things like counting the characters in a string or accessing
-characters by index.
+that UTF-8 is compatible with ASCII, but not with ISO-8859).  If al gets input
+in a different encoding, it might still work somewhat, as long as it understands
+basic macro characters, except for things like counting the characters in a
+string or accessing characters by index.
+
+Input that is not well-formed UTF-8 may cause incorrect behavior in string
+manipulation functions, but should not cause a crash.
 
 
 
