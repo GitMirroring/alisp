@@ -2172,8 +2172,8 @@ struct object *builtin_macro_function (struct object *list,
 				       struct outcome *outcome);
 struct object *builtin_string (struct object *list, struct environment *env,
 			       struct outcome *outcome);
-struct object *builtin_string_eq (struct object *list, struct environment *env,
-				  struct outcome *outcome);
+/*struct object *builtin_string_eq (struct object *list, struct environment *env,
+  struct outcome *outcome);*/
 struct object *builtin_char_eq (struct object *list, struct environment *env,
 				struct outcome *outcome);
 struct object *builtin_char_upcase (struct object *list, struct environment *env,
@@ -3162,7 +3162,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
 		    builtin_setf_macro_function, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);
+  /*add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);*/
   add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CHAR-UPCASE", env, builtin_char_upcase, TYPE_FUNCTION, NULL,
 		    0);
@@ -19738,7 +19738,7 @@ builtin_string (struct object *list, struct environment *env,
 }
 
 
-struct object *
+/*struct object *
 builtin_string_eq (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
@@ -19798,7 +19798,7 @@ builtin_string_eq (struct object *list, struct environment *env,
     return &t_object;
 
   return &nil_object;
-}
+  }*/
 
 
 struct object *

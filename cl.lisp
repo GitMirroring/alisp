@@ -1150,12 +1150,94 @@
   (setf (aref vec ind) newval))
 
 
-(defun string/= (str1 str2)
-  (dotimes (i (min (length str1) (length str2)))
-    (unless (char= (elt str1 i) (elt str2 i))
-      (return-from string/= i)))
-  (if (/= (length str1) (length str2))
-      (min (length str1) (length str2))))
+(defun string= (str1 str2 &key (start1 0) end1 (start2 0) end2)
+  (setq str1 (string str1))
+  (setq str2 (string str2))
+  (unless end1
+    (setq end1 (length str1)))
+  (unless end2
+    (setq end2 (length str2)))
+  (let ((l1 (- end1 start1))
+	(l2 (- end2 start2)))
+    (if (/= l1 l2)
+	(return-from string= nil))
+    (dotimes (i (min l1 l2) t)
+      (unless (char= (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
+	(return-from string= nil)))))
+
+
+(defun string/= (str1 str2 &key (start1 0) end1 (start2 0) end2)
+  (setq str1 (string str1))
+  (setq str2 (string str2))
+  (unless end1
+    (setq end1 (length str1)))
+  (unless end2
+    (setq end2 (length str2)))
+  (let ((l1 (- end1 start1))
+	(l2 (- end2 start2)))
+    (dotimes (i (min l1 l2))
+      (unless (char= (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
+	(return-from string/= (+ start1 i))))
+    (if (/= l1 l2)
+	(min l1 l2))))
+
+
+(defun string< (str1 str2 &key (start1 0) end1 (start2 0) end2)
+  (setq str1 (string str1))
+  (setq str2 (string str2))
+  (unless end1
+    (setq end1 (length str1)))
+  (unless end2
+    (setq end2 (length str2)))
+  (let ((l1 (- end1 start1))
+	(l2 (- end2 start2)))
+    (dotimes (i (min l1 l2))
+      (if (char< (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
+	  (return-from string< (+ start1 i))
+	  (if (char> (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
+	      (return-from string< nil))))
+    (if (< l1 l2)
+	end1)))
+
+
+(defun string<= (str1 str2 &key (start1 0) end1 (start2 0) end2)
+  (unless end1
+    (setq end1 (length str1)))
+  (let ((ret (funcall 'string< str1 str2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
+    (if ret
+	ret
+	(let ((ret (funcall 'string= str1 str2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
+	  (if ret
+	      end1)))))
+
+
+(defun string> (str1 str2 &key (start1 0) end1 (start2 0) end2)
+  (setq str1 (string str1))
+  (setq str2 (string str2))
+  (unless end1
+    (setq end1 (length str1)))
+  (unless end2
+    (setq end2 (length str2)))
+  (let ((l1 (- end1 start1))
+	(l2 (- end2 start2)))
+    (dotimes (i (min l1 l2))
+      (if (char> (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
+	  (return-from string> (+ start1 i))
+	  (if (char< (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
+	      (return-from string> nil))))
+    (if (< l1 l2)
+	end1)))
+
+
+(defun string>= (str1 str2 &key (start1 0) end1 (start2 0) end2)
+  (unless end1
+    (setq end1 (length str1)))
+  (let ((ret (funcall 'string> str1 str2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
+    (if ret
+	ret
+	(let ((ret (funcall 'string= str1 str2 :start1 start1 :end1 end1 :start2 start2 :end2 end2)))
+	  (if ret
+	      end1)))))
 
 
 (defun char/= (&rest chars)
@@ -2107,19 +2189,20 @@
 	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit svref string/= char/= char< char<=
-	  char> char>= char-equal char-not-equal char-lessp char-not-greaterp
-	  char-greaterp char-not-lessp digit-char digit-char-p char-int
-	  string-upcase string-downcase string-capitalize nstring-upcase
-	  nstring-downcase nstring-capitalize string-left-trim string-right-trim
-	  string-trim defpackage signed-byte unsigned-byte consp listp symbolp
-	  keywordp functionp packagep integerp rationalp floatp complexp
-	  random-state-p characterp standard-char-p vectorp simple-vector-p
-	  arrayp sequencep stringp simple-string-p bit-vector-p
-	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
-	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  get-properties char schar bit sbit svref string= string/= string< string<=
+	  string> string>= char/= char< char<= char> char>= char-equal
+	  char-not-equal char-lessp char-not-greaterp char-greaterp
+	  char-not-lessp digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
+	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+	  pathnamep streamp realp numberp check-type macroexpand equal equalp
+	  fdefinition complement mapc mapcan maplist mapl mapcon reduce terpri
+	  write-line write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
