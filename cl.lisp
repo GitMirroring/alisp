@@ -1225,8 +1225,8 @@
 	  (return-from string> (+ start1 i))
 	  (if (char< (elt str1 (+ start1 i)) (elt str2 (+ start2 i)))
 	      (return-from string> nil))))
-    (if (< l1 l2)
-	end1)))
+    (if (> l1 l2)
+	end2)))
 
 
 (defun string>= (str1 str2 &key (start1 0) end1 (start2 0) end2)
