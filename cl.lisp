@@ -1240,6 +1240,30 @@
 	      end1)))))
 
 
+(defun string-equal (&rest strings)
+  (apply #'string= (mapcar #'string-upcase strings)))
+
+
+(defun string-not-equal (&rest strings)
+  (apply #'string/= (mapcar #'string-upcase strings)))
+
+
+(defun string-lessp (&rest strings)
+  (apply #'string< (mapcar #'string-upcase strings)))
+
+
+(defun string-not-greaterp (&rest strings)
+  (apply #'string<= (mapcar #'string-upcase strings)))
+
+
+(defun string-greaterp (&rest strings)
+  (apply #'string> (mapcar #'string-upcase strings)))
+
+
+(defun string-not-lessp (&rest strings)
+  (apply #'string>= (mapcar #'string-upcase strings)))
+
+
 (defun char/= (&rest chars)
   (do ((c chars (cdr c)))
       ((not c) t)
@@ -2189,20 +2213,21 @@
 	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit svref string= string/= string< string<=
-	  string> string>= char/= char< char<= char> char>= char-equal
-	  char-not-equal char-lessp char-not-greaterp char-greaterp
-	  char-not-lessp digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type macroexpand equal equalp
-	  fdefinition complement mapc mapcan maplist mapl mapcon reduce terpri
-	  write-line write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  get-properties char schar bit sbit svref string= string/= string<
+	  string<= string> string>= string-equal string-not-equal string-lessp
+	  string-not-greaterp string-greaterp string-not-lessp char/= char<
+	  char<= char> char>= char-equal char-not-equal char-lessp
+	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage signed-byte unsigned-byte
+	  consp listp symbolp keywordp functionp packagep integerp rationalp
+	  floatp complexp random-state-p characterp standard-char-p vectorp
+	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
+	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
+	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
+	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
+	  princ print do-all-symbols loop format encode-universal-time))
 
 
 
