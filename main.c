@@ -19723,6 +19723,9 @@ struct object *
 builtin_string_eq (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
+  char *s1, *s2;
+  int l1, l2;
+
   if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -19730,15 +19733,49 @@ builtin_string_eq (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_STRING || CAR (CDR (list))->type != TYPE_STRING)
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      s1 = CAR (list)->value_ptr.string->value;
+      l1 = CAR (list)->value_ptr.string->used_size;
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      s1 = SYMBOL (CAR (list))->value_ptr.symbol->name;
+      l1 = SYMBOL (CAR (list))->value_ptr.symbol->name_len;
+    }
+  else if (CAR (list)->type == TYPE_CHARACTER)
+    {
+      s1 = CAR (list)->value_ptr.character;
+      l1 = strlen (s1);
+    }
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
       return NULL;
     }
 
-  if (equal_strings (CAR (list)->value_ptr.string,
-		     CAR (CDR (list))->value_ptr.string))
+  if (CAR (CDR (list))->type == TYPE_STRING)
+    {
+      s2 = CAR (CDR (list))->value_ptr.string->value;
+      l2 = CAR (CDR (list))->value_ptr.string->used_size;
+    }
+  else if (IS_SYMBOL (CAR (CDR (list))))
+    {
+      s2 = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name;
+      l2 = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->name_len;
+    }
+  else if (CAR (CDR (list))->type == TYPE_CHARACTER)
+    {
+      s2 = CAR (CDR (list))->value_ptr.character;
+      l2 = strlen (s2);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (eqmem (s1, l1, s2, l2))
     return &t_object;
 
   return &nil_object;
