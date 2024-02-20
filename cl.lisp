@@ -61,7 +61,7 @@
 (defconstant ARRAY-TOTAL-SIZE-LIMIT most-positive-fixnum)
 
 
-(defconstant CHAR-CODE-LIMIT most-positive-fixnum)
+(defconstant CHAR-CODE-LIMIT 4294967296)
 
 
 

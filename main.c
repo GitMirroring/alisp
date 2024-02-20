@@ -1358,6 +1358,7 @@ struct object *create_complex (struct object *real, struct object *imag,
 			       int steal_refs, struct environment *env,
 			       struct outcome *outcome);
 struct object *create_integer_from_long (long num);
+struct object *create_integer_from_unsigned_long (unsigned long num);
 struct object *convert_to_integer_if_possible (struct object *rat);
 struct object *create_ratio_from_longs (long num, long den);
 struct object *create_floating_from_double (double d);
@@ -2187,6 +2188,9 @@ struct object *builtin_alphanumericp (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
 struct object *builtin_char_code (struct object *list,
+				  struct environment *env,
+				  struct outcome *outcome);
+struct object *builtin_code_char (struct object *list,
 				  struct environment *env,
 				  struct outcome *outcome);
 struct object *builtin_find_package (struct object *list,
@@ -3169,6 +3173,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CHAR-CODE", env, builtin_char_code, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("CODE-CHAR", env, builtin_code_char, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FIND-PACKAGE", env, builtin_find_package, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("PACKAGE-NAME", env, builtin_package_name, TYPE_FUNCTION,
@@ -5859,6 +5864,20 @@ create_integer_from_long (long num)
 
   mpz_init (obj->value_ptr.integer);
   mpz_set_si (obj->value_ptr.integer, num);
+
+  return obj;
+}
+
+
+struct object *
+create_integer_from_unsigned_long (unsigned long num)
+{
+  struct object *obj = alloc_object ();
+
+  obj->type = TYPE_INTEGER;
+
+  mpz_init (obj->value_ptr.integer);
+  mpz_set_ui (obj->value_ptr.integer, num);
 
   return obj;
 }
@@ -19947,8 +19966,8 @@ struct object *
 builtin_char_code (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
-  char *ch;
-  long ret = 0;
+  unsigned char *ch;
+  unsigned long ret = 0;
 
   if (list_length (list) != 1)
     {
@@ -19962,17 +19981,76 @@ builtin_char_code (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ch = CAR (list)->value_ptr.character;
+  ch = (unsigned char *)CAR (list)->value_ptr.character;
 
   while (*ch)
     {
       ret <<= 8;
-      ret += *ch;
+      ret = ret + *ch;
 
       ch++;
     }
 
-  return create_integer_from_long (ret);
+  return create_integer_from_unsigned_long (ret);
+}
+
+
+struct object *
+builtin_code_char (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  unsigned long code;
+  unsigned char *ch, *c, tmp;
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (mpz_cmp_ui (CAR (list)->value_ptr.integer, 0) < 0
+      || mpz_cmp_ui (CAR (list)->value_ptr.integer, 4294967295) > 0)
+    {
+      return &nil_object;
+    }
+
+  code = mpz_get_ui (CAR (list)->value_ptr.integer);
+
+  ret = alloc_object ();
+  ret->type = TYPE_CHARACTER;
+  ret->value_ptr.character = malloc_and_check (5);
+
+  ch = (unsigned char *)ret->value_ptr.character;
+
+  while (code)
+    {
+      *ch = code & 0xff;
+      code >>= 8;
+      ch++;
+    }
+
+  *ch = 0;
+
+  ch = (unsigned char *)ret->value_ptr.character;
+  c = ch + strlen ((char *)ch)-1;
+
+  while (ch < c)
+    {
+      tmp = *ch;
+      *ch = *c;
+      *c = tmp;
+
+      ch++, c--;
+    }
+
+  return ret;
 }
 
 
