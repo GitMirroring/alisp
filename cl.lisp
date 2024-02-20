@@ -1151,7 +1151,11 @@
 
 
 (defun string/= (str1 str2)
-  (not (string= str1 str2)))
+  (dotimes (i (min (length str1) (length str2)))
+    (unless (char= (elt str1 i) (elt str2 i))
+      (return-from string/= i)))
+  (if (/= (length str1) (length str2))
+      (min (length str1) (length str2))))
 
 
 (defun char-equal (&rest chars)
