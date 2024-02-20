@@ -689,6 +689,8 @@ make_test ("(alpha-char-p #\\3)", "NIL");
 make_test ("(alphanumericp #\\a)", "T");
 make_test ("(alphanumericp #\\3)", "T");
 make_test ("(alphanumericp #\\#)", "NIL");
+make_test ("(code-char (char-code #\\a))", "#\\a");
+make_test ("(code-char (char-code #\\ò))", "#\\ò");
 make_test ("(digit-char 2)", "#\\2");
 make_test ("(digit-char 10)", "NIL");
 make_test ("(digit-char 10 16)", "#\\A");
