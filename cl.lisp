@@ -1158,6 +1158,14 @@
       (min (length str1) (length str2))))
 
 
+(defun char/= (&rest chars)
+  (do ((c chars (cdr c)))
+      ((not c) t)
+    (dolist (d (cdr c))
+      (if (char= (car c) d)
+	(return-from char/= nil)))))
+
+
 (defun char-equal (&rest chars)
   (apply #'char= (mapcar #'char-upcase chars)))
 
@@ -2051,7 +2059,7 @@
 	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit svref string/= char-equal
+	  get-properties char schar bit sbit svref string/= char/= char-equal
 	  digit-char digit-char-p char-int string-upcase string-downcase
 	  string-capitalize nstring-upcase nstring-downcase nstring-capitalize
 	  string-left-trim string-right-trim string-trim defpackage signed-byte
