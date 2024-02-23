@@ -555,7 +555,8 @@ environment
     *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym,
     *key_allow_other_keys_sym;
 
-  struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym, *star_sym;
+  struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym,
+    *satisfies_sym, *star_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *print_escape_sym, *print_readably_sym, *print_base_sym, *print_array_sym,
@@ -3361,6 +3362,7 @@ add_standard_definitions (struct environment *env)
   env->or_sym = CREATE_BUILTIN_SYMBOL ("OR");
   env->eql_sym = CREATE_BUILTIN_SYMBOL ("EQL");
   env->member_sym = CREATE_BUILTIN_SYMBOL ("MEMBER");
+  env->satisfies_sym = CREATE_BUILTIN_SYMBOL ("SATISFIES");
   env->star_sym = CREATE_BUILTIN_SYMBOL ("*");
 
 
@@ -11165,7 +11167,7 @@ int
 check_type (struct object *obj, struct object *typespec, struct environment *env,
 	    struct outcome *outcome)
 {
-  struct object *args, *sym, *res;
+  struct object *args, *sym, *res, *fun, *cons;
   int ret;
 
   if ((typespec->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (typespec)))
@@ -11256,6 +11258,43 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	    }
 
 	  return 0;
+	}
+      else if (sym == env->satisfies_sym)
+	{
+	  if (list_length (args) != 1)
+	    {
+	      outcome->type = INVALID_TYPE_SPECIFIER;
+	      return -1;
+	    }
+
+	  if (!IS_SYMBOL (CAR (args)) ||
+	      !(fun = get_function (SYMBOL (CAR (args)), env, 1, 0, 1, 0)))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return -1;
+	    }
+
+	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car = obj;
+	  increment_refcount (obj);
+	  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+	  res = call_function (fun, cons, 0, 0, 1, 0, 0, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  free_cons_pair (cons);
+
+	  if (!res)
+	    return -1;
+
+	  if (SYMBOL (res) != &nil_object)
+	    ret = 1;
+	  else
+	    ret = 0;
+
+	  decrement_refcount (res);
+
+	  return ret;
 	}
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STRUCTURE_CLASS)
