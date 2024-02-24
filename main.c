@@ -1688,7 +1688,7 @@ int is_class_completely_defined (struct object *class);
 
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
-int is_method_more_specific (struct object *first, struct object *second);
+int compare_method_specificity (struct object *first, struct object *second);
 struct object *dispatch_generic_function_call (struct object *func,
 					       struct object *arglist,
 					       struct environment *env,
@@ -11053,7 +11053,7 @@ is_method_applicable (struct object *meth, struct object *args,
 
 
 int
-is_method_more_specific (struct object *first, struct object *second)
+compare_method_specificity (struct object *first, struct object *second)
 {
   struct parameter *par = first->value_ptr.method->lambda_list,
     *par2 = second->value_ptr.method->lambda_list;
@@ -11128,7 +11128,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
       for (i = 0; i < applnum-1; i++)
 	{
-	  if (is_method_more_specific (lapplm->meth, lapplm->next->meth) == 1)
+	  if (compare_method_specificity (lapplm->meth, lapplm->next->meth) == 1)
 	    {
 	      tmp = lapplm->meth;
 	      lapplm->meth = lapplm->next->meth;
