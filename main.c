@@ -2657,7 +2657,10 @@ main (int argc, char *argv [])
 		{
 		  if (is_subtype_by_char_vector
 		      (eval_out.condition->value_ptr.condition->class_name,
-		       "SIMPLE-CONDITION", &env))
+		       "SIMPLE-CONDITION", &env)
+		      || is_subtype_by_char_vector
+		      (eval_out.condition->value_ptr.condition->class_name,
+		       "TYPE-ERROR", &env))
 		    {
 		      print_object (eval_out.condition->value_ptr.condition->fields->
 				    value, &env, c_stdout->value_ptr.stream);
@@ -3301,8 +3304,8 @@ add_standard_definitions (struct environment *env)
   stdobjsym->value_ptr.symbol->typespec = stdobjcl;
 
 
-  add_condition_class ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL, "DATUM",
-		       "EXPECTED-TYPE", (char *)NULL);
+  add_condition_class ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL,
+		       "EXPECTED-TYPE", "DATUM", (char *)NULL);
   add_condition_class ("FILE-ERROR", env, 1, "ERROR", (char *)NULL, "PATHNAME",
 		       (char *)NULL);
   add_condition_class ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
