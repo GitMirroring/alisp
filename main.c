@@ -377,6 +377,7 @@ outcome_type
     DECREASING_INTERVAL_NOT_MEANINGFUL,
     INVALID_SIZE,
     NO_APPLICABLE_METHOD,
+    NO_NEXT_METHOD,
     COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
@@ -544,6 +545,10 @@ environment
   struct binding *structs;
 
   struct object *c_stdout;
+
+  struct object *method_args;
+  struct method_list *next_methods;
+
 
   struct object *quote_sym, *function_sym, *lambda_sym, *setf_sym;
 
@@ -2369,6 +2374,12 @@ struct object *evaluate_defgeneric
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defmethod
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_next_method_p
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_call_next_method
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_no_next_method
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_declaim
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3100,6 +3111,12 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("NEXT-METHOD-P", env, builtin_next_method_p, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("CALL-NEXT-METHOD", env, evaluate_call_next_method,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("NO-NEXT-METHOD", env, evaluate_no_next_method,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DECLAIM", env, evaluate_declaim, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROCLAIM", env, builtin_proclaim, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
@@ -11149,6 +11166,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
   if (parse_argument_list (args, applm->meth->value_ptr.method->lambda_list, 0, 0,
 			   0, 0, env, outcome, &bins, &argsnum))
     {
+      env->method_args = args;
+      env->next_methods = applm->next;
+
       env->vars = chain_bindings (bins, env->vars, NULL, NULL);
       env->lex_env_vars_boundary += argsnum;
 
@@ -11157,6 +11177,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
       env->vars = remove_bindings (env->vars, argsnum);
       env->lex_env_vars_boundary = prev_lex_bin_num;
+
+      env->method_args = NULL;
+      env->next_methods = NULL;
     }
   else
     {
@@ -23956,6 +23979,89 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_next_method_p (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (env->next_methods)
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
+evaluate_call_next_method (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  struct object *args, *prevargs, *ret;
+  struct method_list *nextmeds;
+  struct binding *bins;
+  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+
+
+  if (!env->next_methods)
+    {
+      outcome->type = NO_NEXT_METHOD;
+      return NULL;
+    }
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      args = env->method_args;
+    }
+  else
+    {
+      args = list;
+    }
+
+
+  if (parse_argument_list (args, env->next_methods->meth->value_ptr.method->
+			   lambda_list, 0, 0, 0, 0, env, outcome, &bins,
+			   &argsnum))
+    {
+      prevargs = env->method_args;
+      env->method_args = args;
+
+      nextmeds = env->next_methods;
+      env->next_methods = env->next_methods->next;
+
+      env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+      env->lex_env_vars_boundary += argsnum;
+
+      ret = evaluate_body (nextmeds->meth->value_ptr.method->body, 0, NULL, env,
+			   outcome);
+
+      env->vars = remove_bindings (env->vars, argsnum);
+      env->lex_env_vars_boundary = prev_lex_bin_num;
+
+      env->method_args = prevargs;
+      env->next_methods = nextmeds;
+    }
+  else
+    {
+      ret = NULL;
+    }
+
+  return ret;
+}
+
+
+struct object *
+evaluate_no_next_method (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  outcome->type = NO_NEXT_METHOD;
+  return NULL;
+}
+
+
+struct object *
 evaluate_declaim (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
@@ -26771,6 +26877,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == NO_APPLICABLE_METHOD)
     {
       printf ("eval error: no applicable method found\n");
+    }
+  else if (err->type == NO_NEXT_METHOD)
+    {
+      printf ("eval error: no next method available\n");
     }
   else if (err->type == COULD_NOT_OPEN_FILE)
     {
