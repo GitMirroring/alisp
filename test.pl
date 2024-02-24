@@ -1141,6 +1141,11 @@ make_test ("(defmethod genfun3 ((x string) (y real) z) (write 'third))", "#<STAN
 make_test ("(genfun3 \"\" 0 nil)", "SECOND\nSECOND");
 make_test ("(defmethod genfun3 ((x string) (y integer) (z symbol)) (write 'fourth))", "#<STANDARD-METHOD GENFUN3>");
 make_test ("(genfun3 \"\" 0 nil)", "FOURTH\nFOURTH");
+make_test ("(defgeneric genfun4 (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN4>");
+make_test ("(defmethod genfun4 ((x string) (y number) z) (if (next-method-p) (write 'okay)) (list x y z))", "#<STANDARD-METHOD GENFUN4>");
+make_test ("(defmethod genfun4 ((x string) (y real) z) (call-next-method \"hi\" 30 z))", "#<STANDARD-METHOD GENFUN4>");
+make_test ("(defmethod genfun4 ((x string) (y integer) z) (setq z 10) (if (next-method-p) (write 'okay)) (call-next-method))", "#<STANDARD-METHOD GENFUN4>");
+make_test ("(genfun4 \"what\" 0 0)", "OKAY\n(\"hi\" 30 0)");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ERROR>");
 make_test ("(class-of (make-condition 'new-math-error))", "#<CONDITION-CLASS NEW-MATH-ERROR>");
