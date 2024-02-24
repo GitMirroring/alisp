@@ -614,6 +614,38 @@
 						(progn ,@(cdr clause))))))))))))
 
 
+(defmacro ccase (keyf &rest clauses)
+  (let ((keysym (gensym))
+	outsym)
+    `(let ((,keysym ,keyf))
+       ,(dolist (clause clauses (progn
+				  (setq outsym (append outsym '((t (error 'type-error)))))
+				  (setq outsym (cons 'cond outsym))))
+	  (cond
+	    ((listp (car clause))
+	     (setq outsym (append outsym `(((member ,keysym ',(car clause))
+					    (progn ,@(cdr clause)))))))
+	    (t
+	     (setq outsym (append outsym `(((eql ,keysym ',(car clause))
+					    (progn ,@(cdr clause))))))))))))
+
+
+(defmacro ecase (keyf &rest clauses)
+  (let ((keysym (gensym))
+	outsym)
+    `(let ((,keysym ,keyf))
+       ,(dolist (clause clauses (progn
+				  (setq outsym (append outsym '((t (error 'type-error)))))
+				  (setq outsym (cons 'cond outsym))))
+	  (cond
+		((listp (car clause))
+		 (setq outsym (append outsym `(((member ,keysym ',(car clause))
+						(progn ,@(cdr clause)))))))
+		(t
+		 (setq outsym (append outsym `(((eql ,keysym ',(car clause))
+						(progn ,@(cdr clause))))))))))))
+
+
 (defmacro return (&optional val)
   `(return-from nil (values-list (multiple-value-list ,val))))
 
@@ -2201,9 +2233,9 @@
 	  caaaar caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr
 	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list copy-alist
 	  copy-tree tree-equal sublis nsublis endp butlast nbutlast acons
-	  pairlis when unless incf decf and or cond otherwise case return
-	  multiple-value-bind prog prog* every some notany notevery member
-	  member-if member-if-not find find-if find-if-not assoc assoc-if
+	  pairlis when unless incf decf and or cond otherwise case ccase ecase
+	  return multiple-value-bind prog prog* every some notany notevery
+	  member member-if member-if-not find find-if find-if-not assoc assoc-if
 	  assoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  remove-duplicates delete-duplicates substitute substitute-if
