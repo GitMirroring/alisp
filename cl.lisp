@@ -646,6 +646,41 @@
 						(progn ,@(cdr clause))))))))))))
 
 
+(defmacro typecase (keyf &rest clauses)
+  (let ((keysym (gensym))
+	outsym)
+    `(let ((,keysym ,keyf))
+       ,(dolist (clause clauses (setq outsym (cons 'cond outsym)))
+	  (cond ((or (eq (car clause) t)
+		     (eq (car clause) 'otherwise))
+		 (setq outsym (append outsym `((t (progn ,@(cdr clause)))))))
+		(t
+		 (setq outsym (append outsym `(((typep ,keysym ',(car clause))
+						(progn ,@(cdr clause))))))))))))
+
+
+(defmacro ctypecase (keyf &rest clauses)
+  (let ((keysym (gensym))
+	outsym)
+    `(let ((,keysym ,keyf))
+       ,(dolist (clause clauses (progn
+				  (setq outsym (append outsym '((t (error 'type-error)))))
+				  (setq outsym (cons 'cond outsym))))
+	  (setq outsym (append outsym `(((typep ,keysym ',(car clause))
+					 (progn ,@(cdr clause))))))))))
+
+
+(defmacro etypecase (keyf &rest clauses)
+  (let ((keysym (gensym))
+	outsym)
+    `(let ((,keysym ,keyf))
+       ,(dolist (clause clauses (progn
+				  (setq outsym (append outsym '((t (error 'type-error)))))
+				  (setq outsym (cons 'cond outsym))))
+	  (setq outsym (append outsym `(((typep ,keysym ',(car clause))
+					 (progn ,@(cdr clause))))))))))
+
+
 (defmacro return (&optional val)
   `(return-from nil (values-list (multiple-value-list ,val))))
 
@@ -2234,19 +2269,20 @@
 	  cdadar cdaddr cddaar cddadr cdddar cddddr make-list copy-alist
 	  copy-tree tree-equal sublis nsublis endp butlast nbutlast acons
 	  pairlis when unless incf decf and or cond otherwise case ccase ecase
-	  return multiple-value-bind prog prog* every some notany notevery
-	  member member-if member-if-not find find-if find-if-not assoc assoc-if
-	  assoc-if-not position position-if position-if-not count count-if
-	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  remove-duplicates delete-duplicates substitute substitute-if
-	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
-	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin
-	  fill push pop set-difference nset-difference union nunion intersection
-	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
-	  stable-sort array-rank array-dimension array-total-size
-	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit svref string= string/= string<
-	  string<= string> string>= string-equal string-not-equal string-lessp
+	  typecase ctypecase etypecase return multiple-value-bind prog prog*
+	  every some notany notevery member member-if member-if-not find find-if
+	  find-if-not assoc assoc-if assoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not remove-duplicates delete-duplicates
+	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
+	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
+	  nsubst-if-not nreverse adjoin fill push pop set-difference
+	  nset-difference union nunion intersection nintersection
+	  set-exclusive-or nset-exclusive-or subsetp search sort stable-sort
+	  array-rank array-dimension array-total-size array-in-bounds-p
+	  upgraded-array-element-type adjustable-array-p get get-properties char
+	  schar bit sbit svref string= string/= string< string<= string>
+	  string>= string-equal string-not-equal string-lessp
 	  string-not-greaterp string-greaterp string-not-lessp char/= char<
 	  char<= char> char>= char-equal char-not-equal char-lessp
 	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
