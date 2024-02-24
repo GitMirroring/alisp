@@ -1560,8 +1560,8 @@ struct object *create_condition_by_c_string (char *type,
 int does_condition_include_outcome_type (struct object *cond,
 					 enum outcome_type type,
 					 struct environment *env);
-void add_builtin_condition (char *name, struct environment *env, int is_standard,
-			    ...);
+void add_condition_class (char *name, struct environment *env, int is_standard,
+			  ...);
 struct object *handle_condition (struct object *cond, struct environment *env,
 				 struct outcome *outcome);
 
@@ -3301,27 +3301,27 @@ add_standard_definitions (struct environment *env)
   stdobjsym->value_ptr.symbol->typespec = stdobjcl;
 
 
-  add_builtin_condition ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL, "DATUM",
-			 "EXPECTED-TYPE", (char *)NULL);
-  add_builtin_condition ("FILE-ERROR", env, 1, "ERROR", (char *)NULL, "PATHNAME",
-			 (char *)NULL);
-  add_builtin_condition ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
-			 (char *)NULL, (char *)NULL);
-  add_builtin_condition ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL,
-			 "OPERATION", "OPERANDS", (char *)NULL);
-  add_builtin_condition ("ERROR", env, 1, "SERIOUS-CONDITION", (char *)NULL,
-			 (char *)NULL);
-  add_builtin_condition ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL,
-			 (char *)NULL);
-  add_builtin_condition ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL,
-			 "FORMAT-ARGUMENTS", "FORMAT-CONTROL", (char *)NULL);
-  add_builtin_condition ("SIMPLE-ERROR", env, 1, "SIMPLE-CONDITION", (char *)NULL,
-			 (char *)NULL);
-  add_builtin_condition ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL,
-			 (char *)NULL);
-  add_builtin_condition ("WARNING", env, 1, "CONDITION", (char *)NULL,
-			 (char *)NULL);
-  add_builtin_condition ("CONDITION", env, 1, (char *)NULL, (char *)NULL);
+  add_condition_class ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL, "DATUM",
+		       "EXPECTED-TYPE", (char *)NULL);
+  add_condition_class ("FILE-ERROR", env, 1, "ERROR", (char *)NULL, "PATHNAME",
+		       (char *)NULL);
+  add_condition_class ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
+		       (char *)NULL, (char *)NULL);
+  add_condition_class ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL,
+		       "OPERATION", "OPERANDS", (char *)NULL);
+  add_condition_class ("ERROR", env, 1, "SERIOUS-CONDITION", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("SERIOUS-CONDITION", env, 1, "CONDITION", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("SIMPLE-CONDITION", env, 1, "CONDITION", (char *)NULL,
+		       "FORMAT-ARGUMENTS", "FORMAT-CONTROL", (char *)NULL);
+  add_condition_class ("SIMPLE-ERROR", env, 1, "SIMPLE-CONDITION", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("WARNING", env, 1, "CONDITION", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("CONDITION", env, 1, (char *)NULL, (char *)NULL);
 
 
   add_builtin_type ("RESTART", env, type_restart, 1, (char *)NULL);
@@ -8642,7 +8642,7 @@ does_condition_include_outcome_type (struct object *cond, enum outcome_type type
 
 
 void
-add_builtin_condition (char *name, struct environment *env, int is_standard, ...)
+add_condition_class (char *name, struct environment *env, int is_standard, ...)
 {
   va_list valist;
   char *s, *rn;
