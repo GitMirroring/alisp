@@ -2503,6 +2503,7 @@ void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
+void free_condition (struct object *obj);
 void free_lambda_list_content (struct object *obj, struct parameter *par, int *i);
 void free_lambda_list_structure (struct parameter *par);
 void free_function_or_macro (struct object *obj);
@@ -27568,6 +27569,8 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_BYTESPEC)
     free_bytespec (obj);
+  else if (obj->type == TYPE_CONDITION)
+    free_condition (obj);
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
     free_function_or_macro (obj);
   else if (obj->type == TYPE_METHOD)
@@ -27729,6 +27732,26 @@ free_bytespec (struct object *obj)
   mpz_clear (obj->value_ptr.bytespec->pos);
 
   free (obj->value_ptr.bytespec);
+  free (obj);
+}
+
+
+void
+free_condition (struct object *obj)
+{
+  struct condition_field *f = obj->value_ptr.condition->fields, *n;
+
+  while (f)
+    {
+      n = f->next;
+
+      decrement_refcount (f->value);
+      free (f);
+
+      f = n;
+    }
+
+  free (obj->value_ptr.condition);
   free (obj);
 }
 
