@@ -16429,7 +16429,7 @@ builtin_reverse (struct object *list, struct environment *env,
 	{
 	  cons = alloc_empty_cons_pair ();
 
-	  increment_refcount (CAR (seq));
+	  add_reference (cons, CAR (seq), 0);
 	  cons->value_ptr.cons_pair->car = CAR (seq);
 
 	  cons->value_ptr.cons_pair->cdr = ret;
@@ -16459,9 +16459,8 @@ builtin_reverse (struct object *list, struct environment *env,
 
       for (i = 0; i < sz; i++)
 	{
-	  increment_refcount (seq->value_ptr.array->value [i]);
-
 	  ret->value_ptr.array->value [i] = seq->value_ptr.array->value [sz-i-1];
+	  add_reference (ret, ret->value_ptr.array->value [i], i);
 	}
     }
 
