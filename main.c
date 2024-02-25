@@ -14463,6 +14463,7 @@ builtin_read_line (struct object *list, struct environment *env,
 
 	  s->string = alloc_string (0);
 	  add_reference (str, s->string, 0);
+	  decrement_refcount (s->string);
 	}
       else
 	{
@@ -14476,6 +14477,7 @@ builtin_read_line (struct object *list, struct environment *env,
 	  resize_string_allocation (ret, i);
 
 	  add_reference (str, s->string, 0);
+	  decrement_refcount (s->string);
 	}
     }
 
