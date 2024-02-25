@@ -7903,16 +7903,16 @@ create_string_stream (enum stream_direction direction, struct object *instr)
   str->is_open = 1;
   str->dirty_line = 0;
 
+  obj->type = TYPE_STREAM;
+  obj->value_ptr.stream = str;
+
   if (direction == INPUT_STREAM)
     {
-      increment_refcount (instr);
+      add_reference (obj, instr, 0);
       str->string = instr;
     }
   else
     str->string = alloc_string (0);
-
-  obj->type = TYPE_STREAM;
-  obj->value_ptr.stream = str;
 
   return obj;
 }
