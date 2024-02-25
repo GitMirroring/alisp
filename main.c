@@ -14568,7 +14568,7 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 {
   int l = list_length (list);
   struct stream *s;
-  struct object *str, *ret = NULL;
+  struct object *str, *ret = NULL, *newstr;
   enum outcome_type out;
   const char *objbeg, *objend;
 
@@ -14618,14 +14618,18 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 
   if (s->medium == STRING_STREAM)
     {
-      s->string =
+      newstr =
 	create_string_copying_char_vector (objend + 1,
-					   s->string->value_ptr.string->used_size -
-					   (objend
-					    - s->string->value_ptr.string->value
-					    + 1));
+					   s->string->value_ptr.string->used_size
+					   - (objend
+					      - s->string->value_ptr.string->value
+					      + 1));
 
+      delete_reference (str, s->string, 0);
+
+      s->string = newstr;
       add_reference (str, s->string, 0);
+      decrement_refcount (newstr);
     }
 
   return ret;
