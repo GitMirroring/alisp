@@ -16514,6 +16514,7 @@ builtin_setf_car (struct object *list, struct environment *env,
   CAR (list)->value_ptr.cons_pair->car = newval;
   add_reference (CAR (list), newval, 0);
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16550,6 +16551,7 @@ builtin_setf_cdr (struct object *list, struct environment *env,
   CAR (list)->value_ptr.cons_pair->cdr = newval;
   add_reference (CAR (list), newval, 1);
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16590,6 +16592,7 @@ builtin_setf_nth (struct object *list, struct environment *env,
   add_reference (cons, newval, 0);
   cons->value_ptr.cons_pair->car = newval;
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16683,6 +16686,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
 	}
     }
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16782,6 +16786,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
       cons->value_ptr.cons_pair->car = newval;
     }
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16838,6 +16843,7 @@ builtin_setf_fill_pointer (struct object *list, struct environment *env,
       CAR (list)->value_ptr.array->fill_pointer = fp;
     }
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16890,6 +16896,7 @@ builtin_setf_gethash (struct object *list, struct environment *env,
       CAR (CDR (list))->value_ptr.hashtable->table [ind] = r;
     }
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16920,6 +16927,7 @@ builtin_setf_symbol_plist (struct object *list, struct environment *env,
   SYMBOL (CAR (list))->value_ptr.symbol->plist = newval;
   add_reference (SYMBOL (CAR (list)), newval, 5);
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -16954,6 +16962,7 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
       if (f->name == req)
 	{
 	  f->value = newval;
+	  increment_refcount (f->value);
 	  increment_refcount (f->value);
 	  return f->value;
 	}
@@ -17009,6 +17018,7 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
     newval;
   increment_refcount (newval);
 
+  increment_refcount (newval);
   return newval;
 }
 
@@ -22913,6 +22923,7 @@ evaluate_setf (struct object *list, struct environment *env,
 	      cons1 = alloc_empty_cons_pair ();
 	      cons1->value_ptr.cons_pair->car = val;
 	      add_reference (cons1, val, 0);
+	      decrement_refcount (val);
 	      cons1->value_ptr.cons_pair->cdr = args;
 	      add_reference (cons1, args, 1);
 	      decrement_refcount (args);
