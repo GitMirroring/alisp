@@ -16215,7 +16215,7 @@ builtin_map (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (CAR (list)->type == TYPE_STRING && val->type != TYPE_CHARACTER)
+      if (ret->type == TYPE_STRING && val->type != TYPE_CHARACTER)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
