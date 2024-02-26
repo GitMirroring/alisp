@@ -22898,14 +22898,16 @@ evaluate_setf (struct object *list, struct environment *env,
 
 	      cons1 = alloc_empty_cons_pair ();
 	      cons1->value_ptr.cons_pair->car = val;
+	      add_reference (cons1, val, 0);
 	      cons1->value_ptr.cons_pair->cdr = args;
+	      add_reference (cons1, args, 1);
+	      decrement_refcount (args);
 
 	      val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
 
 	      if (!val)
 		return NULL;
 
-	      increment_refcount (val);
 	      decrement_refcount (cons1);
 	    }
 	}
