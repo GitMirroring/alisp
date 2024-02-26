@@ -16209,6 +16209,18 @@ builtin_map (struct object *list, struct environment *env,
       val = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
+
+      argscons = args;
+
+      for (j = 2; j < l; j++)
+	{
+	  if (nth (j, list)->type == TYPE_STRING)
+	    decrement_refcount (CAR (argscons));
+
+	  argscons = CDR (argscons);
+	}
+
+
       if (!val)
 	{
 	  free_list_structure (args);
@@ -16223,6 +16235,8 @@ builtin_map (struct object *list, struct environment *env,
 
       if (SYMBOL (CAR (list)) != &nil_object)
 	set_elt (i, ret, val);
+
+      decrement_refcount (val);
     }
 
   if (ret->type == TYPE_CONS_PAIR)
