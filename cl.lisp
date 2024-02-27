@@ -1705,6 +1705,13 @@
 
 
 
+(defun map-into (res fun &rest seqs)
+  (let ((len (apply 'min (mapcar #'length (cons res seqs)))))
+    (dotimes (i len)
+      (setf (elt res i) (apply fun (mapcar (lambda (s) (elt s i)) seqs))))
+    res))
+
+
 (defun reduce (fun seq &key key from-end (start 0) end (initial-value nil initvalprov))
   (unless end
     (setq end (length seq)))
@@ -2294,8 +2301,8 @@
 	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
 	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
 	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon reduce terpri write-line write-sequence prin1
-	  princ print do-all-symbols loop format encode-universal-time))
+	  maplist mapl mapcon map-into reduce terpri write-line write-sequence
+	  prin1 princ print do-all-symbols loop format encode-universal-time))
 
 
 
