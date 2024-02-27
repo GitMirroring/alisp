@@ -1275,6 +1275,8 @@ make_test ("(map 'vector #'+ #(1 2 3 4) '(10 11 12) #(20 21 22))", "#(31 34 37)"
 make_test ("(map 'list #'+ #(1 2 3 4) '(10 11 12) #(20 21 22))", "(31 34 37)");
 make_test ("(map nil #'+ '(1 2 3 4) '(10 11 12) '(20 21 22))", "NIL");
 make_test ("(map 'vector #'+ #(1 2 3 4) nil #(20 21 22))", "#()");
+make_test ("(map-into \"xxx\" #'char-upcase \"aBcD\")", "\"ABC\"");
+make_test ("(map-into (make-array 3) #'max '(0 1) #(1 0 2))", "#(1 1 NIL)");
 make_test ("(reduce #'* '(2 3 5 7))", "210");
 make_test ("(reduce #'* #(2 3 5 7) :start 1 :end 1)", "1");
 make_test ("(reduce (lambda (f s) (write f)) '(2 3 5 7) :from-end t)", "532\n2");
