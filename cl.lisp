@@ -1742,6 +1742,39 @@
        out))))
 
 
+(defun merge (restype seq1 seq2 pred &key key)
+  (unless key
+    (setq key #'identity))
+  (let* ((outsz (+ (length seq1) (length seq2)))
+	 (out (cond
+		((subtypep restype 'list)
+		 (make-list outsz))
+		((subtypep restype 'string)
+		 (make-string outsz))
+		(t
+		 (make-array outsz))))
+	 (j 0)
+	 (k 0))
+    (dotimes (i outsz)
+      (if (and
+	   (< j (length seq1))
+	   (or
+	    (>= k (length seq2))
+	    (funcall pred (funcall key (elt seq1 j))
+		     (funcall key (elt seq2 k)))
+	    (and (not (funcall pred (funcall key (elt seq1 j))
+			       (funcall key (elt seq2 k))))
+		 (not (funcall pred (funcall key (elt seq2 k))
+			       (funcall key (elt seq1 j)))))))
+	  (progn
+	    (setf (elt out i) (elt seq1 j))
+	    (incf j))
+	  (progn
+	    (setf (elt out i) (elt seq2 k))
+	    (incf k))))
+    out))
+
+
 
 (defun terpri (&optional (out *standard-output*))
   (write-char #\newline out)
@@ -2301,8 +2334,9 @@
 	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
 	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
 	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon map-into reduce terpri write-line write-sequence
-	  prin1 princ print do-all-symbols loop format encode-universal-time))
+	  maplist mapl mapcon map-into reduce merge terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time))
 
 
 
