@@ -24232,7 +24232,7 @@ struct object *
 evaluate_catch (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *t, *tag, *ret;
+  struct object *tag, *ret;
 
   if (!list_length (list))
     {
@@ -24240,24 +24240,20 @@ evaluate_catch (struct object *list, struct environment *env,
       return NULL;
     }
 
-  t = evaluate_object (CAR (list), env, outcome);
+  tag = evaluate_object (CAR (list), env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-  if (!t)
+  if (!tag)
     return NULL;
-
-  if (IS_SYMBOL (t))
-    tag = SYMBOL (t);
-  else
-    tag = t;
 
   env->catches = add_block (tag, env->catches);
 
   ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
 
   if (!ret && outcome->object_to_catch
-      && tag == SYMBOL (outcome->object_to_catch))
+      && eq_objects (tag, outcome->object_to_catch) == &t_object)
     {
+      decrement_refcount (outcome->object_to_catch);
       outcome->object_to_catch = NULL;
 
       ret = outcome->return_value;
@@ -24268,7 +24264,7 @@ evaluate_catch (struct object *list, struct environment *env,
       outcome->return_other_values = NULL;
     }
 
-  decrement_refcount (t);
+  decrement_refcount (tag);
   env->catches = remove_block (env->catches);
 
   return ret;
@@ -24279,7 +24275,7 @@ struct object *
 evaluate_throw (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *t, *tag, *ret;
+  struct object *tag, *ret;
   struct object_list *l = env->catches;
 
   if (list_length (list) != 2)
@@ -24288,20 +24284,15 @@ evaluate_throw (struct object *list, struct environment *env,
       return NULL;
     }
 
-  t = evaluate_object (CAR (list), env, outcome);
+  tag = evaluate_object (CAR (list), env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-  if (!t)
+  if (!tag)
     return NULL;
-
-  if (IS_SYMBOL (t))
-    tag = SYMBOL (t);
-  else
-    tag = t;
 
   while (l)
     {
-      if (tag == SYMBOL (l->obj))
+      if (eq_objects (tag, l->obj) == &t_object)
 	break;
 
       l = l->next;
@@ -24309,7 +24300,7 @@ evaluate_throw (struct object *list, struct environment *env,
 
   if (!l)
     {
-      decrement_refcount (t);
+      decrement_refcount (tag);
       outcome->type = CATCH_NOT_FOUND;
       return NULL;
     }
@@ -24322,12 +24313,12 @@ evaluate_throw (struct object *list, struct environment *env,
       return NULL;
     }
 
-  outcome->object_to_catch = t;
+  outcome->object_to_catch = tag;
   outcome->return_value = ret;
   outcome->return_no_value = outcome->no_value;
   outcome->return_other_values = outcome->other_values;
   outcome->no_value = 0;
-  outcome->other_values = 0;
+  outcome->other_values = NULL;
 
   return NULL;
 }
