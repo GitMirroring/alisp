@@ -24419,6 +24419,8 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 
 	      if (!hret)
 		goto cleanup_and_leave;
+
+	      decrement_refcount (hret);
 	    }
 
 	  b = b->next;
