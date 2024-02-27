@@ -2514,6 +2514,7 @@ void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
+void free_condition_class (struct object *obj);
 void free_condition (struct object *obj);
 void free_lambda_list_content (struct object *obj, struct parameter *par, int *i);
 void free_lambda_list_structure (struct parameter *par);
@@ -24816,7 +24817,12 @@ evaluate_define_condition (struct object *list, struct environment *env,
     }
 
   SYMBOL (CAR (list))->value_ptr.symbol->is_type = 1;
+
+  delete_reference (SYMBOL (CAR (list)),
+		    SYMBOL (CAR (list))->value_ptr.symbol->typespec, 4);
   SYMBOL (CAR (list))->value_ptr.symbol->typespec = condcl;
+  add_reference (SYMBOL (CAR (list)), condcl, 4);
+  decrement_refcount (condcl);
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -27708,6 +27714,8 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_BYTESPEC)
     free_bytespec (obj);
+  else if (obj->type == TYPE_CONDITION_CLASS)
+    free_condition_class (obj);
   else if (obj->type == TYPE_CONDITION)
     free_condition (obj);
   else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
@@ -27871,6 +27879,31 @@ free_bytespec (struct object *obj)
   mpz_clear (obj->value_ptr.bytespec->pos);
 
   free (obj->value_ptr.bytespec);
+  free (obj);
+}
+
+
+void
+free_condition_class (struct object *obj)
+{
+  struct object_list *p = obj->value_ptr.condition_class->parents, *n;
+  struct condition_field_decl *f = obj->value_ptr.condition_class->fields, *nf;
+
+  while (p)
+    {
+      n = p->next;
+      free (p);
+      p = n;
+    }
+
+  while (f)
+    {
+      nf = f->next;
+      free (f);
+      f = nf;
+    }
+
+  free (obj->value_ptr.condition_class);
   free (obj);
 }
 
