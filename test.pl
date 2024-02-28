@@ -1335,6 +1335,14 @@ make_test ("(set-exclusive-or '(1 2 3 4 5) '(8 7 6 5 4 1) :key #'identity :test 
 make_test ("(nset-exclusive-or '(1 2 3 4 5) '(8 7 6 5 4 1) :key #'identity :test #'=)", "(2 3 8 7 6)");
 make_test ("(subsetp '(1 4 nil 5) '(3 2 1 nil 4 5) :key #'identity :test #'equal)", "T");
 make_test ("(subsetp '(1 4 nil 5) '(3 2 1 4 5) :key #'identity :test #'equal)", "NIL");
+make_test ("(mismatch '(0 1 2 3 4 5 6) #(1 2 3 4) :start1 2 :end1 4 :start2 1 :end2 3 :test #'= :key #'identity)", "NIL");
+make_test ("(mismatch '(0 1 2 10 4 5 6) #(1 2 3 4) :start1 2 :end1 4 :start2 1 :end2 3 :test #'= :key #'identity)", "3");
+make_test ("(mismatch '(0 1 2 3 4) #(1 2) :start1 2 :end1 4 :start2 1 :test #'=)", "3");
+make_test ("(mismatch \"fcde\" \"abcde\" :from-end t)", "1");
+make_test ("(mismatch \"abcde\" \"abcde\" :start1 1 :from-end t)", "1");
+make_test ("(mismatch \"abcde\" \"bcde\" :start1 1 :from-end t)", "NIL");
+make_test ("(mismatch \"abcde\" \"bcde\" :from-end t)", "1");
+make_test ("(mismatch \"xywabcde\" \"xyzabcde\" :start1 2 :from-end t)", "3");
 make_test ("(search \"hello\" \"hey hello\" :test 'char-equal)", "4");
 make_test ("(search \"hello\" \"hey hello hey hello\" :test 'char-equal)", "4");
 make_test ("(search \"hello\" \"hey hello hey hello\" :test 'char-equal :from-end t)", "14");
