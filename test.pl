@@ -1392,6 +1392,8 @@ make_test ("(assoc 1 '(((0) . 10) ((1) . 11) ((2) . 12)) :test #'= :key #'car)",
 make_test ("(assoc 2 '(((0) . 10) nil ((2) . 12)) :test #'= :key #'car)", "((2) . 12)");
 make_test ("(assoc-if 'zerop '((0 . 10) (1 . 11) (2 . 12)))", "(0 . 10)");
 make_test ("(assoc-if-not 'zerop '((0 . 10) (1 . 11) (2 . 12)))", "(1 . 11)");
+make_test ("(rassoc 1 '((10 0) nil (11 1) (12 2)) :test #'= :key #'car)", "(11 1)");
+make_test ("(rassoc-if-not #'oddp '(nil (1 . 11) (2 . 12)))", "(2 . 12)");
 make_test ("(position 2 '(3 2 1 0))", "1");
 make_test ("(position 4 '(3 2 1 0))", "NIL");
 make_test ("(position 2 '(3 2 2 0) :from-end t :start 2 :end 3)", "2");
