@@ -2516,6 +2516,8 @@ void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
 void free_structure_class (struct object *obj);
 void free_structure (struct object *obj);
+void free_standard_class (struct object *obj);
+void free_standard_object (struct object *obj);
 void free_condition_class (struct object *obj);
 void free_condition (struct object *obj);
 void free_lambda_list_content (struct object *obj, struct parameter *par, int *i);
@@ -23532,7 +23534,10 @@ evaluate_defclass (struct object *list, struct environment *env,
   sc->name = name;
 
   name->value_ptr.symbol->is_type = 1;
+
+  delete_reference (name, name->value_ptr.symbol->typespec, 4);
   name->value_ptr.symbol->typespec = class;
+  add_reference (name, class, 4);
 
 
   sc->parents = NULL;
@@ -27751,6 +27756,10 @@ free_object (struct object *obj)
     free_structure_class (obj);
   else if (obj->type == TYPE_STRUCTURE)
     free_structure (obj);
+  else if (obj->type == TYPE_STANDARD_CLASS)
+    free_standard_class (obj);
+  else if (obj->type == TYPE_STANDARD_OBJECT)
+    free_standard_object (obj);
   else if (obj->type == TYPE_CONDITION_CLASS)
     free_condition_class (obj);
   else if (obj->type == TYPE_CONDITION)
@@ -27950,6 +27959,49 @@ free_structure (struct object *obj)
     }
 
   free (obj->value_ptr.structure);
+  free (obj);
+}
+
+
+void
+free_standard_class (struct object *obj)
+{
+  struct object_list *p = obj->value_ptr.standard_class->parents, *n;
+  struct class_field_decl *f = obj->value_ptr.standard_class->fields, *nf;
+
+  while (p)
+    {
+      n = p->next;
+      free (p);
+      p = n;
+    }
+
+  while (f)
+    {
+      nf = f->next;
+      free (f);
+      f = nf;
+    }
+
+  free (obj->value_ptr.standard_class);
+  free (obj);
+}
+
+
+void
+free_standard_object (struct object *obj)
+{
+  struct class_field *f = obj->value_ptr.standard_object->fields, *n;
+
+  while (f)
+    {
+      n = f->next;
+      decrement_refcount (f->value);
+      free (f);
+      f = n;
+    }
+
+  free (obj->value_ptr.standard_object);
   free (obj);
 }
 
