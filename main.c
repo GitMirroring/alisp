@@ -2514,6 +2514,7 @@ void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
 void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
+void free_structure_class (struct object *obj);
 void free_structure (struct object *obj);
 void free_condition_class (struct object *obj);
 void free_condition (struct object *obj);
@@ -23400,7 +23401,12 @@ evaluate_defstruct (struct object *list, struct environment *env,
   sc->name = name;
 
   name->value_ptr.symbol->is_type = 1;
+
+  delete_reference (name, name->value_ptr.symbol->typespec, 4);
   name->value_ptr.symbol->typespec = strcl;
+  add_reference (name, strcl, 4);
+  decrement_refcount (strcl);
+
 
   sc->fields = NULL;
   list = CDR (list);
@@ -23426,13 +23432,21 @@ evaluate_defstruct (struct object *list, struct environment *env,
 			      name->value_ptr.symbol->name_len, (char *)NULL);
 
   funcname = intern_symbol_by_char_vector (constr_name,
-					   5+name->value_ptr.symbol->name_len, 0,
+					   5+name->value_ptr.symbol->name_len, 1,
 					   EXTERNAL_VISIBILITY, 1, pack);
+  free (constr_name);
   increment_refcount (funcname);
+
+  delete_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
   funcname->value_ptr.symbol->function_cell = alloc_function ();
+  add_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
+  decrement_refcount (funcname->value_ptr.symbol->function_cell);
+
   funcname->value_ptr.symbol->function_cell->value_ptr.function->
     struct_constructor_class = name;
+
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
+  add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
 
   f = sc->fields;
 
@@ -23446,19 +23460,28 @@ evaluate_defstruct (struct object *list, struct environment *env,
       memcpy (acc_name+name->value_ptr.symbol->name_len+1,
 	      f->name->value_ptr.symbol->name,
 	      f->name->value_ptr.symbol->name_len);
+
       funcname = intern_symbol_by_char_vector (acc_name,
 					       name->value_ptr.symbol->name_len +
 					       1 +
 					       f->name->value_ptr.symbol->name_len,
-					       0, EXTERNAL_VISIBILITY, 1, pack);
+					       1, EXTERNAL_VISIBILITY, 1, pack);
+      free (acc_name);
       increment_refcount (funcname);
+
+      delete_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
       funcname->value_ptr.symbol->function_cell = alloc_function ();
+      add_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
+      decrement_refcount (funcname->value_ptr.symbol->function_cell);
+
       funcname->value_ptr.symbol->function_cell->value_ptr.function->
 	struct_accessor_class = name;
       funcname->value_ptr.symbol->function_cell->value_ptr.function->
 	struct_accessor_field = f->name;
+
       funcname->value_ptr.symbol->function_cell->value_ptr.function->name =
 	funcname;
+      add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
 
       f = f->next;
     }
@@ -27724,6 +27747,8 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_BYTESPEC)
     free_bytespec (obj);
+  else if (obj->type == TYPE_STRUCTURE_CLASS)
+    free_structure_class (obj);
   else if (obj->type == TYPE_STRUCTURE)
     free_structure (obj);
   else if (obj->type == TYPE_CONDITION_CLASS)
@@ -27891,6 +27916,23 @@ free_bytespec (struct object *obj)
   mpz_clear (obj->value_ptr.bytespec->pos);
 
   free (obj->value_ptr.bytespec);
+  free (obj);
+}
+
+
+void
+free_structure_class (struct object *obj)
+{
+  struct structure_field_decl *f = obj->value_ptr.structure_class->fields, *n;
+
+  while (f)
+    {
+      n = f->next;
+      free (f);
+      f = n;
+    }
+
+  free (obj->value_ptr.structure_class);
   free (obj);
 }
 
