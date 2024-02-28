@@ -1087,6 +1087,7 @@ make_test ("(defstruct ship x y)", "SHIP");
 make_test ("#'make-ship", "#<FUNCTION MAKE-SHIP>");
 make_test ("#'ship-x", "#<FUNCTION SHIP-X>");
 make_test ("(defparameter s1 (make-ship))", "S1");
+make_test ("(defparameter s1 (make-ship))", "S1");
 make_test ("s1", "#<STRUCTURE OF CLASS SHIP>");
 make_test ("(class-of s1)", "#<STRUCTURE CLASS SHIP>");
 make_test ("(class-name (class-of s1))", "SHIP");
