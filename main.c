@@ -3328,6 +3328,12 @@ add_standard_definitions (struct environment *env)
 		       "EXPECTED-TYPE", "DATUM", (char *)NULL);
   add_condition_class ("FILE-ERROR", env, 1, "ERROR", (char *)NULL, "PATHNAME",
 		       (char *)NULL);
+  add_condition_class ("READER-ERROR", env, 1, "PARSE-ERROR", "STREAM-ERROR",
+		       (char *)NULL, (char *)NULL);
+  add_condition_class ("STREAM-ERROR", env, 1, "ERROR", (char *)NULL, "STREAM",
+		       (char *)NULL);
+  add_condition_class ("PARSE-ERROR", env, 1, "ERROR", (char *)NULL,
+		       (char *)NULL);
   add_condition_class ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
 		       (char *)NULL, (char *)NULL);
   add_condition_class ("ARITHMETIC-ERROR", env, 1, "ERROR", (char *)NULL,
