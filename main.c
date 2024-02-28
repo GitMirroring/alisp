@@ -10934,6 +10934,9 @@ call_structure_constructor (struct object *class_name, struct object *args,
       fd = fd->next;
     }
 
+  if (s->fields)
+    f->next = NULL;
+
   return ret;
 }
 
