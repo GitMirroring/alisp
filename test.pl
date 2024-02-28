@@ -1389,6 +1389,7 @@ make_test ("(find-if-not #'oddp #(1 2 5 4 7) :from-end t)", "4");
 make_test ("(assoc 2 '((0 . 10) (1 . 11) (2 . 12)))", "(2 . 12)");
 make_test ("(assoc 3 '((0 . 10) (1 . 11) (2 . 12)))", "NIL");
 make_test ("(assoc 1 '(((0) . 10) ((1) . 11) ((2) . 12)) :test #'= :key #'car)", "((1) . 11)");
+make_test ("(assoc 2 '(((0) . 10) nil ((2) . 12)) :test #'= :key #'car)", "((2) . 12)");
 make_test ("(assoc-if 'zerop '((0 . 10) (1 . 11) (2 . 12)))", "(0 . 10)");
 make_test ("(assoc-if-not 'zerop '((0 . 10) (1 . 11) (2 . 12)))", "(1 . 11)");
 make_test ("(position 2 '(3 2 1 0))", "1");
