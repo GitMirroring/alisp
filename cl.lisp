@@ -1110,6 +1110,38 @@
 
 
 
+(defun mismatch (seq1 seq2 &key from-end test test-not key (start1 0) (start2 0) end1 end2)
+  (unless key
+    (setq key #'identity))
+  (unless end1
+    (setq end1 (length seq1)))
+  (unless end2
+    (setq end2 (length seq2)))
+  (when from-end
+    (setq seq1 (reverse seq1))
+    (let ((tmp end1))
+      (setq end1 (- (length seq1) start1))
+      (setq start1 (- (length seq1) tmp)))
+    (setq seq2 (reverse seq2))
+    (let ((tmp end2))
+      (setq end2 (- (length seq2) start2))
+      (setq start2 (- (length seq2) tmp))))
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (dotimes (i (min (- end1 start1) (- end2 start2)))
+      (unless (funcall tst (funcall key (elt seq1 (+ start1 i)))
+		       (funcall key (elt seq2 (+ start2 i))))
+	(return-from mismatch (if from-end
+				  (- (length seq1) (+ start1 i))
+				  (+ start1 i)))))
+    (if (/= (- end1 start1) (- end2 start2))
+	(if from-end
+	    (- (length seq1) (+ start1 (min (- end1 start1) (- end2 start2))))
+	    (+ start1 (min (- end1 start1) (- end2 start2)))))))
+
+
+
 (defun search (seq1 seq2 &key from-end test test-not key (start1 0) (start2 0) end1 end2)
   (unless key
     (setq key #'identity))
@@ -2346,8 +2378,8 @@
 	  nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
 	  subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin fill push
 	  pop set-difference nset-difference union nunion intersection
-	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
-	  stable-sort array-rank array-dimension array-total-size
+	  nintersection set-exclusive-or nset-exclusive-or subsetp mismatch
+	  search sort stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
 	  get-properties char schar bit sbit svref string= string/= string<
 	  string<= string> string>= string-equal string-not-equal string-lessp
