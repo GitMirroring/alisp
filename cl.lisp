@@ -777,20 +777,25 @@
   (find-if (complement pred) seq :from-end from-end :start start :end end :key key))
 
 
-(defun assoc (obj alist)
-  (assoc-if (lambda (x) (eql obj x)) alist))
+(defun assoc (obj alist &key key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (assoc-if (lambda (x) (funcall tst obj x)) alist :key key)))
 
 
-(defun assoc-if (pred alist)
+(defun assoc-if (pred alist &key key)
+  (unless key
+    (setq key #'identity))
   (let ((subl alist))
     (dotimes (i (length alist))
-      (if (funcall pred (car (car subl)))
+      (if (funcall pred (funcall key (caar subl)))
 	  (return-from assoc-if (car subl)))
       (setq subl (cdr subl)))))
 
 
-(defun assoc-if-not (pred alist)
-  (assoc-if (complement pred) alist))
+(defun assoc-if-not (pred alist &key key)
+  (assoc-if (complement pred) alist :key key))
 
 
 (defun position (obj seq &key from-end test test-not (start 0) end key)
