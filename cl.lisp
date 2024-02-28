@@ -799,6 +799,28 @@
   (assoc-if (complement pred) alist :key key))
 
 
+(defun rassoc (obj alist &key key test test-not)
+  (let ((tst (or test
+		 (if test-not (complement test-not))
+		 #'eql)))
+    (rassoc-if (lambda (x) (funcall tst obj x)) alist :key key)))
+
+
+(defun rassoc-if (pred alist &key key)
+  (unless key
+    (setq key #'identity))
+  (dotimes (i (length alist))
+    (if (and
+	 (car alist)
+	 (funcall pred (funcall key (cdar alist))))
+	(return-from rassoc-if (car alist)))
+    (setq alist (cdr alist))))
+
+
+(defun rassoc-if-not (pred alist &key key)
+  (rassoc-if (complement pred) alist :key key))
+
+
 (defun position (obj seq &key from-end test test-not (start 0) end key)
   (let ((tst (or test
 		 (if test-not (complement test-not))
@@ -2317,18 +2339,18 @@
 	  pairlis when unless incf decf and or cond otherwise case ccase ecase
 	  typecase ctypecase etypecase return multiple-value-bind prog prog*
 	  every some notany notevery member member-if member-if-not find find-if
-	  find-if-not assoc assoc-if assoc-if-not position position-if
-	  position-if-not count count-if count-if-not remove remove-if-not
-	  delete delete-if delete-if-not remove-duplicates delete-duplicates
-	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
-	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
-	  nsubst-if-not nreverse adjoin fill push pop set-difference
-	  nset-difference union nunion intersection nintersection
-	  set-exclusive-or nset-exclusive-or subsetp search sort stable-sort
-	  array-rank array-dimension array-total-size array-in-bounds-p
-	  upgraded-array-element-type adjustable-array-p get get-properties char
-	  schar bit sbit svref string= string/= string< string<= string>
-	  string>= string-equal string-not-equal string-lessp
+	  find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not
+	  position position-if position-if-not count count-if count-if-not
+	  remove remove-if-not delete delete-if delete-if-not remove-duplicates
+	  delete-duplicates substitute substitute-if substitute-if-not
+	  nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
+	  subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin fill push
+	  pop set-difference nset-difference union nunion intersection
+	  nintersection set-exclusive-or nset-exclusive-or subsetp search sort
+	  stable-sort array-rank array-dimension array-total-size
+	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
+	  get-properties char schar bit sbit svref string= string/= string<
+	  string<= string> string>= string-equal string-not-equal string-lessp
 	  string-not-greaterp string-greaterp string-not-lessp char/= char<
 	  char<= char> char>= char-equal char-not-equal char-lessp
 	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
