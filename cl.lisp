@@ -787,11 +787,12 @@
 (defun assoc-if (pred alist &key key)
   (unless key
     (setq key #'identity))
-  (let ((subl alist))
-    (dotimes (i (length alist))
-      (if (funcall pred (funcall key (caar subl)))
-	  (return-from assoc-if (car subl)))
-      (setq subl (cdr subl)))))
+  (dotimes (i (length alist))
+    (if (and
+	 (car alist)
+	 (funcall pred (funcall key (caar alist))))
+	(return-from assoc-if (car alist)))
+    (setq alist (cdr alist))))
 
 
 (defun assoc-if-not (pred alist &key key)
