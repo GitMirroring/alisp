@@ -1028,6 +1028,14 @@
   (reverse seq))
 
 
+(defun revappend (list tail)
+  (nconc (reverse list) tail))
+
+
+(defun nreconc (list tail)
+  (nconc (reverse list) tail))
+
+
 (defun adjoin (obj list)
   (if (member obj list) list (cons obj list)))
 
@@ -2376,27 +2384,27 @@
 	  remove remove-if-not delete delete-if delete-if-not remove-duplicates
 	  delete-duplicates substitute substitute-if substitute-if-not
 	  nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
-	  subst-if-not nsubst nsubst-if nsubst-if-not nreverse adjoin fill push
-	  pop set-difference nset-difference union nunion intersection
-	  nintersection set-exclusive-or nset-exclusive-or subsetp mismatch
-	  search sort stable-sort array-rank array-dimension array-total-size
-	  array-in-bounds-p upgraded-array-element-type adjustable-array-p get
-	  get-properties char schar bit sbit svref string= string/= string<
-	  string<= string> string>= string-equal string-not-equal string-lessp
-	  string-not-greaterp string-greaterp string-not-lessp char/= char<
-	  char<= char> char>= char-equal char-not-equal char-lessp
-	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
-	  char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  consp listp symbolp keywordp functionp packagep integerp rationalp
-	  floatp complexp random-state-p characterp standard-char-p vectorp
-	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
-	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
-	  check-type macroexpand equal equalp fdefinition complement mapc mapcan
-	  maplist mapl mapcon map-into reduce merge terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  subst-if-not nsubst nsubst-if nsubst-if-not nreverse revappend nreconc
+	  adjoin fill push pop set-difference nset-difference union nunion
+	  intersection nintersection set-exclusive-or nset-exclusive-or subsetp
+	  mismatch search sort stable-sort array-rank array-dimension
+	  array-total-size array-in-bounds-p upgraded-array-element-type
+	  adjustable-array-p get get-properties remprop char schar bit sbit
+	  svref string= string/= string< string<= string> string>= string-equal
+	  string-not-equal string-lessp string-not-greaterp string-greaterp
+	  string-not-lessp char/= char< char<= char> char>= char-equal
+	  char-not-equal char-lessp char-not-greaterp char-greaterp
+	  char-not-lessp digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
+	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+	  pathnamep streamp realp numberp check-type macroexpand equal equalp
+	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
+	  merge terpri write-line write-sequence prin1 princ print
+	  do-all-symbols loop format encode-universal-time))
 
 
 
