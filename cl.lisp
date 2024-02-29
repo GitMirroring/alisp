@@ -1254,6 +1254,26 @@
   (values nil nil nil))
 
 
+(defun remprop (sym ind)
+  (let ((propl (symbol-plist sym))
+	prevpl)
+    (if (eq (car propl) ind)
+	(progn
+	  (setf (symbol-plist sym) (cddr propl))
+	  (return-from remprop t))
+	(progn
+	  (setq prevpl propl)
+	  (setq propl (cddr propl))
+	  (do nil
+	      ((not propl))
+	    (when (eq (car propl) ind)
+	      (rplacd (cdr prevpl) (cddr propl))
+	      (return-from remprop t))
+	    (setq prevpl propl)
+	    (setq propl (cddr propl)))))))
+
+
+
 (defun char (str ind)
   (aref str ind))
 
