@@ -1318,6 +1318,8 @@ make_test ("(reverse #(0 1 2 3))", "#(3 2 1 0)");
 make_test ("(nreverse '(0 1 2 3))", "(3 2 1 0)");
 make_test ("(nreverse \"hello\")", "\"olleh\"");
 make_test ("(nreverse #(0 1 2 3))", "#(3 2 1 0)");
+make_test ("(revappend '(2 1 0) '(3 4))", "(0 1 2 3 4)");
+make_test ("(nreconc '(2 1 0) '(3 4))", "(0 1 2 3 4)");
 make_test ("(adjoin 0 '(0 1 2))", "(0 1 2)");
 make_test ("(adjoin 0 '(1 2))", "(0 1 2)");
 make_test ("(fill \"abcdef\" #\\g)", "\"gggggg\"");
