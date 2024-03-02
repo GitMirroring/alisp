@@ -487,7 +487,7 @@ outcome
 
   struct object *block_to_leave;
 
-  struct object *object_to_catch;
+  struct object *catching_tag;
 
   struct object *condition;
 
@@ -24289,11 +24289,11 @@ evaluate_catch (struct object *list, struct environment *env,
 
   ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
 
-  if (!ret && outcome->object_to_catch
-      && eq_objects (tag, outcome->object_to_catch) == &t_object)
+  if (!ret && outcome->catching_tag
+      && eq_objects (tag, outcome->catching_tag) == &t_object)
     {
-      decrement_refcount (outcome->object_to_catch);
-      outcome->object_to_catch = NULL;
+      decrement_refcount (outcome->catching_tag);
+      outcome->catching_tag = NULL;
 
       ret = outcome->return_value;
 
@@ -24352,7 +24352,7 @@ evaluate_throw (struct object *list, struct environment *env,
       return NULL;
     }
 
-  outcome->object_to_catch = tag;
+  outcome->catching_tag = tag;
   outcome->return_value = ret;
   outcome->return_no_value = outcome->no_value;
   outcome->return_other_values = outcome->other_values;
