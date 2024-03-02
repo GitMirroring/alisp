@@ -1601,8 +1601,8 @@ struct object *skip_prefix
 (struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
  struct object **last_prefix);
 
-struct object *elt (unsigned int ind, struct object *seq);
-void set_elt (unsigned int ind, struct object *seq, struct object *val);
+struct object *elt (struct object *seq, unsigned int ind);
+void set_elt (struct object *seq, unsigned int ind, struct object *val);
 fixnum sequence_length (const struct object *seq);
 
 struct object *nth (unsigned int ind, struct object *list);
@@ -9008,7 +9008,7 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
 
 
 struct object *
-elt (unsigned int ind, struct object *seq)
+elt (struct object *seq, unsigned int ind)
 {
   if (IS_LIST (seq))
     return nth (ind, seq);
@@ -9022,7 +9022,7 @@ elt (unsigned int ind, struct object *seq)
 
 
 void
-set_elt (unsigned int ind, struct object *seq, struct object *val)
+set_elt (struct object *seq, unsigned int ind, struct object *val)
 {
   struct object *cons;
 
@@ -16216,7 +16216,7 @@ builtin_map (struct object *list, struct environment *env,
 
       for (j = 2; j < l; j++)
 	{
-	  argscons->value_ptr.cons_pair->car = elt (i, nth (j, list));
+	  argscons->value_ptr.cons_pair->car = elt (nth (j, list), i);
 	  argscons = CDR (argscons);
 	}
 
@@ -16248,7 +16248,7 @@ builtin_map (struct object *list, struct environment *env,
 	}
 
       if (SYMBOL (CAR (list)) != &nil_object)
-	set_elt (i, ret, val);
+	set_elt (ret, i, val);
 
       decrement_refcount (val);
     }
