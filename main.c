@@ -121,6 +121,12 @@ typedef long fixnum;
 #define IS_PACKAGE_DESIGNATOR(s) (IS_STRING_DESIGNATOR(s) \
 				  || (s)->type == TYPE_PACKAGE)
 
+#define IS_PATHNAME_DESIGNATOR(s) ((s)->type == TYPE_STRING		\
+				   || ((s)->type == TYPE_STREAM		\
+				       && (s)->value_ptr.stream->medium \
+				       == FILE_STREAM)			\
+				   || ((s)->type == TYPE_FILENAME))
+
 /*#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_FIXNUM	\
 					   | TYPE_RATIO | TYPE_FLOAT \
 					   | TYPE_BYTESPEC | TYPE_STRING \
@@ -1912,6 +1918,8 @@ struct object *builtin_maphash
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_pathname
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
@@ -2967,6 +2975,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CLRHASH", env, builtin_clrhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("PATHNAME", env, builtin_pathname, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
@@ -14411,6 +14420,42 @@ builtin_last (struct object *list, struct environment *env,
   ret = nthcdr (list_length (CAR (list)) - n, CAR (list));
 
   increment_refcount (ret);
+  return ret;
+}
+
+
+struct object *
+builtin_pathname (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      ret = create_filename (CAR (list));
+    }
+  else if (CAR (list)->type == TYPE_STREAM
+	   && CAR (list)->value_ptr.stream->medium == FILE_STREAM)
+    {
+      ret = create_filename (CAR (list)->value_ptr.stream->namestring);
+    }
+  else if (CAR (list)->type == TYPE_FILENAME)
+    {
+      ret = CAR (list);
+      increment_refcount (ret);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
   return ret;
 }
 
