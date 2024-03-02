@@ -1911,6 +1911,8 @@ struct object *builtin_maphash
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_last
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_make_pathname
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_line
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read
@@ -2962,6 +2964,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("CLRHASH", env, builtin_clrhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
@@ -14398,6 +14402,74 @@ builtin_last (struct object *list, struct environment *env,
   ret = nthcdr (list_length (CAR (list)) - n, CAR (list));
 
   increment_refcount (ret);
+  return ret;
+}
+
+
+struct object *
+builtin_make_pathname (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *name = NULL, *ret;
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":HOST", env)
+	  || symbol_equals (CAR (list), ":DEVICE", env)
+	  || symbol_equals (CAR (list), ":DIRECTORY", env)
+	  || symbol_equals (CAR (list), ":TYPE", env)
+	  || symbol_equals (CAR (list), ":VERSION", env)
+	  || symbol_equals (CAR (list), ":DEFAULTS", env)
+	  || symbol_equals (CAR (list), ":CASE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":NAME", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!name)
+	    {
+	      name = CAR (CDR (list));
+	    }
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+	  return NULL;
+	}
+
+      list = CDR (list);
+    }
+
+  if (name && name->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!name)
+    {
+      ret = create_filename (alloc_string (0));
+      decrement_refcount (ret->value_ptr.filename->value);
+    }
+  else
+    {
+      ret = create_filename (name);
+    }
+
   return ret;
 }
 
