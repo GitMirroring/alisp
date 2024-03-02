@@ -1046,6 +1046,16 @@
   seq)
 
 
+(defun replace (seq1 seq2 &key (start1 0) end1 (start2 0) end2)
+  (unless end1
+    (setq end1 (length seq1)))
+  (unless end2
+    (setq end2 (length seq2)))
+  (dotimes (i (min (- end1 start1) (- end2 start2)))
+    (setf (elt seq1 (+ i start1)) (elt seq2 (+ i start2))))
+  seq1)
+
+
 (defmacro push (item place)
   `(setf ,place (cons ,item ,place)))
 
@@ -2405,9 +2415,9 @@
 	  delete-duplicates substitute substitute-if substitute-if-not
 	  nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
 	  subst-if-not nsubst nsubst-if nsubst-if-not nreverse revappend nreconc
-	  adjoin fill push pop set-difference nset-difference union nunion
-	  intersection nintersection set-exclusive-or nset-exclusive-or subsetp
-	  mismatch search sort stable-sort array-rank array-dimension
+	  adjoin fill replace push pop set-difference nset-difference union
+	  nunion intersection nintersection set-exclusive-or nset-exclusive-or
+	  subsetp mismatch search sort stable-sort array-rank array-dimension
 	  array-total-size array-in-bounds-p upgraded-array-element-type
 	  adjustable-array-p get get-properties remprop char schar bit sbit
 	  svref string= string/= string< string<= string> string>= string-equal
