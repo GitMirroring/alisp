@@ -1328,6 +1328,8 @@ make_test ("(adjoin 0 '(0 1 2))", "(0 1 2)");
 make_test ("(adjoin 0 '(1 2))", "(0 1 2)");
 make_test ("(fill \"abcdef\" #\\g)", "\"gggggg\"");
 make_test ("(fill '(0 1 2 3 4 5) 0 :start 1 :end 4)", "(0 0 0 0 4 5)");
+make_test ("(replace \"abcdefg\" \"xyz\" :start1 2 :start2 1)", "\"abyzefg\"");
+make_test ("(let ((s \"abcdefg\")) (replace s s :start1 1 :start2 2))", "\"acdefgg\"");
 make_test ("(defparameter ll NIL)", "LL");
 make_test ("(push (1+ 0) ll)", "(1)");
 make_test ("ll", "(1)");
