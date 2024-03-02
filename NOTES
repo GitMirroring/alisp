@@ -55,6 +55,23 @@ Be careful, you can easily make your image unusable this way.
 
 
 
+__alisp extensions__
+
+al has a small number of non-standard builtins; they are interned in the CL-USER
+package.
+
+- AL-ARGC (an integer) and AL-ARGV (a vector of strings) let you access argc and
+  argv of C, respectively, so they contain the command-line arguments passed to
+  the interpreter
+
+- the AL-EXIT function takes an optional integer (defaulting to 0) and exit the
+  interpreter with that return value
+
+- the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
+  legal information
+
+
+
 __Literal objects__
 
 In alisp, the reader always produces fresh objects.  Therefore modifying
