@@ -1913,6 +1913,8 @@ struct object *builtin_last
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_pathname_name
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_line
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read
@@ -2965,6 +2967,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
@@ -14471,6 +14475,54 @@ builtin_make_pathname (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_pathname_name (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *fn;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FILENAME)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  fn = CAR (list);
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":CASE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+	  return NULL;
+	}
+
+      list = CDR (list);
+    }
+
+  increment_refcount (fn->value_ptr.filename->value);
+  return fn->value_ptr.filename->value;
 }
 
 
