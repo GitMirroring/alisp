@@ -917,6 +917,8 @@ make_test ("(gethash #(0 1 2) tbl)", "11\nT");
 make_test ("(last '(1 2 3))", "(3)");
 make_test ("(last '(1 2 3) 0)", "NIL");
 make_test ("(last '(1 2 3) 2)", "(2 3)");
+make_test ("(make-pathname :name \"foo\")", "#P\"foo\"");
+make_test ("(make-pathname :device \"foo\" :directory \"bar\")", "#P\"\"");
 make_test ("(read-line)\nabc", "\"abc\"\nNIL", 1);
 make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
 make_test ("(read-line (make-string-input-stream \"hello world\n" .
