@@ -898,6 +898,7 @@ stream
   enum stream_direction direction;
 
   FILE *file;
+  struct object *namestring;
 
   struct object *string;
 
@@ -1503,7 +1504,7 @@ int set_nth_character (struct object *str, int ind, char *ch);
 
 struct object *create_file_stream (enum stream_type type,
 				   enum stream_direction direction,
-				   struct string *filename,
+				   struct object *namestring,
 				   struct outcome *outcome);
 struct object *create_stream_from_open_file (enum stream_type type,
 					     enum stream_direction direction,
@@ -7853,11 +7854,11 @@ set_nth_character (struct object *str, int ind, char *ch)
 
 struct object *
 create_file_stream (enum stream_type type, enum stream_direction direction,
-		    struct string *filename, struct outcome *outcome)
+		    struct object *namestring, struct outcome *outcome)
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
-  char *fn = copy_string_to_c_string (filename);
+  char *fn = copy_string_to_c_string (namestring->value_ptr.string);
 
   str->medium = FILE_STREAM;
 
@@ -7877,6 +7878,9 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
       outcome->type = COULD_NOT_OPEN_FILE;
       return NULL;
     }
+
+  str->namestring = namestring;
+  add_reference (obj, namestring, 1);
 
   str->type = type;
   str->direction = direction;
@@ -7898,6 +7902,7 @@ create_stream_from_open_file (enum stream_type type,
   struct stream *str = malloc_and_check (sizeof (*str));
 
   str->medium = FILE_STREAM;
+  str->namestring = &nil_object;
   str->type = type;
   str->direction = direction;
   str->is_open = 1;
@@ -15022,7 +15027,7 @@ builtin_open (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
   enum stream_direction dir = NO_DIRECTION;
-  struct string *ns;
+  struct object *ns;
 
   if (!list_length (list))
     {
@@ -15036,9 +15041,8 @@ builtin_open (struct object *list, struct environment *env,
       return NULL;
     }
 
-  ns = CAR (list)->type == TYPE_FILENAME
-    ? CAR (list)->value_ptr.filename->value->value_ptr.string
-    : CAR (list)->value_ptr.string;
+  ns = CAR (list)->type == TYPE_FILENAME ? CAR (list)->value_ptr.filename->value
+    : CAR (list);
   list = CDR (list);
 
   while (SYMBOL (list) != &nil_object)
@@ -27343,6 +27347,8 @@ mark_as_constant (struct object *obj)
     {
       if (obj->value_ptr.stream->medium == STRING_STREAM)
 	mark_as_constant (obj->value_ptr.stream->string);
+      else
+	mark_as_constant (obj->value_ptr.stream->namestring);
     }
 }
 
@@ -27770,6 +27776,10 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 	{
 	  rest_inv_at_edge (node->value_ptr.stream->string, 0);
 	}
+      else
+	{
+	  rest_inv_at_edge (node->value_ptr.stream->namestring, 1);
+	}
     }
   else if (node->type == TYPE_FUNCTION || node->type == TYPE_MACRO)
     {
@@ -27900,6 +27910,8 @@ free_object (struct object *obj)
 
       if (obj->value_ptr.stream->medium == STRING_STREAM)
 	delete_reference (obj, obj->value_ptr.stream->string, 0);
+      else
+	delete_reference (obj, obj->value_ptr.stream->namestring, 1);
 
       free (obj->value_ptr.stream);
       free (obj);
