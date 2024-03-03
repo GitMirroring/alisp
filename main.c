@@ -384,6 +384,8 @@ outcome_type
     INVALID_SIZE,
     NO_APPLICABLE_METHOD,
     NO_NEXT_METHOD,
+    COULD_NOT_RENAME_FILE,
+    COULD_NOT_DELETE_FILE,
     COULD_NOT_OPEN_FILE,
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
@@ -1494,6 +1496,8 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
 
+struct object *inspect_pathname_by_designator (struct object *des);
+
 struct object *alloc_vector (fixnum size, int fill_with_nil,
 			     int dont_store_size);
 struct object *create_vector_from_list (struct object *list);
@@ -1923,6 +1927,10 @@ struct object *builtin_pathname
 struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_rename_file
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_delete_file
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_line
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2980,6 +2988,10 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("RENAME-FILE", env, builtin_rename_file, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("DELETE-FILE", env, builtin_delete_file, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
@@ -7581,6 +7593,24 @@ create_filename (struct object *string)
   add_reference (obj, string, 0);
 
   return obj;
+}
+
+
+struct object *
+inspect_pathname_by_designator (struct object *des)
+{
+  if (des->type == TYPE_STRING)
+    {
+      return des;
+    }
+  else if (des->type == TYPE_STREAM)
+    {
+      return des->value_ptr.stream->namestring;
+    }
+  else
+    {
+      return des->value_ptr.filename->value;
+    }
 }
 
 
@@ -14573,6 +14603,91 @@ builtin_pathname_name (struct object *list, struct environment *env,
 
   increment_refcount (fn->value_ptr.filename->value);
   return fn->value_ptr.filename->value;
+}
+
+
+struct object *
+builtin_rename_file (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  char *oldn, *newn;
+  int ret;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list))
+      || !IS_PATHNAME_DESIGNATOR (CAR (CDR (list)))
+      || CAR (CDR (list))->type == TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  oldn = copy_string_to_c_string
+    (inspect_pathname_by_designator (CAR (list))->value_ptr.string);
+
+  newn = copy_string_to_c_string
+    (inspect_pathname_by_designator (CAR (CDR (list)))->value_ptr.string);
+
+  ret = rename (oldn, newn);
+
+  free (oldn);
+  free (newn);
+
+  if (ret)
+    {
+      outcome->type = COULD_NOT_RENAME_FILE;
+      return NULL;
+    }
+
+  prepend_object_to_obj_list
+    (create_filename (inspect_pathname_by_designator (CAR (CDR (list)))),
+     &outcome->other_values);
+  prepend_object_to_obj_list
+    (create_filename (inspect_pathname_by_designator (CAR (list))),
+     &outcome->other_values);
+
+  return create_filename (inspect_pathname_by_designator (CAR (CDR (list))));
+}
+
+
+struct object *
+builtin_delete_file (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  char *fn;
+  int ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  fn = copy_string_to_c_string
+    (inspect_pathname_by_designator (CAR (list))->value_ptr.string);
+
+  ret = remove (fn);
+
+  free (fn);
+
+  if (ret)
+    {
+      outcome->type = COULD_NOT_DELETE_FILE;
+      return NULL;
+    }
+
+  return &t_object;
 }
 
 
@@ -27127,6 +27242,14 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == NO_NEXT_METHOD)
     {
       printf ("eval error: no next method available\n");
+    }
+  else if (err->type == COULD_NOT_RENAME_FILE)
+    {
+      printf ("file error: could not rename file\n");
+    }
+  else if (err->type == COULD_NOT_DELETE_FILE)
+    {
+      printf ("file error: could not delete file\n");
     }
   else if (err->type == COULD_NOT_OPEN_FILE)
     {
