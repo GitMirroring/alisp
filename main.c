@@ -15195,14 +15195,13 @@ builtin_open (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FILENAME && CAR (list)->type != TYPE_STRING)
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  ns = CAR (list)->type == TYPE_FILENAME ? CAR (list)->value_ptr.filename->value
-    : CAR (list);
+  ns = inspect_pathname_by_designator (CAR (list));
   list = CDR (list);
 
   while (SYMBOL (list) != &nil_object)
