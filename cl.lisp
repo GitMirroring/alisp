@@ -1885,6 +1885,10 @@
 (defun pathname-version (fn &key case))
 
 
+(defun file-author (fn))
+
+
+
 (defun terpri (&optional (out *standard-output*))
   (write-char #\newline out)
   nil)
@@ -2445,8 +2449,8 @@
 	  pathnamep streamp realp numberp check-type macroexpand equal equalp
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
 	  merge pathname-host pathname-device pathname-directory pathname-type
-	  pathname-version terpri write-line write-sequence prin1 princ print
-	  do-all-symbols loop format encode-universal-time))
+	  pathname-version file-author terpri write-line write-sequence prin1
+	  princ print do-all-symbols loop format encode-universal-time))
 
 
 
