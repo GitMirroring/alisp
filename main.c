@@ -7467,8 +7467,16 @@ find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
       i++;
     }
 
-  if (ends_with_eof)
-    return input+size-1;
+  if (ends_with_eof && (out->single_escape || out->multiple_escape))
+    {
+      CLEAR_READER_STATUS (*out);
+      out->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+      return NULL;
+    }
+  else if (ends_with_eof)
+    {
+      return input+size-1;
+    }
 
   return NULL;
 }
