@@ -3735,21 +3735,28 @@ read_object_continued (struct object **obj, int backts_commas_balance,
   else if (ob->type == TYPE_SYMBOL_NAME)
     {
       if (!input)
-	token = accumulate_token (stream, preserve_whitespace, &tokensize,
-				  &tokenlength, outcome);
-      else
-	tokenlength = size;
-
-      if ((!input || ends_with_eof)
-	  && (outcome->single_escape || outcome->multiple_escape))
 	{
-	  free (token);
-	  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+	  token = accumulate_token (stream, preserve_whitespace, &tokensize,
+				    &tokenlength, outcome);
+
+	  if (outcome->single_escape || outcome->multiple_escape)
+	    {
+	      free (token);
+	      CLEAR_READER_STATUS (*outcome);
+	      return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+	    }
+	}
+      else
+	{
+	  tokenlength = size;
 	}
 
       out = read_symbol_name (&ob, input ? input : token, tokenlength,
 			      input == NULL, preserve_whitespace, obj_end,
 			      CASE_UPCASE, outcome);
+
+      if (!input)
+	free (token);
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 	{
@@ -4371,10 +4378,21 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    *obj_begin = input;
 
 	  if (!input)
-	    token = accumulate_token (stream, preserve_whitespace, &tokensize,
-				      &tokenlength, outcome);
+	    {
+	      token = accumulate_token (stream, preserve_whitespace, &tokensize,
+					&tokenlength, outcome);
+
+	      if (outcome->single_escape || outcome->multiple_escape)
+		{
+		  free (token);
+		  CLEAR_READER_STATUS (*outcome);
+		  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+		}
+	    }
 	  else
-	    tokenlength = size;
+	    {
+	      tokenlength = size;
+	    }
 
 	  numbase = get_read_base (env);
 
@@ -4388,17 +4406,13 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    }
 	  else
 	    {
-	      if ((!input || ends_with_eof)
-		  && (outcome->single_escape || outcome->multiple_escape))
-		{
-		  free (token);
-		  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
-		}
-
 	      out = read_symbol_name (&ob, input ? input : token, tokenlength,
 				      input == NULL || ends_with_eof,
 				      preserve_whitespace, obj_end, CASE_UPCASE,
 				      outcome);
+
+	      if (!input)
+		free (token);
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 		{
@@ -4999,23 +5013,26 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	  outcome->single_escape = 1;
 	  token = accumulate_token (stream, preserve_whitespace, &tokensize,
 				    &tokenlength, outcome);
+
+	  if (outcome->single_escape || outcome->multiple_escape)
+	    {
+	      free (token);
+	      CLEAR_READER_STATUS (*outcome);
+	      return GOT_EOF_IN_MIDDLE_OF_OBJECT;
+	    }
 	}
       else
 	{
 	  tokenlength = size;
 	}
 
-      if ((!input || ends_with_eof)
-	  && (outcome->single_escape || outcome->multiple_escape))
-	{
-	  free (token);
-	  return GOT_EOF_IN_MIDDLE_OF_OBJECT;
-	}
-
       outcome->single_escape = 1;
       out = read_symbol_name (&call->obj, input ? input : token, tokenlength,
 			      input == NULL, preserve_whitespace, macro_end,
 			      CASE_UPCASE, outcome);
+
+      if (!input)
+	free (token);
 
       if (call->obj->value_ptr.symbol_name->packname_present)
 	{
