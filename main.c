@@ -24802,8 +24802,8 @@ evaluate_restart_bind (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   int restarts = 0;
-  struct object *cons, *res, *ret;
-  struct restart_binding *b, *prev = NULL, *first = NULL;
+  struct object *cons, *res, *ret = NULL;
+  struct restart_binding *b, *last = NULL;
 
   if (!list_length (list))
     {
@@ -24843,18 +24843,17 @@ evaluate_restart_bind (struct object *list, struct environment *env,
       b = malloc_and_check (sizeof (*b));
       b->name = SYMBOL (CAR (CAR (cons)));
       b->restart = res;
-      b->next = NULL;
 
-      if (!first)
+      if (!last)
 	{
-	  prev = env->restarts;
-	  first = b;
+	  b->next = env->restarts;
+	  last = env->restarts = b;
 	}
-
-      if (env->restarts)
-	env->restarts->next = b;
-
-      env->restarts = b;
+      else
+	{
+	  b->next = last->next;
+	  last->next = b;
+	}
 
       restarts++;
 
@@ -24866,13 +24865,11 @@ evaluate_restart_bind (struct object *list, struct environment *env,
  cleanup_and_leave:
   for (; restarts; restarts--)
     {
-      b = first->next;
-      decrement_refcount (first->restart);
-      free (first);
-      first = b;
+      b = env->restarts->next;
+      decrement_refcount (env->restarts->restart);
+      free (env->restarts);
+      env->restarts = b;
     }
-
-  env->restarts = prev;
 
   return ret;
 }
