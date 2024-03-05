@@ -1208,6 +1208,9 @@ make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (write 0))) 
 make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (return 0)))) (handler-bind ((arithmetic-error (lambda (e) (write 1)))) (/ 1 0))))", "1\n0");
 make_test ("(block nil (handler-bind ((type-error (lambda (e) (write 0) (return 1)))) (+ \"\")))", "0\n1");
 make_test ("(restart-bind ((rest (lambda () (write 10)))) (invoke-restart 'rest) (write 11))", "1011\n11");
+make_test ("(restart-bind ((foo (lambda (b) (write b)))) (invoke-restart 'foo 'c))", "C\nC");
+make_test ("(restart-bind ((foo (lambda nil))) (restart-bind nil) (invoke-restart 'foo))", "NIL");
+make_test ("(restart-bind ((foo (lambda nil 0)) (foo (lambda nil 1))) (invoke-restart 'foo))", "0");
 make_test ("(block test (unwind-protect 0 (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
