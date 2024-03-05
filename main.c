@@ -24926,7 +24926,7 @@ builtin_invoke_restart (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
+  return call_function (fun, CDR (list), 0, 0, 1, 0, 0, env, outcome);
 }
 
 
