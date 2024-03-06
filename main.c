@@ -557,6 +557,10 @@ environment
 
   struct object *c_stdout;
 
+
+  int debugging_depth;
+
+
   struct object *method_args;
   struct method_list *next_methods;
 
@@ -1586,6 +1590,11 @@ void add_condition_class (char *name, struct environment *env, int is_standard,
 struct object *handle_condition (struct object *cond, struct environment *env,
 				 struct outcome *outcome);
 
+void print_available_restarts (struct environment *env, struct object *str,
+			       int *restnum);
+struct object *enter_debugger (struct object *cond, struct environment *env,
+			       struct outcome *outcome);
+
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
 		       (const struct object *obj, const struct object *typespec,
@@ -2444,6 +2453,9 @@ struct object *evaluate_define_condition
 struct object *builtin_make_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_invoke_debugger
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
@@ -3182,6 +3194,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("INVOKE-DEBUGGER", env, builtin_invoke_debugger,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SUBTYPEP", env, builtin_subtypep, TYPE_FUNCTION, NULL, 0);
@@ -3651,15 +3665,44 @@ generate_prompt (struct environment *env)
 {
   struct package *pack =
     inspect_variable (env->package_sym, env)->value_ptr.package;
-  size_t s = pack->nicks ? pack->nicks->name_len + 5 : pack->name_len + 5;
-  char *ret = malloc_and_check (s);
+  size_t s = pack->nicks ? pack->nicks->name_len : pack->name_len, ts;
+  char *ret;
+  int i;
+
+  if (env->debugging_depth)
+    {
+      ts = s + 9 + env->debugging_depth-1;
+    }
+  else
+    {
+      ts = s + 5;
+    }
+
+  ret = malloc_and_check (ts);
 
   ret [0] = '[';
+
   memcpy (ret+1, pack->nicks ? pack->nicks->name : pack->name, s);
-  ret [s-4] = ']';
-  ret [s-3] = '>';
-  ret [s-2] = ' ';
-  ret [s-1] = 0;
+  i = s+1;
+
+  ret [i++] = ']';
+
+  if (env->debugging_depth)
+    {
+      memcpy (ret+i, " dbg", 4);
+      i += 4;
+
+      for (; i < ts-2; i++)
+	ret [i] = '>';
+
+      ret [ts-2] = ' ';
+      ret [ts-1] = 0;
+    }
+  else
+    {
+      memcpy (ret+i, "> ", 2);
+      ret [i+2] = 0;
+    }
 
   return ret;
 }
@@ -8875,6 +8918,189 @@ handle_condition (struct object *cond, struct environment *env,
 
       b = b->next;
     }
+
+  return &t_object;
+}
+
+
+void
+print_available_restarts (struct environment *env, struct object *str,
+			  int *restnum)
+{
+  struct restart_binding *r = env->restarts;
+  int ind = 0;
+
+  printf ("available restarts (from most recently established):\n");
+  printf ("(select by number)\n");
+
+  while (r)
+    {
+      printf ("%d: ", ind);
+      print_object (r->name, env, str->value_ptr.stream);
+      printf ("\n");
+
+      ind++;
+      r = r->next;
+    }
+
+  printf ("%d: ABORT\n", ind++);
+
+  str->value_ptr.stream->dirty_line = 0;
+
+  *restnum = ind;
+}
+
+
+struct object *
+enter_debugger (struct object *cond, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *std_out = inspect_variable (env->std_out_sym, env), *obj,
+    *result;
+  struct object_list *vals;
+  struct restart_binding *r;
+  int end_repl = 0, restnum, restind;
+  const char *input_left;
+  char *wholel = NULL;
+  size_t input_left_s;
+
+
+  env->debugging_depth++;
+
+
+  fresh_line (std_out->value_ptr.stream);
+
+  printf ("\nentered debugger (with condition ");
+  print_object (cond, env, std_out->value_ptr.stream);
+  printf (")\n\n");
+
+  std_out->value_ptr.stream->dirty_line = 0;
+  print_available_restarts (env, std_out, &restnum);
+
+  printf ("\n");
+
+
+  while (!end_repl)
+    {
+      free (wholel);
+      obj = read_object_interactively (env, outcome, &input_left, &input_left_s,
+				       &wholel);
+
+      while (obj)
+	{
+	  if (obj->type == TYPE_INTEGER
+	      && mpz_cmp_si (obj->value_ptr.integer, 0) >= 0
+	      && mpz_cmp_si (obj->value_ptr.integer, restnum) < 0)
+	    {
+	      restind = mpz_get_si (obj->value_ptr.integer);
+
+	      if (restind == restnum-1)
+		{
+		  printf ("\n");
+		  env->debugging_depth--;
+		  outcome->type = ABORT_TO_TOP_LEVEL;
+		  return NULL;
+		}
+	      else
+		{
+		  r = env->restarts;
+
+		  while (restind)
+		    {
+		      r = r->next;
+		      restind--;
+		    }
+
+		  result = call_function (r->restart, &nil_object, 0, 0, 1, 0, 0,
+					  env, outcome);
+		}
+	    }
+	  else
+	    {
+	      result = evaluate_object (obj, env, outcome);
+	    }
+
+	  if (!result && outcome->tag_to_jump_to)
+	    {
+	      outcome->type = TAG_NOT_FOUND;
+	      outcome->tag_to_jump_to = NULL;
+	    }
+	  else if (!result && outcome->block_to_leave)
+	    {
+	      outcome->type = BLOCK_NOT_FOUND;
+	      outcome->block_to_leave = NULL;
+	    }
+
+	  if (!result)
+	    {
+	      if (outcome->condition)
+		{
+		  if (is_subtype_by_char_vector
+		      (outcome->condition->value_ptr.condition->class_name,
+		       "SIMPLE-CONDITION", env)
+		      || is_subtype_by_char_vector
+		      (outcome->condition->value_ptr.condition->class_name,
+		       "TYPE-ERROR", env))
+		    {
+		      print_object (outcome->condition->value_ptr.condition->
+				    fields->value, env, std_out->value_ptr.stream);
+		      fresh_line (std_out->value_ptr.stream);
+		    }
+
+		  decrement_refcount (outcome->condition);
+		  outcome->condition = NULL;
+		}
+	      else if (outcome->type == ABORT_TO_TOP_LEVEL)
+		{
+		  env->debugging_depth--;
+		  return NULL;
+		}
+	      else
+		{
+		  print_error (outcome, env);
+		}
+	    }
+	  else if (outcome->no_value)
+	    {
+	      outcome->no_value = 0;
+	    }
+	  else
+	    {
+	      fresh_line (std_out->value_ptr.stream);
+
+	      print_object (result, env, std_out->value_ptr.stream);
+	      printf ("\n");
+	      std_out->value_ptr.stream->dirty_line = 0;
+
+	      vals = outcome->other_values;
+
+	      while (vals)
+		{
+		  print_object (vals->obj, env, std_out->value_ptr.stream);
+		  printf ("\n");
+		  std_out->value_ptr.stream->dirty_line = 0;
+		  vals = vals->next;
+		}
+
+	      free_object_list (outcome->other_values);
+
+	      outcome->other_values = NULL;
+	    }
+
+	  decrement_refcount (result);
+	  decrement_refcount (obj);
+
+	  if (input_left && input_left_s > 0)
+	    obj = read_object_interactively_continued (input_left, input_left_s,
+						       env, outcome, &input_left,
+						       &input_left_s, &wholel);
+	  else
+	    obj = NULL;
+	}
+    }
+
+
+  env->debugging_depth--;
 
   return &t_object;
 }
@@ -25210,6 +25436,26 @@ builtin_make_condition (struct object *list, struct environment *env,
 
   return create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
 				    (struct object *)NULL);
+}
+
+
+struct object *
+builtin_invoke_debugger (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_CONDITION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return enter_debugger (CAR (list), env, outcome);
 }
 
 
