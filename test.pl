@@ -1211,6 +1211,7 @@ make_test ("(restart-bind ((rest (lambda () (write 10)))) (invoke-restart 'rest)
 make_test ("(restart-bind ((foo (lambda (b) (write b)))) (invoke-restart 'foo 'c))", "C\nC");
 make_test ("(restart-bind ((foo (lambda nil))) (restart-bind nil) (invoke-restart 'foo))", "NIL");
 make_test ("(restart-bind ((foo (lambda nil 0)) (foo (lambda nil 1))) (invoke-restart 'foo))", "0");
+make_test ("(restart-bind ((foo (lambda nil (write-line \"hi\") (abort)))) (invoke-restart 'foo))", "hi");
 make_test ("(block test (unwind-protect 0 (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
