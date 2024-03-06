@@ -2410,6 +2410,11 @@
 
 
 
+(defun abort (&optional cond)
+  (invoke-restart 'abort))
+
+
+
 
 (export '(*features* machine-instance machine-type machine-version
 	  short-site-name long-site-name *modules* provide require describe
@@ -2457,7 +2462,7 @@
 	  merge pathname-host pathname-device pathname-directory pathname-type
 	  pathname-version file-author with-open-file terpri write-line
 	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time))
+	  encode-universal-time abort))
 
 
 

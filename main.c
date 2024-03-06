@@ -343,6 +343,9 @@ outcome_type
     GOT_EOF,
 
 
+    ABORT_TO_TOP_LEVEL,
+
+
     EVAL_OK,
     UNBOUND_SYMBOL,
     INVALID_FUNCTION_CALL,
@@ -574,6 +577,8 @@ environment
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *print_escape_sym, *print_readably_sym, *print_base_sym, *print_array_sym,
     *read_base_sym, *read_suppress_sym;
+
+  struct object *abort_sym;
 };
 
 
@@ -2708,11 +2713,13 @@ main (int argc, char *argv [])
 		  decrement_refcount (eval_out.condition);
 		  eval_out.condition = NULL;
 		}
-	      else
+	      else if (eval_out.type != ABORT_TO_TOP_LEVEL)
 		print_error (&eval_out, &env);
 	    }
 	  else if (eval_out.no_value)
-	    eval_out.no_value = 0;
+	    {
+	      eval_out.no_value = 0;
+	    }
 	  else
 	    {
 	      fresh_line (c_stdout->value_ptr.stream);
@@ -3532,6 +3539,8 @@ add_standard_definitions (struct environment *env)
   env->read_suppress_sym = define_variable ("*READ-SUPPRESS*", &nil_object, env);
 
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
+
+  env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    TYPE_FUNCTION, NULL, 0);
@@ -24917,6 +24926,12 @@ builtin_invoke_restart (struct object *list, struct environment *env,
   else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!b && SYMBOL (CAR (list)) == env->abort_sym)
+    {
+      outcome->type = ABORT_TO_TOP_LEVEL;
       return NULL;
     }
 
