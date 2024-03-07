@@ -401,6 +401,8 @@ make_test ("(inc)", "2");
 make_test ("(inc)", "3");
 make_test ("(defmacro f () (f))", "F");
 make_test ("(defmacro f () (f))", "F");
+make_test ("(let ((var 1)) (defmacro mac () var))", "MAC");
+make_test ("(mac)", "1");
 make_test ("(defmacro mac (x (y (z))) `(list ,x ,y ,z))", "MAC");
 make_test ("(mac 0 (1 (2)))", "(0 1 2)");
 make_test ("(defmacro mac (&whole wh f g h) `(list ,wh ,f ,g ,h))", "MAC");
