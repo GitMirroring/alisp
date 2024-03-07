@@ -1837,6 +1837,8 @@ int type_string_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
 int type_standard_object (const struct object *obj, const struct object *typespec,
 			  struct environment *env, struct outcome *outcome);
+int type_generic_function (const struct object *obj, const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
 int type_class (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome);
 int type_structure_class (const struct object *obj, const struct object *typespec,
@@ -3359,6 +3361,8 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
 		    (char *)NULL);
+  add_builtin_type ("GENERIC-FUNCTION", env, type_generic_function, 1,
+		    "FUNCTION", (char *)NULL);
   add_builtin_type ("CLASS", env, type_class, 1, (char *)NULL);
   add_builtin_type ("STRUCTURE-CLASS", env, type_structure_class, 1,
 		    (char *)NULL);
@@ -12772,6 +12776,14 @@ type_standard_object (const struct object *obj, const struct object *typespec,
 {
   return obj->type == TYPE_STANDARD_OBJECT || obj->type == TYPE_STANDARD_CLASS
     || obj->type == TYPE_STRUCTURE_CLASS;
+}
+
+
+int
+type_generic_function (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_FUNCTION && obj->value_ptr.function->is_generic;
 }
 
 
