@@ -7202,12 +7202,9 @@ create_function (struct object *lambda_list, struct object *body,
       return NULL;
     }
 
-  if (!is_macro)
-    {
-      capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
-				   env->lex_env_vars_boundary, env->funcs,
-				   env->lex_env_funcs_boundary);
-    }
+  capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
+			       env->lex_env_vars_boundary, env->funcs,
+			       env->lex_env_funcs_boundary);
 
   f->body = body;
   add_reference (fun, body, 1);
