@@ -540,6 +540,9 @@ environment
   struct binding *funcs;
   int lex_env_funcs_boundary;
 
+  int only_lexical;
+
+
   struct object_list *packages;
   struct object *cl_package, *keyword_package;
 
@@ -1563,7 +1566,8 @@ struct binding *chain_bindings (struct binding *bin, struct binding *env,
 				int *num, struct binding **last_bin);
 struct binding *remove_bindings (struct binding *env, int num);
 struct binding *find_binding (struct symbol *sym, struct binding *bins,
-			      enum binding_type type, int bin_num);
+			      enum binding_type type, int bin_num,
+			      int only_lexical);
 
 struct binding *bind_variable (struct object *sym, struct object *val,
 			       struct binding *bins);
@@ -8559,12 +8563,13 @@ remove_bindings (struct binding *env, int num)
 
 struct binding *
 find_binding (struct symbol *sym, struct binding *bins, enum binding_type type,
-	      int bin_num)
+	      int bin_num, int only_lexical)
 {
   while (bins && (type != LEXICAL_BINDING || bin_num))
     {
       if ((type == ANY_BINDING || bins->type & type)
 	  && (bins->type == DYNAMIC_BINDING || bin_num)
+	  && (bins->type == LEXICAL_BINDING || !only_lexical)
 	  && !(bins->type & DELETED_BINDING))
 	{
 	  if (!bins->sym && bins->closure_bin->sym->value_ptr.symbol == sym)
@@ -11173,6 +11178,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
 
+  if (expand_and_eval)
+    env->only_lexical = 1;
+
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
 			   eval_args, also_pass_name, is_typespec,
 			   func->value_ptr.function->allow_other_keys, env,
@@ -11214,6 +11222,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (ret && expand_and_eval)
     {
+      env->only_lexical = 0;
+
       ret2 = evaluate_object (ret, env, outcome);
 
       decrement_refcount (ret);
@@ -11906,7 +11916,7 @@ evaluate_object (struct object *obj, struct environment *env,
       sym = SYMBOL (obj);
 
       if (sym->value_ptr.symbol->is_const || sym->value_ptr.symbol->is_parameter
-	  || sym->value_ptr.symbol->is_special)
+	  || (sym->value_ptr.symbol->is_special && !env->only_lexical))
 	{
 	  ret = get_dynamic_value (sym, env);
 
@@ -11922,17 +11932,19 @@ evaluate_object (struct object *obj, struct environment *env,
       else
 	{
 	  bind = find_binding (sym->value_ptr.symbol, env->vars,
-			       LEXICAL_BINDING, env->lex_env_vars_boundary);
+			       LEXICAL_BINDING, env->lex_env_vars_boundary,
+			       env->only_lexical);
 
 	  if (bind)
 	    {
 	      increment_refcount (bind->obj);
 	      return bind->obj;
 	    }
-	  else if (sym->value_ptr.symbol->value_dyn_bins_num)
+	  else if (sym->value_ptr.symbol->value_dyn_bins_num
+		   && !env->only_lexical)
 	    {
 	      bind = find_binding (sym->value_ptr.symbol, env->vars,
-				   DYNAMIC_BINDING, -1);
+				   DYNAMIC_BINDING, -1, 0);
 	      increment_refcount (bind->obj);
 	      return bind->obj;
 	    }
@@ -12319,12 +12331,13 @@ evaluate_list (struct object *list, struct environment *env,
   if (sym->value_ptr.symbol->function_dyn_bins_num)
     {
       bind = find_binding (sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING,
-			   -1);
+			   -1, 0);
 
       fun = bind->obj;
     }
   else if ((bind = find_binding (sym->value_ptr.symbol, env->funcs,
-				 LEXICAL_BINDING, env->lex_env_funcs_boundary)))
+				 LEXICAL_BINDING, env->lex_env_funcs_boundary,
+				 0)))
     {
       fun = bind->obj;
     }
@@ -20005,7 +20018,7 @@ builtin_set (struct object *list, struct environment *env,
     }
 
   b = find_binding (SYMBOL (CAR (list))->value_ptr.symbol, env->vars,
-		    DYNAMIC_BINDING, -1);
+		    DYNAMIC_BINDING, -1, env->only_lexical);
 
   if (b)
     {
@@ -22550,7 +22563,8 @@ get_dynamic_value (struct object *sym, struct environment *env)
       return s->value_cell;
     }
 
-  b = find_binding (s, env->vars, ANY_BINDING, env->lex_env_vars_boundary);
+  b = find_binding (s, env->vars, ANY_BINDING, env->lex_env_vars_boundary,
+		    env->only_lexical);
 
   if (b)
     {
@@ -22587,7 +22601,7 @@ get_function (struct object *sym, struct environment *env, int only_functions,
 	    n = env->funcs;
 
 	  b = find_binding (SYMBOL (sym)->value_ptr.symbol, n, ANY_BINDING,
-			    env->lex_env_funcs_boundary);
+			    env->lex_env_funcs_boundary, 0);
 
 	} while (b && setf_func && (b->obj->type != TYPE_FUNCTION
 				    || !b->obj->value_ptr.function->is_setf_func));
@@ -22643,7 +22657,7 @@ inspect_variable (struct object *sym, struct environment *env)
       return s->value_cell;
     }
 
-  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
+  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1, env->only_lexical);
 
   if (b)
     {
@@ -22689,7 +22703,7 @@ set_value (struct object *sym, struct object *value, int eval_value,
 	}
       else
 	{
-	  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1);
+	  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1, env->only_lexical);
 	  decrement_refcount (b->obj);
 	  b->obj = val;
 	  increment_refcount (val);
@@ -22698,7 +22712,7 @@ set_value (struct object *sym, struct object *value, int eval_value,
   else
     {
       b = find_binding (s, env->vars, LEXICAL_BINDING,
-			env->lex_env_vars_boundary);
+			env->lex_env_vars_boundary, env->only_lexical);
 
       if (b)
 	{
