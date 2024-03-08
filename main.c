@@ -724,6 +724,14 @@ parameter
 };
 
 
+enum
+function_flags
+  {
+    GENERIC_FUNCTION = 1,
+    COMPILED_FUNCTION
+  };
+
+
 struct
 function
 {
@@ -741,7 +749,8 @@ function
 
   struct object *body;
 
-  int is_generic;
+  enum function_flags flags;
+
   struct method_list *methods;
 
   struct object *(*builtin_form)
@@ -1549,6 +1558,11 @@ void create_condition_fields (struct object *stdobj, struct object *class);
 struct object *load_file (const char *filename, struct environment *env,
 			  struct outcome *outcome);
 
+struct object *compile_function (struct object *fun, struct environment *env,
+				 struct outcome *outcome);
+struct object *compile_body (struct object *body, struct environment *env,
+			     struct outcome *outcome);
+
 struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     int do_copy,
 					     enum package_record_visibility vis,
@@ -1959,6 +1973,8 @@ struct object *builtin_read
 struct object *builtin_read_preserving_whitespace
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_eval
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_compile
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3022,6 +3038,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
 		    builtin_read_preserving_whitespace, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("COMPILE", env, builtin_compile, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
 		    NULL, 0);
@@ -6344,7 +6361,7 @@ alloc_function (void)
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
   fun->body = NULL;
-  fun->is_generic = 0;
+  fun->flags = 0;
   fun->methods = NULL;
   fun->builtin_form = NULL;
   fun->struct_constructor_class = NULL;
@@ -8302,6 +8319,100 @@ load_file (const char *filename, struct environment *env,
 
 	  return NULL;
 	}
+    }
+}
+
+
+struct object *
+compile_function (struct object *fun, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *compbody;
+
+  if ((fun->value_ptr.function->flags & COMPILED_FUNCTION)
+      || (fun->value_ptr.function->flags & GENERIC_FUNCTION))
+    {
+      fun->value_ptr.function->flags |= COMPILED_FUNCTION;
+      return fun;
+    }
+
+  compbody = compile_body (fun->value_ptr.function->body, env, outcome);
+
+  if (!compbody)
+    return NULL;
+
+  delete_reference (fun, fun->value_ptr.function->body, 1);
+  fun->value_ptr.function->body = compbody;
+  add_reference (fun, compbody, 1);
+
+  fun->value_ptr.function->flags |= COMPILED_FUNCTION;
+
+  return fun;
+}
+
+
+struct object *
+compile_body (struct object *body, struct environment *env,
+	      struct outcome *outcome)
+{
+  struct object *car, *cdr, *mac, *args, *ret;
+
+  if (CAR (body)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (body)))
+      && (mac = get_function (CAR (CAR (body)), env, 0, 0, 0, 0))
+      && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
+    {
+      if (mac->value_ptr.macro->macro_function)
+	{
+	  args = alloc_empty_list (2);
+	  args->value_ptr.cons_pair->car = CAR (body);
+	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+
+	  car = call_function (mac->value_ptr.macro->macro_function, args,
+			       0, 0, 0, 0, 0, env, outcome);
+
+	  free_list_structure (args);
+	}
+      else
+	{
+	  car = call_function (mac, CAR (body), 0, 1, 1, 0, 0, env, outcome);
+	}
+
+      if (!car)
+	return NULL;
+    }
+  else
+    {
+      increment_refcount (CAR (body));
+      car = CAR (body);
+    }
+
+  if (SYMBOL (CDR (body)) != &nil_object)
+    cdr = compile_body (CDR (body), env, outcome);
+  else
+    cdr = &nil_object;
+
+  if (car != CAR (body) || cdr != CDR (body))
+    {
+      ret = alloc_empty_cons_pair ();
+
+      ret->value_ptr.cons_pair->car = car;
+      add_reference (ret, car, 0);
+      decrement_refcount (car);
+
+      ret->value_ptr.cons_pair->cdr = cdr;
+      add_reference (ret, cdr, 1);
+      decrement_refcount (cdr);
+
+      return ret;
+    }
+  else
+    {
+      increment_refcount (body);
+
+      decrement_refcount (car);
+      decrement_refcount (cdr);
+
+      return body;
     }
 }
 
@@ -11172,7 +11283,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
 
-  if (func->value_ptr.function->is_generic)
+  if (func->value_ptr.function->flags & GENERIC_FUNCTION)
     {
       return dispatch_generic_function_call (func, arglist, env, outcome);
     }
@@ -12793,7 +12904,8 @@ int
 type_generic_function (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_FUNCTION && obj->value_ptr.function->is_generic;
+  return obj->type == TYPE_FUNCTION
+    && (obj->value_ptr.function->flags & GENERIC_FUNCTION);
 }
 
 
@@ -15245,6 +15357,77 @@ builtin_eval (struct object *list, struct environment *env,
   env->lex_env_funcs_boundary = lex_funcs;
 
   return ret;
+}
+
+
+struct object *
+builtin_compile (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *fun = NULL;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (SYMBOL (CAR (list)) == &nil_object && l == 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 1)
+    {
+      if (!(fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 0, 0)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+  else
+    {
+      fun = CAR (CDR (list));
+
+      if (fun->type != TYPE_FUNCTION)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+    }
+
+  fun = compile_function (fun, env, outcome);
+
+  if (!fun)
+    return NULL;
+
+  if (l == 2 && SYMBOL (CAR (list)) != &nil_object)
+    {
+      delete_reference (SYMBOL (CAR (list)),
+			SYMBOL (CAR (list))->value_ptr.symbol->function_cell, 1);
+      SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
+      add_reference (SYMBOL (CAR (list)), fun, 1);
+    }
+
+  prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+  prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+
+  if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      increment_refcount (fun);
+      return fun;
+    }
+
+  increment_refcount (SYMBOL (CAR (list)));
+  return SYMBOL (CAR (list));
 }
 
 
@@ -24508,7 +24691,8 @@ evaluate_defgeneric (struct object *list, struct environment *env,
 
   if (sym->value_ptr.symbol->function_cell
       && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
-	  || !sym->value_ptr.symbol->function_cell->value_ptr.function->is_generic))
+	  || !(sym->value_ptr.symbol->function_cell->value_ptr.function->
+	       flags & GENERIC_FUNCTION)))
     {
       outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
       return NULL;
@@ -24519,7 +24703,7 @@ evaluate_defgeneric (struct object *list, struct environment *env,
   if (!fun)
     return NULL;
 
-  fun->value_ptr.function->is_generic = 1;
+  fun->value_ptr.function->flags |= GENERIC_FUNCTION;
 
   if (sym->value_ptr.symbol->function_cell)
     {
@@ -24558,7 +24742,8 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
   fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 1, 0);
 
-  if (fun && (fun->type == TYPE_MACRO || !fun->value_ptr.function->is_generic))
+  if (fun && (fun->type == TYPE_MACRO
+	      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
     {
       outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
       return NULL;
@@ -24589,7 +24774,7 @@ evaluate_defmethod (struct object *list, struct environment *env,
       if (!fun)
 	return NULL;
 
-      fun->value_ptr.function->is_generic = 1;
+      fun->value_ptr.function->flags |= GENERIC_FUNCTION;
 
       SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
       add_reference (SYMBOL (CAR (list)), fun, 1);
@@ -26941,7 +27126,7 @@ print_function_or_macro (const struct object *obj, struct environment *env,
 {
   if (obj->type == TYPE_FUNCTION)
     {
-      if (obj->value_ptr.function->is_generic)
+      if (obj->value_ptr.function->flags & GENERIC_FUNCTION)
 	{
 	  if (write_to_stream (str, "#<STANDARD-GENERIC-FUNCTION ",
 			       strlen ("#<STANDARD-GENERIC-FUNCTION ")) < 0)
