@@ -1786,6 +1786,9 @@ int type_keyword (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome);
 int type_boolean (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome);
+int type_compiled_function (const struct object *obj,
+			    const struct object *typespec,
+			    struct environment *env, struct outcome *outcome);
 int type_function (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct outcome *outcome);
 int type_package (const struct object *obj, const struct object *typespec,
@@ -3321,6 +3324,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("SYMBOL", env, type_symbol, 1, (char *)NULL);
   add_builtin_type ("KEYWORD", env, type_keyword, 1, "SYMBOL", (char *)NULL);
   add_builtin_type ("BOOLEAN", env, type_boolean, 1, "SYMBOL", (char *)NULL);
+  add_builtin_type ("COMPILED-FUNCTION", env, type_compiled_function, 1,
+		    "FUNCTION", (char *)NULL);
   add_builtin_type ("FUNCTION", env, type_function, 1, (char *)NULL);
   add_builtin_type ("PACKAGE", env, type_package, 1, (char *)NULL);
   add_builtin_type ("NUMBER", env, type_number, 1, (char *)NULL);
@@ -12581,6 +12586,15 @@ type_boolean (const struct object *obj, const struct object *typespec,
 	      struct environment *env, struct outcome *outcome)
 {
   return SYMBOL (obj) == &nil_object || SYMBOL (obj) == &t_object;
+}
+
+
+int
+type_compiled_function (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_FUNCTION
+    && (obj->value_ptr.function->flags & COMPILED_FUNCTION);
 }
 
 
