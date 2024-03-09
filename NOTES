@@ -70,6 +70,9 @@ package.
 - the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
   legal information
 
+- the functions AL-START-PROFILING, AL-STOP-PROFILING, AL-CLEAR-PROFILING and
+  AL-REPORT-PROFILING govern the profiler, see "Profiling".
+
 
 
 __Literal objects__
@@ -118,6 +121,28 @@ string or accessing characters by index.
 
 Input that is not well-formed UTF-8 may cause incorrect behavior in string
 manipulation functions, but should not cause a crash.
+
+
+
+__Profiling__
+
+al has a basic profiler.  You can start profiling with AL-START-PROFILING, which
+introduces a little overhead, and stop it with AL-STOP-PROFILING.
+
+If you later start profiling again, al will keep adding to the previous data,
+until you call AL-CLEAR-PROFILING which clears all data.
+
+Calling AL-REPORT-PROFILING returns a list in which each element is a list which
+contains a name, a counter of all the times that function or macro has been
+called, and all the time spent in that function or macro.  For functions, the
+time doesn't include evaluation of arguments.  For macros, the time includes
+both expansion and evaluation of result.
+
+The profiler has a few limitations: it doesn't track builtin functions and
+macros, but the time spent inside them still adds up to the total of the caller;
+also, generic functions, structure constructor and accessors, condition readers,
+functions obtained as macro functions and macros defined with macro functions
+are not tracked.
 
 
 
