@@ -61,8 +61,11 @@ al has a small number of non-standard builtins; they are interned in the CL-USER
 package.
 
 - AL-ARGC (an integer) and AL-ARGV (a vector of strings) let you access argc and
-  argv of C, respectively, so they contain the command-line arguments passed to
-  the interpreter
+  argv of C, respectively, so they contain the number and value of command-line
+  arguments passed to the interpreter
+
+- AL-GETENV takes a string and returns the environment variable with that name,
+  or NIL if such does not exist
 
 - the AL-EXIT function takes an optional integer (defaulting to 0) and exit the
   interpreter with that return value
