@@ -2509,7 +2509,10 @@ struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
 (struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_getenv
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_system
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_exit
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3627,6 +3630,7 @@ add_standard_definitions (struct environment *env)
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
 }
 
@@ -26473,6 +26477,42 @@ builtin_al_getenv (struct object *list, struct environment *env,
   ret = create_string_copying_c_string (envval);
 
   return ret;
+}
+
+
+struct object *
+builtin_al_system (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  char *com;
+  int ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      if (system (NULL))
+	return &t_object;
+
+      return &nil_object;
+    }
+  else if (CAR (list)->type == TYPE_STRING)
+    {
+      com = copy_string_to_c_string (CAR (list)->value_ptr.string);
+
+      ret = system (com);
+
+      free (com);
+
+      return create_integer_from_long (ret);
+    }
+
+  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+  return NULL;
 }
 
 
