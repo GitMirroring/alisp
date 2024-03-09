@@ -2509,6 +2509,8 @@ struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_getenv
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_exit
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -3624,6 +3626,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
 }
 
@@ -26436,6 +26439,40 @@ builtin_al_print_terms_and_conditions (struct object *list,
 	"copy of the Program in return for a fee.\n");
 
   return &t_object;
+}
+
+
+struct object *
+builtin_al_getenv (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  char *envvar, *envval;
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  envvar = copy_string_to_c_string (CAR (list)->value_ptr.string);
+
+  envval = getenv (envvar);
+
+  free (envvar);
+
+  if (!envval)
+    return &nil_object;
+
+  ret = create_string_copying_c_string (envval);
+
+  return ret;
 }
 
 
