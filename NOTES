@@ -67,6 +67,11 @@ package.
 - AL-GETENV takes a string and returns the environment variable with that name,
   or NIL if such does not exist
 
+- AL-SYSTEM takes a string or NIL; in the first case it tries executing that
+  command, in the second it tells whether an execution environment is actually
+  available.  AL-SYSTEM uses system from C, so the precise working depends on
+  your C library
+
 - the AL-EXIT function takes an optional integer (defaulting to 0) and exit the
   interpreter with that return value
 
