@@ -532,6 +532,18 @@ string
 
 
 struct
+profiling_record
+{
+  struct object *name;
+
+  unsigned counter;
+  unsigned time;
+
+  struct profiling_record *next;
+};
+
+
+struct
 environment
 {
   struct binding *vars;
@@ -562,6 +574,9 @@ environment
 
 
   int debugging_depth;
+
+  int is_profiling;
+  struct profiling_record *profiling_data;
 
 
   struct object *method_args;
@@ -2481,6 +2496,15 @@ struct object *builtin_make_condition
 struct object *builtin_invoke_debugger
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_start_profiling
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_stop_profiling
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_clear_profiling
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_report_profiling
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
@@ -3585,6 +3609,15 @@ add_standard_definitions (struct environment *env)
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
 
   env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
+
+  add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-STOP-PROFILING", env, builtin_al_stop_profiling,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-CLEAR-PROFILING", env, builtin_al_clear_profiling,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-REPORT-PROFILING", env, builtin_al_report_profiling,
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    TYPE_FUNCTION, NULL, 0);
@@ -11199,6 +11232,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct binding *bins, *b;
   struct object *ret, *ret2, *args = NULL;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+  unsigned isprof = 0, time, evaltime;
+  struct profiling_record *r;
 
 
   if (func->value_ptr.function->builtin_form)
@@ -11313,8 +11348,21 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->vars = chain_bindings (bins, env->vars, NULL, NULL);
       env->lex_env_vars_boundary += argsnum;
 
+
+      if (env->is_profiling && func->value_ptr.function->name)
+	{
+	  isprof = 1;
+	  time = clock ();
+	}
+
       ret = evaluate_body (func->value_ptr.function->body, 0,
 			   func->value_ptr.function->name, env, outcome);
+
+      if (isprof)
+	{
+	  time = clock () - time;
+	}
+
 
       env->vars = remove_bindings (env->vars, argsnum);
 
@@ -11340,12 +11388,49 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     {
       env->only_lexical = 0;
 
+      if (isprof)
+	{
+	  evaltime = clock ();
+	}
+
       ret2 = evaluate_object (ret, env, outcome);
+
+      if (isprof)
+	{
+	  evaltime = clock () - evaltime;
+	}
 
       decrement_refcount (ret);
 
       ret = ret2;
     }
+
+  if (isprof)
+    {
+      r = env->profiling_data;
+
+      while (r)
+	{
+	  if (r->name == SYMBOL (func->value_ptr.function->name))
+	    break;
+
+	  r = r->next;
+	}
+
+      if (!r)
+	{
+	  r = malloc_and_check (sizeof (*r));
+	  r->name = SYMBOL (func->value_ptr.function->name);
+	  r->counter = 0;
+	  r->time = 0;
+	  r->next = env->profiling_data;
+	  env->profiling_data = r;
+	}
+
+      r->counter += 1;
+      r->time += (time + (expand_and_eval ? evaltime : 0));
+    }
+
 
   return ret;
 }
@@ -25678,6 +25763,104 @@ builtin_invoke_debugger (struct object *list, struct environment *env,
     }
 
   return enter_debugger (CAR (list), env, outcome);
+}
+
+
+struct object *
+builtin_al_start_profiling (struct object *list, struct environment *env,
+			    struct outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  env->is_profiling = 1;
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_stop_profiling (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  env->is_profiling = 0;
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_clear_profiling (struct object *list, struct environment *env,
+			    struct outcome *outcome)
+{
+  struct profiling_record *r = env->profiling_data, *n;
+
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  while (r)
+    {
+      n = r->next;
+      free (r);
+      r = n;
+    }
+
+  env->profiling_data = NULL;
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_report_profiling (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *ret = &nil_object, *cons, *car;
+  struct profiling_record *r = env->profiling_data;
+
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  while (r)
+    {
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->cdr = ret;
+      ret = cons;
+
+      car = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = car;
+
+      car->value_ptr.cons_pair->car = r->name;
+      add_reference (car, r->name, 0);
+      car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      car = CDR (car);
+      car->value_ptr.cons_pair->car =
+	create_integer_from_unsigned_long (r->counter);
+      car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      car = CDR (car);
+      car->value_ptr.cons_pair->car =
+	create_integer_from_unsigned_long (r->time);
+      car->value_ptr.cons_pair->cdr = &nil_object;
+
+      r = r->next;
+    }
+
+  return ret;
 }
 
 
