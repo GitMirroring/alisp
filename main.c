@@ -1539,6 +1539,10 @@ struct object *alloc_vector (fixnum size, int fill_with_nil,
 struct object *create_vector_from_list (struct object *list, fixnum size);
 struct object *create_bitvector_from_char_vector (const char *in, size_t sz,
 						  size_t req_size);
+struct object *fill_axis_from_sequence (struct object *arr, struct object **axis,
+					fixnum index, struct array_size *size,
+					fixnum rowsize, struct object *seq);
+struct object *create_array_from_sequence (struct object *seq, fixnum rank);
 void resize_vector (struct object *vector, fixnum size);
 
 struct object *create_character (char *character, int do_copy);
@@ -5121,7 +5125,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(:cC+-*bBoOxXrR", call->dispatch_ch))
+  if (!strchr ("'\\.pP(aA:cC+-*bBoOxXrR", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -5460,6 +5464,10 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
   else if (macro_call->dispatch_ch == '(')
     {
       return create_vector_from_list (obj, macro_call->arg);
+    }
+  else if (macro_call->dispatch_ch == 'a' || macro_call->dispatch_ch == 'A')
+    {
+      return create_array_from_sequence (obj, macro_call->arg);
     }
   else if (macro_call->dispatch_ch == ':')
     {
@@ -7880,6 +7888,86 @@ create_bitvector_from_char_vector (const char *in, size_t sz, size_t req_size)
   ret->value_ptr.bitarray->alloc_size->size = req_size ? req_size : i;
 
   return ret;
+}
+
+
+struct object *
+fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
+			 struct array_size *size, fixnum rowsize,
+			 struct object *seq)
+{
+  fixnum i;
+
+  if (!size)
+    {
+      *axis = seq;
+      add_reference (arr, seq, index);
+    }
+  else if (size->next)
+    {
+      for (i = 0; i < size->size; i++)
+	{
+	  fill_axis_from_sequence (arr,
+				   &axis [i*(rowsize/size->size)],
+				   i*(rowsize/size->size), size->next,
+				   rowsize/size->size, CAR (seq));
+	  seq = CDR (seq);
+	}
+    }
+  else
+    {
+      for (i = 0; i < size->size; i++)
+	{
+	  axis [i] = CAR (seq);
+	  add_reference (arr, axis [i], index+i);
+	  seq = CDR (seq);
+	}
+    }
+
+  return NULL;
+}
+
+
+struct object *
+create_array_from_sequence (struct object *seq, fixnum rank)
+{
+  struct object *obj = alloc_object (), *s = seq;
+  struct array *arr = malloc_and_check (sizeof (*arr));
+  struct array_size *size = malloc_and_check (sizeof (*size)), *sz = size;
+  fixnum i, totsize, rowsize;
+
+  obj->type = TYPE_ARRAY;
+
+  sz->size = totsize = list_length (s);
+
+  for (i = 1; i < rank; i++)
+    {
+      sz->next = malloc_and_check (sizeof (*sz));
+      sz = sz->next;
+      s = CAR (s);
+      sz->size = list_length (s);
+      totsize *= sz->size;
+    }
+
+  sz->next = NULL;
+
+  arr->alloc_size = size;
+  arr->fill_pointer = -1;
+  arr->value = calloc_and_check (totsize, sizeof (*arr->value));
+  arr->reference_strength_factor = calloc_and_check (totsize, sizeof (int));
+
+  obj->value_ptr.array = arr;
+
+  rowsize = totsize / size->size;
+
+  for (i = 0; i < size->size; i++)
+    {
+      fill_axis_from_sequence (obj, &arr->value [i*rowsize], i*rowsize,
+			       size->next, rowsize, CAR (seq));
+      seq = CDR (seq);
+    }
+
+  return obj;
 }
 
 
