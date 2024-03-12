@@ -1536,7 +1536,7 @@ struct object *inspect_pathname_by_designator (struct object *des);
 
 struct object *alloc_vector (fixnum size, int fill_with_nil,
 			     int dont_store_size);
-struct object *create_vector_from_list (struct object *list);
+struct object *create_vector_from_list (struct object *list, fixnum size);
 struct object *create_bitvector_from_char_vector (const char *in, size_t sz,
 						  size_t req_size);
 void resize_vector (struct object *vector, fixnum size);
@@ -5458,7 +5458,9 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
       return create_filename (obj);
     }
   else if (macro_call->dispatch_ch == '(')
-    return create_vector_from_list (obj);
+    {
+      return create_vector_from_list (obj, macro_call->arg);
+    }
   else if (macro_call->dispatch_ch == ':')
     {
       if (!obj)
@@ -7795,28 +7797,36 @@ alloc_vector (fixnum size, int fill_with_nil, int dont_store_size)
 
 
 struct object *
-create_vector_from_list (struct object *list)
+create_vector_from_list (struct object *list, fixnum size)
 {
-  struct object *obj = alloc_object ();
+  struct object *obj = alloc_object (), *lastobj = &nil_object;
   struct array *vec = malloc_and_check (sizeof (*vec));
   struct array_size *sz = malloc_and_check (sizeof (*sz));
-  fixnum i;
+  fixnum i, l = list_length (list), actsz = (size >= 0 ? size : l);
 
   obj->type = TYPE_ARRAY;
 
-  sz->size = list_length (list);
+  sz->size = actsz;
   sz->next = NULL;
 
   vec->alloc_size = sz;
   vec->fill_pointer = -1;
-  vec->value = calloc_and_check (sz->size, sizeof (*vec->value));
-  vec->reference_strength_factor = calloc_and_check (sz->size, sizeof (int));
+  vec->value = calloc_and_check (actsz, sizeof (*vec->value));
+  vec->reference_strength_factor = calloc_and_check (actsz, sizeof (int));
 
   obj->value_ptr.array = vec;
 
-  for (i = 0; i < sz->size; i++)
+  for (i = 0; i < actsz && i < l; i++)
     {
-      vec->value [i] = nth (i, list);
+      vec->value [i] = CAR (list);
+      add_reference (obj, vec->value [i], i);
+      lastobj = CAR (list);
+      list = CDR (list);
+    }
+
+  for (; i < size; i++)
+    {
+      vec->value [i] = lastobj;
       add_reference (obj, vec->value [i], i);
     }
 
@@ -14276,7 +14286,7 @@ struct object *
 builtin_vector (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  return create_vector_from_list (list);
+  return create_vector_from_list (list, -1);
 }
 
 
