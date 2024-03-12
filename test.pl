@@ -181,6 +181,8 @@ make_test ("#(\n" .
 	   "(\n" .
 	   ")\n" .
 	   ")", "#(NIL)");
+make_test ("#5(a b c)", "#(A B C C C)");
+make_test ("#0()", "#()");
 make_test ("'#:a", "#:A");
 make_test ("'#:car", "#:CAR");
 make_test ("#b01010", "10");
