@@ -1054,6 +1054,7 @@ make_test ("(format t \"aaa~%~%\")", "aaa\n\nNIL");
 make_test ("(format t \"aa~&~&bb\")", "aa\nbb\nNIL");
 make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))",
 	   "the number is 10 and the list is (1 2 3)\nNIL");
+make_test ("(open \"README\" :foo 'what :allow-other-keys t :allow-other-keys nil)", "#<STREAM ?>");
 make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
 make_test ("(write \"hello\" :stream str)", "\"hello\"");
 make_test ("(write #\\a :stream str :stream *standard-input*)", "#\\a");
