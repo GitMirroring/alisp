@@ -14213,8 +14213,8 @@ struct object *
 builtin_make_array (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  int indx, tot = 1, fillp = -1;
-  struct object *ret, *cons, *dims, *fp = NULL;
+  int indx, tot = 1, fillp = -1, found_unknown_key = 0;
+  struct object *ret, *cons, *dims, *fp = NULL, *allow_other_keys = NULL;
   struct array_size *size = NULL, *sz;
 
   if (!list_length (list))
@@ -14251,13 +14251,34 @@ builtin_make_array (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
       list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   if (fp && fp->type == TYPE_INTEGER)
@@ -14685,9 +14706,10 @@ struct object *
 builtin_make_hash_table (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct object *ret;
+  struct object *ret, *allow_other_keys = NULL;
   struct hashtable *ht;
   enum hashtable_type type = HT_NONE;
+  int found_unknown_key = 0;
 
   while (SYMBOL (list) != &nil_object)
     {
@@ -14727,13 +14749,34 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
       list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   if (type == HT_NONE)
@@ -15092,7 +15135,8 @@ struct object *
 builtin_make_pathname (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *name = NULL, *ret;
+  struct object *name = NULL, *ret, *allow_other_keys = NULL;
+  int found_unknown_key = 0;
 
   while (SYMBOL (list) != &nil_object)
     {
@@ -15127,13 +15171,34 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
       list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   if (name && name->type != TYPE_STRING)
@@ -15160,7 +15225,8 @@ struct object *
 builtin_pathname_name (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *fn;
+  struct object *fn, *allow_other_keys = NULL;
+  int found_unknown_key = 0;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -15190,13 +15256,34 @@ builtin_pathname_name (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
       list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   increment_refcount (fn->value_ptr.filename->value);
@@ -15639,7 +15726,8 @@ struct object *
 builtin_write (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *obj, *str = NULL;
+  struct object *obj, *str = NULL, *allow_other_keys = NULL;
+  int found_unknown_key = 0;
 
   if (list_length (list) < 1)
     {
@@ -15673,13 +15761,34 @@ builtin_write (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
-	list = CDR (list);
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   if (!str)
@@ -15856,7 +15965,8 @@ builtin_open (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
   enum stream_direction dir = NO_DIRECTION;
-  struct object *ns;
+  struct object *ns, *allow_other_keys = NULL;
+  int found_unknown_key = 0;
 
   if (!list_length (list))
     {
@@ -15908,13 +16018,34 @@ builtin_open (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
       list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   if (!dir)
@@ -21526,7 +21657,8 @@ builtin_make_package (struct object *list, struct environment *env,
 {
   char *name;
   int len;
-  struct object *ret, *nicks = NULL, *args;
+  struct object *ret, *nicks = NULL, *args, *allow_other_keys = NULL;
+  int found_unknown_key = 0;
 
   if (!list_length (list))
     {
@@ -21580,13 +21712,34 @@ builtin_make_package (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else
 	{
-	  outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-	  return NULL;
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
 	}
 
       list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
     }
 
   ret = create_package (name, len);
