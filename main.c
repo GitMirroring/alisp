@@ -1537,6 +1537,7 @@ struct object *inspect_pathname_by_designator (struct object *des);
 struct object *alloc_vector (fixnum size, int fill_with_nil,
 			     int dont_store_size);
 struct object *create_vector_from_list (struct object *list, fixnum size);
+struct object *alloc_bitvector (fixnum size);
 struct object *create_bitvector_from_char_vector (const char *in, size_t sz,
 						  size_t req_size);
 struct object *fill_axis_from_sequence (struct object *arr, struct object **axis,
@@ -7843,21 +7844,32 @@ create_vector_from_list (struct object *list, fixnum size)
 
 
 struct object *
-create_bitvector_from_char_vector (const char *in, size_t sz, size_t req_size)
+alloc_bitvector (fixnum size)
 {
   struct object *ret = alloc_object ();
-  size_t i;
-  char l;
 
   ret->type = TYPE_BITARRAY;
   ret->value_ptr.bitarray = malloc_and_check (sizeof (*ret->value_ptr.bitarray));
 
   ret->value_ptr.bitarray->alloc_size =
     malloc_and_check (sizeof (*ret->value_ptr.bitarray->alloc_size));
+  ret->value_ptr.bitarray->alloc_size->size = size;
   ret->value_ptr.bitarray->alloc_size->next = NULL;
+
   ret->value_ptr.bitarray->fill_pointer = -1;
 
   mpz_init (ret->value_ptr.bitarray->value);
+
+  return ret;
+}
+
+
+struct object *
+create_bitvector_from_char_vector (const char *in, size_t sz, size_t req_size)
+{
+  struct object *ret = alloc_bitvector (req_size);
+  size_t i;
+  char l;
 
   for (i = 0; i < sz; i++)
     {
@@ -9588,6 +9600,11 @@ elt (struct object *seq, unsigned int ind)
     return get_nth_character (seq, ind);
   else if (seq->type == TYPE_ARRAY)
     return seq->value_ptr.array->value [ind];
+  else if (seq->type == TYPE_BITARRAY)
+    {
+      return create_integer_from_long
+	(mpz_tstbit (seq->value_ptr.bitarray->value, ind));
+    }
   else
     return NULL;
 }
@@ -9610,6 +9627,13 @@ set_elt (struct object *seq, unsigned int ind, struct object *val)
     {
       seq->value_ptr.array->value [ind] = val;
       add_reference (seq, val, ind);
+    }
+  else if (seq->type == TYPE_BITARRAY)
+    {
+      if (is_zero (val))
+	mpz_clrbit (seq->value_ptr.bitarray->value, ind);
+      else
+	mpz_setbit (seq->value_ptr.bitarray->value, ind);
     }
 }
 
@@ -17331,6 +17355,8 @@ builtin_map (struct object *list, struct environment *env,
     ret = alloc_empty_list (min);
   else if (is_subtype_by_char_vector (CAR (list), "STRING", env))
     ret = alloc_string (min);
+  else if (is_subtype_by_char_vector (CAR (list), "BIT-VECTOR", env))
+    ret = alloc_bitvector (min);
   else
     ret = alloc_vector (min, 0, 0);
 
@@ -17357,8 +17383,11 @@ builtin_map (struct object *list, struct environment *env,
 
       for (j = 2; j < l; j++)
 	{
-	  if (nth (j, list)->type == TYPE_STRING)
-	    decrement_refcount (CAR (argscons));
+	  if (nth (j, list)->type == TYPE_STRING
+	      || nth (j, list)->type == TYPE_BITARRAY)
+	    {
+	      decrement_refcount (CAR (argscons));
+	    }
 
 	  argscons = CDR (argscons);
 	}
@@ -17370,7 +17399,8 @@ builtin_map (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (ret->type == TYPE_STRING && val->type != TYPE_CHARACTER)
+      if ((ret->type == TYPE_STRING && val->type != TYPE_CHARACTER)
+	  || (ret->type == TYPE_BITARRAY && !is_bit (val)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
