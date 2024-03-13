@@ -381,7 +381,7 @@ outcome_type
     WRONG_NUMBER_OF_ARGUMENTS,
     MISMATCH_IN_DESTRUCTURING_CALL,
     WRONG_TYPE_OF_ARGUMENT,
-    WRONG_NUMBER_OF_AXIS,
+    WRONG_NUMBER_OF_AXES,
     OUT_OF_BOUND_INDEX,
     DECREASING_INTERVAL_NOT_MEANINGFUL,
     INVALID_SIZE,
@@ -13752,7 +13752,7 @@ builtin_elt (struct object *list, struct environment *env,
     {
       if (array_rank (CAR (list)->value_ptr.array->alloc_size) != 1)
 	{
-	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  outcome->type = WRONG_NUMBER_OF_AXES;
 	  return NULL;
 	}
 
@@ -13773,7 +13773,7 @@ builtin_elt (struct object *list, struct environment *env,
     {
       if (array_rank (CAR (list)->value_ptr.bitarray->alloc_size) != 1)
 	{
-	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  outcome->type = WRONG_NUMBER_OF_AXES;
 	  return NULL;
 	}
 
@@ -14665,7 +14665,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
     {
       if (!sz)
 	{
-	  outcome->type = WRONG_NUMBER_OF_AXIS;
+	  outcome->type = WRONG_NUMBER_OF_AXES;
 	  return NULL;
 	}
 
@@ -14703,7 +14703,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
 
   if (sz)
     {
-      outcome->type = WRONG_NUMBER_OF_AXIS;
+      outcome->type = WRONG_NUMBER_OF_AXES;
       return NULL;
     }
 
@@ -28407,9 +28407,9 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("type error: wrong type of argument\n");
     }
-  else if (err->type == WRONG_NUMBER_OF_AXIS)
+  else if (err->type == WRONG_NUMBER_OF_AXES)
     {
-      printf ("eval error: wrong number of axis\n");
+      printf ("eval error: wrong number of axes\n");
     }
   else if (err->type == OUT_OF_BOUND_INDEX)
     {
