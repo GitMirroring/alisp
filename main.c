@@ -1544,6 +1544,9 @@ struct object *fill_axis_from_sequence (struct object *arr, struct object **axis
 					fixnum index, struct array_size *size,
 					fixnum rowsize, struct object *seq);
 struct object *create_array_from_sequence (struct object *seq, fixnum rank);
+struct object *adjust_array_axis (struct object *dest, struct object *src,
+				  struct array_size *axis_size,
+				  struct array_size *ind, struct array_size *i);
 void resize_vector (struct object *vector, fixnum size);
 
 struct object *create_character (char *character, int do_copy);
@@ -1685,6 +1688,8 @@ struct object *copy_list_structure (struct object *list,
 
 fixnum array_rank (const struct array_size *sz);
 fixnum array_total_size (const struct array_size *sz);
+fixnum array_row_major_index (const struct array_size *ind,
+			      const struct array_size *sz);
 
 int hash_object_respecting_eq (const struct object *object, size_t table_size);
 int hash_object_respecting_eql (const struct object *object, size_t table_size);
@@ -7983,6 +7988,40 @@ create_array_from_sequence (struct object *seq, fixnum rank)
 }
 
 
+struct object *
+adjust_array_axis (struct object *dest, struct object *src,
+		   struct array_size *axis_size, struct array_size *ind,
+		   struct array_size *i)
+{
+  fixnum j;
+  size_t s, d;
+
+  if (i->next)
+    {
+      for (j = 0; j < axis_size->size; j++)
+	{
+	  i->size = j;
+	  adjust_array_axis (dest, src, axis_size->next, ind, i->next);
+	}
+    }
+  else
+    {
+      for (j = 0; j < axis_size->size; j++)
+	{
+	  i->size = j;
+
+	  s = array_row_major_index (ind, src->value_ptr.array->alloc_size);
+	  d = array_row_major_index (ind, dest->value_ptr.array->alloc_size);
+
+	  dest->value_ptr.array->value [d] = src->value_ptr.array->value [s];
+	  add_reference (dest, dest->value_ptr.array->value [d], d);
+	}
+    }
+
+  return dest;
+}
+
+
 void
 resize_vector (struct object *vector, fixnum size)
 {
@@ -9917,6 +9956,24 @@ array_total_size (const struct array_size *sz)
     {
       ret *= sz->size;
 
+      sz = sz->next;
+    }
+
+  return ret;
+}
+
+
+fixnum
+array_row_major_index (const struct array_size *ind, const struct array_size *sz)
+{
+  fixnum ret = 0, totsize = array_total_size (sz);
+
+  while (ind)
+    {
+      totsize /= sz->size;
+      ret += ind->size*totsize;
+
+      ind = ind->next;
       sz = sz->next;
     }
 
@@ -14658,7 +14715,9 @@ struct object *
 builtin_adjust_array (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
-  fixnum newsz, oldsz, i, newchsz;
+  fixnum newsz, oldsz, i, newchsz, r, newtotsz;
+  struct object *cons, *ret;
+  struct array_size *ind, *in, *size, *s;
 
   if (list_length (list) != 2)
     {
@@ -14721,32 +14780,74 @@ builtin_adjust_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (CAR (list)->value_ptr.array->alloc_size->size > newsz)
+      if (CAR (list)->value_ptr.array->alloc_size->next)
 	{
-	  for (i = newsz; i < CAR (list)->value_ptr.array->alloc_size->size; i++)
+	  ind = in = malloc_and_check (sizeof (*in));
+	  size = s = malloc_and_check (sizeof (*s));
+	  cons = CAR (CDR (list));
+	  s->size = mpz_get_si (CAR (cons)->value_ptr.integer);
+
+	  r = array_rank (CAR (list)->value_ptr.array->alloc_size);
+
+	  for (i = 1; i < r; i++)
 	    {
-	      delete_reference (CAR (list), CAR (list)->value_ptr.array->value [i],
-				i);
+	      in->next = malloc_and_check (sizeof (*in));
+	      s->next = malloc_and_check (sizeof (*s));
+	      in = in->next;
+	      s = s->next;
+
+	      cons = CDR (cons);
+	      s->size = mpz_get_si (CAR (cons)->value_ptr.integer);
 	    }
+
+	  s->next = in->next = NULL;
+
+	  newtotsz = array_total_size (size);
+
+	  ret = alloc_vector (newtotsz, 1, 1);
+	  ret->value_ptr.array->alloc_size = size;
+
+	  for (i = 0; i < CAR (list)->value_ptr.array->alloc_size->size; i++)
+	    {
+	      ind->size = i;
+	      adjust_array_axis (ret, CAR (list),
+				 CAR (list)->value_ptr.array->alloc_size->next,
+				 ind, ind->next);
+	    }
+
+	  return ret;
 	}
-
-      CAR (list)->value_ptr.array->value =
-	realloc_and_check (CAR (list)->value_ptr.array->value, newsz
-			   * sizeof (*CAR (list)->value_ptr.array->value));
-
-      if (CAR (list)->value_ptr.array->alloc_size->size < newsz)
+      else
 	{
-	  for (i = CAR (list)->value_ptr.array->alloc_size->size; i < newsz; i++)
+	  if (CAR (list)->value_ptr.array->alloc_size->size > newsz)
 	    {
-	      CAR (list)->value_ptr.array->value [i] = &nil_object;
+	      for (i = newsz; i < CAR (list)->value_ptr.array->alloc_size->size;
+		   i++)
+		{
+		  delete_reference (CAR (list),
+				    CAR (list)->value_ptr.array->value [i], i);
+		}
 	    }
+
+	  CAR (list)->value_ptr.array->value =
+	    realloc_and_check (CAR (list)->value_ptr.array->value, newsz
+			       * sizeof (*CAR (list)->value_ptr.array->value));
+
+	  if (CAR (list)->value_ptr.array->alloc_size->size < newsz)
+	    {
+	      for (i = CAR (list)->value_ptr.array->alloc_size->size; i < newsz;
+		   i++)
+		{
+		  CAR (list)->value_ptr.array->value [i] = &nil_object;
+		}
+	    }
+
+	  CAR (list)->value_ptr.array->alloc_size->size = newsz;
+
+	  CAR (list)->value_ptr.array->reference_strength_factor =
+	    realloc_and_check (CAR (list)->value_ptr.array->reference_strength_factor,
+			       newsz * sizeof (int));
 	}
-
-      CAR (list)->value_ptr.array->alloc_size->size = newsz;
-
-      CAR (list)->value_ptr.array->reference_strength_factor =
-	realloc_and_check (CAR (list)->value_ptr.array->reference_strength_factor,
-			   newsz * sizeof (int));
     }
   else if (CAR (list)->type == TYPE_BITARRAY)
     {
