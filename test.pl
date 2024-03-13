@@ -891,6 +891,8 @@ make_test ("(let ((arr (make-array 2))) (adjust-array arr 3) arr)", "#(NIL NIL N
 make_test ("(let ((str \"abcdef\")) (adjust-array str 4) str)", "\"abcd\"");
 make_test ("(let ((str \"abcdef\")) (adjust-array str 8) (length str))", "8");
 make_test ("(adjust-array #(0 1 2 4 5 3) 5)", "#(0 1 2 4 5)");
+make_test ("(adjust-array #2a((a b c) (d e f)) '(3 4))", "#2A((A B C NIL) (D E F NIL) (NIL NIL NIL NIL))");
+make_test ("(adjust-array #2a((a b c) (d e f)) '(2 2))", "#2A((A B) (D E))");
 make_test ("(defparameter tbl (make-hash-table))", "TBL");
 make_test ("tbl", "#<HASH-TABLE EQL 0/1024>");
 make_test ("(hash-table-size tbl)", "1024");
