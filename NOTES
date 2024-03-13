@@ -102,6 +102,21 @@ proclaimed special, so it is equivalent to a DEFPARAMETER.
 
 
 
+__Arrays__
+
+All arrays are adjustable in alisp.  As long as it's an interpreter, there's no
+reason to do otherwise.
+
+
+
+__Structures__
+
+Redefining a structure type works fine, despite being undefined in ANSI.  But if
+you redefine a structure class as something other than a structure, then calling
+the constructor or accessors of the previous definition will cause a crash.
+
+
+
 __Language of implementation__
 
 The alisp codebase should be valid C89, to the best of my knowledge.
