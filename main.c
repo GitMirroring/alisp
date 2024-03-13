@@ -14447,9 +14447,10 @@ builtin_array_dimensions (struct object *list, struct environment *env,
       ret->value_ptr.cons_pair->car = num;
       ret->value_ptr.cons_pair->cdr = &nil_object;
     }
-  else if (arr->type == TYPE_ARRAY)
+  else if (arr->type == TYPE_ARRAY || arr->type == TYPE_BITARRAY)
     {
-      sz = arr->value_ptr.array->alloc_size;
+      sz = arr->type == TYPE_ARRAY ? arr->value_ptr.array->alloc_size
+	: arr->value_ptr.bitarray->alloc_size;
 
       if (!sz)
 	return &nil_object;
