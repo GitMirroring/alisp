@@ -14213,8 +14213,9 @@ struct object *
 builtin_make_array (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  int indx, tot = 1, fillp = -1, found_unknown_key = 0;
-  struct object *ret, *cons, *dims, *fp = NULL, *allow_other_keys = NULL;
+  int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize;
+  struct object *ret, *cons, *dims, *fp = NULL, *initial_contents = NULL,
+    *allow_other_keys = NULL;
   struct array_size *size = NULL, *sz;
 
   if (!list_length (list))
@@ -14242,6 +14243,27 @@ builtin_make_array (struct object *list, struct environment *env,
 	    {
 	      if (!fp)
 		fp = CAR (CDR (list));
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":INITIAL-CONTENTS", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (list))->type == TYPE_CONS_PAIR)
+	    {
+	      if (!initial_contents)
+		initial_contents = CAR (CDR (list));
 	    }
 	  else
 	    {
@@ -14314,8 +14336,6 @@ builtin_make_array (struct object *list, struct environment *env,
 	ret->value_ptr.array->fill_pointer = indx;
       else
 	ret->value_ptr.array->fill_pointer = fillp;
-
-      return ret;
     }
   else if (dims->type == TYPE_CONS_PAIR)
     {
@@ -14385,6 +14405,27 @@ builtin_make_array (struct object *list, struct environment *env,
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
+    }
+
+  if (initial_contents)
+    {
+      rowsize = 1;
+      sz = ret->value_ptr.array->alloc_size->next;
+
+      while (sz)
+	{
+	  rowsize *= sz->size;
+	  sz = sz->next;
+	}
+
+      for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
+	{
+	  fill_axis_from_sequence (ret, &ret->value_ptr.array->value [i*rowsize],
+				   i*rowsize,
+				   ret->value_ptr.array->alloc_size->next,
+				   rowsize, CAR (initial_contents));
+	  initial_contents = CDR (initial_contents);
+	}
     }
 
   return ret;
