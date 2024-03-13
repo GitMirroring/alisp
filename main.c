@@ -11626,10 +11626,11 @@ struct object *
 call_structure_constructor (struct object *class_name, struct object *args,
 			    struct environment *env, struct outcome *outcome)
 {
-  struct object *ret;
+  struct object *ret, *allow_other_keys = NULL;
   struct structure *s;
   struct structure_field *f;
   struct structure_field_decl *fd;
+  int found_unknown_key = 0;
 
   ret = alloc_object ();
   ret->type = TYPE_STRUCTURE;
@@ -11649,13 +11650,85 @@ call_structure_constructor (struct object *class_name, struct object *args,
 	s->fields = f = malloc_and_check (sizeof (*f));
 
       f->name = fd->name;
-      f->value = &nil_object;
+      f->value = NULL;
 
       fd = fd->next;
     }
 
   if (s->fields)
     f->next = NULL;
+
+
+  while (SYMBOL (args) != &nil_object)
+    {
+      f = s->fields;
+
+      while (f)
+	{
+	  if (eqmem (f->name->value_ptr.symbol->name,
+		     f->name->value_ptr.symbol->name_len,
+		     IS_SYMBOL (CAR (args))
+		     ? SYMBOL (CAR (args))->value_ptr.symbol->name : "",
+		     IS_SYMBOL (CAR (args))
+		     ? SYMBOL (CAR (args))->value_ptr.symbol->name_len : 0))
+	    {
+	      if (SYMBOL (CDR (args)) == &nil_object)
+		{
+		  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+		  return NULL;
+		}
+
+	      if (!f->value)
+		{
+		  f->value = CAR (CDR (args));
+		  increment_refcount (f->value);
+		}
+
+	      break;
+	    }
+
+	  f = f->next;
+	}
+
+      if (SYMBOL (CAR (args)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (args)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (args));
+	}
+
+      if (!f && SYMBOL (CAR (args)) != env->key_allow_other_keys_sym)
+	{
+	  found_unknown_key = 1;
+	}
+
+      args = CDR (CDR (args));
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
+    }
+
+
+  f = s->fields;
+
+  while (f)
+    {
+      if (!f->value)
+	{
+	  f->value = &nil_object;
+	}
+
+      f = f->next;
+    }
 
   return ret;
 }
