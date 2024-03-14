@@ -772,20 +772,20 @@ function
     (struct object *list, struct environment *env, struct outcome *outcome);
 
 
-  struct object *struct_constructor_class;
+  struct object *struct_constructor_class_name;
 
 
-  struct object *struct_accessor_class;
+  struct object *struct_accessor_class_name;
   struct object *struct_accessor_field;
 
 
-  struct object *struct_predicate_class;
+  struct object *struct_predicate_class_name;
 
 
-  struct object *struct_copyier_class;
+  struct object *struct_copyier_class_name;
 
 
-  struct object *condition_reader_class;
+  struct object *condition_reader_class_name;
   struct object *condition_reader_field;
 
 
@@ -6430,11 +6430,11 @@ alloc_function (void)
   fun->flags = 0;
   fun->methods = NULL;
   fun->builtin_form = NULL;
-  fun->struct_constructor_class = NULL;
-  fun->struct_accessor_class = NULL;
-  fun->struct_predicate_class = NULL;
-  fun->struct_copyier_class = NULL;
-  fun->condition_reader_class = NULL;
+  fun->struct_constructor_class_name = NULL;
+  fun->struct_accessor_class_name = NULL;
+  fun->struct_predicate_class_name = NULL;
+  fun->struct_copyier_class_name = NULL;
+  fun->condition_reader_class_name = NULL;
   fun->function_macro = NULL;
   fun->macro_function = NULL;
 
@@ -9181,7 +9181,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
       increment_refcount (rs);
       rs->value_ptr.symbol->function_cell = alloc_function ();
       rs->value_ptr.symbol->function_cell->value_ptr.function->
-	condition_reader_class = sym;
+	condition_reader_class_name = sym;
       rs->value_ptr.symbol->function_cell->value_ptr.function->
 	condition_reader_field = par;
       rs->value_ptr.symbol->function_cell->value_ptr.function->name = rs;
@@ -11446,7 +11446,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       return ret;
     }
-  else if (func->value_ptr.function->struct_constructor_class)
+  else if (func->value_ptr.function->struct_constructor_class_name)
     {
       args = evaluate_through_list (arglist, env, outcome);
 
@@ -11454,14 +11454,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	return NULL;
 
       ret = call_structure_constructor (func->value_ptr.function->
-					struct_constructor_class, args,
+					struct_constructor_class_name, args,
 					env, outcome);
 
       decrement_refcount (args);
 
       return ret;
     }
-  else if (func->value_ptr.function->struct_accessor_class)
+  else if (func->value_ptr.function->struct_accessor_class_name)
     {
       args = evaluate_through_list (arglist, env, outcome);
 
@@ -11469,7 +11469,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	return NULL;
 
       ret = call_structure_accessor (func->value_ptr.function->
-				     struct_accessor_class,
+				     struct_accessor_class_name,
 				     func->value_ptr.function->
 				     struct_accessor_field, args, NULL,
 				     env, outcome);
@@ -11478,7 +11478,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       return ret;
     }
-  else if (func->value_ptr.function->condition_reader_class)
+  else if (func->value_ptr.function->condition_reader_class_name)
     {
       args = evaluate_through_list (arglist, env, outcome);
 
@@ -11486,7 +11486,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	return NULL;
 
       ret = call_condition_reader (func->value_ptr.function->
-				   condition_reader_class,
+				   condition_reader_class_name,
 				   func->value_ptr.function->
 				   condition_reader_field, args, env, outcome);
 
@@ -24255,7 +24255,7 @@ evaluate_setf (struct object *list, struct environment *env,
 	    }
 	  else if ((fun = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
 		    function_cell)
-		   && fun->value_ptr.function->struct_accessor_class)
+		   && fun->value_ptr.function->struct_accessor_class_name)
 	    {
 	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
 
@@ -24268,7 +24268,7 @@ evaluate_setf (struct object *list, struct environment *env,
 		return NULL;
 
 	      val = call_structure_accessor (fun->value_ptr.function->
-					     struct_accessor_class,
+					     struct_accessor_class_name,
 					     fun->value_ptr.function->
 					     struct_accessor_field, args, val,
 					     env, outcome);
@@ -24806,7 +24806,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
   decrement_refcount (funcname->value_ptr.symbol->function_cell);
 
   funcname->value_ptr.symbol->function_cell->value_ptr.function->
-    struct_constructor_class = name;
+    struct_constructor_class_name = name;
 
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
   add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
@@ -24838,7 +24838,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
       decrement_refcount (funcname->value_ptr.symbol->function_cell);
 
       funcname->value_ptr.symbol->function_cell->value_ptr.function->
-	struct_accessor_class = name;
+	struct_accessor_class_name = name;
       funcname->value_ptr.symbol->function_cell->value_ptr.function->
 	struct_accessor_field = f->name;
 
