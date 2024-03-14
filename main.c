@@ -24811,7 +24811,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   funcname = intern_symbol_by_char_vector (constr_name,
 					   5+name->value_ptr.symbol->name_len, 1,
-					   EXTERNAL_VISIBILITY, 1, pack);
+					   INTERNAL_VISIBILITY, 1, pack);
   free (constr_name);
   increment_refcount (funcname);
 
@@ -24843,7 +24843,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
 					       name->value_ptr.symbol->name_len +
 					       1 +
 					       f->name->value_ptr.symbol->name_len,
-					       1, EXTERNAL_VISIBILITY, 1, pack);
+					       1, INTERNAL_VISIBILITY, 1, pack);
       free (acc_name);
       increment_refcount (funcname);
 
