@@ -11712,6 +11712,12 @@ call_structure_constructor (struct object *class_name, struct object *args,
 	  found_unknown_key = 1;
 	}
 
+      if (SYMBOL (CDR (args)) == &nil_object)
+	{
+	  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	  return NULL;
+	}
+
       args = CDR (CDR (args));
     }
 
