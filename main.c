@@ -5534,6 +5534,15 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == 's' || macro_call->dispatch_ch == 'S')
     {
+      if (obj->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (obj))
+	  || !SYMBOL (CAR (obj))->value_ptr.symbol->typespec
+	  || SYMBOL (CAR (obj))->value_ptr.symbol->typespec->type
+	  != TYPE_STRUCTURE_CLASS)
+	{
+	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	  return NULL;
+	}
+
       return call_structure_constructor (SYMBOL (CAR (obj)), CDR (obj), env,
 					 outcome);
     }
