@@ -5131,7 +5131,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(aA:cC+-*bBoOxXrR", call->dispatch_ch))
+  if (!strchr ("'\\.pP(aA:cC+-*sSbBoOxXrR", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -5531,6 +5531,11 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  outcome->type = SKIPPED_OBJECT;
 	  return NULL;
 	}
+    }
+  else if (macro_call->dispatch_ch == 's' || macro_call->dispatch_ch == 'S')
+    {
+      return call_structure_constructor (SYMBOL (CAR (obj)), CDR (obj), env,
+					 outcome);
     }
   else if (strchr ("*bBoOxXrR", macro_call->dispatch_ch))
     {
