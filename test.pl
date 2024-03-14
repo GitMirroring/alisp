@@ -1127,6 +1127,7 @@ make_test ("(let ((z 0)) (destructuring-bind (i) (list z) (setq z (+ i 1))))", "
 make_test ("(destructuring-bind (x (y (z))) '(0 (1 (2))) (list x y z))", "(0 1 2)");
 make_test ("(destructuring-bind (x (y z) w) '(0 ((1 2) 3) 4) (list x y z w))", "(0 (1 2) 3 4)");
 make_test ("(destructuring-bind (x . y) '(0 1 2 3) (list x y))", "(0 (1 2 3))");
+make_test ("'make-ship", "MAKE-SHIP");
 make_test ("(defstruct ship x y)", "SHIP");
 make_test ("(defstruct ship x y)", "SHIP");
 make_test ("#'make-ship", "#<FUNCTION MAKE-SHIP>");
