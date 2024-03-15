@@ -2000,6 +2000,8 @@ struct object *builtin_read
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_preserving_whitespace
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_read_from_string
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_eval
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_compile
@@ -3081,6 +3083,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
 		    builtin_read_preserving_whitespace, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("READ-FROM-STRING", env, builtin_read_from_string,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COMPILE", env, builtin_compile, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
@@ -15885,6 +15889,56 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
       add_reference (str, s->string, 0);
       decrement_refcount (newstr);
     }
+
+  return ret;
+}
+
+
+struct object *
+builtin_read_from_string (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *ret = NULL;
+  enum outcome_type out;
+  const char *objbeg, *objend;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  out = read_object (&ret, 0, CAR (list)->value_ptr.string->value,
+		     CAR (list)->value_ptr.string->used_size, NULL, 0, 1, env,
+		     outcome, &objbeg, &objend);
+
+  if (IS_READ_OR_EVAL_ERROR (out))
+    {
+      outcome->type = out;
+      return NULL;
+    }
+
+  if (IS_INCOMPLETE_OBJECT (out))
+    {
+      outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+      return NULL;
+    }
+
+  if (out == NO_OBJECT)
+    {
+      outcome->type = GOT_EOF;
+      return NULL;
+    }
+
+  prepend_object_to_obj_list
+    (create_integer_from_long (objend - CAR (list)->value_ptr.string->value + 1),
+     &outcome->other_values);
 
   return ret;
 }
