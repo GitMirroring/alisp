@@ -1990,6 +1990,8 @@ struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_truename
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_probe_file
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_rename_file
@@ -3077,6 +3079,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("TRUENAME", env, builtin_truename, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PROBE-FILE", env, builtin_probe_file, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("RENAME-FILE", env, builtin_rename_file, TYPE_FUNCTION, NULL,
@@ -15560,6 +15563,46 @@ builtin_pathname_name (struct object *list, struct environment *env,
 
   increment_refcount (fn->value_ptr.filename->value);
   return fn->value_ptr.filename->value;
+}
+
+
+struct object *
+builtin_truename (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  FILE *f;
+  char *fn;
+  struct object *ns;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ns = inspect_pathname_by_designator (CAR (list));
+
+  fn = copy_string_to_c_string (ns->value_ptr.string);
+
+  f = fopen (fn, "r");
+
+  free (fn);
+
+  if (!f)
+    {
+      outcome->type = COULD_NOT_OPEN_FILE_FOR_READING;
+      return NULL;
+    }
+
+  fclose (f);
+
+  return create_filename (ns);
 }
 
 
