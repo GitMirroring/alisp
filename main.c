@@ -8226,9 +8226,6 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
       return NULL;
     }
 
-  str->namestring = namestring;
-  add_reference (obj, namestring, 1);
-
   str->type = type;
   str->direction = direction;
   str->is_open = 1;
@@ -8236,6 +8233,9 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
 
   obj->type = TYPE_STREAM;
   obj->value_ptr.stream = str;
+
+  str->namestring = namestring;
+  add_reference (obj, namestring, 1);
 
   return obj;
 }
