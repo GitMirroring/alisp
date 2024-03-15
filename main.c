@@ -3461,6 +3461,14 @@ add_standard_definitions (struct environment *env)
   stdobjsym->value_ptr.symbol->typespec = stdobjcl;
 
 
+  add_condition_class ("UNBOUND-SLOT", env, 1, "CELL-ERROR", (char *)NULL,
+		       "INSTANCE", (char *)NULL);
+  add_condition_class ("UNDEFINED-FUNCTION", env, 1, "CELL-ERROR", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("UNBOUND-VARIABLE", env, 1, "CELL-ERROR", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("CELL-ERROR", env, 1, "ERROR", (char *)NULL, "NAME",
+		       (char *)NULL);
   add_condition_class ("TYPE-ERROR", env, 1, "ERROR", (char *)NULL,
 		       "EXPECTED-TYPE", "DATUM", (char *)NULL);
   add_condition_class ("FILE-ERROR", env, 1, "ERROR", (char *)NULL, "PATHNAME",
