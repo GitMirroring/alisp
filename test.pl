@@ -984,6 +984,8 @@ make_test ("(read-preserving-whitespace inp2)", "AA");
 make_test ("(read-line inp2)", "\"  \"\nT");
 make_test ("(read-preserving-whitespace (make-string-input-stream \"hello\"))", "HELLO");
 make_test ("(read-preserving-whitespace (make-string-input-stream \"123\"))", "123");
+make_test ("(read-from-string \" abc\")", "ABC\n4");
+make_test ("(read-from-string \" 1  \")", "1\n2");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
 make_test ("(let ((var 12)) (eval 'var))", "12");
