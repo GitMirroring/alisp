@@ -117,6 +117,24 @@ the constructor or accessors of the previous definition will cause a crash.
 
 
 
+__Pathnames__
+
+The pathname API of Common Lisp is very complex, so I chose the simplest
+interpretation.  The only meaningful component of a pathname is the name, the
+others are ignored.  The truename of a file is just the name, there's no
+resolution.
+
+
+
+__File operations__
+
+PROBE-FILE does not work very well.  It tries to open the file for reading and
+returns NIL if it can't, so it may return NIL even just for lack of permissions.
+In the future I will probably add an optional use of POSIX api for better file
+operations.
+
+
+
 __Language of implementation__
 
 The alisp codebase should be valid C89, to the best of my knowledge.
