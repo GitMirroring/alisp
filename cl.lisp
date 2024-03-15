@@ -1315,6 +1315,22 @@
   (setf (aref vec ind) newval))
 
 
+(defun vector-pop (vec)
+  (setf (fill-pointer vec) (1- (fill-pointer vec)))
+  (aref vec (fill-pointer vec)))
+
+(defun vector-push (newel vec)
+  (unless (>= (fill-pointer vec) (array-dimension vec 0))
+    (setf (aref vec (fill-pointer vec)) newel)
+    (setf (fill-pointer vec) (1+ (fill-pointer vec)))
+    (1- (fill-pointer vec))))
+
+(defun vector-push-extend (newel vec &optional (ext 1))
+  (if (>= (fill-pointer vec) (array-dimension vec 0))
+      (adjust-array vec (+ (array-dimension vec 0) ext)))
+  (vector-push newel vec))
+
+
 (defun string= (str1 str2 &key (start1 0) end1 (start2 0) end2)
   (setq str1 (string str1))
   (setq str2 (string str2))
@@ -2448,23 +2464,24 @@
 	  subsetp mismatch search sort stable-sort array-rank array-dimension
 	  array-total-size array-in-bounds-p upgraded-array-element-type
 	  adjustable-array-p get get-properties remprop char schar bit sbit
-	  svref string= string/= string< string<= string> string>= string-equal
-	  string-not-equal string-lessp string-not-greaterp string-greaterp
-	  string-not-lessp char/= char< char<= char> char>= char-equal
-	  char-not-equal char-lessp char-not-greaterp char-greaterp
-	  char-not-lessp digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte consp listp symbolp keywordp
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type macroexpand equal
-	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
-	  merge pathname-host pathname-device pathname-directory pathname-type
-	  pathname-version file-author user-homedir-pathname with-open-file
-	  terpri write-line write-sequence prin1 princ print do-all-symbols loop
-	  format encode-universal-time abort))
+	  svref vector-pop vector-push vector-push-extend string= string/=
+	  string< string<= string> string>= string-equal string-not-equal
+	  string-lessp string-not-greaterp string-greaterp string-not-lessp
+	  char/= char< char<= char> char>= char-equal char-not-equal char-lessp
+	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage signed-byte unsigned-byte
+	  consp listp symbolp keywordp functionp packagep integerp rationalp
+	  floatp complexp random-state-p characterp standard-char-p vectorp
+	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
+	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
+	  check-type macroexpand equal fdefinition complement mapc mapcan
+	  maplist mapl mapcon map-into reduce merge pathname-host
+	  pathname-device pathname-directory pathname-type pathname-version
+	  file-author user-homedir-pathname with-open-file terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time abort))
 
 
 
