@@ -945,6 +945,8 @@ make_test ("(make-pathname :device \"foo\" :directory \"bar\")", "#P\"\"");
 make_test ("(pathname-name #p\"foo\")", "\"foo\"");
 make_test ("(pathname-name (make-pathname :name \"foo\"))", "\"foo\"");
 make_test ("(pathname-type (make-pathname :name \"foo\"))", "NIL");
+make_test ("(probe-file \"README\")", "#P\"README\"");
+make_test ("(probe-file \"foo\")", "NIL");
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (read s))", "(C)");
 make_test ("(read-line)\nabc", "\"abc\"\nNIL", 1);
 make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
