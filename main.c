@@ -6346,6 +6346,7 @@ alloc_object (void)
   obj->refcount1 = 0;
   obj->refcount2 = 1;
   obj->flags = 0;
+  obj->mark = 0;
 
   return obj;
 }
