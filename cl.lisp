@@ -1736,7 +1736,7 @@
     (t (eq x y))))
 
 
-(defun equalp (x y)
+#|(defun equalp (x y)
   (cond
     ((and (numberp x) (numberp y)) (= x y))
     ((and (characterp x) (characterp y)) (char-equal x y))
@@ -1756,7 +1756,7 @@
 				      (unless (equalp (row-major-aref x i) (row-major-aref y i))
 					(return-from equalp nil))))))
     (t (eq x y))))
-
+|#
 
 
 (defun fdefinition (fname)
@@ -2457,7 +2457,7 @@
 	  functionp packagep integerp rationalp floatp complexp random-state-p
 	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
 	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type macroexpand equal equalp
+	  pathnamep streamp realp numberp check-type macroexpand equal
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
 	  merge pathname-host pathname-device pathname-directory pathname-type
 	  pathname-version file-author with-open-file terpri write-line

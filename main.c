@@ -2044,6 +2044,8 @@ struct object *builtin_eq
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_eql
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_equalp
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_not
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_concatenate
@@ -3115,6 +3117,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("EQL", env, builtin_eql, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("EQUALP", env, builtin_equalp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, NULL,
@@ -16618,6 +16621,20 @@ builtin_eql (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_equalp (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  return equalp_objects (CAR (list), CAR (CDR (list)));
+}
+
+
+struct object *
 builtin_not (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
@@ -27276,6 +27293,10 @@ struct object *
 equalp_objects (struct object *obj1, struct object *obj2)
 {
   int i;
+  struct structure_field *f1, *f2;
+
+  if (eq_objects (obj1, obj2) == &t_object)
+    return &t_object;
 
   if (IS_NUMBER (obj1) && IS_NUMBER (obj2))
     {
@@ -27334,6 +27355,27 @@ equalp_objects (struct object *obj1, struct object *obj2)
 	  if (equalp_objects (obj1->value_ptr.array->value [i],
 			      obj2->value_ptr.array->value [i]) == &nil_object)
 	    return &nil_object;
+	}
+
+      return &t_object;
+    }
+
+  if (obj1->type == TYPE_STRUCTURE && obj2->type == TYPE_STRUCTURE)
+    {
+      if (obj1->value_ptr.structure->class_name
+	  != obj2->value_ptr.structure->class_name)
+	return &nil_object;
+
+      f1 = obj1->value_ptr.structure->fields;
+      f2 = obj2->value_ptr.structure->fields;
+
+      while (f1)
+	{
+	  if (equalp_objects (f1->value, f2->value) == &nil_object)
+	    return &nil_object;
+
+	  f1 = f1->next;
+	  f2 = f2->next;
 	}
 
       return &t_object;
