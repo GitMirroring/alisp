@@ -1887,6 +1887,8 @@
 
 (defun file-author (fn))
 
+(defun user-homedir-pathname (&optional h))
+
 
 
 (defmacro with-open-file ((str fn &rest opts) &body forms)
@@ -2460,9 +2462,9 @@
 	  pathnamep streamp realp numberp check-type macroexpand equal
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
 	  merge pathname-host pathname-device pathname-directory pathname-type
-	  pathname-version file-author with-open-file terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time abort))
+	  pathname-version file-author user-homedir-pathname with-open-file
+	  terpri write-line write-sequence prin1 princ print do-all-symbols loop
+	  format encode-universal-time abort))
 
 
 
