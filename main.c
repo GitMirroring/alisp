@@ -28808,7 +28808,7 @@ parameter_by_index (struct parameter *par, int *ind)
 {
   struct parameter *sp;
 
-  while (par && *ind > 7)
+  while (par && (*ind > 7 || !par->name))
     {
       if (!par->name)
 	{
