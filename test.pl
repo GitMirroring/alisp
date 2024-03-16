@@ -898,6 +898,8 @@ make_test ("(let ((str \"abcdef\")) (adjust-array str 8) (length str))", "8");
 make_test ("(adjust-array #(0 1 2 4 5 3) 5)", "#(0 1 2 4 5)");
 make_test ("(adjust-array #2a((a b c) (d e f)) '(3 4))", "#2A((A B C NIL) (D E F NIL) (NIL NIL NIL NIL))");
 make_test ("(adjust-array #2a((a b c) (d e f)) '(2 2))", "#2A((A B) (D E))");
+make_test ("(adjust-array #2a((a b c d) (e f g h) (i j k l)) '(2 3))", "#2A((A B C) (E F G))");
+make_test ("(adjust-array #3a(((a b) (c d) (e f)) ((g h) (i j) (k l))) '(3 4 3))", "#3A(((A B NIL) (C D NIL) (E F NIL) (NIL NIL NIL)) ((G H NIL) (I J NIL) (K L NIL) (NIL NIL NIL)) ((NIL NIL NIL) (NIL NIL NIL) (NIL NIL NIL) (NIL NIL NIL)))");
 make_test ("(defparameter tbl (make-hash-table))", "TBL");
 make_test ("tbl", "#<HASH-TABLE EQL 0/1024>");
 make_test ("(hash-table-size tbl)", "1024");
