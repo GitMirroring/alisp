@@ -8164,7 +8164,7 @@ get_nth_character_offset (struct object *str, int ind)
 int
 set_nth_character (struct object *str, int ind, char *ch)
 {
-  char *c = str->value_ptr.string->value;
+  char *c = str->value_ptr.string->value, *bk;
   size_t s = str->value_ptr.string->used_size, off, csz, newsz;
 
   for (off = 0; ind; ind--)
@@ -8189,8 +8189,11 @@ set_nth_character (struct object *str, int ind, char *ch)
 
       if (newsz > str->value_ptr.string->alloc_size)
 	{
+	  bk = str->value_ptr.string->value;
 	  str->value_ptr.string->value =
 	    realloc_and_check (str->value_ptr.string->value, newsz);
+	  c = str->value_ptr.string->value + (c-bk);
+
 	  str->value_ptr.string->alloc_size = newsz;
 	}
 
