@@ -1544,8 +1544,10 @@ struct object *fill_axis_from_sequence (struct object *arr, struct object **axis
 					fixnum index, struct array_size *size,
 					fixnum rowsize, struct object *seq);
 struct object *create_array_from_sequence (struct object *seq, fixnum rank);
-struct object *adjust_array_axis (struct object *dest, struct object *src,
-				  struct array_size *axis_size,
+struct object *adjust_array_axis (struct object *dest,
+				  struct array_size *dest_axis_size,
+				  struct object *src,
+				  struct array_size *src_axis_size,
 				  struct array_size *ind, struct array_size *i);
 void resize_vector (struct object *vector, fixnum size);
 
@@ -8026,24 +8028,25 @@ create_array_from_sequence (struct object *seq, fixnum rank)
 
 
 struct object *
-adjust_array_axis (struct object *dest, struct object *src,
-		   struct array_size *axis_size, struct array_size *ind,
-		   struct array_size *i)
+adjust_array_axis (struct object *dest, struct array_size *dest_axis_size,
+		   struct object *src, struct array_size *src_axis_size,
+		   struct array_size *ind, struct array_size *i)
 {
   fixnum j;
   size_t s, d;
 
   if (i->next)
     {
-      for (j = 0; j < axis_size->size; j++)
+      for (j = 0; j < dest_axis_size->size && j < src_axis_size->size; j++)
 	{
 	  i->size = j;
-	  adjust_array_axis (dest, src, axis_size->next, ind, i->next);
+	  adjust_array_axis (dest, dest_axis_size->next, src,
+			     src_axis_size->next, ind, i->next);
 	}
     }
   else
     {
-      for (j = 0; j < axis_size->size; j++)
+      for (j = 0; j < dest_axis_size->size && j < src_axis_size->size; j++)
 	{
 	  i->size = j;
 
@@ -14926,10 +14929,12 @@ builtin_adjust_array (struct object *list, struct environment *env,
 	  ret = alloc_vector (newtotsz, 1, 1);
 	  ret->value_ptr.array->alloc_size = size;
 
-	  for (i = 0; i < CAR (list)->value_ptr.array->alloc_size->size; i++)
+	  for (i = 0; i < CAR (list)->value_ptr.array->alloc_size->size
+		 && i < ret->value_ptr.array->alloc_size->size; i++)
 	    {
 	      ind->size = i;
-	      adjust_array_axis (ret, CAR (list),
+	      adjust_array_axis (ret, ret->value_ptr.array->alloc_size->next,
+				 CAR (list),
 				 CAR (list)->value_ptr.array->alloc_size->next,
 				 ind, ind->next);
 	    }
