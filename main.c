@@ -1699,6 +1699,8 @@ int hash_object_respecting_equal (const struct object *object, size_t table_size
 int hash_object_respecting_equalp (const struct object *object,
 				   size_t table_size);
 int hash_table_count (const struct hashtable *hasht);
+void clear_hash_record (struct object *hasht, struct hashtable_record *rec,
+			int ind, int depth);
 void clear_hash_table (struct object *hasht);
 
 struct parameter *alloc_parameter (enum parameter_type type,
@@ -10106,28 +10108,33 @@ hash_table_count (const struct hashtable *hasht)
 
 
 void
+clear_hash_record (struct object *hasht, struct hashtable_record *rec, int ind,
+		   int depth)
+{
+  if (rec->next)
+    {
+      clear_hash_record (hasht, rec->next, ind, depth+1);
+    }
+
+  delete_reference (hasht, rec->key, ind+depth*2*LISP_HASHTABLE_SIZE);
+  delete_reference (hasht, rec->value, ind+(depth*2+1)*LISP_HASHTABLE_SIZE);
+
+  free (rec);
+}
+
+
+void
 clear_hash_table (struct object *hasht)
 {
-  size_t i, j;
-  struct hashtable_record *r, *n;
+  size_t i;
+  struct hashtable_record *r;
 
   for (i = 0; i < LISP_HASHTABLE_SIZE; i++)
     {
       r = hasht->value_ptr.hashtable->table [i];
-      j = 0;
 
-      while (r)
-	{
-	  n = r->next;
-
-	  delete_reference (hasht, r->key, i+j*2*LISP_HASHTABLE_SIZE);
-	  delete_reference (hasht, r->value, i+(j*2+1)*LISP_HASHTABLE_SIZE);
-
-	  free (r);
-
-	  r = n;
-	  j++;
-	}
+      if (r)
+	clear_hash_record (hasht, r, i, 0);
 
       hasht->value_ptr.hashtable->table [i] = NULL;
     }
