@@ -21359,7 +21359,7 @@ builtin_string (struct object *list, struct environment *env,
       l = strlen (CAR (list)->value_ptr.character);
 
       ret = alloc_string (l);
-      strcpy (ret->value_ptr.string->value, CAR (list)->value_ptr.character);
+      strncpy (ret->value_ptr.string->value, CAR (list)->value_ptr.character, l);
       ret->value_ptr.string->used_size = l;
 
       return ret;
