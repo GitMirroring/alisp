@@ -8209,7 +8209,7 @@ set_nth_character (struct object *str, int ind, char *ch)
       else
 	{
 	  for (off = c - str->value_ptr.string->value + strlen (ch);
-	       off < str->value_ptr.string->used_size; off++)
+	       off < str->value_ptr.string->used_size+strlen(ch)-csz; off++)
 	    {
 	      str->value_ptr.string->value [off] =
 		str->value_ptr.string->value [off-strlen(ch)+csz];
