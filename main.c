@@ -1670,6 +1670,9 @@ void print_available_restarts (struct environment *env, struct object *str,
 struct object *enter_debugger (struct object *cond, struct environment *env,
 			       struct outcome *outcome);
 
+void add_profiling_data (struct profiling_record **data, struct object *name,
+			 int time, int evaltime);
+
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
 		       (const struct object *obj, const struct object *typespec,
@@ -9495,6 +9498,35 @@ enter_debugger (struct object *cond, struct environment *env,
 
 
 void
+add_profiling_data (struct profiling_record **data, struct object *name,
+		    int time, int evaltime)
+{
+  struct profiling_record *r = *data;
+
+  while (r)
+    {
+      if (r->name == name)
+	break;
+
+      r = r->next;
+    }
+
+  if (!r)
+    {
+      r = malloc_and_check (sizeof (*r));
+      r->name = name;
+      r->counter = 0;
+      r->time = 0;
+      r->next = *data;
+      *data = r;
+    }
+
+  r->counter += 1;
+  r->time += time + evaltime;
+}
+
+
+void
 add_builtin_type (char *name, struct environment *env,
 		  int (*builtin_type) (const struct object *obj,
 				       const struct object *typespec,
@@ -11500,8 +11532,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct binding *bins, *b;
   struct object *ret, *ret2, *args = NULL;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
-  unsigned isprof = 0, time, evaltime;
-  struct profiling_record *r;
+  unsigned isprof = 0, time, evaltime = 0;
 
 
   if (func->value_ptr.function->builtin_form)
@@ -11516,7 +11547,21 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       else
 	args = arglist;
 
+      if (env->is_profiling && func->value_ptr.function->name)
+	{
+	  isprof = 1;
+	  time = clock ();
+	}
+
       ret = func->value_ptr.function->builtin_form (args, env, outcome);
+
+      if (isprof)
+	{
+	  time = clock () - time;
+	  add_profiling_data (&env->profiling_data,
+			      SYMBOL (func->value_ptr.function->name), time,
+			      evaltime);
+	}
 
       if (eval_args)
 	decrement_refcount (args);
@@ -11675,28 +11720,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (isprof)
     {
-      r = env->profiling_data;
-
-      while (r)
-	{
-	  if (r->name == SYMBOL (func->value_ptr.function->name))
-	    break;
-
-	  r = r->next;
-	}
-
-      if (!r)
-	{
-	  r = malloc_and_check (sizeof (*r));
-	  r->name = SYMBOL (func->value_ptr.function->name);
-	  r->counter = 0;
-	  r->time = 0;
-	  r->next = env->profiling_data;
-	  env->profiling_data = r;
-	}
-
-      r->counter += 1;
-      r->time += (time + (expand_and_eval ? evaltime : 0));
+      add_profiling_data (&env->profiling_data,
+			  SYMBOL (func->value_ptr.function->name), time,
+			  evaltime);
     }
 
 
