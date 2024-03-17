@@ -8607,7 +8607,10 @@ compile_function (struct object *fun, struct environment *env,
       return fun;
     }
 
-  compbody = compile_body (fun->value_ptr.function->body, env, outcome);
+  if (SYMBOL (fun->value_ptr.function->body) != &nil_object)
+    compbody = compile_body (fun->value_ptr.function->body, env, outcome);
+  else
+    compbody = &nil_object;
 
   if (!compbody)
     return NULL;
