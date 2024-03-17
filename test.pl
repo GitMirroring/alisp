@@ -849,6 +849,7 @@ make_test ("(let ((*print-array* nil)) (write (make-array '(1 2 3))))", "#<ARRAY
 make_test ("(make-array '(1 2 3))", "#3A(((NIL NIL NIL) (NIL NIL NIL)))");
 make_test ("(make-array nil)", "#0ANIL");
 make_test ("(make-array '(2 3 2) :initial-contents '(((a b) (c d) (e f)) ((g h) (i j) (k l))))", "#3A(((A B) (C D) (E F)) ((G H) (I J) (K L)))");
+make_test ("(make-array '(2 3 2) :initial-contents #(((a b) #(c d) \"ef\") ((g h) #(i j) #*10)))", "#3A(((A B) (C D) (#\\e #\\f)) ((G H) (I J) (1 0)))");
 make_test ("(make-array 3 :initial-contents '(a b c))", "#(A B C)");
 make_test ("(defparameter arr (make-array 5 :fill-pointer 3))", "ARR");
 make_test ("arr", "#(NIL NIL NIL)");
