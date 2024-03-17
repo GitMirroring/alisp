@@ -110,6 +110,28 @@ typedef long fixnum;
 			    (s)->type == TYPE_BITARRAY			\
 			    ? (s)->value_ptr.bitarray->alloc_size->size : 0)
 
+#define ACTUAL_VECTOR_LENGTH(v) ((v)->value_ptr.array->fill_pointer >= 0 \
+				 ? (v)->value_ptr.array->fill_pointer	\
+				 : (v)->value_ptr.array->alloc_size->size) \
+
+#define ACTUAL_STRING_LENGTH(s) ((s)->value_ptr.string->fill_pointer >= 0 \
+				 ? (s)->value_ptr.string->fill_pointer	\
+				 : (s)->value_ptr.string->used_size)
+
+#define ACTUAL_BITVECTOR_LENGTH(v) ((v)->value_ptr.bitarray->fill_pointer >= 0 \
+				    ? (v)->value_ptr.bitarray->fill_pointer \
+				    : (v)->value_ptr.bitarray->alloc_size->size)
+
+#define ACTUAL_SEQUENCE_LENGTH(s) (SYMBOL (s) == &nil_object ? 0	\
+				   : (s)->type == TYPE_CONS_PAIR	\
+				   ? list_length (s)			\
+				   : (s)->type == TYPE_ARRAY		\
+				   ? ACTUAL_VECTOR_LENGTH (s)		\
+				   : (s)->type == TYPE_STRING		\
+				   ? ACTUAL_STRING_LENGTH (s)		\
+				   : (s)->type == TYPE_BITARRAY		\
+				   ? ACTUAL_BITVECTOR_LENGTH (s) : 0)
+
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
@@ -17724,8 +17746,8 @@ builtin_map (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (min == -1 || (sequence_length (nth (i, list)) < min))
-	min = sequence_length (nth (i, list));
+      if (min == -1 || (ACTUAL_SEQUENCE_LENGTH (nth (i, list)) < min))
+	min = ACTUAL_SEQUENCE_LENGTH (nth (i, list));
 
       if (!min && is_subtype_by_char_vector (CAR (list), "LIST", env))
 	return &nil_object;
