@@ -1392,6 +1392,7 @@ make_test ("(nsubst-if 0 #'consp '(1 2 (3 4)) :key #'identity)", "0");
 make_test ("(reverse '(0 1 2 3))", "(3 2 1 0)");
 make_test ("(reverse \"hello\")", "\"olleh\"");
 make_test ("(reverse #(0 1 2 3))", "#(3 2 1 0)");
+make_test ("(reverse (make-array 4 :initial-contents '(0 1 2 3) :fill-pointer 2))", "#(1 0)");
 make_test ("(nreverse '(0 1 2 3))", "(3 2 1 0)");
 make_test ("(nreverse \"hello\")", "\"olleh\"");
 make_test ("(nreverse #(0 1 2 3))", "#(3 2 1 0)");
