@@ -17912,7 +17912,7 @@ builtin_remove_if (struct object *list, struct environment *env,
     }
   else if (seq->type == TYPE_STRING)
     {
-      sz = seq->value_ptr.string->used_size;
+      sz = ACTUAL_STRING_LENGTH (seq);
 
       ret = alloc_string (sz);
 
@@ -17956,7 +17956,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
       j = 0;
 
-      for (i = 0; i < seq->value_ptr.array->alloc_size->size; i++)
+      for (i = 0; i < ACTUAL_VECTOR_LENGTH (seq); i++)
 	{
 	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
 	  increment_refcount (CAR (arg));
