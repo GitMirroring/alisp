@@ -18031,7 +18031,7 @@ builtin_reverse (struct object *list, struct environment *env,
     }
   else if (seq->type == TYPE_STRING)
     {
-      sz = seq->value_ptr.string->used_size;
+      sz = ACTUAL_STRING_LENGTH (seq);
 
       ret = alloc_string (sz);
       ret->value_ptr.string->used_size = sz;
@@ -18044,7 +18044,7 @@ builtin_reverse (struct object *list, struct environment *env,
     }
   else if (seq->type == TYPE_ARRAY)
     {
-      sz = seq->value_ptr.array->alloc_size->size;
+      sz = ACTUAL_VECTOR_LENGTH (seq);
 
       ret = alloc_vector (sz, 0, 0);
 
