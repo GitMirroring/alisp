@@ -101,6 +101,16 @@ typedef long fixnum;
 			     || ((s)->type == TYPE_BITARRAY		\
 				 && (s)->value_ptr.bitarray->fill_pointer >= 0))
 
+#define SEQUENCE_LENGTH(s) (SYMBOL (s) == &nil_object ? 0 :		\
+			    (s)->type == TYPE_CONS_PAIR ? list_length (s) : \
+			    (s)->type == TYPE_ARRAY ? \
+			    (s)->value_ptr.array->alloc_size->size :	\
+			    (s)->type == TYPE_STRING \
+			    ? (s)->value_ptr.string->used_size :	\
+			    (s)->type == TYPE_BITARRAY			\
+			    ? (s)->value_ptr.bitarray->alloc_size->size : 0)
+
+
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
 
 #define IS_REAL(s) ((s)->type == TYPE_INTEGER || (s)->type == TYPE_FIXNUM \
@@ -7968,17 +7978,15 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	  fill_axis_from_sequence (arr,
 				   &axis [i*(rowsize/size->size)],
 				   i*(rowsize/size->size), size->next,
-				   rowsize/size->size, CAR (seq));
-	  seq = CDR (seq);
+				   rowsize/size->size, elt (seq, i));
 	}
     }
   else
     {
       for (i = 0; i < size->size; i++)
 	{
-	  axis [i] = CAR (seq);
+	  axis [i] = elt (seq, i);
 	  add_reference (arr, axis [i], index+i);
-	  seq = CDR (seq);
 	}
     }
 
@@ -7996,14 +8004,14 @@ create_array_from_sequence (struct object *seq, fixnum rank)
 
   obj->type = TYPE_ARRAY;
 
-  sz->size = totsize = list_length (s);
+  sz->size = totsize = SEQUENCE_LENGTH (s);
 
   for (i = 1; i < rank; i++)
     {
       sz->next = malloc_and_check (sizeof (*sz));
       sz = sz->next;
-      s = CAR (s);
-      sz->size = list_length (s);
+      s = elt (s, 0);
+      sz->size = SEQUENCE_LENGTH (s);
       totsize *= sz->size;
     }
 
@@ -8021,8 +8029,7 @@ create_array_from_sequence (struct object *seq, fixnum rank)
   for (i = 0; i < size->size; i++)
     {
       fill_axis_from_sequence (obj, &arr->value [i*rowsize], i*rowsize,
-			       size->next, rowsize, CAR (seq));
-      seq = CDR (seq);
+			       size->next, rowsize, elt (seq, i));
     }
 
   return obj;
@@ -9775,7 +9782,7 @@ fixnum
 list_length (const struct object *list)
 {
   fixnum l = 0;
-  
+
   while (list && list->type == TYPE_CONS_PAIR)
     {
       l++;
