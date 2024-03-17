@@ -1373,6 +1373,7 @@ make_test ("(remove-if #'numberp #(1 2 3))", "#()");
 make_test ("(remove-if 'numberp #(1 2 3))", "#()");
 make_test ("(remove-if #'consp '(x y))", "(X Y)");
 make_test ("(remove-if #'not '(nil))", "NIL");
+make_test ("(remove-if #'oddp (make-array 4 :initial-contents '(0 1 2 3) :fill-pointer 2))", "#(0)");
 make_test ("(remove-if-not #'listp #(()))", "#(NIL)");
 make_test ("(remove-duplicates \"abcaadeabfc\")", "\"deabfc\"");
 make_test ("(remove-duplicates '(0 1 2 3 4 3 3 5 6 8 6))", "(0 1 2 4 3 5 8 6)");
