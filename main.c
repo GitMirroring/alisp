@@ -14499,7 +14499,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (CAR (CDR (list))->type == TYPE_CONS_PAIR)
+	  if (IS_SEQUENCE (CAR (CDR (list))))
 	    {
 	      if (!initial_contents)
 		initial_contents = CAR (CDR (list));
@@ -14662,8 +14662,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	  fill_axis_from_sequence (ret, &ret->value_ptr.array->value [i*rowsize],
 				   i*rowsize,
 				   ret->value_ptr.array->alloc_size->next,
-				   rowsize, CAR (initial_contents));
-	  initial_contents = CDR (initial_contents);
+				   rowsize, elt (initial_contents, i));
 	}
     }
 
