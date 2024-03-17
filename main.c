@@ -8623,16 +8623,19 @@ struct object *
 compile_body (struct object *body, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *car, *cdr, *mac, *args, *ret;
+  struct object *car = CAR (body), *cdr, *mac, *args, *ret;
+  int expanded = 0;
 
-  if (CAR (body)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (body)))
-      && (mac = get_function (CAR (CAR (body)), env, 0, 0, 0, 0))
-      && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
+  while (car->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (car))
+	 && (mac = get_function (CAR (car), env, 0, 0, 0, 0))
+	 && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
+      expanded = 1;
+
       if (mac->value_ptr.macro->macro_function)
 	{
 	  args = alloc_empty_list (2);
-	  args->value_ptr.cons_pair->car = CAR (body);
+	  args->value_ptr.cons_pair->car = car;
 	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
 
 	  car = call_function (mac->value_ptr.macro->macro_function, args,
@@ -8642,16 +8645,16 @@ compile_body (struct object *body, struct environment *env,
 	}
       else
 	{
-	  car = call_function (mac, CAR (body), 0, 1, 1, 0, 0, env, outcome);
+	  car = call_function (mac, car, 0, 1, 1, 0, 0, env, outcome);
 	}
 
       if (!car)
 	return NULL;
     }
-  else
+
+  if (!expanded)
     {
-      increment_refcount (CAR (body));
-      car = CAR (body);
+      increment_refcount (car);
     }
 
   if (SYMBOL (CDR (body)) != &nil_object)
