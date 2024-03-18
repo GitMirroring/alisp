@@ -2045,6 +2045,8 @@ struct object *builtin_read_preserving_whitespace
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_from_string
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_parse_integer
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_eval
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_compile
@@ -3131,6 +3133,8 @@ add_standard_definitions (struct environment *env)
 		    builtin_read_preserving_whitespace, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-FROM-STRING", env, builtin_read_from_string,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("PARSE-INTEGER", env, builtin_parse_integer, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COMPILE", env, builtin_compile, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
@@ -16112,6 +16116,47 @@ builtin_read_from_string (struct object *list, struct environment *env,
      &outcome->other_values);
 
   return ret;
+}
+
+
+struct object *
+builtin_parse_integer (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  unsigned char ch;
+  const char *in;
+  size_t sz, epos;
+  enum object_type t;
+  const char *nend, *tokend;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STRING)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  in = CAR (list)->value_ptr.string->value;
+  sz = CAR (list)->value_ptr.string->used_size;
+
+  if (!next_nonspace_char (&ch, &in, &sz, NULL)
+      || !is_number (in-1, sz+1, 10, &t, &nend, &epos, &tokend)
+      || t != TYPE_INTEGER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  prepend_object_to_obj_list
+    (create_integer_from_long (CAR (list)->value_ptr.string->used_size),
+     &outcome->other_values);
+
+  return create_number (in-1, nend-in+2, epos, 10, TYPE_INTEGER);
 }
 
 
