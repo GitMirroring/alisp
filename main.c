@@ -3500,6 +3500,8 @@ add_standard_definitions (struct environment *env)
   stdobjsym->value_ptr.symbol->typespec = stdobjcl;
 
 
+  add_condition_class ("PACKAGE-ERROR", env, 1, "ERROR", (char *)NULL, "PACKAGE",
+		       (char *)NULL);
   add_condition_class ("UNBOUND-SLOT", env, 1, "CELL-ERROR", (char *)NULL,
 		       "INSTANCE", (char *)NULL);
   add_condition_class ("UNDEFINED-FUNCTION", env, 1, "CELL-ERROR", (char *)NULL,
