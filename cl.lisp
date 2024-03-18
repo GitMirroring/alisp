@@ -1901,6 +1901,11 @@
 (defun pathname-version (fn &key case))
 
 
+(defun merge-pathnames (pn &optional defpn defv)
+  (pathname pn))
+
+
+
 (defun file-author (fn))
 
 (defun user-homedir-pathname (&optional h))
@@ -2479,9 +2484,9 @@
 	  check-type macroexpand equal fdefinition complement mapc mapcan
 	  maplist mapl mapcon map-into reduce merge pathname-host
 	  pathname-device pathname-directory pathname-type pathname-version
-	  file-author user-homedir-pathname with-open-file terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time abort))
+	  merge-pathnames file-author user-homedir-pathname with-open-file
+	  terpri write-line write-sequence prin1 princ print do-all-symbols loop
+	  format encode-universal-time abort))
 
 
 
