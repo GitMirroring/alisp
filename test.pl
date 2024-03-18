@@ -1000,6 +1000,9 @@ make_test ("(read-preserving-whitespace (make-string-input-stream \"hello\"))", 
 make_test ("(read-preserving-whitespace (make-string-input-stream \"123\"))", "123");
 make_test ("(read-from-string \" abc\")", "ABC\n4");
 make_test ("(read-from-string \" 1  \")", "1\n2");
+make_test ("(parse-integer \"2\")", "2\n1");
+make_test ("(parse-integer \"  25 \")", "25\n5");
+make_test ("(parse-integer \"  -4\")", "-4\n4");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
 make_test ("(let ((var 12)) (eval 'var))", "12");
