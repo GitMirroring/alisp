@@ -11564,7 +11564,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       ret = func->value_ptr.function->builtin_form (args, env, outcome);
 
-      if (isprof)
+      if (isprof && env->is_profiling)
 	{
 	  time = clock () - time;
 	  add_profiling_data (&env->profiling_data,
@@ -11727,7 +11727,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       ret = ret2;
     }
 
-  if (isprof)
+  if (isprof && env->is_profiling)
     {
       add_profiling_data (&env->profiling_data,
 			  SYMBOL (func->value_ptr.function->name), time,
