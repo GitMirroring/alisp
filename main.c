@@ -8645,6 +8645,7 @@ compile_function (struct object *fun, struct environment *env,
   delete_reference (fun, fun->value_ptr.function->body, 1);
   fun->value_ptr.function->body = compbody;
   add_reference (fun, compbody, 1);
+  decrement_refcount (compbody);
 
   fun->value_ptr.function->flags |= COMPILED_FUNCTION;
 
@@ -8656,7 +8657,7 @@ struct object *
 compile_body (struct object *body, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *car = CAR (body), *cdr, *mac, *args, *ret;
+  struct object *prevcar = NULL, *car = CAR (body), *cdr, *mac, *args, *ret;
   int expanded = 0;
 
   while (car->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (car))
@@ -8680,6 +8681,11 @@ compile_body (struct object *body, struct environment *env,
 	{
 	  car = call_function (mac, car, 0, 1, 1, 0, 0, env, outcome);
 	}
+
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      decrement_refcount (prevcar);
+      prevcar = car;
 
       if (!car)
 	return NULL;
