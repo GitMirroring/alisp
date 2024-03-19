@@ -1235,6 +1235,8 @@ make_test ("(defmethod genfun4 ((x string) (y number) z) (if (next-method-p) (wr
 make_test ("(defmethod genfun4 ((x string) (y real) z) (call-next-method \"hi\" 30 z))", "#<STANDARD-METHOD GENFUN4>");
 make_test ("(defmethod genfun4 ((x string) (y integer) z) (setq z 10) (if (next-method-p) (write 'okay)) (call-next-method))", "#<STANDARD-METHOD GENFUN4>");
 make_test ("(genfun4 \"what\" 0 0)", "OKAY\n(\"hi\" 30 0)");
+make_test ("(defun fle (b &optional c &rest d &key e &allow-other-keys &aux f) 0 1 2)", "FLE");
+make_test ("(function-lambda-expression #'fle)", "(LAMBDA (B &OPTIONAL C &REST D &KEY E &ALLOW-OTHER-KEYS &AUX F) 0 1 2)\nNIL\nFLE");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ERROR>");
