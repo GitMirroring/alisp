@@ -14506,7 +14506,7 @@ builtin_make_array (struct object *list, struct environment *env,
 {
   int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize;
   struct object *ret, *cons, *dims, *fp = NULL, *initial_contents = NULL,
-    *allow_other_keys = NULL;
+    *allow_other_keys = NULL, *el;
   struct array_size *size = NULL, *sz;
 
   if (!list_length (list))
@@ -14711,10 +14711,17 @@ builtin_make_array (struct object *list, struct environment *env,
 
       for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
 	{
+	  el = elt (initial_contents, i);
 	  fill_axis_from_sequence (ret, &ret->value_ptr.array->value [i*rowsize],
 				   i*rowsize,
 				   ret->value_ptr.array->alloc_size->next,
-				   rowsize, elt (initial_contents, i));
+				   rowsize, el);
+
+	  if (initial_contents->type == TYPE_STRING
+	      || initial_contents->type == TYPE_BITARRAY)
+	    {
+	      decrement_refcount (el);
+	    }
 	}
     }
 
