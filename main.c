@@ -1665,6 +1665,9 @@ void add_condition_class (char *name, struct environment *env, int is_standard,
 struct object *handle_condition (struct object *cond, struct environment *env,
 				 struct outcome *outcome);
 
+struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
+				 struct environment *env);
+
 void print_available_restarts (struct environment *env, struct object *str,
 			       int *restnum);
 struct object *enter_debugger (struct object *cond, struct environment *env,
@@ -2514,6 +2517,8 @@ struct object *evaluate_call_next_method
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_no_next_method
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_function_lambda_expression
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_declaim
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3293,6 +3298,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("NO-NEXT-METHOD", env, evaluate_no_next_method,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FUNCTION-LAMBDA-EXPRESSION", env,
+		    builtin_function_lambda_expression, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DECLAIM", env, evaluate_declaim, TYPE_MACRO, NULL, 0);
   add_builtin_form ("PROCLAIM", env, builtin_proclaim, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
@@ -9334,6 +9341,85 @@ handle_condition (struct object *cond, struct environment *env,
     }
 
   return &t_object;
+}
+
+
+struct object *
+list_lambda_list (struct parameter *par, int allow_other_keys,
+		  struct environment *env)
+{
+  struct object *ret = NULL, *cons;
+  enum parameter_type t = REQUIRED_PARAM;
+
+  while (par)
+    {
+      if (par->type == AUXILIARY_VAR && t < par->type && allow_other_keys)
+	{
+	  if (!ret)
+	    ret = cons = alloc_empty_cons_pair ();
+	  else
+	    {
+	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      cons = CDR (cons);
+	    }
+
+	  cons->value_ptr.cons_pair->car = env->amp_allow_other_keys_sym;
+	  add_reference (cons, CAR (cons), 0);
+	}
+
+      if (t < par->type)
+	{
+	  if (!ret)
+	    ret = cons = alloc_empty_cons_pair ();
+	  else
+	    {
+	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      cons = CDR (cons);
+	    }
+
+	  cons->value_ptr.cons_pair->car
+	    = par->type == OPTIONAL_PARAM ? env->amp_optional_sym :
+	    par->type == REST_PARAM ? env->amp_rest_sym :
+	    par->type == KEYWORD_PARAM ? env->amp_key_sym :
+	    par->type == AUXILIARY_VAR ? env->amp_aux_sym : NULL;
+	  add_reference (cons, CAR (cons), 0);
+	}
+
+      if (!ret)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car = par->name;
+      add_reference (cons, CAR (cons), 0);
+
+      t = par->type;
+      par = par->next;
+    }
+
+  if (allow_other_keys && t == KEYWORD_PARAM)
+    {
+      if (!ret)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car = env->amp_allow_other_keys_sym;
+      add_reference (cons, CAR (cons), 0);
+    }
+
+  if (!ret)
+    ret = &nil_object;
+  else
+    cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
 }
 
 
@@ -25820,6 +25906,48 @@ evaluate_no_next_method (struct object *list, struct environment *env,
 {
   outcome->type = NO_NEXT_METHOD;
   return NULL;
+}
+
+
+struct object *
+builtin_function_lambda_expression (struct object *list, struct environment *env,
+				    struct outcome *outcome)
+{
+  struct object *ret, *cons;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_empty_cons_pair ();
+
+  ret->value_ptr.cons_pair->car = env->lambda_sym;
+  add_reference (ret, CAR (ret), 0);
+
+  ret->value_ptr.cons_pair->cdr = cons = alloc_empty_cons_pair ();
+  cons->value_ptr.cons_pair->car
+    = list_lambda_list (CAR (list)->value_ptr.function->lambda_list,
+			CAR (list)->value_ptr.function->allow_other_keys, env);
+
+  cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->body;
+  add_reference (cons, CDR (cons), 1);
+
+  prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
+			      CAR (list)->value_ptr.function->name : &nil_object,
+			      &outcome->other_values);
+  increment_refcount (outcome->other_values->obj);
+  prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
+			      &t_object : &nil_object, &outcome->other_values);
+
+  return ret;
 }
 
 
