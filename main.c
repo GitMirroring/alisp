@@ -7996,6 +7996,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 			 struct object *seq)
 {
   fixnum i;
+  struct object *el;
 
   if (!size)
     {
@@ -8006,10 +8007,15 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
     {
       for (i = 0; i < size->size; i++)
 	{
+	  el = elt (seq, i);
+
 	  fill_axis_from_sequence (arr,
 				   &axis [i*(rowsize/size->size)],
-				   i*(rowsize/size->size), size->next,
-				   rowsize/size->size, elt (seq, i));
+				   index+i*(rowsize/size->size), size->next,
+				   rowsize/size->size, el);
+
+	  if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
+	    decrement_refcount (el);
 	}
     }
   else
@@ -8018,6 +8024,9 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	{
 	  axis [i] = elt (seq, i);
 	  add_reference (arr, axis [i], index+i);
+
+	  if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
+	    decrement_refcount (axis [i]);
 	}
     }
 
@@ -8028,7 +8037,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 struct object *
 create_array_from_sequence (struct object *seq, fixnum rank)
 {
-  struct object *obj = alloc_object (), *s = seq;
+  struct object *obj = alloc_object (), *s = seq, *el;
   struct array *arr = malloc_and_check (sizeof (*arr));
   struct array_size *size = malloc_and_check (sizeof (*size)), *sz = size;
   fixnum i, totsize, rowsize;
@@ -8059,8 +8068,13 @@ create_array_from_sequence (struct object *seq, fixnum rank)
 
   for (i = 0; i < size->size; i++)
     {
+      el = elt (seq, i);
+
       fill_axis_from_sequence (obj, &arr->value [i*rowsize], i*rowsize,
-			       size->next, rowsize, elt (seq, i));
+			       size->next, rowsize, el);
+
+      if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
+	decrement_refcount (el);
     }
 
   return obj;
