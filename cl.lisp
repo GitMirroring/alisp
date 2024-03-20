@@ -574,24 +574,24 @@
 
 
 (defmacro and (&rest forms)
-  `(let ((val (multiple-value-list ,(car forms))))
-     (if ,(not forms)
-         t
+  (if (not forms)
+      t
+      `(let ((val (multiple-value-list ,(car forms))))
          (if (car val)
-             (if ,(not (cdr forms))
-                 (values-list val)
-                 (and ,@(cdr forms)))))))
+             ,(if (not (cdr forms))
+                  `(values-list val)
+                  `(and ,@(cdr forms)))))))
 
 
 (defmacro or (&rest forms)
-  `(let ((val (multiple-value-list ,(car forms))))
-     (if ,(not forms)
-       nil
-       (if (car val)
-	   (if ,(not (cdr forms))
-               (values-list val)
-	       (car val))
-           (or ,@(cdr forms))))))
+  (if (not forms)
+      nil
+      `(let ((val (multiple-value-list ,(car forms))))
+	 (if (car val)
+	     ,(if (not (cdr forms))
+		  `(values-list val)
+		  `(car val))
+             (or ,@(cdr forms))))))
 
 
 (defmacro cond (&body body)
