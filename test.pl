@@ -1032,6 +1032,9 @@ make_test ("(testfun4)", "2");
 make_test ("(defun testfun5 nil (1+ (loop for i from 0 return i)))", "TESTFUN5");
 make_test ("(compile 'testfun5)", "TESTFUN5\nNIL\nNIL");
 make_test ("(testfun5)", "1");
+make_test ("(defun testfun6 nil (if 0 (cond (nil))))", "TESTFUN6");
+make_test ("(compile 'testfun6)", "TESTFUN6\nNIL\nNIL");
+make_test ("(testfun6)", "NIL");
 make_test ("(write \"\")", "\"\"\n\"\"");
 make_test ("(write-string \"aaa\\n\")", "aaan\n\"aaan\"");
 make_test ("(write-string \"\n" .
