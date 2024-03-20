@@ -1617,8 +1617,10 @@ struct object *load_file (const char *filename, struct environment *env,
 
 struct object *compile_function (struct object *fun, struct environment *env,
 				 struct outcome *outcome);
-struct object *compile_body (struct object *body, struct environment *env,
+struct object *compile_form (struct object *form, struct environment *env,
 			     struct outcome *outcome);
+int compile_body (struct object *body, struct environment *env,
+		  struct outcome *outcome);
 
 struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     int do_copy,
@@ -8625,8 +8627,6 @@ struct object *
 compile_function (struct object *fun, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *compbody;
-
   if ((fun->value_ptr.function->flags & COMPILED_FUNCTION)
       || (fun->value_ptr.function->flags & GENERIC_FUNCTION))
     {
@@ -8634,18 +8634,8 @@ compile_function (struct object *fun, struct environment *env,
       return fun;
     }
 
-  if (SYMBOL (fun->value_ptr.function->body) != &nil_object)
-    compbody = compile_body (fun->value_ptr.function->body, env, outcome);
-  else
-    compbody = &nil_object;
-
-  if (!compbody)
+  if (!compile_body (fun->value_ptr.function->body, env, outcome))
     return NULL;
-
-  delete_reference (fun, fun->value_ptr.function->body, 1);
-  fun->value_ptr.function->body = compbody;
-  add_reference (fun, compbody, 1);
-  decrement_refcount (compbody);
 
   fun->value_ptr.function->flags |= COMPILED_FUNCTION;
 
@@ -8654,14 +8644,14 @@ compile_function (struct object *fun, struct environment *env,
 
 
 struct object *
-compile_body (struct object *body, struct environment *env,
+compile_form (struct object *form, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *prevcar = NULL, *car = CAR (body), *cdr, *mac, *args, *ret;
+  struct object *prevform = NULL, *mac, *args, *fun;
   int expanded = 0;
 
-  while (car->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (car))
-	 && (mac = get_function (CAR (car), env, 0, 0, 0, 0))
+  while (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
+	 && (mac = get_function (CAR (form), env, 0, 0, 0, 0))
 	 && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
       expanded = 1;
@@ -8669,61 +8659,69 @@ compile_body (struct object *body, struct environment *env,
       if (mac->value_ptr.macro->macro_function)
 	{
 	  args = alloc_empty_list (2);
-	  args->value_ptr.cons_pair->car = car;
+	  args->value_ptr.cons_pair->car = form;
 	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
 
-	  car = call_function (mac->value_ptr.macro->macro_function, args,
-			       0, 0, 0, 0, 0, env, outcome);
-
+	  form = call_function (mac->value_ptr.macro->macro_function, args,
+				0, 0, 0, 0, 0, env, outcome);
 	  free_list_structure (args);
 	}
       else
 	{
-	  car = call_function (mac, car, 0, 1, 1, 0, 0, env, outcome);
+	  form = call_function (mac, form, 0, 1, 1, 0, 0, env, outcome);
 	}
 
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-      decrement_refcount (prevcar);
-      prevcar = car;
+      decrement_refcount (prevform);
+      prevform = form;
 
-      if (!car)
+      if (!form)
 	return NULL;
     }
 
   if (!expanded)
     {
-      increment_refcount (car);
+      increment_refcount (form);
     }
 
-  if (SYMBOL (CDR (body)) != &nil_object)
-    cdr = compile_body (CDR (body), env, outcome);
-  else
-    cdr = &nil_object;
-
-  if (car != CAR (body) || cdr != CDR (body))
+  if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
+      && (fun = get_function (CAR (form), env, 0, 0, 0, 0))
+      && fun->type == TYPE_FUNCTION)
     {
-      ret = alloc_empty_cons_pair ();
+      if (!compile_body (CDR (form), env, outcome))
+	return NULL;
+    }
 
-      ret->value_ptr.cons_pair->car = car;
-      add_reference (ret, car, 0);
+  return form;
+}
+
+
+int
+compile_body (struct object *body, struct environment *env,
+	      struct outcome *outcome)
+{
+  struct object *car = CAR (body);
+
+  if (SYMBOL (body) == &nil_object)
+    return 1;
+
+  while (SYMBOL (body) != &nil_object)
+    {
+      car = compile_form (CAR (body), env, outcome);
+
+      if (!car)
+	return 0;
+
+      delete_reference (body, CAR (body), 0);
+      body->value_ptr.cons_pair->car = car;
+      add_reference (body, CAR (body), 0);
       decrement_refcount (car);
 
-      ret->value_ptr.cons_pair->cdr = cdr;
-      add_reference (ret, cdr, 1);
-      decrement_refcount (cdr);
-
-      return ret;
+      body = CDR (body);
     }
-  else
-    {
-      increment_refcount (body);
 
-      decrement_refcount (car);
-      decrement_refcount (cdr);
-
-      return body;
-    }
+  return 1;
 }
 
 
