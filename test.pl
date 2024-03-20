@@ -1464,6 +1464,8 @@ make_test ("(stable-sort #((0 . 1) (4 . 2) (7 . 0) (1 . 0) (6 . 2) (3 . 9) (6 . 
 make_test ("(cond (t (+ 1 2)))", "3");
 make_test ("(cond (nil 2) (t 3) (nil 4))", "3");
 make_test ("(cond ((= 2 (+ 1 2)) (+ 0 10)) ((= 3 (+ 1 2)) (+ 12) (+ 0 11)))", "11");
+make_test ("(cond (nil 0) (t 0 (values 1 2)))", "1\n2");
+make_test ("(cond ((values 0 1)))", "0");
 make_test ("(case (+ 1 2) (3 (+ 1 5)))", "6");
 make_test ("(case (+ 1 2) (4 (+ 1 5)))", "NIL");
 make_test ("(case (+ 1 2) (2 10) ((4 3) (+ 1 5)))", "6");
