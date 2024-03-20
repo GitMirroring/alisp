@@ -8685,12 +8685,19 @@ compile_form (struct object *form, struct environment *env,
       increment_refcount (form);
     }
 
-  if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
-      && (fun = get_function (CAR (form), env, 0, 0, 0, 0))
-      && fun->type == TYPE_FUNCTION)
+  if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form)))
     {
-      if (!compile_body (CDR (form), env, outcome))
-	return NULL;
+      if ((fun = get_function (CAR (form), env, 0, 0, 0, 0))
+	  && fun->type == TYPE_FUNCTION)
+	{
+	  if (!compile_body (CDR (form), env, outcome))
+	    return NULL;
+	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF"))
+	{
+	  if (!compile_body (CDR (form), env, outcome))
+	    return NULL;
+	}
     }
 
   return form;
@@ -8701,7 +8708,7 @@ int
 compile_body (struct object *body, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *car = CAR (body);
+  struct object *car;
 
   if (SYMBOL (body) == &nil_object)
     return 1;
