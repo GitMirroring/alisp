@@ -572,6 +572,7 @@
   `(setf ,place (- ,place ,delta)))
 
 
+
 (defmacro and (&rest forms)
   `(let ((val (multiple-value-list ,(car forms))))
      (if ,(not forms)
@@ -594,12 +595,14 @@
 
 
 (defmacro cond (&body body)
-  (let ((first (car body))
-	(rest (cdr body)))
-    `(if ,(car first)
-	 (progn ,@(cdr first))
-	 (if ',rest
-	     (cond ,@rest)))))
+  (when body
+    (let ((first (car body))
+	  (rest (cdr body)))
+      `(if ,(car first)
+	   (progn ,@(cdr first))
+	   (if ',rest
+	       (cond ,@rest))))))
+
 
 
 (defmacro case (keyf &rest clauses)
