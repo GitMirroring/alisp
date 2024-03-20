@@ -8693,9 +8693,16 @@ compile_form (struct object *form, struct environment *env,
 	  if (!compile_body (CDR (form), env, outcome))
 	    return NULL;
 	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF"))
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("BLOCK"))
 	{
 	  if (!compile_body (CDR (form), env, outcome))
+	    return NULL;
+	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*"))
+	{
+	  if (!compile_body (CDR (CDR (form)), env, outcome))
 	    return NULL;
 	}
     }
