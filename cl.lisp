@@ -251,10 +251,10 @@
 (defun gensym (&optional x)
   (let ((str (make-string-output-stream)))
     (cond
-      ((stringp x) (write-string x str)
+      ((typep x 'string) (write-string x str)
        (write *gensym-counter* :stream str)
        (incf *gensym-counter*))
-      ((integerp x) (write-string "G" str)
+      ((typep x 'integer) (write-string "G" str)
        (write x :stream str))
       ((null x) (write-string "G" str)
        (write *gensym-counter* :stream str)
@@ -613,7 +613,7 @@
 	  (cond ((or (eq (car clause) t)
 		     (eq (car clause) 'otherwise))
 		 (setq outsym (append outsym `((t (progn ,@(cdr clause)))))))
-		((listp (car clause))
+		((typep (car clause) 'list)
 		 (setq outsym (append outsym `(((member ,keysym ',(car clause))
 						(progn ,@(cdr clause)))))))
 		(t
