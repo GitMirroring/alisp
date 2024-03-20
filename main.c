@@ -8647,7 +8647,7 @@ struct object *
 compile_form (struct object *form, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *prevform = NULL, *mac, *args, *fun;
+  struct object *prevform = NULL, *mac, *args, *fun, *cons, *val;
   int expanded = 0;
 
   while (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
@@ -8694,17 +8694,48 @@ compile_form (struct object *form, struct environment *env,
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("BLOCK"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("PROGN")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("BLOCK")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("TAGBODY"))
 	{
 	  if (!compile_body (CDR (form), env, outcome))
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LAMBDA")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOLIST")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOTIMES"))
 	{
 	  if (!compile_body (CDR (CDR (form)), env, outcome))
 	    return NULL;
 	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETQ")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETF"))
+	{
+	  cons = CDR (form);
+
+	  while (SYMBOL (cons) != &nil_object)
+	    {
+	      cons = CDR (cons);
+
+	      if (SYMBOL (cons) == &nil_object)
+		break;
+
+	      val = compile_form (CAR (cons), env, outcome);
+
+	      if (!val)
+		return 0;
+
+	      delete_reference (cons, CAR (cons), 0);
+	      cons->value_ptr.cons_pair->car = val;
+	      add_reference (cons, CAR (cons), 0);
+	      decrement_refcount (val);
+
+	      cons = CDR (cons);
+	    }
+	}
+
     }
 
   return form;
