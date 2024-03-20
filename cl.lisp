@@ -598,10 +598,10 @@
   (when body
     (let ((first (car body))
 	  (rest (cdr body)))
-      `(if ,(car first)
-	   (progn ,@(cdr first))
-	   (if ',rest
-	       (cond ,@rest))))))
+      `(let ((val ,(car first)))
+	 (if val
+	     (progn val ,@(cdr first))
+	     (cond ,@rest))))))
 
 
 
