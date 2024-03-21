@@ -1009,7 +1009,7 @@ make_test ("(let ((var 12)) (eval 'var))", "12");
 make_test ("(defun testfun () (loop for i to 5 do (write i)))", "TESTFUN");
 make_test ("(testfun)", "012345\nNIL");
 make_test ("(typep #'testfun 'compiled-function)", "NIL");
-make_test ("(typep #'car 'compiled-function)", "NIL");
+make_test ("(typep #'car 'compiled-function)", "T");
 make_test ("(compile 'testfun)", "TESTFUN\nNIL\nNIL");
 make_test ("(testfun)", "012345\nNIL");
 make_test ("(typep #'testfun 'compiled-function)", "T");
