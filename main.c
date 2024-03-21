@@ -25859,6 +25859,8 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
       fun->value_ptr.function->name = SYMBOL (CAR (list));
       add_reference (fun, SYMBOL (CAR (list)), 0);
+
+      decrement_refcount (fun);
     }
   else if (!are_lambda_lists_congruent (m->lambda_list,
 					fun->value_ptr.function->lambda_list))
