@@ -12257,6 +12257,15 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       ret = NULL;
     }
 
+  decrement_refcount (args);
+
+  while (applm)
+    {
+      lapplm = applm->next;
+      free (applm);
+      applm = lapplm;
+    }
+
   return ret;
 }
 
