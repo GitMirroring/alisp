@@ -1762,6 +1762,7 @@ struct parameter *parse_lambda_list
 (struct object *obj, int allow_destructuring, int is_specialized,
  struct environment *env, struct outcome *outcome, int *allow_other_keys);
 
+void count_parameters (struct parameter *par, int *req_params, int *opt_params);
 int are_lambda_lists_congruent (struct parameter *meth_list,
 				struct parameter *gen_list);
 
@@ -11007,11 +11008,40 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 }
 
 
+void
+count_parameters (struct parameter *par, int *req_params, int *opt_params)
+{
+  *req_params = 0, *opt_params = 0;
+
+  while (par)
+    {
+      if (par->type == REQUIRED_PARAM)
+	(*req_params)++;
+
+      if (par->type == OPTIONAL_PARAM)
+	(*opt_params)++;
+
+      par = par->next;
+    }
+}
+
+
 int
 are_lambda_lists_congruent (struct parameter *meth_list,
 			    struct parameter *gen_list)
 {
-  return 1;
+  int req1, req2, opt1, opt2;
+
+  if (!gen_list)
+    return 1;
+
+  count_parameters (meth_list, &req1, &opt1);
+  count_parameters (gen_list, &req2, &opt2);
+
+  if (req1 == req2 && opt1 == opt2)
+    return 1;
+
+  return 0;
 }
 
 
