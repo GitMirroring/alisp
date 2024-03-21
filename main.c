@@ -9746,6 +9746,7 @@ add_builtin_form (char *name, struct environment *env,
 
   f->is_special_operator = is_special_operator;
   f->builtin_form = builtin_form;
+  f->flags = COMPILED_FUNCTION;
 
   if (builtin_setf_func)
     {
