@@ -2678,8 +2678,10 @@ void free_standard_class (struct object *obj);
 void free_standard_object (struct object *obj);
 void free_condition_class (struct object *obj);
 void free_condition (struct object *obj);
-void free_lambda_list_content (struct object *obj, struct parameter *par, int *i);
+void free_lambda_list_content (struct object *obj, struct parameter *par, int *i,
+			       int is_method);
 void free_lambda_list_structure (struct parameter *par);
+void free_method_list (struct object *fun, struct method_list *ml, int ind);
 void free_function_or_macro (struct object *obj);
 void free_method (struct object *obj);
 
@@ -29384,7 +29386,7 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
 	      ml = ml->next;
 	    }
 
-	  return !(ml->reference_strength_factor & (0x1 << ind))
+	  return !ml->reference_strength_factor
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
 
@@ -30148,7 +30150,8 @@ free_condition (struct object *obj)
 
 
 void
-free_lambda_list_content (struct object *obj, struct parameter *par, int *i)
+free_lambda_list_content (struct object *obj, struct parameter *par, int *i,
+			  int is_method)
 {
   while (par)
     {
@@ -30159,11 +30162,12 @@ free_lambda_list_content (struct object *obj, struct parameter *par, int *i)
 	  delete_reference (obj, par->supplied_p_param, (*i)++);
 	  delete_reference (obj, par->key, (*i)++);
 
-	  *i += 4;
+	  if (!is_method)
+	    *i += 4;
 	}
       else
 	{
-	  free_lambda_list_content (obj, par->sub_lambda_list, i);
+	  free_lambda_list_content (obj, par->sub_lambda_list, i, is_method);
 	}
 
       par = par->next;
@@ -30189,33 +30193,35 @@ free_lambda_list_structure (struct parameter *par)
     }
 }
 
+void
+free_method_list (struct object *fun, struct method_list *ml, int ind)
+{
+  if (!ml)
+    return;
+
+  free_method_list (fun, ml->next, ind+8);
+
+  delete_reference (fun, ml->meth, ind);
+
+  free (ml);
+}
+
 
 void
 free_function_or_macro (struct object *obj)
 {
-  struct method_list *nml, *ml = obj->value_ptr.function->methods;
   struct binding *b, *nx;
   int i = 2;
 
   delete_reference (obj, obj->value_ptr.function->name, 0);
   delete_reference (obj, obj->value_ptr.function->body, 1);
 
-  free_lambda_list_content (obj, obj->value_ptr.function->lambda_list, &i);
+  free_lambda_list_content (obj, obj->value_ptr.function->lambda_list, &i, 0);
   free_lambda_list_structure (obj->value_ptr.function->lambda_list);
+  obj->value_ptr.function->lambda_list = NULL;
 
-  i = 6;
-
-  while (ml)
-    {
-      delete_reference (obj, ml->meth, i);
-
-      i += 8;
-
-      nml = ml->next;
-      free (ml);
-      ml = nml;
-    }
-
+  free_method_list (obj, obj->value_ptr.function->methods, 6);
+  obj->value_ptr.function->methods = NULL;
 
   b = obj->value_ptr.function->lex_vars;
 
@@ -30263,23 +30269,14 @@ free_function_or_macro (struct object *obj)
 void
 free_method (struct object *obj)
 {
-  struct parameter *n, *l = obj->value_ptr.method->lambda_list;
   int i = 2;
 
   delete_reference (obj, obj->value_ptr.method->generic_func, 0);
   delete_reference (obj, obj->value_ptr.method->body, 1);
 
-  while (l)
-    {
-      delete_reference (obj, l->name, i++);
-      delete_reference (obj, l->init_form, i++);
-      delete_reference (obj, l->supplied_p_param, i++);
-      delete_reference (obj, l->key, i++);
-
-      n = l->next;
-      free (l);
-      l = n;
-    }
+  free_lambda_list_content (obj, obj->value_ptr.method->lambda_list, &i, 1);
+  free_lambda_list_structure (obj->value_ptr.method->lambda_list);
+  obj->value_ptr.method->lambda_list = NULL;
 
   free (obj->value_ptr.method);
   free (obj);
