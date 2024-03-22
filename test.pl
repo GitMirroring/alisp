@@ -1247,6 +1247,11 @@ make_test ("(defmethod genfun4 ((x string) (y number) z) (if (next-method-p) (wr
 make_test ("(defmethod genfun4 ((x string) (y real) z) (call-next-method \"hi\" 30 z))", "#<STANDARD-METHOD GENFUN4>");
 make_test ("(defmethod genfun4 ((x string) (y integer) z) (setq z 10) (if (next-method-p) (write 'okay)) (call-next-method))", "#<STANDARD-METHOD GENFUN4>");
 make_test ("(genfun4 \"what\" 0 0)", "OKAY\n(\"hi\" 30 0)");
+make_test ("(defgeneric genfun5 (x y))", "#<STANDARD-GENERIC-FUNCTION GENFUN5>");
+make_test ("(defmethod genfun5 ((x string) (y (eql (+)))) (write 'first))", "#<STANDARD-METHOD GENFUN5>");
+make_test ("(defmethod genfun5 ((x string) (y integer)) (write 'second))", "#<STANDARD-METHOD GENFUN5>");
+make_test ("(genfun5 \"\" 0)", "FIRST\nFIRST");
+make_test ("(genfun5 \"\" 1)", "SECOND\nSECOND");
 make_test ("(defun fle (b &optional c &rest d &key e &allow-other-keys &aux f) 0 1 2)", "FLE");
 make_test ("(function-lambda-expression #'fle)", "(LAMBDA (B &OPTIONAL C &REST D &KEY E &ALLOW-OTHER-KEYS &AUX F) 0 1 2)\nNIL\nFLE");
 make_test ("(function-lambda-expression (let ((i 0)) (lambda (x) 0 1)))", "(LAMBDA (X) 0 1)\nT\nNIL");
