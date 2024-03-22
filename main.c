@@ -3495,6 +3495,8 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
 		    (char *)NULL);
+  add_builtin_type ("STANDARD-GENERIC-FUNCTION", env, type_generic_function, 1,
+		    "GENERIC-FUNCTION", (char *)NULL);
   add_builtin_type ("GENERIC-FUNCTION", env, type_generic_function, 1,
 		    "FUNCTION", (char *)NULL);
   add_builtin_type ("CLASS", env, type_class, 1, (char *)NULL);
