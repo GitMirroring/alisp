@@ -12309,7 +12309,8 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
   int ret;
 
   if ((typespec->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (typespec)))
-      && !IS_SYMBOL (typespec))
+      && !IS_SYMBOL (typespec) && typespec->type != TYPE_STANDARD_CLASS
+      && typespec->type != TYPE_STRUCTURE_CLASS)
     {
       outcome->type = INVALID_TYPE_SPECIFIER;
       return -1;
@@ -12317,6 +12318,10 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 
   if (typespec->type == TYPE_CONS_PAIR)
     sym = SYMBOL (CAR (typespec));
+  else if (typespec->type == TYPE_STANDARD_CLASS)
+    sym = typespec->value_ptr.standard_class->name;
+  else if (typespec->type == TYPE_STRUCTURE_CLASS)
+    sym = typespec->value_ptr.structure_class->name;
   else
     sym = SYMBOL (typespec);
 
