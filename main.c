@@ -10390,7 +10390,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 			   int is_specialized, struct environment *env,
 			   struct outcome *outcome)
 {
-  struct object *car;
+  struct object *car, *eqlobj, *eqlts;
   struct parameter *first = NULL;
 
   *last = NULL;
@@ -10417,7 +10417,12 @@ parse_required_parameters (struct object *obj, struct parameter **last,
       else if (car->type == TYPE_CONS_PAIR && is_specialized)
 	{
 	  if (list_length (car) != 2 || !IS_SYMBOL (CAR (car))
-	      || !IS_SYMBOL (CAR (CDR (car))))
+	      || (!IS_SYMBOL (CAR (CDR (car)))
+		  && CAR (CDR (car))->type != TYPE_STANDARD_CLASS
+		  && CAR (CDR (car))->type != TYPE_CONDITION_CLASS
+		  && (CAR (CDR (car))->type != TYPE_CONS_PAIR
+		      || list_length (CAR (CDR (car))) != 2
+		      || SYMBOL (CAR (CAR (CDR (car)))) != env->eql_sym)))
 	    {
 	      outcome->type = INVALID_LAMBDA_LIST;
 	      return NULL;
@@ -10439,7 +10444,31 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	    !STRENGTH_FACTOR_OF_OBJECT (SYMBOL (CAR (car)));
 	  INC_WEAK_REFCOUNT (SYMBOL (CAR (car)));
 
-	  (*last)->typespec = SYMBOL (CAR (CDR (car)));
+	  if (IS_SYMBOL (CAR (CDR (car))))
+	    (*last)->typespec = SYMBOL (CAR (CDR (car)));
+	  else if (CAR (CDR (car))->type == TYPE_CONS_PAIR)
+	    {
+	      eqlobj = evaluate_object (CAR (CDR (CAR (CDR (car)))), env,
+					outcome);
+
+	      if (!eqlobj)
+		return NULL;
+
+	      eqlts = alloc_empty_cons_pair ();
+	      eqlts->value_ptr.cons_pair->car = env->eql_sym;
+	      add_reference (eqlts, CAR (eqlts), 0);
+	      eqlts->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      eqlts->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = eqlobj;
+	      add_reference (CDR (eqlts), CAR (CDR (eqlts)), 0);
+	      eqlts->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr
+		= &nil_object;
+
+	      (*last)->typespec = eqlts;
+	    }
+	  else
+	    {
+	      (*last)->typespec = CAR (CDR (car));
+	    }
 	}
       else
 	{
@@ -12184,17 +12213,33 @@ compare_method_specificity (struct object *first, struct object *second)
 
   while (par && par->type == REQUIRED_PARAM)
     {
-      ret1 = is_subtype (par->typespec, par2->typespec, NULL);
-      ret2 = is_subtype (par2->typespec, par->typespec, NULL);
-
-      if (ret1 && !ret2)
+      if (par->typespec->type == TYPE_CONS_PAIR
+	  && par2->typespec->type != TYPE_CONS_PAIR)
 	{
 	  return -1;
 	}
 
-      if (!ret1 && ret2)
+      if (par->typespec->type != TYPE_CONS_PAIR
+	  && par2->typespec->type == TYPE_CONS_PAIR)
 	{
 	  return 1;
+	}
+
+      if (par->typespec->type != TYPE_CONS_PAIR
+	  && par2->typespec->type != TYPE_CONS_PAIR)
+	{
+	  ret1 = is_subtype (par->typespec, par2->typespec, NULL);
+	  ret2 = is_subtype (par2->typespec, par->typespec, NULL);
+
+	  if (ret1 && !ret2)
+	    {
+	      return -1;
+	    }
+
+	  if (!ret1 && ret2)
+	    {
+	      return 1;
+	    }
 	}
 
       par = par->next;
