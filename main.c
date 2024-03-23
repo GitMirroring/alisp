@@ -142,6 +142,9 @@ typedef long fixnum;
 
 #define IS_NUMBER(s) (IS_REAL (s) || (s)->type == TYPE_COMPLEX)
 
+#define IS_CLASS(obj) ((obj)->type == TYPE_STRUCTURE_CLASS	\
+		       || (obj)->type == TYPE_STANDARD_CLASS)
+
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :			\
 		   (s)->type == TYPE_SYMBOL_NAME ?			\
 		   (s)->value_ptr.symbol_name->sym :			\
@@ -12620,10 +12623,32 @@ is_subtype (const struct object *first, const struct object *second,
   if (IS_SYMBOL (second) && type_starts_with (first, SYMBOL (second)))
     return 1;
 
+  if (IS_CLASS (first) || IS_CLASS (second))
+    {
+      if (first->type == TYPE_STANDARD_CLASS)
+	first = first->value_ptr.standard_class->name;
+
+      if (first->type == TYPE_STRUCTURE_CLASS)
+	first = first->value_ptr.structure_class->name;
+
+      if (second->type == TYPE_STANDARD_CLASS)
+	second = second->value_ptr.standard_class->name;
+
+      if (second->type == TYPE_STRUCTURE_CLASS)
+	second = second->value_ptr.structure_class->name;
+
+      if (SYMBOL (first) == SYMBOL (second))
+	return 1;
+    }
+
+
   if (IS_SYMBOL (first) && IS_SYMBOL (second))
     {
       p = SYMBOL (first)->value_ptr.symbol->builtin_type
 	? SYMBOL (first)->value_ptr.symbol->parent_types
+	: SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS
+	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.standard_class->
+	parents
 	: SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS
 	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->
 	parents : NULL;
@@ -20934,14 +20959,16 @@ builtin_subtypep (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || !IS_SYMBOL (CAR (CDR (list))))
+  if ((!IS_SYMBOL (CAR (list)) && !IS_CLASS (CAR (list)))
+      || (!IS_SYMBOL (CAR (CDR (list))) && !IS_CLASS (CAR (CDR (list)))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  if (!SYMBOL (CAR (list))->value_ptr.symbol->is_type
-      || !SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_type)
+  if ((IS_SYMBOL (CAR (list)) && !SYMBOL (CAR (list))->value_ptr.symbol->is_type)
+      || (IS_SYMBOL (CAR (CDR (list)))
+	  && !SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_type))
     {
       outcome->type = UNKNOWN_TYPE;
       return NULL;
@@ -20949,7 +20976,7 @@ builtin_subtypep (struct object *list, struct environment *env,
 
   prepend_object_to_obj_list (&t_object, &outcome->other_values);
 
-  if (is_subtype (SYMBOL (CAR (list)), SYMBOL (CAR (CDR (list))), NULL))
+  if (is_subtype (CAR (list), CAR (CDR (list)), NULL))
     {
       return &t_object;
     }
