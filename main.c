@@ -158,7 +158,7 @@ typedef long fixnum;
 
 #define IS_PATHNAME_DESIGNATOR(s) ((s)->type == TYPE_STRING		\
 				   || ((s)->type == TYPE_STREAM		\
-				       && (s)->value_ptr.stream->medium \
+				       && (s)->value_ptr.stream->type	\
 				       == FILE_STREAM)			\
 				   || ((s)->type == TYPE_FILENAME))
 
@@ -942,15 +942,16 @@ filename
 
 
 enum
-stream_medium
+stream_type
   {
     FILE_STREAM,
-    STRING_STREAM
+    STRING_STREAM,
+    SYNONYM_STREAM
   };
 
 
 enum
-stream_type
+stream_content_type
   {
     CHARACTER_STREAM,
     BINARY_STREAM
@@ -970,9 +971,9 @@ stream_direction
 struct
 stream
 {
-  enum stream_medium medium;
-
   enum stream_type type;
+
+  enum stream_content_type content_type;
 
   enum stream_direction direction;
 
@@ -980,6 +981,8 @@ stream
   struct object *namestring;
 
   struct object *string;
+
+  struct object *synonym_of;
 
   int is_open;
 
@@ -1593,15 +1596,16 @@ struct object *get_nth_character (struct object *str, int ind);
 fixnum get_nth_character_offset (struct object *str, int ind);
 int set_nth_character (struct object *str, int ind, char *ch);
 
-struct object *create_file_stream (enum stream_type type,
+struct object *create_file_stream (enum stream_content_type content_type,
 				   enum stream_direction direction,
 				   struct object *namestring,
 				   struct outcome *outcome);
-struct object *create_stream_from_open_file (enum stream_type type,
+struct object *create_stream_from_open_file (enum stream_content_type content_type,
 					     enum stream_direction direction,
 					     FILE *file);
 struct object *create_string_stream (enum stream_direction direction,
 				     struct object *instr);
+struct object *create_synonym_stream (struct object *sym);
 
 struct structure_field_decl *create_structure_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
@@ -1929,6 +1933,8 @@ int type_file_stream (const struct object *obj, const struct object *typespec,
 		      struct environment *env, struct outcome *outcome);
 int type_string_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
+int type_synonym_stream (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome);
 int type_standard_object (const struct object *obj, const struct object *typespec,
 			  struct environment *env, struct outcome *outcome);
 int type_generic_function (const struct object *obj, const struct object *typespec,
@@ -2089,6 +2095,10 @@ struct object *builtin_make_string_input_stream
 struct object *builtin_make_string_output_stream
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_get_output_stream_string
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_make_synonym_stream
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_synonym_stream_symbol
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_upper_case_p
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2602,6 +2612,10 @@ struct object *equalp_objects (struct object *obj1, struct object *obj2);
 int arrays_have_equal_size (struct array *a1, struct array *a2);
 
 struct object *fresh_line (struct stream *str);
+
+struct object *resolve_synonym_stream (struct object *str,
+				       struct environment *env,
+				       struct outcome *outcome);
 
 int is_printer_escaping_enabled (struct environment *env);
 
@@ -3176,6 +3190,10 @@ add_standard_definitions (struct environment *env)
 		    builtin_make_string_output_stream, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("GET-OUTPUT-STREAM-STRING", env,
 		    builtin_get_output_stream_string, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-SYNONYM-STREAM", env, builtin_make_synonym_stream,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SYNONYM-STREAM-SYMBOL", env, builtin_synonym_stream_symbol,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, TYPE_FUNCTION,
@@ -3497,6 +3515,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("FILE-STREAM", env, type_file_stream, 1, "STREAM",
 		    (char *)NULL);
   add_builtin_type ("STRING-STREAM", env, type_string_stream, 1, "STREAM",
+		    (char *)NULL);
+  add_builtin_type ("SYNONYM-STREAM", env, type_synonym_stream, 1, "STREAM",
 		    (char *)NULL);
   add_builtin_type ("STANDARD-GENERIC-FUNCTION", env, type_generic_function, 1,
 		    "GENERIC-FUNCTION", (char *)NULL);
@@ -8299,14 +8319,15 @@ set_nth_character (struct object *str, int ind, char *ch)
 
 
 struct object *
-create_file_stream (enum stream_type type, enum stream_direction direction,
-		    struct object *namestring, struct outcome *outcome)
+create_file_stream (enum stream_content_type content_type,
+		    enum stream_direction direction, struct object *namestring,
+		    struct outcome *outcome)
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
   char *fn = copy_string_to_c_string (namestring->value_ptr.string);
 
-  str->medium = FILE_STREAM;
+  str->type = FILE_STREAM;
 
   if (direction == INPUT_STREAM)
     str->file = fopen (fn, "r");
@@ -8325,7 +8346,7 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
       return NULL;
     }
 
-  str->type = type;
+  str->content_type = content_type;
   str->direction = direction;
   str->is_open = 1;
   str->dirty_line = 0;
@@ -8334,22 +8355,22 @@ create_file_stream (enum stream_type type, enum stream_direction direction,
   obj->value_ptr.stream = str;
 
   str->namestring = namestring;
-  add_reference (obj, namestring, 1);
+  add_reference (obj, namestring, 0);
 
   return obj;
 }
 
 
 struct object *
-create_stream_from_open_file (enum stream_type type,
+create_stream_from_open_file (enum stream_content_type content_type,
 			      enum stream_direction direction, FILE *file)
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
 
-  str->medium = FILE_STREAM;
+  str->type = FILE_STREAM;
   str->namestring = &nil_object;
-  str->type = type;
+  str->content_type = content_type;
   str->direction = direction;
   str->is_open = 1;
   str->dirty_line = 0;
@@ -8368,7 +8389,7 @@ create_string_stream (enum stream_direction direction, struct object *instr)
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
 
-  str->medium = STRING_STREAM;
+  str->type = STRING_STREAM;
   str->direction = direction;
   str->is_open = 1;
   str->dirty_line = 0;
@@ -8383,6 +8404,25 @@ create_string_stream (enum stream_direction direction, struct object *instr)
     }
   else
     str->string = alloc_string (0);
+
+  return obj;
+}
+
+
+struct object *
+create_synonym_stream (struct object *sym)
+{
+  struct object *obj = alloc_object ();
+  struct stream *str = malloc_and_check (sizeof (*str));
+
+  str->type = SYNONYM_STREAM;
+  str->is_open = 1;
+  str->synonym_of = sym;
+
+  obj->type = TYPE_STREAM;
+  obj->value_ptr.stream = str;
+
+  add_reference (obj, sym, 0);
 
   return obj;
 }
@@ -13627,7 +13667,7 @@ type_file_stream (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_STREAM
-    && obj->value_ptr.stream->medium == FILE_STREAM;
+    && obj->value_ptr.stream->type == FILE_STREAM;
 }
 
 
@@ -13636,7 +13676,16 @@ type_string_stream (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_STREAM
-    && obj->value_ptr.stream->medium == STRING_STREAM;
+    && obj->value_ptr.stream->type == STRING_STREAM;
+}
+
+
+int
+type_synonym_stream (const struct object *obj, const struct object *typespec,
+		     struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STREAM
+    && obj->value_ptr.stream->type == SYNONYM_STREAM;
 }
 
 
@@ -15751,7 +15800,7 @@ builtin_pathname (struct object *list, struct environment *env,
       ret = create_filename (CAR (list));
     }
   else if (CAR (list)->type == TYPE_STREAM
-	   && CAR (list)->value_ptr.stream->medium == FILE_STREAM)
+	   && CAR (list)->value_ptr.stream->type == FILE_STREAM)
     {
       ret = create_filename (CAR (list)->value_ptr.stream->namestring);
     }
@@ -16118,7 +16167,15 @@ builtin_read_line (struct object *list, struct environment *env,
   str = l ? CAR (list) : inspect_variable (env->std_in_sym, env);
   s = str->value_ptr.stream;
 
-  if (s->medium == FILE_STREAM)
+  if (s->type == SYNONYM_STREAM &&
+      !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  s = str->value_ptr.stream;
+
+  if (s->type == FILE_STREAM)
     {
       i = 0, eof = 0;
 
@@ -16148,7 +16205,7 @@ builtin_read_line (struct object *list, struct environment *env,
       ret = create_string_with_char_vector (in, i);
       ret->value_ptr.string->alloc_size = sz;
     }
-  else if (s->medium == STRING_STREAM)
+  else if (s->type == STRING_STREAM)
     {
       eof = 1;
 
@@ -16225,11 +16282,19 @@ builtin_read (struct object *list, struct environment *env,
 
   s = str->value_ptr.stream;
 
-  out = read_object (&ret, 0, s->medium == STRING_STREAM
+  if (s->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  s = str->value_ptr.stream;
+
+  out = read_object (&ret, 0, s->type == STRING_STREAM
 		     ? s->string->value_ptr.string->value : NULL,
-		     s->medium == STRING_STREAM
+		     s->type == STRING_STREAM
 		     ? s->string->value_ptr.string->used_size : 0,
-		     s->medium == FILE_STREAM ? s->file : NULL, 0, 1, env,
+		     s->type == FILE_STREAM ? s->file : NULL, 0, 1, env,
 		     outcome, &objbeg, &objend);
 
   if (IS_READ_OR_EVAL_ERROR (out))
@@ -16250,7 +16315,7 @@ builtin_read (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (s->medium == STRING_STREAM)
+  if (s->type == STRING_STREAM)
     {
       newstr =
 	create_string_copying_char_vector (objend + 1,
@@ -16299,11 +16364,19 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 
   s = str->value_ptr.stream;
 
-  out = read_object (&ret, 0, s->medium == STRING_STREAM
+  if (s->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  s = str->value_ptr.stream;
+
+  out = read_object (&ret, 0, s->type == STRING_STREAM
 		     ? s->string->value_ptr.string->value : NULL,
-		     s->medium == STRING_STREAM
+		     s->type == STRING_STREAM
 		     ? s->string->value_ptr.string->used_size : 0,
-		     s->medium == FILE_STREAM ? s->file : NULL, 1, 1, env,
+		     s->type == FILE_STREAM ? s->file : NULL, 1, 1, env,
 		     outcome, &objbeg, &objend);
 
   if (IS_READ_OR_EVAL_ERROR (out))
@@ -16324,7 +16397,7 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
       return NULL;
     }
 
-  if (s->medium == STRING_STREAM)
+  if (s->type == STRING_STREAM)
     {
       newstr =
 	create_string_copying_char_vector (objend + 1,
@@ -16603,6 +16676,12 @@ builtin_write (struct object *list, struct environment *env,
   if (!str)
     str = inspect_variable (env->std_out_sym, env);
 
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
   print_object (obj, env, str->value_ptr.stream);
 
   increment_refcount (obj);
@@ -16615,7 +16694,7 @@ builtin_write_string (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
   struct string *s;
-  struct stream *str;
+  struct object *str;
   int l;
 
   if (!(l = list_length (list)) || l > 2)
@@ -16633,15 +16712,21 @@ builtin_write_string (struct object *list, struct environment *env,
 
   s = CAR (list)->value_ptr.string;
 
-  str = l == 2 ? CAR (CDR (list))->value_ptr.stream
-    : inspect_variable (env->std_out_sym, env)->value_ptr.stream;
+  str = l == 2 ? CAR (CDR (list))
+    : inspect_variable (env->std_out_sym, env);
 
-  write_to_stream (str, s->value, s->used_size);
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  write_to_stream (str->value_ptr.stream, s->value, s->used_size);
 
   if (s->value [s->used_size - 1] == '\n')
-    str->dirty_line = 0;
+    str->value_ptr.stream->dirty_line = 0;
   else
-    str->dirty_line = 1;
+    str->value_ptr.stream->dirty_line = 1;
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -16652,7 +16737,7 @@ struct object *
 builtin_write_char (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct stream *str;
+  struct object *str;
   int l;
 
   if (!(l = list_length (list)) || l > 2)
@@ -16669,17 +16754,23 @@ builtin_write_char (struct object *list, struct environment *env,
     }
 
   if (l == 2)
-    str = CAR (CDR (list))->value_ptr.stream;
+    str = CAR (CDR (list));
   else
-    str = inspect_variable (env->std_out_sym, env)->value_ptr.stream;
+    str = inspect_variable (env->std_out_sym, env);
 
-  write_to_stream (str, CAR (list)->value_ptr.character,
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  write_to_stream (str->value_ptr.stream, CAR (list)->value_ptr.character,
 		   strlen (CAR (list)->value_ptr.character));
 
   if (!strcmp (CAR (list)->value_ptr.character, "\n"))
-    str->dirty_line = 0;
+    str->value_ptr.stream->dirty_line = 0;
   else
-    str->dirty_line = 1;
+    str->value_ptr.stream->dirty_line = 1;
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -16691,6 +16782,7 @@ builtin_write_byte (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
   char b;
+  struct object *str;
 
   if (list_length (list) != 2)
     {
@@ -16706,7 +16798,15 @@ builtin_write_byte (struct object *list, struct environment *env,
 
   b = mpz_get_ui (CAR (list)->value_ptr.integer);
 
-  write_to_stream (CAR (CDR (list))->value_ptr.stream, &b, 1);
+  str = CAR (CDR (list));
+
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  write_to_stream (str->value_ptr.stream, &b, 1);
 
   increment_refcount (CAR (list));
   return CAR (list);
@@ -16726,6 +16826,12 @@ builtin_fresh_line (struct object *list, struct environment *env,
     }
 
   std_out = inspect_variable (env->std_out_sym, env);
+
+  if (std_out->value_ptr.stream->type == SYNONYM_STREAM
+      && !(std_out = resolve_synonym_stream (std_out, env, outcome)))
+    {
+      return NULL;
+    }
 
   return fresh_line (std_out->value_ptr.stream);
 }
@@ -16868,7 +16974,7 @@ struct object *
 builtin_close (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct stream *s;
+  struct object *str;
 
   if (list_length (list) != 1)
     {
@@ -16882,15 +16988,21 @@ builtin_close (struct object *list, struct environment *env,
       return NULL;
     }
 
-  s = CAR (list)->value_ptr.stream;
+  str = CAR (list);
 
-  if (!s->is_open)
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  if (!str->value_ptr.stream->is_open)
     return &nil_object;
 
-  if (s->medium == FILE_STREAM)
-    fclose (s->file);
+  if (str->value_ptr.stream->type == FILE_STREAM)
+    fclose (str->value_ptr.stream->file);
 
-  s->is_open = 0;
+  str->value_ptr.stream->is_open = 0;
 
   return &t_object;
 }
@@ -16900,6 +17012,8 @@ struct object *
 builtin_open_stream_p (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
+  struct object *str;
+
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -16912,7 +17026,15 @@ builtin_open_stream_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->value_ptr.stream->is_open)
+  str = CAR (list);
+
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  if (str->value_ptr.stream->is_open)
     return &t_object;
   else
     return &nil_object;
@@ -16923,6 +17045,8 @@ struct object *
 builtin_input_stream_p (struct object *list, struct environment *env,
 			struct outcome *outcome)
 {
+  struct object *str;
+
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -16935,7 +17059,15 @@ builtin_input_stream_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->value_ptr.stream->direction == INPUT_STREAM)
+  str = CAR (list);
+
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  if (str->value_ptr.stream->direction == INPUT_STREAM)
     return &t_object;
   else
     return &nil_object;
@@ -16946,6 +17078,8 @@ struct object *
 builtin_output_stream_p (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
+  struct object *str;
+
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -16958,7 +17092,15 @@ builtin_output_stream_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->value_ptr.stream->direction == OUTPUT_STREAM)
+  str = CAR (list);
+
+  if (str->value_ptr.stream->type == SYNONYM_STREAM
+      && !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  if (str->value_ptr.stream->direction == OUTPUT_STREAM)
     return &t_object;
   else
     return &nil_object;
@@ -17032,7 +17174,7 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_STREAM
-      || CAR (list)->value_ptr.stream->medium != STRING_STREAM)
+      || CAR (list)->value_ptr.stream->type != STRING_STREAM)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -17047,6 +17189,48 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
   decrement_refcount (CAR (list)->value_ptr.stream->string);
 
   return ret;
+}
+
+
+struct object *
+builtin_make_synonym_stream (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return create_synonym_stream (SYMBOL (CAR (list)));
+}
+
+
+struct object *
+builtin_synonym_stream_symbol (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM
+      || CAR (list)->value_ptr.stream->type != SYNONYM_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list)->value_ptr.stream->synonym_of);
+  return CAR (list)->value_ptr.stream->synonym_of;
 }
 
 
@@ -28018,7 +28202,7 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
   struct string *s;
   size_t i;
 
-  if (stream->medium == FILE_STREAM)
+  if (stream->type == FILE_STREAM)
     {
       if (fwrite (str, 1, size, stream->file) < size)
 	return -1;
@@ -28068,7 +28252,7 @@ write_long_to_stream (struct stream *stream, long z)
       size++;
     }
 
-  if (stream->medium == STRING_STREAM)
+  if (stream->type == STRING_STREAM)
     resize_string_allocation (stream->string,
 			      stream->string->value_ptr.string->used_size + size);
 
@@ -28085,6 +28269,26 @@ write_long_to_stream (struct stream *stream, long z)
     }
 
   return 0;
+}
+
+
+struct object *
+resolve_synonym_stream (struct object *str, struct environment *env,
+			struct outcome *outcome)
+{
+  while (1)
+    {
+      str = inspect_variable (str->value_ptr.stream->synonym_of, env);
+
+      if (!str || str->type != TYPE_STREAM)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (str->value_ptr.stream->type != SYNONYM_STREAM)
+	return str;
+    }
 }
 
 
@@ -28126,7 +28330,7 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 	    {
 	      do_need_multiple_escape = 1;
 
-	      if (str->medium == FILE_STREAM)
+	      if (str->type == FILE_STREAM)
 		break;
 
 	      sz += 2;
@@ -28137,7 +28341,7 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 	}
     }
 
-  if (str->medium == STRING_STREAM)
+  if (str->type == STRING_STREAM)
     resize_string_allocation (str->string,
 			      str->string->value_ptr.string->used_size + sz);
 
@@ -29428,10 +29632,12 @@ mark_as_constant (struct object *obj)
     }
   else if (obj->type == TYPE_STREAM)
     {
-      if (obj->value_ptr.stream->medium == STRING_STREAM)
+      if (obj->value_ptr.stream->type == STRING_STREAM)
 	mark_as_constant (obj->value_ptr.stream->string);
-      else
+      else if (obj->value_ptr.stream->type == FILE_STREAM)
 	mark_as_constant (obj->value_ptr.stream->namestring);
+      else
+	mark_as_constant (obj->value_ptr.stream->synonym_of);
     }
 }
 
@@ -29855,13 +30061,17 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
     }
   else if (node->type == TYPE_STREAM)
     {
-      if (node->value_ptr.stream->medium == STRING_STREAM)
+      if (node->value_ptr.stream->type == STRING_STREAM)
 	{
 	  rest_inv_at_edge (node->value_ptr.stream->string, 0);
 	}
+      else if (node->value_ptr.stream->type == FILE_STREAM)
+	{
+	  rest_inv_at_edge (node->value_ptr.stream->namestring, 0);
+	}
       else
 	{
-	  rest_inv_at_edge (node->value_ptr.stream->namestring, 1);
+	  rest_inv_at_edge (node->value_ptr.stream->synonym_of, 0);
 	}
     }
   else if (node->type == TYPE_FUNCTION || node->type == TYPE_MACRO)
@@ -29988,13 +30198,15 @@ free_object (struct object *obj)
   else if (obj->type == TYPE_STREAM)
     {
       if (obj->value_ptr.stream->is_open
-	  && obj->value_ptr.stream->medium == FILE_STREAM)
+	  && obj->value_ptr.stream->type == FILE_STREAM)
 	fclose (obj->value_ptr.stream->file);
 
-      if (obj->value_ptr.stream->medium == STRING_STREAM)
+      if (obj->value_ptr.stream->type == STRING_STREAM)
 	delete_reference (obj, obj->value_ptr.stream->string, 0);
+      else if (obj->value_ptr.stream->type == FILE_STREAM)
+	delete_reference (obj, obj->value_ptr.stream->namestring, 0);
       else
-	delete_reference (obj, obj->value_ptr.stream->namestring, 1);
+	delete_reference (obj, obj->value_ptr.stream->synonym_of, 0);
 
       free (obj->value_ptr.stream);
       free (obj);
