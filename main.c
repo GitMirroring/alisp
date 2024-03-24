@@ -551,6 +551,14 @@ object_list
 };
 
 
+struct
+refcounted_object_list
+{
+  int reference_strength_factor;
+  struct object *obj;
+  struct refcounted_object_list *next;
+};
+
 
 /* not a C string. not null-terminated and explicit size. null bytes are
    allowed inside */
@@ -946,7 +954,8 @@ stream_type
   {
     FILE_STREAM,
     STRING_STREAM,
-    SYNONYM_STREAM
+    SYNONYM_STREAM,
+    BROADCAST_STREAM
   };
 
 
@@ -983,6 +992,9 @@ stream
   struct object *string;
 
   struct object *synonym_of;
+
+  struct refcounted_object_list *broadcast_to;
+
 
   int is_open;
 
@@ -1308,7 +1320,7 @@ object
 
 
 struct
-refcounted_object_list
+refcounted_object_list_old
 {
   int refc;
 
@@ -1516,7 +1528,7 @@ int is_object_in_hash_table (const struct object *object,
 			     size_t table_size);
 void free_hash_table (struct object_list **hash_table, size_t table_size);
 
-struct refcounted_object_list **alloc_empty_tailsharing_hash_table
+/*struct refcounted_object_list **alloc_empty_tailsharing_hash_table
 (size_t table_size);
 int is_object_in_refcounted_obj_list (const struct object *obj,
 				      const struct refcounted_object_list *list);
@@ -1525,7 +1537,7 @@ void prepend_object_to_refcounted_obj_list (struct object *obj,
 struct refcounted_object_list **clone_tailsharing_hash_table
 (struct refcounted_object_list **hash_table, size_t table_size);
 void free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
-				  size_t table_size);
+size_t table_size);*/
 
 void capture_lexical_environment (struct binding **lex_vars,
 				  struct binding **lex_funcs,
@@ -1935,6 +1947,9 @@ int type_string_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
 int type_synonym_stream (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome);
+int type_broadcast_stream (const struct object *obj,
+			   const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
 int type_standard_object (const struct object *obj, const struct object *typespec,
 			  struct environment *env, struct outcome *outcome);
 int type_generic_function (const struct object *obj, const struct object *typespec,
@@ -2099,6 +2114,10 @@ struct object *builtin_get_output_stream_string
 struct object *builtin_make_synonym_stream
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_synonym_stream_symbol
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_make_broadcast_stream
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_broadcast_stream_streams
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_upper_case_p
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3194,6 +3213,10 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYNONYM-STREAM-SYMBOL", env, builtin_synonym_stream_symbol,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("MAKE-BROADCAST-STREAM", env, builtin_make_broadcast_stream,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("BROADCAST-STREAM-STREAMS", env,
+		    builtin_broadcast_stream_streams, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, TYPE_FUNCTION,
@@ -7203,6 +7226,7 @@ free_hash_table (struct object_list **hash_table, size_t table_size)
 }
 
 
+/*
 struct refcounted_object_list **
 alloc_empty_tailsharing_hash_table (size_t table_size)
 {
@@ -7301,6 +7325,7 @@ free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
 
   free (hash_table);
 }
+*/
 
 
 void
@@ -8418,6 +8443,7 @@ create_synonym_stream (struct object *sym)
   str->type = SYNONYM_STREAM;
   str->is_open = 1;
   str->synonym_of = sym;
+  str->direction = NO_DIRECTION;
 
   obj->type = TYPE_STREAM;
   obj->value_ptr.stream = str;
@@ -13690,6 +13716,15 @@ type_synonym_stream (const struct object *obj, const struct object *typespec,
 
 
 int
+type_broadcast_stream (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STREAM
+    && obj->value_ptr.stream->type == BROADCAST_STREAM;
+}
+
+
+int
 type_standard_object (const struct object *obj, const struct object *typespec,
 		      struct environment *env, struct outcome *outcome)
 {
@@ -17231,6 +17266,83 @@ builtin_synonym_stream_symbol (struct object *list, struct environment *env,
 
   increment_refcount (CAR (list)->value_ptr.stream->synonym_of);
   return CAR (list)->value_ptr.stream->synonym_of;
+}
+
+
+struct object *
+builtin_make_broadcast_stream (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  struct object *obj = alloc_object ();
+  struct stream *str = malloc_and_check (sizeof (*str));
+  struct refcounted_object_list *l;
+
+  str->type = BROADCAST_STREAM;
+  str->broadcast_to = NULL;
+  str->direction = OUTPUT_STREAM;
+  str->is_open = 1;
+
+  obj->type = TYPE_STREAM;
+  obj->value_ptr.stream = str;
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (CAR (list)->type != TYPE_STREAM
+	  || CAR (list)->value_ptr.stream->direction != OUTPUT_STREAM)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      l = malloc_and_check (sizeof (*l));
+      l->obj = CAR (list);
+      l->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (CAR (list));
+      l->next = str->broadcast_to;
+      str->broadcast_to = l;
+
+      INC_WEAK_REFCOUNT (CAR (list));
+
+      list = CDR (list);
+    }
+
+  return obj;
+}
+
+
+struct object *
+builtin_broadcast_stream_streams (struct object *list, struct environment *env,
+				  struct outcome *outcome)
+{
+  struct refcounted_object_list *s;
+  struct object *ret = &nil_object, *cons;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM
+      || CAR (list)->value_ptr.stream->type != BROADCAST_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  s = CAR (list)->value_ptr.stream->broadcast_to;
+
+  while (s)
+    {
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = s->obj;
+      add_reference (cons, CAR (cons), 0);
+      cons->value_ptr.cons_pair->cdr = ret;
+      ret = cons;
+
+      s = s->next;
+    }
+
+  return ret;
 }
 
 
@@ -28201,11 +28313,31 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
 {
   struct string *s;
   size_t i;
+  struct refcounted_object_list *l;
 
-  if (stream->type == FILE_STREAM)
+  if (stream->type == BROADCAST_STREAM)
+    {
+      l = stream->broadcast_to;
+
+      while (l)
+	{
+	  if (write_to_stream (l->obj->value_ptr.stream, str, size) < 0)
+	    return -1;
+
+	  l = l->next;
+	}
+
+      return 0;
+    }
+  else if (stream->type == FILE_STREAM)
     {
       if (fwrite (str, 1, size, stream->file) < size)
 	return -1;
+
+      if (str [size-1] == '\n')
+	stream->dirty_line = 0;
+      else
+	stream->dirty_line = 1;
 
       return 0;
     }
@@ -28218,6 +28350,11 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
 	s->value [s->used_size + i] = str [i];
 
       s->used_size = s->alloc_size;
+
+      if (str [size-1] == '\n')
+	stream->dirty_line = 0;
+      else
+	stream->dirty_line = 1;
 
       return 0;
     }
@@ -29536,6 +29673,7 @@ mark_as_constant (struct object *obj)
   struct parameter *p;
   struct method_list *m;
   struct hashtable_record *r;
+  struct refcounted_object_list *l;
   int i;
 
   if (DONT_REFCOUNT (obj))
@@ -29636,8 +29774,18 @@ mark_as_constant (struct object *obj)
 	mark_as_constant (obj->value_ptr.stream->string);
       else if (obj->value_ptr.stream->type == FILE_STREAM)
 	mark_as_constant (obj->value_ptr.stream->namestring);
-      else
+      else if (obj->value_ptr.stream->type == SYNONYM_STREAM)
 	mark_as_constant (obj->value_ptr.stream->synonym_of);
+      else
+	{
+	  l = obj->value_ptr.stream->broadcast_to;
+
+	  while (l)
+	    {
+	      mark_as_constant (l->obj);
+	      l = l->next;
+	    }
+	}
     }
 }
 
@@ -29674,6 +29822,7 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
   struct parameter *par;
   struct hashtable_record *r;
   struct method_list *ml;
+  struct refcounted_object_list *l;
 
   if (src->type == TYPE_ARRAY)
     {
@@ -29742,6 +29891,19 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
       return !(par->reference_strength_factor & (0x1 << ind))
 	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
     }
+  else if (src->type == TYPE_STREAM
+	   && src->value_ptr.stream->type == BROADCAST_STREAM)
+    {
+      l = src->value_ptr.stream->broadcast_to;
+
+      while (ind)
+	{
+	  l = l->next;
+	  ind--;
+	}
+
+      return !l->reference_strength_factor != !STRENGTH_FACTOR_OF_OBJECT (dest);
+    }
   else
     {
       return !(src->flags & (0x1 << ind)) != !STRENGTH_FACTOR_OF_OBJECT (dest);
@@ -29757,6 +29919,7 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
   struct parameter *par;
   struct hashtable_record *r;
   struct method_list *ml;
+  struct refcounted_object_list *l;
 
   if (src->type == TYPE_ARRAY)
     {
@@ -29835,6 +29998,20 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 					    & ~(1 << ind))
 	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
 	}
+    }
+  else if (src->type == TYPE_STREAM
+	   && src->value_ptr.stream->type == BROADCAST_STREAM)
+    {
+      l = src->value_ptr.stream->broadcast_to;
+
+      while (ind)
+	{
+	  l = l->next;
+	  ind--;
+	}
+
+      l->reference_strength_factor
+	= !new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest);
     }
   else
     {
@@ -30005,6 +30182,7 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
   struct parameter *par;
   struct hashtable_record *r;
   struct method_list *ml;
+  struct refcounted_object_list *l;
 
   if (IS_PREFIX (node->type))
     rest_inv_at_edge (node->value_ptr.next, 0);
@@ -30069,9 +30247,20 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 	{
 	  rest_inv_at_edge (node->value_ptr.stream->namestring, 0);
 	}
-      else
+      else if (node->value_ptr.stream->type == SYNONYM_STREAM)
 	{
 	  rest_inv_at_edge (node->value_ptr.stream->synonym_of, 0);
+	}
+      else
+	{
+	  l = node->value_ptr.stream->broadcast_to;
+	  i = 0;
+
+	  while (l)
+	    {
+	      rest_inv_at_edge (l->obj, i++);
+	      l = l->next;
+	    }
 	}
     }
   else if (node->type == TYPE_FUNCTION || node->type == TYPE_MACRO)
@@ -30120,6 +30309,8 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 void
 free_object (struct object *obj)
 {
+  struct refcounted_object_list *n;
+
   if (!obj)
     return;
 
@@ -30205,8 +30396,18 @@ free_object (struct object *obj)
 	delete_reference (obj, obj->value_ptr.stream->string, 0);
       else if (obj->value_ptr.stream->type == FILE_STREAM)
 	delete_reference (obj, obj->value_ptr.stream->namestring, 0);
-      else
+      else if (obj->value_ptr.stream->type == SYNONYM_STREAM)
 	delete_reference (obj, obj->value_ptr.stream->synonym_of, 0);
+      else
+	{
+	  while (obj->value_ptr.stream->broadcast_to)
+	    {
+	      delete_reference (obj, obj->value_ptr.stream->broadcast_to->obj, 0);
+	      n = obj->value_ptr.stream->broadcast_to->next;
+	      free (obj->value_ptr.stream->broadcast_to);
+	      obj->value_ptr.stream->broadcast_to = n;
+	    }
+	}
 
       free (obj->value_ptr.stream);
       free (obj);
