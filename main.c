@@ -2063,6 +2063,10 @@ struct object *builtin_truename
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_probe_file
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_file_position
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_file_length
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_rename_file
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_delete_file
@@ -3168,6 +3172,10 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("TRUENAME", env, builtin_truename, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PROBE-FILE", env, builtin_probe_file, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("FILE-POSITION", env, builtin_file_position, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("FILE-LENGTH", env, builtin_file_length, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("RENAME-FILE", env, builtin_rename_file, TYPE_FUNCTION, NULL,
 		    0);
@@ -16090,6 +16098,86 @@ builtin_probe_file (struct object *list, struct environment *env,
   fclose (f);
 
   return create_filename (ns);
+}
+
+
+struct object *
+builtin_file_position (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  int l = list_length (list);
+  long ret;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM
+      || CAR (list)->value_ptr.stream->type != FILE_STREAM
+      || (l == 2 && (CAR (CDR (list))->type != TYPE_INTEGER
+		     || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1)
+    {
+      ret = ftell (CAR (list)->value_ptr.stream->file);
+
+      if (ret < 0)
+	return &nil_object;
+
+      return create_integer_from_long (ret);
+    }
+
+  if (fseek (CAR (list)->value_ptr.stream->file,
+	     mpz_get_si (CAR (CDR (list))->value_ptr.integer), SEEK_SET))
+    {
+      return &nil_object;
+    }
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_file_length (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  FILE *f;
+  long oldp, l;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM
+      || CAR (list)->value_ptr.stream->type != FILE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  f = CAR (list)->value_ptr.stream->file;
+
+  if ((oldp = ftell (f)) == -1)
+    return &nil_object;
+
+  if (fseek (f, 0l, SEEK_END))
+    return &nil_object;
+
+  if ((l = ftell (f)) == -1)
+    return &nil_object;
+
+  if (fseek (f, oldp, SEEK_SET))
+    return &nil_object;
+
+  return create_integer_from_long (l);
 }
 
 
