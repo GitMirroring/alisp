@@ -8355,11 +8355,11 @@ create_file_stream (enum stream_content_type content_type,
   str->type = FILE_STREAM;
 
   if (direction == INPUT_STREAM)
-    str->file = fopen (fn, "r");
+    str->file = fopen (fn, "rb");
   else if (direction == OUTPUT_STREAM)
-    str->file = fopen (fn, "w");
+    str->file = fopen (fn, "wb");
   else if (direction == BIDIRECTIONAL_STREAM)
-    str->file = fopen (fn, "r+");
+    str->file = fopen (fn, "rb+");
 
   free (fn);
 
