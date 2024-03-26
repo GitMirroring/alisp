@@ -24502,7 +24502,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 {
   struct object *exp, *cons1, *cons2, *res, *val, *args, *fun;
   struct object_list *expvals, *l;
-  int binsnum;
+  int binsnum = 0;
 
 
   if (IS_SYMBOL (form))
