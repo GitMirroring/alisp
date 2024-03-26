@@ -504,6 +504,7 @@ make_test ("(typep (make-random-state) 'random-state)", "T");
 make_test ("(typep #\\a 'character)", "T");
 make_test ("(typep #\\ò 'character)", "T");
 make_test ("(typep #\\ò 'base-char)", "T");
+make_test ("(typep #\\ò 'extended-char)", "NIL");
 make_test ("(typep #\\ò 'standard-char)", "NIL");
 make_test ("(typep #\\! 'standard-char)", "T");
 make_test ("(typep \"abc\" 'string)", "T");
