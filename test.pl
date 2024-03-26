@@ -292,6 +292,7 @@ make_test ("(setf)", "NIL");
 make_test ("(let ((c 0)) c)", "0");
 make_test ("(setf c (+ c 1))", "5");
 make_test ("c", "5");
+make_test ("(let ((l '(0 1))) (psetf (car l) 2 (cdr l) (car l)) l)", "(2 . 0)");
 make_test ("(setq)", "NIL");
 make_test ("(setq b 9 c 4 c (+ c 1))", "5");
 make_test ("(let ((f 0)) (setq g 1) f)", "0");
