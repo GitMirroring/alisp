@@ -1098,12 +1098,15 @@ make_test ("(loop for k being each hash-key in tbl do (write k))", "321\nNIL");
 make_test ("(loop for k being each hash-key in (make-hash-table) do (write k))", "NIL");
 make_test ("(loop for v being the hash-values in tbl using (hash-key k) do (write v) (write k))", "736251\nNIL");
 make_test ("(format t \"aaa\")", "aaa\nNIL");
+#make_test ("(loop for (i . j) in nil do (write j) finally (write j))", "NIL\nNIL");
 make_test ("(format t \"aaa~~\")", "aaa~\nNIL");
 make_test ("(format t \"aaa~%~%\")", "aaa\n\nNIL");
 make_test ("(format t \"aa~&~&bb\")", "aa\nbb\nNIL");
 make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))",
 	   "the number is 10 and the list is (1 2 3)\nNIL");
 make_test ("(open \"README\" :foo 'what :allow-other-keys t :allow-other-keys nil)", "#<STREAM ?>");
+make_test ("(with-open-file (s \"writetest2\" :direction :io) (write 'hello :stream s) (file-position s 0) (read s))", "HELLO");
+make_test ("(with-open-file (s \"writetest2\" :direction :io) (list (input-stream-p s) (output-stream-p s)))", "(T T)");
 make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
 make_test ("(write \"hello\" :stream str)", "\"hello\"");
 make_test ("(write-char #\\newline str)", "#\\Newline");
