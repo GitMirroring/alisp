@@ -1644,6 +1644,11 @@
   `(integer 0 ,(1- s)))
 
 
+(deftype extended-char ()
+  nil)
+
+
+
 (defun consp (obj)
   (typep obj 'cons))
 
@@ -2498,12 +2503,12 @@
 	  char-int string-upcase string-downcase string-capitalize
 	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
 	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  consp listp symbolp keywordp functionp packagep integerp rationalp
-	  floatp complexp random-state-p characterp standard-char-p vectorp
-	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
-	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
-	  check-type macroexpand equal fdefinition complement mapc mapcan
-	  maplist mapl mapcon map-into reduce merge pathname-host
+	  extended-char consp listp symbolp keywordp functionp packagep integerp
+	  rationalp floatp complexp random-state-p characterp standard-char-p
+	  vectorp simple-vector-p arrayp sequencep stringp simple-string-p
+	  bit-vector-p simple-bit-vector-p hash-table-p pathnamep streamp realp
+	  numberp check-type macroexpand equal fdefinition complement mapc
+	  mapcan maplist mapl mapcon map-into reduce merge pathname-host
 	  pathname-device pathname-directory pathname-type pathname-version
 	  namestring file-namestring directory-namestring host-namestring
 	  enough-namestring merge-pathnames file-author file-write-date
