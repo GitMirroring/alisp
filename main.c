@@ -5910,7 +5910,7 @@ char *
 accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 		  int *token_length, struct outcome *out)
 {
-  unsigned char ch;
+  int ch;
   char *outbuf;
 
   *token_size = 16;
