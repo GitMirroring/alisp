@@ -8373,7 +8373,7 @@ create_file_stream (enum stream_content_type content_type,
   else if (direction == OUTPUT_STREAM)
     str->file = fopen (fn, "wb");
   else if (direction == BIDIRECTIONAL_STREAM)
-    str->file = fopen (fn, "rb+");
+    str->file = fopen (fn, "wb+");
 
   free (fn);
 
@@ -17008,7 +17008,7 @@ struct object *
 builtin_open (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
-  enum stream_direction dir = NO_DIRECTION;
+  enum stream_direction dir = -1;
   struct object *ns, *allow_other_keys = NULL;
   int found_unknown_key = 0;
 
@@ -17039,21 +17039,24 @@ builtin_open (struct object *list, struct environment *env,
 
 	  if (symbol_equals (CAR (CDR (list)), ":INPUT", env))
 	    {
-	      if (!dir)
+	      if (dir == -1)
 		dir = INPUT_STREAM;
 	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":OUTPUT", env))
 	    {
-	      if (!dir)
+	      if (dir == -1)
 		dir = OUTPUT_STREAM;
 	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":IO", env))
 	    {
-	      if (!dir)
+	      if (dir == -1)
 		dir = BIDIRECTIONAL_STREAM;
 	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":PROBE", env))
-	    ;
+	    {
+	      if (dir == -1)
+		dir = NO_DIRECTION;
+	    }
 	  else
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -17092,7 +17095,7 @@ builtin_open (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!dir)
+  if (dir == -1)
     dir = INPUT_STREAM;
 
   return create_file_stream (BINARY_STREAM, dir, ns, outcome);
@@ -17196,7 +17199,7 @@ builtin_input_stream_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (str->value_ptr.stream->direction == INPUT_STREAM)
+  if (str->value_ptr.stream->direction & INPUT_STREAM)
     return &t_object;
   else
     return &nil_object;
@@ -17229,7 +17232,7 @@ builtin_output_stream_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (str->value_ptr.stream->direction == OUTPUT_STREAM)
+  if (str->value_ptr.stream->direction & OUTPUT_STREAM)
     return &t_object;
   else
     return &nil_object;
