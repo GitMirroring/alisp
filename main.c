@@ -2553,6 +2553,8 @@ struct object *builtin_slot_makunbound
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defgeneric
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_ensure_generic_function
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defmethod
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_next_method_p
@@ -3354,6 +3356,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SLOT-MAKUNBOUND", env, builtin_slot_makunbound,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("ENSURE-GENERIC-FUNCTION", env,
+		    builtin_ensure_generic_function, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
   add_builtin_form ("NEXT-METHOD-P", env, builtin_next_method_p, TYPE_FUNCTION,
 		    NULL, 0);
@@ -26363,6 +26367,136 @@ evaluate_defgeneric (struct object *list, struct environment *env,
   fun->value_ptr.function->name = sym;
   add_reference (fun, sym, 0);
 
+  return fun;
+}
+
+
+struct object *
+builtin_ensure_generic_function (struct object *list, struct environment *env,
+				 struct outcome *outcome)
+{
+  struct object *sym, *lambdal = NULL, *allow_other_keys = NULL, *fun;
+  struct parameter *ll;
+  int found_unknown_key = 0;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  if (sym->value_ptr.symbol->function_cell
+      && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
+	  || !(sym->value_ptr.symbol->function_cell->value_ptr.function->
+	       flags & GENERIC_FUNCTION)))
+    {
+      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+      return NULL;
+    }
+
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":LAMBDA-LIST", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!IS_LIST (CAR (CDR (list))))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  if (!lambdal)
+	    lambdal = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
+	}
+
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
+    }
+
+
+  fun = sym->value_ptr.symbol->function_cell;
+
+  if (!fun)
+    {
+      fun = create_function (lambdal ? lambdal : &nil_object, &nil_object, env,
+			     outcome, 0, 0);
+
+      if (!fun)
+	return NULL;
+
+      fun->value_ptr.function->flags |= GENERIC_FUNCTION;
+    }
+  else
+    {
+      outcome->type = EVAL_OK;
+      ll = parse_lambda_list (lambdal ? lambdal : &nil_object, 0, 1, env,
+			      outcome,
+			      &fun->value_ptr.function->allow_other_keys);
+
+      if (outcome->type != EVAL_OK)
+	return NULL;
+
+      fun->value_ptr.function->lambda_list = ll;
+    }
+
+
+  if (!sym->value_ptr.symbol->function_cell)
+    {
+      sym->value_ptr.symbol->function_cell = fun;
+      add_reference (sym, fun, 1);
+
+      fun->value_ptr.function->name = sym;
+      add_reference (fun, sym, 0);
+
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+
+      return fun;
+    }
+
+  increment_refcount (fun);
   return fun;
 }
 
