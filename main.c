@@ -2469,6 +2469,9 @@ struct object *inspect_variable (struct object *sym, struct environment *env);
 struct object *set_value (struct object *sym, struct object *value,
 			  int eval_value, struct environment *env,
 			  struct outcome *outcome);
+struct object *setf_value (struct object *form, struct object *value,
+			   int eval_value, struct environment *env,
+			   struct outcome *outcome);
 
 struct object *evaluate_quote
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -2501,6 +2504,8 @@ struct object *evaluate_setq
 struct object *evaluate_psetq
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_setf
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_psetf
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_function
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3315,6 +3320,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, NULL, 1);
   add_builtin_form ("PSETQ", env, evaluate_psetq, TYPE_MACRO, NULL, 0);
   add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("PSETF", env, evaluate_psetf, TYPE_MACRO, NULL, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, NULL, 0);
   add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, NULL, 0);
@@ -24488,6 +24494,202 @@ set_value (struct object *sym, struct object *value, int eval_value,
 
 
 struct object *
+setf_value (struct object *form, struct object *value, int eval_value,
+	    struct environment *env, struct outcome *outcome)
+{
+  struct object *exp, *cons1, *cons2, *res, *val, *args, *fun;
+  struct object_list *expvals, *l;
+  int binsnum;
+
+
+  if (IS_SYMBOL (form))
+    {
+      return set_value (SYMBOL (form), value, eval_value, env, outcome);
+    }
+  else if (form->type == TYPE_CONS_PAIR)
+    {
+      if (!IS_SYMBOL (CAR (form)))
+	{
+	  outcome->type = INVALID_ACCESSOR;
+	  return NULL;
+	}
+
+      if (SYMBOL (CAR (form))->value_ptr.symbol->setf_expander)
+	{
+	  exp = call_function (SYMBOL (CAR (form))->value_ptr.symbol->
+			       setf_expander, CDR (form), 0, 0, 0, 0, 0, env,
+			       outcome);
+
+	  if (!exp)
+	    return NULL;
+
+	  if (object_list_length (outcome->other_values) < 4)
+	    {
+	      outcome->type = SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES;
+	      return NULL;
+	    }
+
+	  expvals = outcome->other_values;
+	  outcome->other_values = NULL;
+
+	  cons1 = exp;
+	  cons2 = expvals->obj;
+
+	  while (SYMBOL (cons1) != &nil_object)
+	    {
+	      if (!IS_SYMBOL (CAR (cons1)) || cons2->type != TYPE_CONS_PAIR)
+		{
+		  outcome->type = INVALID_SETF_EXPANSION;
+		  return NULL;
+		}
+
+	      res = evaluate_object (CAR (cons2), env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!res)
+		return NULL;
+
+	      env->vars = bind_variable (SYMBOL (CAR (cons1)), res, env->vars);
+	      binsnum++;
+
+	      cons1 = CDR (cons1);
+	      cons2 = CDR (cons2);
+	    }
+
+	  decrement_refcount (exp);
+	  decrement_refcount (expvals->obj);
+
+	  if (eval_value)
+	    {
+	      value = evaluate_object (value, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!value)
+		return NULL;
+	    }
+
+	  cons1 = expvals->next->obj;
+	  l = NULL;
+
+	  while (SYMBOL (cons1) != &nil_object)
+	    {
+	      if (!IS_SYMBOL (CAR (cons1)))
+		{
+		  outcome->type = INVALID_SETF_EXPANSION;
+		  return NULL;
+		}
+
+	      if (!l)
+		{
+		  env->vars = bind_variable (SYMBOL (CAR (cons1)), value,
+					     env->vars);
+		  l = outcome->other_values;
+		}
+	      else
+		{
+		  env->vars = bind_variable (SYMBOL (CAR (cons1)), l->obj,
+					     env->vars);
+		  l = l->next;
+		}
+
+	      binsnum++;
+
+	      cons1 = CDR (cons1);
+	    }
+
+	  decrement_refcount (expvals->next->obj);
+
+	  free_object_list_structure (outcome->other_values);
+	  outcome->other_values = NULL;
+
+	  env->lex_env_vars_boundary += binsnum;
+
+	  val = evaluate_object (expvals->next->next->obj, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  free_object_list (expvals->next->next);
+	  expvals->next->next = NULL;
+	  free_object_list_structure (expvals);
+
+	  env->vars = remove_bindings (env->vars, binsnum);
+	  env->lex_env_vars_boundary -= binsnum;
+	}
+      else if ((fun = SYMBOL (CAR (form))->value_ptr.symbol->
+		function_cell)
+	       && fun->value_ptr.function->struct_accessor_class_name)
+	{
+	  args = evaluate_through_list (CDR (form), env, outcome);
+
+	  if (!args)
+	    return NULL;
+
+	  if (eval_value)
+	    {
+	      value = evaluate_object (value, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!value)
+		return NULL;
+	    }
+
+	  val = call_structure_accessor (fun->value_ptr.function->
+					 struct_accessor_class_name,
+					 fun->value_ptr.function->
+					 struct_accessor_field, args, value,
+					 env, outcome);
+
+	  decrement_refcount (args);
+	}
+      else
+	{
+	  args = evaluate_through_list (CDR (form), env, outcome);
+
+	  if (!args)
+	    return NULL;
+
+	  if (eval_value)
+	    {
+	      value = evaluate_object (value, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!value)
+		return NULL;
+	    }
+
+	  fun = get_function (SYMBOL (CAR (form)), env, 1, 1, 0, 0);
+
+	  if (!fun)
+	    {
+	      outcome->type = INVALID_ACCESSOR;
+	      return NULL;
+	    }
+
+	  cons1 = alloc_empty_cons_pair ();
+	  cons1->value_ptr.cons_pair->car = value;
+	  add_reference (cons1, value, 0);
+	  cons1->value_ptr.cons_pair->cdr = args;
+	  add_reference (cons1, args, 1);
+	  decrement_refcount (args);
+
+	  val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
+
+	  if (!val)
+	    return NULL;
+
+	  decrement_refcount (cons1);
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return val;
+}
+
+
+struct object *
 evaluate_quote (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
@@ -25090,202 +25292,72 @@ struct object *
 evaluate_setf (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *val = &nil_object, *exp, *cons1, *cons2, *res, *fun, *args;
-  struct object_list *l, *expvals;
-  int binsnum = 0;
+  struct object *ret = &nil_object;
 
   if (list_length (list) % 2)
+    {
+      outcome->type = ODD_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      decrement_refcount (ret);
+
+      ret = setf_value (CAR (list), CAR (CDR (list)), 1, env, outcome);
+
+      if (!ret)
+	return NULL;
+
+      list = CDR (CDR (list));
+    }
+
+  return ret;
+}
+
+
+struct object *
+evaluate_psetf (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  struct object *cons = list;
+  int l = list_length (list);
+  struct object_list *ls, *last;
+
+  if (l % 2)
     {
       outcome->type = ODD_NUMBER_OF_ARGUMENTS;
 
       return NULL;
     }
 
-  while (SYMBOL (list) != &nil_object)
+  last = ls = alloc_empty_object_list (l / 2);
+
+  while (SYMBOL (cons) != &nil_object)
     {
-      decrement_refcount (val);
+      last->obj = evaluate_object (CAR (CDR (cons)), env, outcome);
 
-      if (IS_SYMBOL (CAR (list)))
-	{
-	  val = set_value (SYMBOL (CAR (list)), nth (1, list), 1, env, outcome);
+      if (!last->obj)
+	return NULL;
 
-	  if (!val)
-	    return NULL;
-	}
-      else if (CAR (list)->type == TYPE_CONS_PAIR)
-	{
-	  if (!IS_SYMBOL (CAR (CAR (list))))
-	    {
-	      outcome->type = INVALID_ACCESSOR;
-	      return NULL;
-	    }
-
-	  if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
-	    {
-	      exp = call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
-				   setf_expander, CDR (CAR (list)), 0, 0, 0, 0,
-				   0, env, outcome);
-
-	      if (!exp)
-		return NULL;
-
-	      if (object_list_length (outcome->other_values) < 4)
-		{
-		  outcome->type = SETF_EXPANDER_PRODUCED_NOT_ENOUGH_VALUES;
-		  return NULL;
-		}
-
-	      expvals = outcome->other_values;
-	      outcome->other_values = NULL;
-
-	      cons1 = exp;
-	      cons2 = expvals->obj;
-
-	      while (SYMBOL (cons1) != &nil_object)
-		{
-		  if (!IS_SYMBOL (CAR (cons1)) || cons2->type != TYPE_CONS_PAIR)
-		    {
-		      outcome->type = INVALID_SETF_EXPANSION;
-		      return NULL;
-		    }
-
-		  res = evaluate_object (CAR (cons2), env, outcome);
-		  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-		  if (!res)
-		    return NULL;
-
-		  env->vars = bind_variable (SYMBOL (CAR (cons1)), res,
-					     env->vars);
-		  binsnum++;
-
-		  cons1 = CDR (cons1);
-		  cons2 = CDR (cons2);
-		}
-
-	      decrement_refcount (exp);
-	      decrement_refcount (expvals->obj);
-
-	      val = evaluate_object (CAR (CDR (list)), env, outcome);
-
-	      if (!val)
-		return NULL;
-
-	      cons1 = expvals->next->obj;
-	      l = NULL;
-
-	      while (SYMBOL (cons1) != &nil_object)
-		{
-		  if (!IS_SYMBOL (CAR (cons1)))
-		    {
-		      outcome->type = INVALID_SETF_EXPANSION;
-		      return NULL;
-		    }
-
-		  if (!l)
-		    {
-		      env->vars = bind_variable (SYMBOL (CAR (cons1)), val,
-						 env->vars);
-		      l = outcome->other_values;
-		    }
-		  else
-		    {
-		      env->vars = bind_variable (SYMBOL (CAR (cons1)), l->obj,
-						 env->vars);
-		      l = l->next;
-		    }
-
-		  binsnum++;
-
-		  cons1 = CDR (cons1);
-		}
-
-	      decrement_refcount (expvals->next->obj);
-
-	      free_object_list_structure (outcome->other_values);
-	      outcome->other_values = NULL;
-
-	      env->lex_env_vars_boundary += binsnum;
-
-	      val = evaluate_object (expvals->next->next->obj, env, outcome);
-	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	      free_object_list (expvals->next->next);
-	      expvals->next->next = NULL;
-	      free_object_list_structure (expvals);
-
-	      env->vars = remove_bindings (env->vars, binsnum);
-	      env->lex_env_vars_boundary -= binsnum;
-	    }
-	  else if ((fun = SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
-		    function_cell)
-		   && fun->value_ptr.function->struct_accessor_class_name)
-	    {
-	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
-
-	      if (!args)
-		return NULL;
-
-	      val = evaluate_object (CAR (CDR (list)), env, outcome);
-
-	      if (!val)
-		return NULL;
-
-	      val = call_structure_accessor (fun->value_ptr.function->
-					     struct_accessor_class_name,
-					     fun->value_ptr.function->
-					     struct_accessor_field, args, val,
-					     env, outcome);
-
-	      decrement_refcount (args);
-	    }
-	  else
-	    {
-	      args = evaluate_through_list (CDR (CAR (list)), env, outcome);
-
-	      if (!args)
-		return NULL;
-
-	      val = evaluate_object (CAR (CDR (list)), env, outcome);
-
-	      if (!val)
-		return NULL;
-
-	      fun = get_function (SYMBOL (CAR (CAR (list))), env, 1, 1, 0, 0);
-
-	      if (!fun)
-		{
-		  outcome->type = INVALID_ACCESSOR;
-		  return NULL;
-		}
-
-	      cons1 = alloc_empty_cons_pair ();
-	      cons1->value_ptr.cons_pair->car = val;
-	      add_reference (cons1, val, 0);
-	      decrement_refcount (val);
-	      cons1->value_ptr.cons_pair->cdr = args;
-	      add_reference (cons1, args, 1);
-	      decrement_refcount (args);
-
-	      val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
-
-	      if (!val)
-		return NULL;
-
-	      decrement_refcount (cons1);
-	    }
-	}
-      else
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-	  return NULL;
-	}
-
-      list = CDR (CDR (list));
+      cons = CDR (CDR (cons));
+      last = last->next;
     }
 
-  return val;
+  cons = list;
+  last = ls;
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      setf_value (CAR (cons), last->obj, 0, env, outcome);
+
+      cons = CDR (CDR (cons));
+      last = last->next;
+    }
+
+  free_object_list (ls);
+
+  return &nil_object;
 }
 
 
