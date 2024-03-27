@@ -1052,6 +1052,8 @@ class_field_decl
 {
   struct object *name;
 
+  struct object *initform;
+
   struct class_field_decl *next;
 };
 
@@ -1628,7 +1630,9 @@ struct class_field_decl *create_class_field_decl
 struct condition_field_decl *create_condition_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
-void create_object_fields (struct object *stdobj, struct object *class);
+struct object *create_object_fields (struct object *stdobj, struct object *class,
+				     struct environment *env,
+				     struct outcome *outcome);
 void create_condition_fields (struct object *stdobj, struct object *class);
 
 struct object *load_file (const char *filename, struct environment *env,
@@ -8504,22 +8508,57 @@ struct class_field_decl *
 create_class_field_decl (struct object *fieldform, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct object *name;
+  struct object *name, *initform = NULL;
   struct class_field_decl *ret;
 
   if (IS_SYMBOL (fieldform))
     name = SYMBOL (fieldform);
-  else if (IS_LIST (fieldform) && IS_SYMBOL (CAR (fieldform)))
-    name = SYMBOL (CAR (fieldform));
+  else if (fieldform->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (fieldform)))
+    {
+      name = SYMBOL (CAR (fieldform));
+      fieldform = CDR (fieldform);
+    }
   else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
+  while (fieldform->type == TYPE_CONS_PAIR)
+    {
+      if (symbol_equals (CAR (fieldform), ":INITFORM", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (initform)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  initform = CAR (CDR (fieldform));
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      fieldform = CDR (CDR (fieldform));
+    }
+
   ret = malloc_and_check (sizeof (*ret));
 
   ret->name = name;
+
+  if (initform)
+    increment_refcount (initform);
+
+  ret->initform = initform;
   ret->next = NULL;
 
   return ret;
@@ -8552,8 +8591,9 @@ create_condition_field_decl (struct object *fieldform, struct environment *env,
 }
 
 
-void
-create_object_fields (struct object *stdobj, struct object *class)
+struct object *
+create_object_fields (struct object *stdobj, struct object *class,
+		      struct environment *env, struct outcome *outcome)
 {
   struct class_field_decl *fd = class->value_ptr.standard_class->fields;
   struct object_list *p = class->value_ptr.standard_class->parents;
@@ -8564,7 +8604,18 @@ create_object_fields (struct object *stdobj, struct object *class)
       f = malloc_and_check (sizeof (*f));
 
       f->name = fd->name;
-      f->value = NULL;
+
+      if (fd->initform)
+	{
+	  f->value = evaluate_object (fd->initform, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!f->value)
+	    return NULL;
+	}
+      else
+	f->value = NULL;
+
       f->next = stdobj->value_ptr.standard_object->fields;
       stdobj->value_ptr.standard_object->fields = f;
 
@@ -8573,10 +8624,14 @@ create_object_fields (struct object *stdobj, struct object *class)
 
   while (p)
     {
-      create_object_fields (stdobj, p->obj->value_ptr.symbol->typespec);
+      if (!create_object_fields (stdobj, p->obj->value_ptr.symbol->typespec, env,
+				 outcome))
+	return NULL;
 
       p = p->next;
     }
+
+  return stdobj;
 }
 
 
@@ -26086,9 +26141,7 @@ builtin_make_instance (struct object *list, struct environment *env,
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
-  create_object_fields (ret, class);
-
-  return ret;
+  return create_object_fields (ret, class, env, outcome);
 }
 
 
