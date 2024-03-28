@@ -421,6 +421,7 @@ outcome_type
     DECREASING_INTERVAL_NOT_MEANINGFUL,
     INVALID_SIZE,
     NO_APPLICABLE_METHOD,
+    NO_PRIMARY_APPLICABLE_METHOD,
     NO_NEXT_METHOD,
     COULD_NOT_RENAME_FILE,
     COULD_NOT_DELETE_FILE,
@@ -623,7 +624,7 @@ environment
 
 
   struct object *method_args;
-  struct method_list *next_methods;
+  struct method_list *method_list;
 
 
   struct object *quote_sym, *function_sym, *lambda_sym, *setf_sym;
@@ -839,6 +840,17 @@ function
 };
 
 
+enum
+method_qualifier
+  {
+    AROUND_METHOD = 1,
+    BEFORE_METHOD = 2,
+    PRIMARY_METHOD = 4,
+    AFTER_METHOD = 8,
+    AUXILIARY_METHOD = 11
+  };
+
+
 struct
 method
 {
@@ -846,6 +858,8 @@ method
 
   struct parameter *lambda_list;
   int allow_other_keys;
+
+  enum method_qualifier qualifier;
 
   struct object *body;
 };
@@ -12405,11 +12419,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 				struct outcome *outcome)
 {
   struct object *args = evaluate_through_list (arglist, env, outcome), *ret,
-    *tmp;
+    *res, *tmp;
   struct method_list *applm = NULL, *lapplm,
     *ml = func->value_ptr.function->methods;
   struct binding *bins;
-  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary, applnum = 0, i;
+  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary, applnum = 0, i,
+    found_primary = 0;
 
   if (!args)
     return NULL;
@@ -12418,6 +12433,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     {
       if (is_method_applicable (ml->meth, args, env, outcome))
 	{
+	  if (ml->meth->value_ptr.method->qualifier == PRIMARY_METHOD)
+	    found_primary = 1;
+
 	  if (applm)
 	    lapplm = lapplm->next = malloc_and_check (sizeof (*lapplm));
 	  else
@@ -12438,6 +12456,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       return NULL;
     }
 
+  if (!found_primary)
+    {
+      outcome->type = NO_PRIMARY_APPLICABLE_METHOD;
+      return NULL;
+    }
+
 
   while (applnum > 1)
     {
@@ -12445,7 +12469,17 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
       for (i = 0; i < applnum-1; i++)
 	{
-	  if (compare_method_specificity (lapplm->meth, lapplm->next->meth) == 1)
+	  if (lapplm->meth->value_ptr.method->qualifier
+	      > lapplm->next->meth->value_ptr.method->qualifier
+	      || (lapplm->meth->value_ptr.method->qualifier
+		  == lapplm->next->meth->value_ptr.method->qualifier
+		  && ((lapplm->meth->value_ptr.method->qualifier == AFTER_METHOD
+		       && compare_method_specificity (lapplm->meth,
+						      lapplm->next->meth) < 0)
+		      || (lapplm->meth->value_ptr.method->qualifier
+			  != AFTER_METHOD
+			  && compare_method_specificity (lapplm->meth,
+							 lapplm->next->meth) > 0))))
 	    {
 	      tmp = lapplm->meth;
 	      lapplm->meth = lapplm->next->meth;
@@ -12459,27 +12493,55 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     }
 
 
-  if (parse_argument_list (args, applm->meth->value_ptr.method->lambda_list, 0, 0,
-			   0, 0, env, outcome, &bins, &argsnum))
+  lapplm = applm;
+
+  while (lapplm)
     {
-      env->method_args = args;
-      env->next_methods = applm->next;
+      if (parse_argument_list (args, lapplm->meth->value_ptr.method->lambda_list,
+			       0, 0, 0, 0, env, outcome, &bins, &argsnum))
+	{
+	  env->method_args = args;
+	  env->method_list = lapplm;
 
-      env->vars = chain_bindings (bins, env->vars, NULL, NULL);
-      env->lex_env_vars_boundary += argsnum;
+	  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+	  env->lex_env_vars_boundary += argsnum;
 
-      ret = evaluate_body (applm->meth->value_ptr.method->body, 0, NULL, env,
-			   outcome);
+	  res = evaluate_body (lapplm->meth->value_ptr.method->body, 0, NULL, env,
+			       outcome);
 
-      env->vars = remove_bindings (env->vars, argsnum);
-      env->lex_env_vars_boundary = prev_lex_bin_num;
+	  env->vars = remove_bindings (env->vars, argsnum);
+	  env->lex_env_vars_boundary = prev_lex_bin_num;
 
-      env->method_args = NULL;
-      env->next_methods = NULL;
-    }
-  else
-    {
-      ret = NULL;
+	  env->method_args = NULL;
+	  env->method_list = NULL;
+	}
+      else
+	{
+	  ret = NULL;
+	  break;
+	}
+
+      if (lapplm->meth->value_ptr.method->qualifier == AROUND_METHOD)
+	{
+	  ret = res;
+	  break;
+	}
+      else if (lapplm->meth->value_ptr.method->qualifier == BEFORE_METHOD
+	       || lapplm->meth->value_ptr.method->qualifier == AFTER_METHOD)
+	{
+	  lapplm = lapplm->next;
+	}
+      else
+	{
+	  lapplm = lapplm->next;
+	  ret = res;
+
+	  while (lapplm && lapplm->meth->value_ptr.method->qualifier
+		 == PRIMARY_METHOD)
+	    {
+	      lapplm = lapplm->next;
+	    }
+	}
     }
 
   decrement_refcount (args);
@@ -26563,9 +26625,10 @@ struct object *
 evaluate_defmethod (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct object *fun, *meth;
+  struct object *fun, *meth, *lambdal;
   struct method *m;
   struct method_list *ml;
+  enum method_qualifier q = PRIMARY_METHOD;
 
   if (list_length (list) < 2)
     {
@@ -26573,7 +26636,8 @@ evaluate_defmethod (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+  if (!IS_SYMBOL (CAR (list)) ||
+      (!IS_SYMBOL (CAR (CDR (list))) && CAR (CDR (list))->type != TYPE_CONS_PAIR))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -26588,15 +26652,35 @@ evaluate_defmethod (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (!IS_LIST (CAR (CDR (list))))
+    {
+      if (symbol_equals (CAR (CDR (list)), ":AROUND", env))
+	q = AROUND_METHOD;
+      else if (symbol_equals (CAR (CDR (list)), ":BEFORE", env))
+	q = BEFORE_METHOD;
+      else if (symbol_equals (CAR (CDR (list)), ":AFTER", env))
+	q = AFTER_METHOD;
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      lambdal = CAR (CDR (CDR (list)));
+    }
+  else
+    lambdal = CAR (CDR (list));
+
   meth = alloc_object ();
   meth->type = TYPE_METHOD;
   m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
   m->generic_func = NULL;
+  m->qualifier = q;
   m->body = NULL;
 
   outcome->type = EVAL_OK;
   m->lambda_list = NULL;
-  m->lambda_list = parse_lambda_list (CAR (CDR (list)), 0, 1, env, outcome,
+  m->lambda_list = parse_lambda_list (lambdal, 0, 1, env, outcome,
 				      &m->allow_other_keys);
 
   if (outcome->type != EVAL_OK)
@@ -26631,8 +26715,8 @@ evaluate_defmethod (struct object *list, struct environment *env,
       return NULL;
     }
 
-  m->body = CDR (CDR (list));
-  add_reference (meth, CDR (CDR (list)), 1);
+  m->body = q == PRIMARY_METHOD ? CDR (CDR (list)) : CDR (CDR (CDR (list)));
+  add_reference (meth, m->body, 1);
 
   m->generic_func = fun;
   add_reference (meth, fun, 0);
@@ -26659,7 +26743,7 @@ builtin_next_method_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (env->next_methods)
+  if (env->method_list && env->method_list->next)
     return &t_object;
 
   return &nil_object;
@@ -26670,13 +26754,15 @@ struct object *
 evaluate_call_next_method (struct object *list, struct environment *env,
 			   struct outcome *outcome)
 {
-  struct object *args, *prevargs, *ret;
-  struct method_list *nextmeds;
+  struct object *args, *prevargs, *res, *ret;
+  struct method_list *medl;
   struct binding *bins;
   int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
 
 
-  if (!env->next_methods)
+  if (!env->method_list || !env->method_list->next
+      || env->method_list->meth->value_ptr.method->qualifier & (BEFORE_METHOD
+								| AFTER_METHOD))
     {
       outcome->type = NO_NEXT_METHOD;
       return NULL;
@@ -26691,33 +26777,61 @@ evaluate_call_next_method (struct object *list, struct environment *env,
       args = list;
     }
 
+  prevargs = env->method_args;
+  env->method_args = args;
 
-  if (parse_argument_list (args, env->next_methods->meth->value_ptr.method->
-			   lambda_list, 0, 0, 0, 0, env, outcome, &bins,
-			   &argsnum))
+  medl = env->method_list;
+  env->method_list = env->method_list->next;
+
+  while (env->method_list)
     {
-      prevargs = env->method_args;
-      env->method_args = args;
+      if (parse_argument_list (args, env->method_list->meth->value_ptr.method->
+			       lambda_list, 0, 0, 0, 0, env, outcome, &bins,
+			       &argsnum))
+	{
+	  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+	  env->lex_env_vars_boundary += argsnum;
 
-      nextmeds = env->next_methods;
-      env->next_methods = env->next_methods->next;
+	  res = evaluate_body (env->method_list->meth->value_ptr.method->body, 0,
+			       NULL, env, outcome);
 
-      env->vars = chain_bindings (bins, env->vars, NULL, NULL);
-      env->lex_env_vars_boundary += argsnum;
+	  env->vars = remove_bindings (env->vars, argsnum);
+	  env->lex_env_vars_boundary = prev_lex_bin_num;
+	}
+      else
+	{
+	  ret = NULL;
+	  break;
+	}
 
-      ret = evaluate_body (nextmeds->meth->value_ptr.method->body, 0, NULL, env,
-			   outcome);
+      if (env->method_list->meth->value_ptr.method->qualifier == AROUND_METHOD)
+	{
+	  ret = res;
+	  break;
+	}
+      else if (env->method_list->meth->value_ptr.method->qualifier
+	       == BEFORE_METHOD
+	       || env->method_list->meth->value_ptr.method->qualifier
+	       == AFTER_METHOD)
+	{
+	  env->method_list = env->method_list->next;
+	}
+      else
+	{
+	  env->method_list = env->method_list->next;
+	  ret = res;
 
-      env->vars = remove_bindings (env->vars, argsnum);
-      env->lex_env_vars_boundary = prev_lex_bin_num;
-
-      env->method_args = prevargs;
-      env->next_methods = nextmeds;
+	  while (env->method_list
+		 && env->method_list->meth->value_ptr.method->qualifier
+		 == PRIMARY_METHOD)
+	    {
+	      env->method_list = env->method_list->next;
+	    }
+	}
     }
-  else
-    {
-      ret = NULL;
-    }
+
+  env->method_args = prevargs;
+  env->method_list = medl;
 
   return ret;
 }
@@ -29849,6 +29963,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == NO_APPLICABLE_METHOD)
     {
       printf ("eval error: no applicable method found\n");
+    }
+  else if (err->type == NO_PRIMARY_APPLICABLE_METHOD)
+    {
+      printf ("eval error: no primary method is applicable\n");
     }
   else if (err->type == NO_NEXT_METHOD)
     {
