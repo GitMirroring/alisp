@@ -27485,7 +27485,8 @@ builtin_error (struct object *list, struct environment *env,
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+      if (!SYMBOL (CAR (list))->value_ptr.symbol->typespec
+	  || SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
 	  != TYPE_CONDITION_CLASS)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
