@@ -5857,8 +5857,9 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 					  obj_begin, obj_end);
 	    }
 
-	} while (!IS_READ_OR_EVAL_ERROR (out) && !IS_INCOMPLETE_OBJECT (out)
-		 && *list_depth);
+	} while (out == NO_OBJECT ||
+		 (!IS_READ_OR_EVAL_ERROR (out) && !IS_INCOMPLETE_OBJECT (out)
+		  && *list_depth));
 
       return out;
     }
