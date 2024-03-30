@@ -5852,8 +5852,11 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 					  ends_with_eof, env, outc, list_depth,
 					  obj_begin, obj_end);
 
-	      if (!next_nonspace_char (&ch, &input, &size, stream))
-		return out;
+	      if (out == COMPLETE_OBJECT)
+		{
+		  input = *obj_end+1;
+		  size = (input + size) - *obj_end - 1;
+		}
 	    }
 	  else
 	    {
@@ -5865,8 +5868,13 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 					  stream, preserve_whitespace,
 					  ends_with_eof, env, outc, list_depth,
 					  obj_begin, obj_end);
-	    }
 
+	      if (out == COMPLETE_OBJECT)
+		{
+		  input = *obj_end+1;
+		  size = (input + size) - *obj_end - 1;
+		}
+	    }
 	} while (out == NO_OBJECT ||
 		 (!IS_READ_OR_EVAL_ERROR (out) && !IS_INCOMPLETE_OBJECT (out)
 		  && *list_depth));
