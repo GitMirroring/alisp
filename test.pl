@@ -1610,6 +1610,8 @@ make_test ("#+foo \"aaa\nbbb\" 0", "0");
 make_test ("#+foo (1\n2 (3)) 0", "0");
 make_test ("#+foo (\"\") 0", "0");
 make_test ("#-fooo :fooo 0", ":FOOO\n0");
+make_test ("`(#+foo ,@'(\"\"))", "NIL");
+make_test ("(list `(#+foo ,@'(\"\")))", "(NIL)");
 
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package *package*)", "#<PACKAGE \"COMMON-LISP-USER\">");
