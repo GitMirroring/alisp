@@ -10577,7 +10577,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
     {
       car = CAR (obj);
 
-      if (car->type == TYPE_CONS_PAIR && allow_destructuring)
+      if (IS_LIST (car) && allow_destructuring)
 	{
 	  if (!first)
 	    *last = first = alloc_parameter (REQUIRED_PARAM, NULL);
@@ -11622,9 +11622,9 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   while (SYMBOL (arglist) != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
-      if (par->sub_lambda_list)
+      if (!par->name)
 	{
-	  if (CAR (arglist)->type != TYPE_CONS_PAIR)
+	  if (!IS_LIST (CAR (arglist)))
 	    {
 	      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
 	      return 0;
