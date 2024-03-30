@@ -4843,6 +4843,13 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
     {
       if (out == CLOSING_PARENTHESIS)
 	{
+	  if (!last_cons)
+	    {
+	      *list_end = obj_end;
+	      *obj = &nil_object;
+	      return COMPLETE_OBJECT;
+	    }
+
 	  if (last_cons->value_ptr.cons_pair->found_dot
 	      && !last_cons->value_ptr.cons_pair->cdr)
 	    return NO_OBJ_AFTER_DOT_IN_LIST;
