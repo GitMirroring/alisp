@@ -25133,13 +25133,16 @@ struct object *
 evaluate_defconstant (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
-  if (list_length (list) != 2)
+  int l = list_length (list);
+
+  if (l < 2 || l > 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)))
+  if (!IS_SYMBOL (CAR (list))
+      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -25195,8 +25198,9 @@ evaluate_defparameter (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   struct object *s;
+  int l = list_length (list);
 
-  if (list_length (list) != 2)
+  if (l < 2 || l > 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
@@ -25204,7 +25208,8 @@ evaluate_defparameter (struct object *list, struct environment *env,
 
   s = CAR (list);
 
-  if (s->type != TYPE_SYMBOL && s->type != TYPE_SYMBOL_NAME)
+  if ((s->type != TYPE_SYMBOL && s->type != TYPE_SYMBOL_NAME)
+      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -25229,13 +25234,14 @@ evaluate_defvar (struct object *list, struct environment *env,
   struct object *s = CAR (list);
   unsigned int l = list_length (list);
 
-  if (!l || l > 2)
+  if (!l || l > 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+  if ((s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
+      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
