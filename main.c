@@ -11065,7 +11065,10 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 		  && allow_destructuring)))
     {
       if (obj->type == TYPE_CONS_PAIR
-	  && (SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	  && (SYMBOL (CDR (obj)) == &nil_object
+	      || (!IS_SYMBOL (CAR (CDR (obj)))
+		  && (CAR (CDR (obj))->type != TYPE_CONS_PAIR
+		      || !allow_destructuring))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -11077,27 +11080,48 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 	  return NULL;
 	}
 
-      restsym = obj->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (obj)))
-	: SYMBOL (obj);
-
-      if (restsym->value_ptr.symbol->is_const)
+      if (obj->type == TYPE_CONS_PAIR && IS_LIST (CAR (CDR (obj))))
 	{
-	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
-	  return NULL;
+	  if (!first)
+	    last = first = alloc_parameter (REST_PARAM, NULL);
+	  else
+	    last = last->next = alloc_parameter (REST_PARAM, NULL);
+
+	  outcome->type = EVAL_OK;
+	  last->sub_lambda_list = parse_lambda_list (CAR (CDR (obj)), 1, 0, env,
+						     outcome,
+						     &last->
+						     sub_allow_other_keys);
+
+	  if (outcome->type != EVAL_OK)
+	    return NULL;
+
+	  obj = CDR (CDR (obj));
 	}
-
-      if (first)
-	last = last->next = alloc_parameter (REST_PARAM, restsym);
       else
-	last = first = alloc_parameter (REST_PARAM, restsym);
+	{
+	  restsym = obj->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (obj)))
+	    : SYMBOL (obj);
 
-      last->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (restsym);
-      INC_WEAK_REFCOUNT (restsym);
+	  if (restsym->value_ptr.symbol->is_const)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return NULL;
+	    }
 
-      if (obj->type == TYPE_CONS_PAIR)
-	obj = CDR (CDR (obj));
-      else
-	dotted_ok = 1;
+	  if (first)
+	    last = last->next = alloc_parameter (REST_PARAM, restsym);
+	  else
+	    last = first = alloc_parameter (REST_PARAM, restsym);
+
+	  last->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (restsym);
+	  INC_WEAK_REFCOUNT (restsym);
+
+	  if (obj->type == TYPE_CONS_PAIR)
+	    obj = CDR (CDR (obj));
+	  else
+	    dotted_ok = 1;
+	}
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
@@ -11730,7 +11754,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       par = par->next;
     }
 
-  if (par && (par->type == REST_PARAM || par->type == KEYWORD_PARAM))
+  if (par && ((par->type == REST_PARAM && par->name)
+	      || par->type == KEYWORD_PARAM))
     {
       if (eval_args)
 	{
@@ -11750,13 +11775,34 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
   if (par && par->type == REST_PARAM)
     {
-      *bins = bind_variable (par->name, args, *bins);
+      if (!par->name)
+	{
+	  if (!IS_LIST (arglist))
+	    {
+	      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
+	      return 0;
+	    }
 
-      (*argsnum)++;
+	  if (!parse_argument_list (arglist, par->sub_lambda_list, eval_args, 0,
+				    is_typespec, par->sub_allow_other_keys, env,
+				    outcome, &subbins, &subargs))
+	    {
+	      return 0;
+	    }
 
-      par = par->next;
+	  *argsnum += subargs;
+	  *bins = chain_bindings (subbins, *bins, NULL, NULL);
+	}
+      else
+	{
+	  *bins = bind_variable (par->name, args, *bins);
 
-      rest_found = 1;
+	  (*argsnum)++;
+
+	  par = par->next;
+
+	  rest_found = 1;
+	}
     }
 
   as = args;
