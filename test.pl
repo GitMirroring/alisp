@@ -587,6 +587,7 @@ make_test ("(deftype odd-integer nil '(and integer (satisfies oddp)))", "ODD-INT
 make_test ("(typep 0 'odd-integer)", "NIL");
 make_test ("(typep 1 'odd-integer)", "T");
 make_test ("(let ((i 0)) (check-type i integer))", "NIL");
+make_test ("(assert (= 1 1))", "NIL");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
 make_test ("(defun (setf foo2) (a1 a2) (list a1 a2))", "(SETF FOO2)");
