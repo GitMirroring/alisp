@@ -1737,6 +1737,12 @@
 
 
 
+(defmacro assert (test &optional places (conddat "Assertion does not hold") condargs)
+  `(unless ,test
+     (apply 'error ,conddat ,condargs)))
+
+
+
 (defun macroexpand (form)
   (do ((ret (list form t))
        expp)
@@ -2507,8 +2513,8 @@
 	  rationalp floatp complexp random-state-p characterp standard-char-p
 	  vectorp simple-vector-p arrayp sequencep stringp simple-string-p
 	  bit-vector-p simple-bit-vector-p hash-table-p pathnamep streamp realp
-	  numberp check-type macroexpand equal fdefinition complement mapc
-	  mapcan maplist mapl mapcon map-into reduce merge pathname-host
+	  numberp check-type assert macroexpand equal fdefinition complement
+	  mapc mapcan maplist mapl mapcon map-into reduce merge pathname-host
 	  pathname-device pathname-directory pathname-type pathname-version
 	  namestring file-namestring directory-namestring host-namestring
 	  enough-namestring merge-pathnames file-author file-write-date
