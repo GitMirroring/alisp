@@ -2510,6 +2510,8 @@ struct object *evaluate_eval_when
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defconstant
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_constantp
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defparameter
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defvar
@@ -3333,6 +3335,7 @@ add_standard_definitions (struct environment *env)
 		    1);
   add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
 		    0);
+  add_builtin_form ("CONSTANTP", env, builtin_constantp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, NULL, 0);
@@ -25144,6 +25147,46 @@ evaluate_defconstant (struct object *list, struct environment *env,
 
   return define_constant (CAR (list)->value_ptr.symbol_name->sym,
 			  CAR (CDR (list)), env, outcome);
+}
+
+
+struct object *
+builtin_constantp (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  int l = list_length (list);
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_NUMBER (CAR (list)) || CAR (list)->type == TYPE_CHARACTER
+      || IS_ARRAY (CAR (list)) || CAR (list)->type == TYPE_HASHTABLE
+      || CAR (list)->type == TYPE_PACKAGE || CAR (list)->type == TYPE_FILENAME
+      || CAR (list)->type == TYPE_STREAM
+      || CAR (list)->type == TYPE_STRUCTURE_CLASS
+      || CAR (list)->type == TYPE_STRUCTURE
+      || CAR (list)->type == TYPE_STANDARD_CLASS
+      || CAR (list)->type == TYPE_STANDARD_OBJECT
+      || CAR (list)->type == TYPE_CONDITION_CLASS
+      || CAR (list)->type == TYPE_CONDITION
+      || CAR (list)->type == TYPE_FUNCTION || CAR (list)->type == TYPE_MACRO
+      || CAR (list)->type == TYPE_METHOD)
+    return &t_object;
+
+  if (IS_SYMBOL (CAR (list)) && SYMBOL (CAR (list))->value_ptr.symbol->is_const)
+    return &t_object;
+
+  if (IS_CONSTANT (CAR (list)))
+    return &t_object;
+
+  if (CAR (list)->type == TYPE_CONS_PAIR
+      && SYMBOL (CAR (CAR (list))) == env->quote_sym)
+    return &t_object;
+
+  return &nil_object;
 }
 
 
