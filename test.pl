@@ -916,6 +916,8 @@ make_test ("(array-row-major-index (make-array '(2 3 4)) 0 0 1)", "1");
 make_test ("(array-row-major-index (make-array '(2 3 4)) 0 2 0)", "8");
 make_test ("(array-row-major-index (make-array '(2 3 4)) 1 0 0)", "12");
 make_test ("(array-row-major-index #*010 1)", "1");
+make_test ("(array-element-type \"abc\")", "CHARACTER");
+make_test ("(array-element-type #*01)", "BIT");
 make_test ("(let ((arr (make-array 5))) (adjust-array arr 3) arr)", "#(NIL NIL NIL)");
 make_test ("(let ((arr (make-array 2))) (adjust-array arr 3) arr)", "#(NIL NIL NIL)");
 make_test ("(let ((str \"abcdef\")) (adjust-array str 4) str)", "\"abcd\"");
