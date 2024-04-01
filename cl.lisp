@@ -245,7 +245,7 @@
     (t (+ ""))))
 
 
-
+#|
 (defparameter *gensym-counter* 1)
 
 (defun gensym (&optional x)
@@ -260,6 +260,7 @@
        (write *gensym-counter* :stream str)
        (incf *gensym-counter*)))
     (make-symbol (get-output-stream-string str))))
+|#
 
 
 (defparameter gentemp-counter 1)

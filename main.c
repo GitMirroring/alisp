@@ -640,6 +640,8 @@ environment
   struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym,
     *satisfies_sym, *star_sym;
 
+  struct object *gensym_counter_sym;
+
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *print_escape_sym, *print_readably_sym, *print_base_sym, *print_array_sym,
     *read_base_sym, *read_suppress_sym;
@@ -2365,6 +2367,8 @@ struct object *builtin_makunbound (struct object *list, struct environment *env,
 				   struct outcome *outcome);
 struct object *builtin_fmakunbound (struct object *list, struct environment *env,
 				    struct outcome *outcome);
+struct object *builtin_gensym (struct object *list, struct environment *env,
+			       struct outcome *outcome);
 struct object *builtin_macroexpand_1 (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
@@ -3132,6 +3136,10 @@ add_standard_definitions (struct environment *env)
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
 
 
+  env->gensym_counter_sym = define_variable ("*GENSYM-COUNTER*",
+					     create_integer_from_long (1), env);
+
+
   env->random_state_sym =
     intern_symbol_by_char_vector ("*RANDOM-STATE*", strlen ("*RANDOM-STATE*"), 1,
 				  EXTERNAL_VISIBILITY, 1, env->cl_package);
@@ -3453,6 +3461,7 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("FMAKUNBOUND", env, builtin_fmakunbound, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("GENSYM", env, builtin_gensym, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
@@ -22213,6 +22222,77 @@ builtin_fmakunbound (struct object *list, struct environment *env,
 
   increment_refcount (SYMBOL (CAR (list)));
   return SYMBOL (CAR (list));
+}
+
+
+struct object *
+builtin_gensym (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  char *buf, *pr, *out;
+  struct object *num, *ret, *newcnt;
+  size_t s;
+
+  if (list_length (list) > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      num = inspect_variable (env->gensym_counter_sym, env);
+      pr = "G";
+      s = 1;
+    }
+  else if (CAR (list)->type == TYPE_STRING)
+    {
+      num = inspect_variable (env->gensym_counter_sym, env);
+      pr = CAR (list)->value_ptr.string->value;
+      s = CAR (list)->value_ptr.string->used_size;
+    }
+  else if (CAR (list)->type == TYPE_INTEGER
+	   && mpz_cmp_si (CAR (list)->value_ptr.integer, 0) >= 0)
+    {
+      num = CAR (list);
+      pr = "G";
+      s = 1;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  gmp_asprintf (&buf, "%Zd", num->value_ptr.integer);
+
+  if (SYMBOL (list) == &nil_object || CAR (list)->type == TYPE_STRING)
+    {
+      newcnt = alloc_number (TYPE_INTEGER);
+      mpz_set (newcnt->value_ptr.integer, num->value_ptr.integer);
+      mpz_add_ui (newcnt->value_ptr.integer, newcnt->value_ptr.integer, 1);
+
+      set_value (env->gensym_counter_sym, newcnt, 0, env, outcome);
+
+      decrement_refcount (newcnt);
+    }
+
+  if (!buf)
+    {
+      fprintf (stderr, "could not allocate memory.  Exiting...\n");
+      exit (1);
+    }
+
+  out = malloc_and_check (s+strlen (buf));
+  strncpy (out, pr, s);
+  strcpy (out+s, buf);
+
+  ret = create_symbol (out, s+strlen (buf), 0);
+  free (buf);
+
+  ret->value_ptr.symbol->home_package = &nil_object;
+
+  return ret;
 }
 
 
