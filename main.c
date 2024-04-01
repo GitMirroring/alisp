@@ -26062,28 +26062,110 @@ struct object *
 builtin_get_setf_expansion (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
+  struct object *tmp, *l, *cons, *val, *newv, *func;
+
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if (!IS_LIST (CAR (list)))
+  if (IS_SYMBOL (CAR (list)))
+    {
+      prepend_object_to_obj_list (SYMBOL (CAR (list)), &outcome->other_values);
+      increment_refcount (SYMBOL (CAR (list)));
+
+      tmp = builtin_gensym (&nil_object, env, outcome);
+
+      l = alloc_empty_list (3);
+      l->value_ptr.cons_pair->car = BUILTIN_SYMBOL ("SETQ");
+      add_reference (l, CAR (l), 0);
+
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = SYMBOL (CAR (list));
+      increment_refcount (SYMBOL (CAR (list)));
+
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->car = tmp;
+
+      prepend_object_to_obj_list (l, &outcome->other_values);
+
+      l = alloc_empty_list (1);
+      l->value_ptr.cons_pair->car = tmp;
+      add_reference (l, CAR (l), 0);
+      prepend_object_to_obj_list (l, &outcome->other_values);
+
+      prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+
+      return &nil_object;
+    }
+  else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
+    {
+      if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
+	{
+	  return call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
+				setf_expander, CDR (CAR (list)), 0, 0, 0, 0, 0,
+				env, outcome);
+	}
+
+      l = alloc_empty_list (list_length (CAR (list))-1);
+      cons = l;
+
+      while (cons != &nil_object)
+	{
+	  cons->value_ptr.cons_pair->car = builtin_gensym (&nil_object, env,
+							   outcome);
+	  cons = CDR (cons);
+	}
+
+      val = alloc_empty_cons_pair ();
+      val->value_ptr.cons_pair->car = SYMBOL (CAR (CAR (list)));
+      add_reference (val, CAR (val), 0);
+      val->value_ptr.cons_pair->cdr = l;
+      add_reference (val, l, 1);
+      prepend_object_to_obj_list (val, &outcome->other_values);
+
+      func = alloc_empty_list (2);
+      func->value_ptr.cons_pair->car = env->function_sym;
+      add_reference (func, CAR (func), 0);
+
+      func->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= alloc_empty_list (2);
+      func->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car->
+	value_ptr.cons_pair->car = env->setf_sym;
+      add_reference (CAR (CDR (func)), CAR (CAR (CDR (func))), 0);
+      func->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car->
+	value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= SYMBOL (CAR (CAR (list)));
+      add_reference (CDR (CAR (CDR (func))), CAR (CDR (CAR (CDR (func)))), 0);
+
+      newv = builtin_gensym (&nil_object, env, outcome);
+
+      val = alloc_empty_list (3);
+      val->value_ptr.cons_pair->car = BUILTIN_SYMBOL ("FUNCALL");
+      add_reference (val, CAR (val), 0);
+      val->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = func;
+      val->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->car = newv;
+      val->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->cdr = l;
+      add_reference (CDR (CDR (val)), CDR (CDR (CDR (val))), 1);
+      prepend_object_to_obj_list (val, &outcome->other_values);
+
+      val = alloc_empty_list (1);
+      val->value_ptr.cons_pair->car = newv;
+      add_reference (val, CAR (val), 0);
+      prepend_object_to_obj_list (val, &outcome->other_values);
+
+      increment_refcount (CDR (CAR (list)));
+      prepend_object_to_obj_list (CDR (CAR (list)), &outcome->other_values);
+
+      return l;
+    }
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
-
-  if (!IS_SYMBOL (CAR (CAR (list)))
-      || !SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
-    {
-      outcome->type = NO_SETF_EXPANDER;
-      return NULL;
-    }
-
-  return call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
-			setf_expander, CDR (CAR (list)), 0, 0, 0, 0, 0, env,
-			outcome);
 }
 
 
