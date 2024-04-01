@@ -1239,6 +1239,13 @@
 	  (array-dimensions array))))
 
 
+(defun array-element-type (array)
+  (cond
+    ((stringp array) 'character)
+    ((bit-vector-p array) 'bit)
+    (t)))
+
+
 (defun upgraded-array-element-type (ts &optional env)
   (cond
     ((subtypep ts 'bit) 'bit)
@@ -2503,28 +2510,29 @@
 	  adjoin fill replace push pop set-difference nset-difference union
 	  nunion intersection nintersection set-exclusive-or nset-exclusive-or
 	  subsetp mismatch search sort stable-sort array-rank array-dimension
-	  array-total-size array-in-bounds-p upgraded-array-element-type
-	  adjustable-array-p get get-properties remprop char schar bit sbit
-	  svref vector-pop vector-push vector-push-extend string= string/=
-	  string< string<= string> string>= string-equal string-not-equal
-	  string-lessp string-not-greaterp string-greaterp string-not-lessp
-	  char/= char< char<= char> char>= char-equal char-not-equal char-lessp
-	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
-	  char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  extended-char consp listp symbolp keywordp compiled-function-p
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type assert macroexpand equal
-	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
-	  merge pathname-host pathname-device pathname-directory pathname-type
-	  pathname-version namestring file-namestring directory-namestring
-	  host-namestring enough-namestring merge-pathnames file-author
-	  file-write-date user-homedir-pathname with-open-file terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time abort))
+	  array-total-size array-in-bounds-p array-element-type
+	  upgraded-array-element-type adjustable-array-p get get-properties
+	  remprop char schar bit sbit svref vector-pop vector-push
+	  vector-push-extend string= string/= string< string<= string> string>=
+	  string-equal string-not-equal string-lessp string-not-greaterp
+	  string-greaterp string-not-lessp char/= char< char<= char> char>=
+	  char-equal char-not-equal char-lessp char-not-greaterp char-greaterp
+	  char-not-lessp digit-char digit-char-p char-int string-upcase
+	  string-downcase string-capitalize nstring-upcase nstring-downcase
+	  nstring-capitalize string-left-trim string-right-trim string-trim
+	  defpackage signed-byte unsigned-byte extended-char consp listp symbolp
+	  keywordp compiled-function-p functionp packagep integerp rationalp
+	  floatp complexp random-state-p characterp standard-char-p vectorp
+	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
+	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
+	  check-type assert macroexpand equal fdefinition complement mapc mapcan
+	  maplist mapl mapcon map-into reduce merge pathname-host
+	  pathname-device pathname-directory pathname-type pathname-version
+	  namestring file-namestring directory-namestring host-namestring
+	  enough-namestring merge-pathnames file-author file-write-date
+	  user-homedir-pathname with-open-file terpri write-line write-sequence
+	  prin1 princ print do-all-symbols loop format encode-universal-time
+	  abort))
 
 
 
