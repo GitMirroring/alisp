@@ -15245,7 +15245,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
 
       ret = alloc_vector (1, 1, 1);
-      ret->value_ptr.array->alloc_size = 0;
+      ret->value_ptr.array->alloc_size = NULL;
     }
   else
     {
