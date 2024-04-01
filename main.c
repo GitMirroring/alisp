@@ -29230,6 +29230,12 @@ print_bignum (const mpz_t z, struct environment *env, struct stream *str)
   else
     gmp_asprintf (&out, "%Zd", z);
 
+  if (!out)
+    {
+      fprintf (stderr, "could not allocate memory.  Exiting...\n");
+      exit (1);
+    }
+
   ret = write_to_stream (str, out, strlen (out));
   free (out);
   return ret;
@@ -29247,6 +29253,12 @@ print_floating (const double f, struct environment *env, struct stream *str)
   mpf_set_d (fl, f);
   l = gmp_asprintf (&out, "%.Ff", fl);
   mpf_clear (fl);
+
+  if (!out)
+    {
+      fprintf (stderr, "could not allocate memory.  Exiting...\n");
+      exit (1);
+    }
 
   if (!strchr (out, '.'))
     {
@@ -29698,6 +29710,12 @@ print_object (const struct object *obj, struct environment *env,
 	    gmp_asprintf (&out, "%Qx", obj->value_ptr.ratio);
 	  else
 	    gmp_asprintf (&out, "%Qd", obj->value_ptr.ratio);
+
+	  if (!out)
+	    {
+	      fprintf (stderr, "could not allocate memory.  Exiting...\n");
+	      exit (1);
+	    }
 
 	  ret = write_to_stream (str, out, strlen (out));
 	  free (out);
