@@ -1665,6 +1665,9 @@
 (defun keywordp (obj)
   (typep obj 'keyword))
 
+(defun compiled-function-p (obj)
+  (typep obj 'compiled-function))
+
 (defun functionp (obj)
   (typep obj 'function))
 
@@ -2510,18 +2513,18 @@
 	  char-int string-upcase string-downcase string-capitalize
 	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
 	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  extended-char consp listp symbolp keywordp functionp packagep integerp
-	  rationalp floatp complexp random-state-p characterp standard-char-p
-	  vectorp simple-vector-p arrayp sequencep stringp simple-string-p
-	  bit-vector-p simple-bit-vector-p hash-table-p pathnamep streamp realp
-	  numberp check-type assert macroexpand equal fdefinition complement
-	  mapc mapcan maplist mapl mapcon map-into reduce merge pathname-host
-	  pathname-device pathname-directory pathname-type pathname-version
-	  namestring file-namestring directory-namestring host-namestring
-	  enough-namestring merge-pathnames file-author file-write-date
-	  user-homedir-pathname with-open-file terpri write-line write-sequence
-	  prin1 princ print do-all-symbols loop format encode-universal-time
-	  abort))
+	  extended-char consp listp symbolp keywordp compiled-function-p
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
+	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+	  pathnamep streamp realp numberp check-type assert macroexpand equal
+	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
+	  merge pathname-host pathname-device pathname-directory pathname-type
+	  pathname-version namestring file-namestring directory-namestring
+	  host-namestring enough-namestring merge-pathnames file-author
+	  file-write-date user-homedir-pathname with-open-file terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time abort))
 
 
 
