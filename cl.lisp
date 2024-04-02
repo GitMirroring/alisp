@@ -565,6 +565,25 @@
   `(if (not ,clause) (progn ,@body)))
 
 
+(defmacro define-modify-macro (name lambda-list func &optional doc)
+  (let (args)
+    (dolist (l lambda-list)
+      (unless (eq l '&optional)
+	(if (typep l 'cons)
+	    (setq args (cons (car l) args))
+	    (setq args (cons l args)))))
+    `(defmacro ,name (place . ,lambda-list)
+       (let ((exp (multiple-value-list (get-setf-expansion place)))
+	      letf)
+	  (dolist (f (car exp))
+	    (setq letf (cons (list f (caadr exp)) letf))
+	    (setf (cadr exp) (cdadr exp)))
+	  (setq letf (cons (list (caaddr exp) (list ',func (nth 4 exp) ,@args)) letf))
+	  (setq letf (list 'let* (reverse letf) nil))
+	  (setf (caddr letf) (nth 3 exp))
+	  letf))))
+
+
 (defmacro incf (place &optional (delta 1))
   `(setf ,place (+ ,place ,delta)))
 
@@ -2498,41 +2517,41 @@
 	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
 	  cdaddr cddaar cddadr cdddar cddddr make-list copy-alist copy-tree
 	  tree-equal sublis nsublis endp butlast nbutlast acons pairlis when
-	  unless incf decf and or cond otherwise case ccase ecase typecase
-	  ctypecase etypecase return multiple-value-bind prog prog* every some
-	  notany notevery member member-if member-if-not find find-if
-	  find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not
-	  position position-if position-if-not count count-if count-if-not
-	  remove remove-if-not delete delete-if delete-if-not remove-duplicates
-	  delete-duplicates substitute substitute-if substitute-if-not
-	  nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
-	  subst-if-not nsubst nsubst-if nsubst-if-not nreverse revappend nreconc
-	  adjoin fill replace push pop set-difference nset-difference union
-	  nunion intersection nintersection set-exclusive-or nset-exclusive-or
-	  subsetp mismatch search sort stable-sort array-rank array-dimension
-	  array-total-size array-in-bounds-p array-element-type
-	  upgraded-array-element-type adjustable-array-p get get-properties
-	  remprop char schar bit sbit svref vector-pop vector-push
-	  vector-push-extend string= string/= string< string<= string> string>=
-	  string-equal string-not-equal string-lessp string-not-greaterp
-	  string-greaterp string-not-lessp char/= char< char<= char> char>=
-	  char-equal char-not-equal char-lessp char-not-greaterp char-greaterp
-	  char-not-lessp digit-char digit-char-p char-int string-upcase
-	  string-downcase string-capitalize nstring-upcase nstring-downcase
-	  nstring-capitalize string-left-trim string-right-trim string-trim
-	  defpackage signed-byte unsigned-byte extended-char consp listp symbolp
-	  keywordp compiled-function-p functionp packagep integerp rationalp
-	  floatp complexp random-state-p characterp standard-char-p vectorp
-	  simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
-	  simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
-	  check-type assert macroexpand equal fdefinition complement mapc mapcan
-	  maplist mapl mapcon map-into reduce merge pathname-host
-	  pathname-device pathname-directory pathname-type pathname-version
-	  namestring file-namestring directory-namestring host-namestring
-	  enough-namestring merge-pathnames file-author file-write-date
-	  user-homedir-pathname with-open-file terpri write-line write-sequence
-	  prin1 princ print do-all-symbols loop format encode-universal-time
-	  abort))
+	  unless define-modify-macro incf decf and or cond otherwise case ccase
+	  ecase typecase ctypecase etypecase return multiple-value-bind prog
+	  prog* every some notany notevery member member-if member-if-not find
+	  find-if find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if
+	  rassoc-if-not position position-if position-if-not count count-if
+	  count-if-not remove remove-if-not delete delete-if delete-if-not
+	  remove-duplicates delete-duplicates substitute substitute-if
+	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
+	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse
+	  revappend nreconc adjoin fill replace push pop set-difference
+	  nset-difference union nunion intersection nintersection
+	  set-exclusive-or nset-exclusive-or subsetp mismatch search sort
+	  stable-sort array-rank array-dimension array-total-size
+	  array-in-bounds-p array-element-type upgraded-array-element-type
+	  adjustable-array-p get get-properties remprop char schar bit sbit
+	  svref vector-pop vector-push vector-push-extend string= string/=
+	  string< string<= string> string>= string-equal string-not-equal
+	  string-lessp string-not-greaterp string-greaterp string-not-lessp
+	  char/= char< char<= char> char>= char-equal char-not-equal char-lessp
+	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
+	  char-int string-upcase string-downcase string-capitalize
+	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+	  string-right-trim string-trim defpackage signed-byte unsigned-byte
+	  extended-char consp listp symbolp keywordp compiled-function-p
+	  functionp packagep integerp rationalp floatp complexp random-state-p
+	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
+	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+	  pathnamep streamp realp numberp check-type assert macroexpand equal
+	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
+	  merge pathname-host pathname-device pathname-directory pathname-type
+	  pathname-version namestring file-namestring directory-namestring
+	  host-namestring enough-namestring merge-pathnames file-author
+	  file-write-date user-homedir-pathname with-open-file terpri write-line
+	  write-sequence prin1 princ print do-all-symbols loop format
+	  encode-universal-time abort))
 
 
 
