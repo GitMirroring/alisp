@@ -584,13 +584,9 @@
 	  letf))))
 
 
-(defmacro incf (place &optional (delta 1))
-  `(setf ,place (+ ,place ,delta)))
+(define-modify-macro incf (&optional (delta 1)) +)
 
-
-(defmacro decf (place &optional (delta 1))
-  `(setf ,place (- ,place ,delta)))
-
+(define-modify-macro decf (&optional (delta 1)) -)
 
 
 (defmacro and (&rest forms)
