@@ -6248,6 +6248,8 @@ create_complex (struct object *real, struct object *imag, int steal_refs,
     {
       if (!steal_refs)
 	increment_refcount (real);
+      else
+	decrement_refcount (imag);
 
       return real;
     }
@@ -19771,6 +19773,9 @@ reciprocate_number (struct object *num)
 
       y = copy_number (num->value_ptr.complex->imag);
       i = divide_two_numbers (y, x2py2, NULL, NULL);
+      decrement_refcount (y);
+      decrement_refcount (x2py2);
+
       i = negate_number (i, 1);
 
       return create_complex (r, i, 1, NULL, NULL);
