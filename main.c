@@ -2209,7 +2209,7 @@ struct object *compare_any_numbers (struct object *list, struct environment *env
 				    enum number_comparison comp);
 int is_zero (const struct object *num);
 int is_bit (const struct object *num);
-struct object *negate_number (struct object *num, int in_place);
+struct object *negate_real_number (struct object *num, int in_place);
 struct object *reciprocate_number (struct object *num);
 double convert_number_to_double (struct object *num);
 struct object *add_two_numbers (struct object *n1, struct object *n2);
@@ -19686,14 +19686,13 @@ is_bit (const struct object *num)
 
 
 struct object *
-negate_number (struct object *num, int in_place)
+negate_real_number (struct object *num, int in_place)
 {
   struct object *ret;
 
   if (!in_place)
     {
-      ret = alloc_object ();
-      ret->type = num->type;
+      ret = alloc_number (num->type);
     }
   else
     ret = num;
@@ -19708,10 +19707,6 @@ negate_number (struct object *num, int in_place)
     }
   else
     {
-      if (!in_place)
-	ret->value_ptr.floating =
-	  malloc_and_check (sizeof (*ret->value_ptr.floating));
-
       *ret->value_ptr.floating = -*num->value_ptr.floating;
     }
 
@@ -19776,7 +19771,7 @@ reciprocate_number (struct object *num)
       decrement_refcount (y);
       decrement_refcount (x2py2);
 
-      i = negate_number (i, 1);
+      i = negate_real_number (i, 1);
 
       return create_complex (r, i, 1, NULL, NULL);
     }
@@ -19891,7 +19886,7 @@ subtract_two_numbers (struct object *n1, struct object *n2)
 	}
       else
 	{
-	  i = negate_number (n2->value_ptr.complex->imag, 0);
+	  i = negate_real_number (n2->value_ptr.complex->imag, 0);
 	}
 
       return create_complex (r, i, 1, NULL, NULL);
