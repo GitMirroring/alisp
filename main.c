@@ -1474,7 +1474,7 @@ struct object *create_number (const char *token, size_t size,
 			      enum object_type numtype);
 struct object *alloc_complex (void);
 struct object *create_complex (struct object *real, struct object *imag,
-			       int steal_refs, struct environment *env,
+			       int decrement_refc, struct environment *env,
 			       struct outcome *outcome);
 struct object *create_integer_from_long (long num);
 struct object *create_integer_from_unsigned_long (unsigned long num);
@@ -6223,13 +6223,15 @@ alloc_complex (void)
 
   ret->type = TYPE_COMPLEX;
   ret->value_ptr.complex = malloc_and_check (sizeof (*ret->value_ptr.complex));
+  ret->value_ptr.complex->real = NULL;
+  ret->value_ptr.complex->imag = NULL;
 
   return ret;
 }
 
 
 struct object *
-create_complex (struct object *real, struct object *imag, int steal_refs,
+create_complex (struct object *real, struct object *imag, int decrement_refc,
 		struct environment *env, struct outcome *outcome)
 {
   struct object *ret, *r, *i;
@@ -6246,10 +6248,13 @@ create_complex (struct object *real, struct object *imag, int steal_refs,
 				       || (imag->type == TYPE_RATIO
 					   && !mpq_sgn (imag->value_ptr.ratio)))))
     {
-      if (!steal_refs)
-	increment_refcount (real);
-      else
-	decrement_refcount (imag);
+      increment_refcount (real);
+
+      if (decrement_refc)
+	{
+	  decrement_refcount (real);
+	  decrement_refcount (imag);
+	}
 
       return real;
     }
@@ -6258,11 +6263,16 @@ create_complex (struct object *real, struct object *imag, int steal_refs,
     {
       ret = alloc_complex ();
 
-      if (!steal_refs)
-	increment_refcount (real);
+      add_reference (ret, real, 0);
+
+      if (decrement_refc)
+	decrement_refcount (real);
 
       ret->value_ptr.complex->real = real;
       ret->value_ptr.complex->imag = create_floating_from_double (0.0);
+
+      add_reference (ret, ret->value_ptr.complex->imag, 1);
+      decrement_refcount (ret->value_ptr.complex->imag);
 
       return ret;
     }
@@ -6271,7 +6281,7 @@ create_complex (struct object *real, struct object *imag, int steal_refs,
   r = promote_number (real, t);
   i = promote_number (imag, t);
 
-  if (steal_refs)
+  if (decrement_refc)
     {
       decrement_refcount (real);
       decrement_refcount (imag);
@@ -6280,6 +6290,12 @@ create_complex (struct object *real, struct object *imag, int steal_refs,
   ret = alloc_complex ();
   ret->value_ptr.complex->real = convert_to_integer_if_possible (r);
   ret->value_ptr.complex->imag = convert_to_integer_if_possible (i);
+
+  add_reference (ret, ret->value_ptr.complex->real, 0);
+  decrement_refcount (ret->value_ptr.complex->real);
+
+  add_reference (ret, ret->value_ptr.complex->imag, 1);
+  decrement_refcount (ret->value_ptr.complex->imag);
 
   return ret;
 }
