@@ -19505,8 +19505,11 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
     {
       if (f->name == req)
 	{
+	  increment_refcount (newval);
+	  decrement_refcount (f->value);
+
 	  f->value = newval;
-	  increment_refcount (f->value);
+
 	  increment_refcount (f->value);
 	  return f->value;
 	}
@@ -31396,6 +31399,7 @@ free_standard_class (struct object *obj)
   while (f)
     {
       nf = f->next;
+      decrement_refcount (f->initform);
       free (f);
       f = nf;
     }
