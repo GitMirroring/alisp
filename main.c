@@ -6316,8 +6316,7 @@ create_integer_from_unsigned_long (unsigned long num)
 struct object *
 convert_to_integer_if_possible (struct object *rat)
 {
-  mpz_t den;
-  struct object *obj;
+  mpz_t num, den;
 
   if (rat->type != TYPE_RATIO)
     return rat;
@@ -6327,14 +6326,15 @@ convert_to_integer_if_possible (struct object *rat)
 
   if (!mpz_cmp (den, integer_one))
     {
-      obj = alloc_object ();
-      obj->type = TYPE_INTEGER;
-      mpz_init (obj->value_ptr.integer);
-      mpz_set (obj->value_ptr.integer, mpq_numref (rat->value_ptr.ratio));
+      mpz_init (num);
+      mpz_set (num, mpq_numref (rat->value_ptr.ratio));
+      mpq_clear (rat->value_ptr.ratio);
 
-      mpz_clear (den);
-      decrement_refcount (rat);
-      return obj;
+      rat->type = TYPE_INTEGER;
+      mpz_init (rat->value_ptr.integer);
+      mpz_set (rat->value_ptr.integer, num);
+
+      mpz_clear (num);
     }
 
   mpz_clear (den);
