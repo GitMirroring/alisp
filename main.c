@@ -24960,6 +24960,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	  cons1 = alloc_empty_cons_pair ();
 	  cons1->value_ptr.cons_pair->car = value;
 	  add_reference (cons1, value, 0);
+	  decrement_refcount (value);
 	  cons1->value_ptr.cons_pair->cdr = args;
 	  add_reference (cons1, args, 1);
 	  decrement_refcount (args);
