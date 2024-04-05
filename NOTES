@@ -135,6 +135,12 @@ operations.
 
 
 
+__Streams__
+
+No stream is deemed interactive in alisp.
+
+
+
 __Language of implementation__
 
 The alisp codebase should be valid C89, to the best of my knowledge.
