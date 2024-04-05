@@ -22301,7 +22301,7 @@ builtin_gensym (struct object *list, struct environment *env,
 
   out = malloc_and_check (s+strlen (buf));
   strncpy (out, pr, s);
-  strcpy (out+s, buf);
+  strncpy (out+s, buf, strlen (buf));
 
   ret = create_symbol (out, s+strlen (buf), 0);
   free (buf);
