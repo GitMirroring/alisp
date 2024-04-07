@@ -1829,6 +1829,10 @@ int parse_argument_list (struct object *arglist, struct parameter *par,
 			 int allow_other_keys, struct environment *env,
 			 struct outcome *outcome, struct binding **bins,
 			 int *argsnum);
+int destructure_tree (struct object *template, struct object *vals,
+		      struct binding **bins, int *binnum,
+		      struct outcome *outcome);
+
 struct object *call_function (struct object *func, struct object *arglist,
 			      int eval_args, int also_pass_name,
 			      int create_new_lex_env, int expand_and_eval,
@@ -2638,6 +2642,9 @@ struct object *builtin_make_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_invoke_debugger
+(struct object *list, struct environment *env, struct outcome *outcome);
+
+struct object *evaluate_al_loopy_destructuring_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_start_profiling
@@ -3810,6 +3817,9 @@ add_standard_definitions (struct environment *env)
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
 
   env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
+
+  add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
+		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
 
   add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
 		    TYPE_FUNCTION, NULL, 0);
@@ -12046,6 +12056,137 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       env->vars = lastbin->next;
       lastbin->next = NULL;
       env->lex_env_vars_boundary -= *argsnum;
+    }
+
+  return 1;
+}
+
+
+int
+destructure_tree (struct object *template, struct object *vals,
+		  struct binding **bins, int *binnum, struct outcome *outcome)
+{
+  struct binding *subbins;
+  int subnum;
+
+  *bins = NULL, *binnum = 0;
+
+  while (template->type == TYPE_CONS_PAIR && vals->type == TYPE_CONS_PAIR)
+    {
+      if (CAR (template)->type == TYPE_CONS_PAIR
+	  && CAR (vals)->type == TYPE_CONS_PAIR)
+	{
+	  if (!destructure_tree (CAR (template), CAR (vals), &subbins, &subnum,
+				 outcome))
+	    return 0;
+
+	  *binnum += subnum;
+	  *bins = chain_bindings (subbins, *bins, NULL, NULL);
+	}
+      else if (IS_SYMBOL (CAR (template)))
+	{
+	  if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
+	      && SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return 0;
+	    }
+
+	  if (SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      increment_refcount (CAR (vals));
+	      *bins = bind_variable (SYMBOL (CAR (template)), CAR (vals), *bins);
+	      (*binnum)++;
+	    }
+	}
+      else
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return 0;
+	}
+
+      template = CDR (template);
+      vals = CDR (vals);
+    }
+
+  while (template->type == TYPE_CONS_PAIR)
+    {
+      if (!IS_SYMBOL (CAR (template)))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return 0;
+	}
+
+      if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
+	  && SYMBOL (CAR (template)) != &nil_object)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	  return 0;
+	}
+
+      if (SYMBOL (CAR (template)) != &nil_object)
+	{
+	  *bins = bind_variable (SYMBOL (CAR (template)), &nil_object, *bins);
+	  (*binnum)++;
+	  template = CDR (template);
+	}
+    }
+
+  if (SYMBOL (template) != &nil_object && SYMBOL (vals) != &nil_object)
+    {
+      if (!IS_SYMBOL (template))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return 0;
+	}
+
+      if (SYMBOL (template)->value_ptr.symbol->is_const)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	  return 0;
+	}
+
+      *bins = bind_variable (SYMBOL (template), vals, *bins);
+      (*binnum)++;
+      return 1;
+    }
+
+  while (template->type == TYPE_CONS_PAIR)
+    {
+      if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
+	  && SYMBOL (CAR (template)) != &nil_object)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	  return 0;
+	}
+
+      if (SYMBOL (CAR (template)) != &nil_object)
+	{
+	  *bins = bind_variable (SYMBOL (CAR (template)), &nil_object, *bins);
+	  (*binnum)++;
+	  template = CDR (template);
+	}
+
+      template = CDR (template);
+    }
+
+  if (!IS_SYMBOL (template))
+    {
+      outcome->type = INVALID_LAMBDA_LIST;
+      return 0;
+    }
+
+  if (SYMBOL (template)->value_ptr.symbol->is_const
+      && SYMBOL (template) != &nil_object)
+    {
+      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+      return 0;
+    }
+
+  if (SYMBOL (template) != &nil_object)
+    {
+      *bins = bind_variable (SYMBOL (template), &nil_object, *bins);
+      (*binnum)++;
     }
 
   return 1;
@@ -28128,6 +28269,49 @@ builtin_invoke_debugger (struct object *list, struct environment *env,
     }
 
   return enter_debugger (CAR (list), env, outcome);
+}
+
+
+struct object *
+evaluate_al_loopy_destructuring_bind (struct object *list,
+				      struct environment *env,
+				      struct outcome *outcome)
+{
+  struct binding *bins;
+  int binnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+  struct object *ret, *vals;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  vals = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!vals)
+    return NULL;
+
+  if (destructure_tree (CAR (list), vals, &bins, &binnum, outcome))
+    {
+      env->vars = chain_bindings (bins, env->vars, NULL, NULL);
+      env->lex_env_vars_boundary += binnum;
+
+      ret = evaluate_body (CDR (CDR (list)), 0, NULL, env, outcome);
+
+      env->vars = remove_bindings (env->vars, binnum);
+
+      env->lex_env_vars_boundary = prev_lex_bin_num;
+    }
+  else
+    {
+      ret = NULL;
+    }
+
+  decrement_refcount (vals);
+
+  return ret;
 }
 
 
