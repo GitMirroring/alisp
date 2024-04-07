@@ -153,6 +153,12 @@ typedef long fixnum;
 #define IS_STRING_DESIGNATOR(s) ((s)->type == TYPE_CHARACTER || IS_SYMBOL (s) \
 				 || (s)->type == TYPE_STRING)
 
+#define IS_CHARACTER_DESIGNATOR(s) ((IS_SYMBOL (s)			\
+				     && SYMBOL (s)->value_ptr.symbol->name_len) \
+				    || ((s)->type == TYPE_STRING	\
+					&& (s)->value_ptr.string->used_size) \
+				    || (s)->type == TYPE_CHARACTER)
+
 #define IS_PACKAGE_DESIGNATOR(s) (IS_STRING_DESIGNATOR(s) \
 				  || (s)->type == TYPE_PACKAGE)
 
@@ -1622,6 +1628,7 @@ void resize_vector (struct object *vector, fixnum size);
 struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *create_character_from_char (char ch);
+struct object *create_character_from_designator (struct object *des);
 struct object *get_nth_character (struct object *str, int ind);
 fixnum get_nth_character_offset (struct object *str, int ind);
 int set_nth_character (struct object *str, int ind, char *ch);
@@ -2326,6 +2333,8 @@ struct object *builtin_type_of (struct object *list, struct environment *env,
 				struct outcome *outcome);
 struct object *builtin_subtypep (struct object *list, struct environment *env,
 				 struct outcome *outcome);
+struct object *builtin_coerce (struct object *list, struct environment *env,
+			       struct outcome *outcome);
 
 struct object *builtin_make_string (struct object *list, struct environment *env,
 				    struct outcome *outcome);
@@ -3425,6 +3434,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SUBTYPEP", env, builtin_subtypep, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("COERCE", env, builtin_coerce, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-RANDOM-STATE", env, builtin_make_random_state,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("RANDOM", env, builtin_random, TYPE_FUNCTION, NULL, 0);
@@ -8324,6 +8334,46 @@ create_character_from_char (char ch)
   s [1] = 0;
 
   return create_character (s, 0);
+}
+
+
+struct object *
+create_character_from_designator (struct object *des)
+{
+  char *s, *buf;
+  int l, i;
+
+  if (des->type == TYPE_CHARACTER)
+    {
+      increment_refcount (des);
+      return des;
+    }
+
+  if (IS_SYMBOL (des))
+    {
+      s = SYMBOL (des)->value_ptr.symbol->name;
+      l = SYMBOL (des)->value_ptr.symbol->name_len;
+    }
+  else
+    {
+      s = des->value_ptr.string->value;
+      l = des->value_ptr.string->used_size;
+    }
+
+  for (i = 0; i < l; i++)
+    {
+      if (IS_LOWEST_BYTE_IN_UTF8 (s [i]))
+	{
+	  i++;
+	  break;
+	}
+    }
+
+  buf = malloc_and_check (i+1);
+  strncpy (buf, s, i);
+  buf [i] = 0;
+
+  return create_character (buf, 0);
 }
 
 
@@ -21597,6 +21647,126 @@ builtin_subtypep (struct object *list, struct environment *env,
     }
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_coerce (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  int res, i, l;
+  struct object *ret, *el;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  res = check_type (CAR (list), CAR (CDR (list)), env, outcome);
+
+  if (res < 0)
+    return NULL;
+
+  if (res)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  if (is_subtype_by_char_vector (CAR (CDR (list)), "SEQUENCE", env) > 0)
+    {
+      if (!IS_SEQUENCE (CAR (list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      l = ACTUAL_SEQUENCE_LENGTH (CAR (list));
+
+      if (is_subtype_by_char_vector (CAR (CDR (list)), "LIST", env))
+	ret = alloc_empty_list (l);
+      else if (is_subtype_by_char_vector (CAR (CDR (list)), "STRING", env))
+	ret = alloc_string (l);
+      else if (is_subtype_by_char_vector (CAR (CDR (list)), "BIT-VECTOR", env))
+	ret = alloc_bitvector (l);
+      else
+	ret = alloc_vector (l, 0, 0);
+
+      for (i = 0; i < ACTUAL_SEQUENCE_LENGTH (CAR (list)); i++)
+	{
+	  el = elt (CAR (list), i);
+
+	  if ((ret->type == TYPE_STRING && el->type != TYPE_CHARACTER)
+	      || (ret->type == TYPE_BITARRAY && !is_bit (el)))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  set_elt (ret, i, el);
+
+	  if (CAR (list)->type == TYPE_STRING
+	      || CAR (list)->type == TYPE_BITARRAY)
+	    decrement_refcount (el);
+	}
+
+      return ret;
+    }
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "CHARACTER", env) > 0)
+    {
+      if (!IS_CHARACTER_DESIGNATOR (CAR (list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      return create_character_from_designator (CAR (list));
+    }
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "COMPLEX", env) > 0)
+    {
+      if (!IS_REAL (CAR (list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      return create_complex (CAR (list), NULL, 0, env, outcome);
+    }
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "FLOAT", env) > 0)
+    {
+      if (!IS_REAL (CAR (list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (CAR (list)->type == TYPE_FLOAT)
+	{
+	  increment_refcount (CAR (list));
+	  return CAR (list);
+	}
+
+	ret = alloc_number (TYPE_FLOAT);
+	*ret->value_ptr.floating = convert_number_to_double (CAR (list));
+
+	return ret;
+    }
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "FUNCTION", env) > 0)
+    {
+      if (!IS_SYMBOL (CAR (list)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      return get_function (CAR (list), env, 1, 0, 1, 1);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
 }
 
 
