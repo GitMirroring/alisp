@@ -12071,10 +12071,21 @@ destructure_tree (struct object *template, struct object *vals,
 
   *bins = NULL, *binnum = 0;
 
+  if (!IS_LIST (template))
+    {
+      outcome->type = INVALID_LAMBDA_LIST;
+      return 0;
+    }
+
+  if (!IS_LIST (vals))
+    {
+      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
+      return 0;
+    }
+
   while (template->type == TYPE_CONS_PAIR && vals->type == TYPE_CONS_PAIR)
     {
-      if (CAR (template)->type == TYPE_CONS_PAIR
-	  && CAR (vals)->type == TYPE_CONS_PAIR)
+      if (CAR (template)->type == TYPE_CONS_PAIR && IS_LIST (CAR (vals)))
 	{
 	  if (!destructure_tree (CAR (template), CAR (vals), &subbins, &subnum,
 				 outcome))
@@ -12111,28 +12122,40 @@ destructure_tree (struct object *template, struct object *vals,
 
   while (template->type == TYPE_CONS_PAIR)
     {
-      if (!IS_SYMBOL (CAR (template)))
+      if (CAR (template)->type == TYPE_CONS_PAIR)
 	{
-	  outcome->type = INVALID_LAMBDA_LIST;
+	  if (!destructure_tree (CAR (template), &nil_object, &subbins, &subnum,
+				 outcome))
+	    return 0;
+
+	  *binnum += subnum;
+	  *bins = chain_bindings (subbins, *bins, NULL, NULL);
+	}
+      else if (IS_SYMBOL (CAR (template)))
+	{
+	  if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
+	      && SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return 0;
+	    }
+
+	  if (SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      *bins = bind_variable (SYMBOL (CAR (template)), &nil_object, *bins);
+	      (*binnum)++;
+	    }
+	}
+      else
+	{
+      	  outcome->type = INVALID_LAMBDA_LIST;
 	  return 0;
 	}
 
-      if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
-	  && SYMBOL (CAR (template)) != &nil_object)
-	{
-	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
-	  return 0;
-	}
-
-      if (SYMBOL (CAR (template)) != &nil_object)
-	{
-	  *bins = bind_variable (SYMBOL (CAR (template)), &nil_object, *bins);
-	  (*binnum)++;
-	  template = CDR (template);
-	}
+      template = CDR (template);
     }
 
-  if (SYMBOL (template) != &nil_object && SYMBOL (vals) != &nil_object)
+  if (SYMBOL (template) != &nil_object)
     {
       if (!IS_SYMBOL (template))
 	{
@@ -12147,45 +12170,6 @@ destructure_tree (struct object *template, struct object *vals,
 	}
 
       *bins = bind_variable (SYMBOL (template), vals, *bins);
-      (*binnum)++;
-      return 1;
-    }
-
-  while (template->type == TYPE_CONS_PAIR)
-    {
-      if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
-	  && SYMBOL (CAR (template)) != &nil_object)
-	{
-	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
-	  return 0;
-	}
-
-      if (SYMBOL (CAR (template)) != &nil_object)
-	{
-	  *bins = bind_variable (SYMBOL (CAR (template)), &nil_object, *bins);
-	  (*binnum)++;
-	  template = CDR (template);
-	}
-
-      template = CDR (template);
-    }
-
-  if (!IS_SYMBOL (template))
-    {
-      outcome->type = INVALID_LAMBDA_LIST;
-      return 0;
-    }
-
-  if (SYMBOL (template)->value_ptr.symbol->is_const
-      && SYMBOL (template) != &nil_object)
-    {
-      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
-      return 0;
-    }
-
-  if (SYMBOL (template) != &nil_object)
-    {
-      *bins = bind_variable (SYMBOL (template), &nil_object, *bins);
       (*binnum)++;
     }
 
