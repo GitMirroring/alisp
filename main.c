@@ -12169,6 +12169,7 @@ destructure_tree (struct object *template, struct object *vals,
 	  return 0;
 	}
 
+      increment_refcount (vals);
       *bins = bind_variable (SYMBOL (template), vals, *bins);
       (*binnum)++;
     }
