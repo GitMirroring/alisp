@@ -4088,6 +4088,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
       if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 	{
+	  increment_refcount (ob);
 	  outcome->obj = ob;
 	  return out;
 	}
@@ -4744,6 +4745,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
 		{
+		  increment_refcount (ob);
 		  outcome->obj = ob;
 		  return out;
 		}
@@ -13251,6 +13253,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	  if (!ret)
 	    {
 	      outcome->type = UNBOUND_SYMBOL;
+	      increment_refcount (sym);
 	      outcome->obj = sym;
 	      return NULL;
 	    }
@@ -13279,6 +13282,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	  else
 	    {
 	      outcome->type = UNBOUND_SYMBOL;
+	      increment_refcount (sym);
 	      outcome->obj = sym;
 	      return NULL;
 	    }
@@ -13649,6 +13653,7 @@ evaluate_list (struct object *list, struct environment *env,
   if (!IS_SYMBOL (CAR (list)))
     {
       outcome->type = INVALID_FUNCTION_CALL;
+      increment_refcount (CAR (list));
       outcome->obj = CAR (list);
       return NULL;
     }
@@ -13682,7 +13687,9 @@ evaluate_list (struct object *list, struct environment *env,
     return call_function (fun, list, 0, 1, 0, 1, 0, env, outcome);
 
   outcome->type = UNKNOWN_FUNCTION;
+  increment_refcount (CAR (list));
   outcome->obj = CAR (list);
+
   return NULL;
 }
 
@@ -16139,6 +16146,7 @@ builtin_maphash (struct object *list, struct environment *env,
       if (!fun)
 	{
 	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (SYMBOL (CAR (list)));
 	  outcome->obj = SYMBOL (CAR (list));
 	  return NULL;
 	}
@@ -18746,6 +18754,7 @@ builtin_mapcar (struct object *list, struct environment *env,
       if (!fun)
 	{
 	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (SYMBOL (CAR (list)));
 	  outcome->obj = SYMBOL (CAR (list));
 	  return NULL;
 	}
@@ -18866,6 +18875,7 @@ builtin_map (struct object *list, struct environment *env,
       if (!fun)
 	{
 	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (SYMBOL (CAR (CDR (list))));
 	  outcome->obj = SYMBOL (CAR (CDR (list)));
 	  return NULL;
 	}
@@ -18992,6 +19002,7 @@ builtin_remove_if (struct object *list, struct environment *env,
       if (!fun)
 	{
 	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (SYMBOL (CAR (list)));
 	  outcome->obj = SYMBOL (CAR (list));
 	  return NULL;
 	}
@@ -22251,6 +22262,7 @@ builtin_symbol_value (struct object *list, struct environment *env,
   if (!ret)
     {
       outcome->type = UNBOUND_SYMBOL;
+      increment_refcount (s);
       outcome->obj = s;
       return NULL;
     }
@@ -22366,6 +22378,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
   if (!ret)
     {
       outcome->type = UNKNOWN_FUNCTION;
+      increment_refcount (s);
       outcome->obj = s;
       return NULL;
     }
@@ -23977,6 +23990,7 @@ builtin_use_package (struct object *list, struct environment *env,
       if (!use_package (use, pack, &conf))
 	{
 	  outcome->type = USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL;
+	  increment_refcount (conf);
 	  outcome->obj = conf;
 	  outcome->pack = des;
 	  return NULL;
@@ -26100,6 +26114,7 @@ evaluate_apply (struct object *list, struct environment *env,
       if (!fun)
 	{
 	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (s);
 	  outcome->obj = s;
 	  return NULL;
 	}
@@ -26153,6 +26168,7 @@ evaluate_funcall (struct object *list, struct environment *env,
       if (!fun)
 	{
 	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (SYMBOL (CAR (list)));
 	  outcome->obj = SYMBOL (CAR (list));
 	  return NULL;
 	}
