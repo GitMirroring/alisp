@@ -5653,6 +5653,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	return create_character ("\f", 1);
       else if (eqmem (s->value, s->used_size, "RETURN", strlen ("RETURN")))
 	return create_character ("\r", 1);
+      else if (eqmem (s->value, s->used_size, "LINEFEED", strlen ("LINEFEED")))
+	return create_character ("\n", 1);
       else
 	{
 	  outcome->type = UNKNOWN_CHARACTER_NAME;
