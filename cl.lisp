@@ -2102,16 +2102,14 @@
 	       (cond
 		 ((eq (car iter) :from)
 		  (setf (elt iter 6) (cadr f)))
-		 ((eq (car iter) :in)
-		  (setf (elt iter 4) (cadr f)))
-		 ((eq (car iter) :on)
-		  (setf (elt iter 3) (cadr f))))
+		 ((member (car iter) '(:in :on))
+		  (setf (elt iter 4) (cadr f))))
 	       (setq f (cddr f)))
 	      ((string= sym "IN")
 	       (setq iter `(:in ,(car iter) nil ,(cadr f) #'cdr))
 	       (setq f (cddr f)))
 	      ((string= sym "ON")
-	       (setq iter `(:on ,(car iter) ,(cadr f) #'cdr))
+	       (setq iter `(:on ,(car iter) nil ,(cadr f) #'cdr))
 	       (setq f (cddr f)))
 	      ((string= sym "=")
 	       (setq iter `(:eq ,(car iter) ,(cadr f) nil))
@@ -2149,7 +2147,7 @@
 	  (progn
 	    (setq forms f)
 	    (return nil))))
-    (if (member (car iter) '(:from :in))
+    (if (member (car iter) '(:from :in :on))
 	(setf (elt iter 2) (gensym)))
     (when (eq (car iter) :hashtable)
       (unless (elt iter 1)
@@ -2241,19 +2239,38 @@
     (values out forms vars returnvar)))
 
 
+(defun flatten-tree-skipping-nils (tree)
+  (let (out)
+    (if (atom tree)
+	(list tree)
+	(do nil
+	    (nil)
+	  (if (null tree)
+	      (return-from flatten-tree-skipping-nils out))
+	  (if (or (atom tree) (car tree))
+	      (setq out (append (flatten-tree-skipping-nils (if (consp tree)
+								(car tree)
+								tree))
+				out)))
+	  (if (atom tree)
+	      (return-from flatten-tree-skipping-nils out))
+	  (setq tree (cdr tree))))))
+
+
 (defmacro loop (&body forms)
   (let (block-name
-	(tagname (gensym))
-	(middle-block-name (gensym))
+	(body-tag (gensym))
+	(prologue-tag (gensym))
 	(inner-block-name (gensym))
+	(skip-body-sym (gensym))
 	initially-forms
 	finally-forms
 	do-forms
 	iters
 	var vars parvars
 	lets l
-	outdestbinds od
-	indestbinds id
+	initial-setup iteration-setup
+	out o
 	returnvar)
     (do ()
 	((not forms))
@@ -2325,135 +2342,103 @@
     (if parvars
 	(setq vars (cons parvars vars)))
     (setq vars (reverse vars))
+
+    (setq lets `(let (,skip-body-sym) nil))
+    (setq l (cddr lets))
+
     (dolist (v vars)
-      (if lets
-	  (progn
-	    (setf (car l) `(let ,v nil))
-	    (setq l (cddar l)))
-	  (progn
-	    (setq lets `(let ,v nil))
-	    (setq l (cddr lets)))))
-    (dolist (i iters)
-      (let ((outdb (cond
-		     ((eq (car i) :hashtable)
-		      `(let (,(cadddr i))
-			 (maphash (lambda (k v) (setq ,(elt i 3) (cons (cons k v) ,(elt i 3)))) ,(elt i 4))
-			 nil))
-		     ((member (car i) '(:on :eq))
-		      `(destructuring-bind (,(cadr i))
-			   (list ,(caddr i))
-			 nil))
-		     (t
-		      `(destructuring-bind (,(caddr i))
-			   (list ,(cadddr i))
-			 nil))))
-	    (listcheck `(progn
-			  (if (endp ,(elt i 3))
-			      (return-from ,middle-block-name nil))
-			  nil))
-	    (middb (if (eq (car i) :hashtable)
-		       `(let ((,(cadr i) (caar ,(elt i 3)))
-			      (,(caddr i) (cdar ,(elt i 3))))
-			  nil nil)
-		       `(destructuring-bind (,(cadr i))
-			    ,(if (eq (car i) :from)
-				 `(list ,(cadddr i))
-				 `(list (car ,(cadddr i))))
-			  nil)))
-	    (indb (if (eq (car i) :hashtable)
-		      `(let ((,(caddr i) (cdar ,(elt i 3)))
-			     (,(cadr i) (caar ,(elt i 3))))
-			 nil
-			 nil)
-		      `(destructuring-bind (,(cadr i))
-			   ,(if (eq (car i) :from)
-				`(list ,(caddr i))
-				`(list (car ,(caddr i))))
-			 nil))))
-	(if outdestbinds
-	    (progn
-	      (setf (car od) outdb)
-	      (setq od (cdddar od))
-	      (when (member (car i) '(:from :in :hashtable))
-	      	(when (not (eq (car i) :from))
-		  (setf (car od) listcheck)
-		  (setq od (cddar od)))
-		(setf (car od) middb)
-		(setq od (cdddar od))
-		(setf (car id) indb)
-		(setq id (cdddar id))))
-	    (progn
-	      (setf outdestbinds outdb)
-	      (setq od (cdddr outdestbinds))
-	      (when (member (car i) '(:from :in :hashtable))
-		(when (not (eq (car i) :from))
-		  (setf (car od) listcheck)
-		  (setq od (cddar od)))
-		(setf (car od) middb)
-		(setq od (cdddar od))
-		(setf indestbinds indb)
-		(setq id (cdddr indestbinds)))))))
-    `(block ,block-name
-       ,(let ((inner-body
-	       `(progn
-		  (block ,middle-block-name
-		    ,(let ((pre-initially-forms-body
-			    `(progn
-			       ,@initially-forms
-			       (block ,inner-block-name
-				 (tagbody
-				    ,tagname
-				    (if (or ,@(mapcar (lambda (x) (cond
-								    ((eq (car x) :from)
-								     (if (elt x 4)
-									 (if (= (elt x 5) 1)
-									     `(> ,(elt x 2) ,(elt x 4))
-									     `(< ,(elt x 2) ,(elt x 4)))))
-								    ((eq (car x) :on)
-								     `(endp ,(elt x 1)))
-								    ((eq (car x) :in)
-								     `(endp ,(elt x 2)))
-								    ((eq (car x) :hashtable)
-								     `(endp ,(elt x 3)))))
-						      iters))
-					,(if returnvar
-					     `(return-from ,block-name ,returnvar)
-					     `(return-from ,inner-block-name nil)))
-				    ,(let ((post-initially-forms-body
-					    `(progn
-					       ,@do-forms
-					       ,@(mapcar (lambda (x) (cond
-								       ((eq (car x) :on)
-									`(setq ,(elt x 1) (funcall ,(elt x 3) ,(elt x 1))))
-								       ((eq (car x) :eq)
-									`(setq ,(elt x 1) ,(or (elt x 3) (elt x 2))))
-								       ((eq (car x) :from)
-									`(setq ,(elt x 2) (+ ,(elt x 1) ,(* (elt x 5) (elt x 6)))))
-								       ((eq (car x) :in)
-									`(setq ,(elt x 2) (funcall ,(elt x 4) ,(elt x 2))))
-								       ((eq (car x) :hashtable)
-									`(setq ,(elt x 3) (cdr ,(elt x 3))))))
-							 iters)
-					       (go ,tagname))))
-				       (if indestbinds
-					   (progn
-					     (setf (car id) post-initially-forms-body)
-					     indestbinds)
-					   post-initially-forms-body))))
-			       ,@finally-forms
-			       (return-from ,block-name nil))))
-		       (if outdestbinds
-			   (progn
-			     (setf (car od) pre-initially-forms-body)
-			     outdestbinds)
-			   pre-initially-forms-body)))
-		  ,@finally-forms)))
-	  (if lets
-	      (progn
-		(setf (car l) inner-body)
-		lets)
-	      inner-body))
-       nil)))
+      (setf (car l) `(let ,v nil))
+      (setq l (cddar l)))
+
+    (let (vrs)
+      (dolist (i iters)
+	(when (eq (car i) :in)
+	  (setq vrs (append (flatten-tree-skipping-nils (elt i 1)) (cons (elt i 2) vrs)))
+	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 1) (car ,(elt i 3)))
+				(when (endp ,(elt i 2))
+				  (setq ,skip-body-sym t)
+				  (go ,prologue-tag))
+				(cl-user:al-loopy-setq ,(elt i 2) ,(elt i 3))
+				. ,initial-setup))
+	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 1) (car ,(elt i 2)))
+				  (if (endp ,(elt i 2)) (return-from ,inner-block-name nil))
+				  (cl-user:al-loopy-setq ,(elt i 2) (funcall ,(elt i 4) ,(elt i 2)))
+				  . ,iteration-setup)))
+	(when (eq (car i) :on)
+	  (setq vrs (append (flatten-tree-skipping-nils (elt i 1)) (cons (elt i 2) vrs)))
+	  (setq initial-setup `((when (endp ,(elt i 2))
+				  (setq ,skip-body-sym t)
+				  (go ,prologue-tag))
+				(cl-user:al-loopy-setq ,(elt i 1) ,(elt i 3))
+				(cl-user:al-loopy-setq ,(elt i 2) ,(elt i 3))
+				. ,initial-setup))
+	  (setq iteration-setup `((if (endp ,(elt i 2)) (return-from ,inner-block-name nil))
+				  (cl-user:al-loopy-setq ,(elt i 1) ,(elt i 2))
+				  (cl-user:al-loopy-setq ,(elt i 2) (funcall ,(elt i 4) ,(elt i 2)))
+				  . ,iteration-setup)))
+	(when (eq (car i) :from)
+	  (setq vrs (cons (elt i 1) vrs))
+	  (setq initial-setup `(,@(if (elt i 4)
+				      (list `(when ,(if (= (elt i 5) 1)
+							`(> ,(elt i 1) ,(elt i 4))
+							`(< ,(elt i 1) ,(elt i 4)))
+					       (setq ,skip-body-sym t)
+					       (go ,prologue-tag))))
+				  (setq ,(elt i 1) ,(elt i 3))
+				  . ,initial-setup))
+	  (setq iteration-setup `(,@(if (elt i 4)
+					(list `(if ,(if (= (elt i 5) 1)
+							`(> ,(elt i 1) ,(elt i 4))
+							`(< ,(elt i 1) ,(elt i 4)))
+						   (return-from ,inner-block-name nil))))
+				    (setq ,(elt i 1) (+ ,(elt i 1) ,(* (elt i 5) (elt i 6))))
+				    . ,iteration-setup)))
+	(when (eq (car i) :eq)
+	  (setq vrs (cons (elt i 1) vrs))
+	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(elt i 2))
+				. ,initial-setup))
+	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(or (elt i 3) (elt i 2)))
+				  . ,iteration-setup)))
+	(when (eq (car i) :hashtable)
+	  (setq vrs (list* (elt i 1) (elt i 2) (elt i 3) vrs))
+	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
+				(cl-user:al-loopy-setq ,(elt i 1) (caar ,(elt i 3)))
+				(when (endp ,(elt i 3))
+				  (setq ,skip-body-sym t)
+				  (go ,prologue-tag))
+				(setq ,(elt i 3)
+				      (let (o) (maphash (lambda (k v) (setq o (cons (cons k v) o))) ,(elt i 4)) o))
+				. ,initial-setup))
+	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
+				  (cl-user:al-loopy-setq ,(elt i 1) (caar ,(elt i 3)))
+				  (if (endp ,(elt i 3)) (return-from ,inner-block-name nil))
+				  (setq ,(elt i 3) (cdr ,(elt i 3)))
+				  . ,iteration-setup))))
+
+      (when vrs
+	(setf (car l) `(let ,vrs nil))
+	(setq l (cddar l)))
+
+      (let* ((out `(block ,block-name
+		     nil))
+	     (o (cddr out)))
+	(setf (car o) lets)
+	(setq o l)
+	(setf (car o) `(tagbody
+			  (progn ,@(reverse initial-setup))
+			  ,prologue-tag
+			  ,@initially-forms
+			  (unless ,skip-body-sym
+			    (block ,inner-block-name
+			      (tagbody
+				 ,body-tag
+				 ,@do-forms
+				 (progn ,@(reverse iteration-setup))
+				 (go ,body-tag))))
+			  ,@finally-forms
+			  ,(if returnvar
+			       `(return-from ,block-name ,returnvar))))
+	out))))
 
 
 
