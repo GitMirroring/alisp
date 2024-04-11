@@ -2505,6 +2505,8 @@ struct object *inspect_variable (struct object *sym, struct environment *env);
 struct object *set_value (struct object *sym, struct object *value,
 			  int eval_value, struct environment *env,
 			  struct outcome *outcome);
+int set_values_destructuring (struct object *template, struct object *vals,
+			      struct environment *env, struct outcome *outcome);
 struct object *setf_value (struct object *form, struct object *value,
 			   int eval_value, struct environment *env,
 			   struct outcome *outcome);
@@ -2645,6 +2647,8 @@ struct object *builtin_invoke_debugger
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_al_loopy_destructuring_bind
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_al_loopy_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_start_profiling
@@ -3820,6 +3824,8 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
 		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("AL-LOOPY-SETQ", env, evaluate_al_loopy_setq, TYPE_MACRO,
+		    NULL, 0);
 
   add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
 		    TYPE_FUNCTION, NULL, 0);
@@ -25099,6 +25105,106 @@ set_value (struct object *sym, struct object *value, int eval_value,
 }
 
 
+int
+set_values_destructuring (struct object *template, struct object *vals,
+			  struct environment *env, struct outcome *outcome)
+{
+  if (template->type != TYPE_CONS_PAIR && !IS_SYMBOL (template))
+    {
+      outcome->type = INVALID_LAMBDA_LIST;
+      return 0;
+    }
+
+  if (template->type == TYPE_CONS_PAIR && !IS_LIST (vals))
+    {
+      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
+      return 0;
+    }
+
+  while (template->type == TYPE_CONS_PAIR && vals->type == TYPE_CONS_PAIR)
+    {
+      if (CAR (template)->type == TYPE_CONS_PAIR && IS_LIST (CAR (vals)))
+	{
+	  if (!set_values_destructuring (CAR (template), CAR (vals), env,
+					 outcome))
+	    return 0;
+	}
+      else if (IS_SYMBOL (CAR (template)))
+	{
+	  if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
+	      && SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return 0;
+	    }
+
+	  if (SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      set_value (SYMBOL (CAR (template)), CAR (vals), 0, env, outcome);
+	    }
+	}
+      else
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return 0;
+	}
+
+      template = CDR (template);
+      vals = CDR (vals);
+    }
+
+  while (template->type == TYPE_CONS_PAIR)
+    {
+      if (CAR (template)->type == TYPE_CONS_PAIR)
+	{
+	  if (!set_values_destructuring (CAR (template), &nil_object, env,
+					 outcome))
+	    return 0;
+	}
+      else if (IS_SYMBOL (CAR (template)))
+	{
+	  if (SYMBOL (CAR (template))->value_ptr.symbol->is_const
+	      && SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	      return 0;
+	    }
+
+	  if (SYMBOL (CAR (template)) != &nil_object)
+	    {
+	      set_value (SYMBOL (CAR (template)), &nil_object, 0, env, outcome);
+	    }
+	}
+      else
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return 0;
+	}
+
+      template = CDR (template);
+    }
+
+  if (SYMBOL (template) != &nil_object)
+    {
+      if (!IS_SYMBOL (template))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return 0;
+	}
+
+      if (SYMBOL (template)->value_ptr.symbol->is_const)
+	{
+	  outcome->type = CANT_USE_CONSTANT_NAME_IN_LAMBDA_LIST;
+	  return 0;
+	}
+
+      set_value (SYMBOL (template), vals, 0, env, outcome);
+    }
+
+  return 1;
+}
+
+
 struct object *
 setf_value (struct object *form, struct object *value, int eval_value,
 	    struct environment *env, struct outcome *outcome)
@@ -28311,6 +28417,41 @@ evaluate_al_loopy_destructuring_bind (struct object *list,
     }
 
   decrement_refcount (vals);
+
+  return ret;
+}
+
+
+struct object *
+evaluate_al_loopy_setq (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  struct object *ret = &nil_object, *vals;
+
+  if (list_length (list) % 2)
+    {
+      outcome->type = ODD_NUMBER_OF_ARGUMENTS;
+
+      return NULL;
+    }
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      decrement_refcount (ret);
+
+      vals = evaluate_object (CAR (CDR (list)), env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      if (!vals)
+	return NULL;
+
+      if (!set_values_destructuring (CAR (list), vals, env, outcome))
+	return NULL;
+
+      decrement_refcount (vals);
+
+      list = CDR (CDR (list));
+    }
 
   return ret;
 }
