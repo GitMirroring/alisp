@@ -1224,6 +1224,17 @@ make_test ("(al-loopy-destructuring-bind (x . y) '(0 . 1) (list x y))", "(0 1)")
 make_test ("(al-loopy-destructuring-bind (x . y) '(nil) y)", "NIL");
 make_test ("(al-loopy-destructuring-bind ((x y)) '(nil) x)", "NIL");
 make_test ("(al-loopy-destructuring-bind (x (y z)) '(nil) y)", "NIL");
+make_test ("(let (i) (al-loopy-setq i 0) i)", "0");
+make_test ("(let ((i 0)) (al-loopy-setq i (+ i 1)) i)", "1");
+make_test ("(let (x y) (al-loopy-setq (x y) '(0 1 2)) y)", "1");
+make_test ("(let (x y z) (al-loopy-setq (x y z) '(0 1)) z)", "NIL");
+make_test ("(al-loopy-setq (nil) '(0))", "NIL");
+make_test ("(let (x) (al-loopy-setq (x nil) '(0)) x)", "0");
+make_test ("(let (x y) (al-loopy-setq (x (y)) '(0 (1))) (list x y))", "(0 1)");
+make_test ("(let (x y) (al-loopy-setq (x . y) '(0 . 1)) (list x y))", "(0 1)");
+make_test ("(let (x y) (al-loopy-setq (x . y) '(nil)) y)", "NIL");
+make_test ("(let (x y) (al-loopy-setq ((x y)) '(nil)) x)", "NIL");
+make_test ("(let (x y z) (al-loopy-setq (x (y z)) '(nil)) y)", "NIL");
 make_test ("'make-ship", "MAKE-SHIP");
 make_test ("(defstruct ship x y)", "SHIP");
 make_test ("(defstruct ship x y)", "SHIP");
