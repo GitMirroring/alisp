@@ -91,6 +91,7 @@ make_test ("'(1 .\n(2)\n)", "(1 2)");
 make_test ("'(1 . (\n" .
 	   "2))", "(1 2)");
 make_test ("'( \"\" #||# )", "(\"\")");
+make_test ("'||", "||");
 make_test ("'asd\\f|gh|j", "|ASDfghJ|");
 make_test ("'\\\\", "\\\\");
 make_test ("'\\123", "|123|");
@@ -639,6 +640,7 @@ make_test ("(intern \"hi\")", "|hi|\nNIL");
 make_test ("(unintern :|hi| 'keyword)", "T");
 make_test ("(intern \"hi\" 'keyword)", ":|hi|\nNIL");
 make_test ("(make-symbol \"aaa\")", "#:|aaa|");
+make_test ("(make-symbol \"\")", "#:||");
 make_test ("(symbol-package (copy-symbol 'abc))", "NIL");
 make_test ("(fboundp (copy-symbol 'car))", "NIL");
 make_test ("(fboundp (copy-symbol 'car t))", "T");
