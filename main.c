@@ -29719,7 +29719,7 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 
   sz = len;
 
-  if (is_number (sym, len, 10, &t, &ne, &emp, &te))
+  if (is_number (sym, len, 10, &t, &ne, &emp, &te) || !len)
     {
       do_need_multiple_escape = 1;
       sz += 2;
