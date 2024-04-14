@@ -107,6 +107,7 @@ make_test ("'cl:car", "CAR");
 make_test ("'cl-user::car", "CAR");
 make_test ("(car ''0)", "QUOTE");
 make_test ("(car '#'car)", "FUNCTION");
+make_test ("`#'(lambda nil ,(+))", "(FUNCTION (LAMBDA NIL 0))");
 
 
 # now we extensively test backtick notation.  maybe some of these
