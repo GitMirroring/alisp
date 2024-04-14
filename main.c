@@ -1453,8 +1453,8 @@ enum outcome_type read_prefix
 
 enum outcome_type read_sharp_macro_call
 (struct object **obj, const char *input, size_t size, FILE *stream,
- int preserve_whitespace, int ends_with_eof, struct environment *env,
- struct outcome *outcome, const char **macro_end);
+ int backts_commas_balance, int preserve_whitespace, int ends_with_eof,
+ struct environment *env, struct outcome *outcome, const char **macro_end);
 struct object *call_sharp_macro
 (struct sharp_macro_call *macro_call, struct environment *env,
  struct outcome *outcome);
@@ -4101,7 +4101,8 @@ read_object_continued (struct object **obj, int backts_commas_balance,
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
     {
-      out = read_sharp_macro_call (&ob, input, size, stream, preserve_whitespace,
+      out = read_sharp_macro_call (&ob, input, size, stream,
+				   backts_commas_balance, preserve_whitespace,
 				   ends_with_eof, env, outcome, obj_end);
 
       if (out == COMPLETE_OBJECT)
@@ -4591,6 +4592,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 		*obj_begin = input;
 
 	      out = read_sharp_macro_call (&ob, input, size, stream,
+					   backts_commas_balance,
 					   preserve_whitespace,
 					   ends_with_eof, env, outcome, obj_end);
 
@@ -5188,7 +5190,8 @@ read_prefix (struct object **obj, const char *input, size_t size, FILE *stream,
 
 enum outcome_type
 read_sharp_macro_call (struct object **obj, const char *input, size_t size,
-		       FILE *stream, int preserve_whitespace, int ends_with_eof,
+		       FILE *stream, int backts_commas_balance,
+		       int preserve_whitespace, int ends_with_eof,
 		       struct environment *env, struct outcome *outcome,
 		       const char **macro_end)
 {
@@ -5586,8 +5589,9 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     }
 
   call->obj = NULL;
-  out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
-		     ends_with_eof, env, outcome, &obj_b, macro_end);
+  out = read_object (&call->obj, backts_commas_balance, input, size, stream,
+		     preserve_whitespace, ends_with_eof, env, outcome, &obj_b,
+		     macro_end);
 
   if (out == UNCLOSED_EMPTY_LIST)
     call->is_empty_list = 1;
