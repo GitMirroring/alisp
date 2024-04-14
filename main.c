@@ -7874,7 +7874,7 @@ find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
 				  || !!preserve_whitespace);
 	    }
 
-	  if (input [i] != '.')
+	  if (input [i] != '.' || out->single_escape || out->multiple_escape)
 	    just_dots = 0;
 
 	  (**length)++;
