@@ -1080,7 +1080,18 @@
 
 
 (defmacro push (item place)
-  `(setf ,place (cons ,item ,place)))
+  (let ((exp (multiple-value-list (get-setf-expansion place)))
+	(itemkey (gensym))
+	letf)
+    (dolist (f (car exp))
+      (setq letf (cons (cons f (cadr exp)) letf))
+      (setf (cadr exp) (cdadr exp)))
+    (setq letf (reverse letf))
+    `(let* ((,itemkey ,item)
+	    ,@letf
+	    (,(caaddr exp) (cons ,itemkey ,(nth 4 exp))))
+       ,(nth 3 exp)
+       ,(nth 4 exp))))
 
 
 (defmacro pushnew (item place &key key test test-not)
@@ -1109,9 +1120,18 @@
 
 
 (defmacro pop (place)
-  `(let ((c (car ,place)))
-     (setf ,place (cdr ,place))
-     c))
+  (let ((exp (multiple-value-list (get-setf-expansion place)))
+	(carsym (gensym))
+	letf)
+    (dolist (f (car exp))
+      (setq letf (cons (cons f (cadr exp)) letf))
+      (setf (cadr exp) (cdadr exp)))
+    (setq letf (reverse letf))
+    `(let* (,@letf
+	    (,carsym (car ,(nth 4 exp)))
+	    (,(caaddr exp) (cdr ,(nth 4 exp))))
+       ,(nth 3 exp)
+       ,carsym)))
 
 
 (defun set-difference (l1 l2 &key key test test-not)
