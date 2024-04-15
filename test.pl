@@ -1553,6 +1553,8 @@ make_test ("(let ((s \"abcdefg\")) (replace s s :start1 1 :start2 2))", "\"acdef
 make_test ("(defparameter ll NIL)", "LL");
 make_test ("(push (1+ 0) ll)", "(1)");
 make_test ("ll", "(1)");
+make_test ("(let ((l '(1 2 3 4))) (pushnew 3 l :test #'=))", "(1 2 3 4)");
+make_test ("(let ((l '(1 2 3 4))) (pushnew 0 l :test #'= :key 'identity))", "(0 1 2 3 4)");
 make_test ("(pop ll)", "1");
 make_test ("ll", "NIL");
 make_test ("(set-difference '(0 1 1 2) nil)", "(0 1 1 2)");
