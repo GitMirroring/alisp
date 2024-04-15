@@ -1083,6 +1083,29 @@
   `(setf ,place (cons ,item ,place)))
 
 
+(defmacro pushnew (item place &key key test test-not)
+  (let ((exp (multiple-value-list (get-setf-expansion place)))
+	(keysym (gensym))
+	(tstsym (gensym))
+	(blocksym (gensym))
+	letf)
+    (dolist (f (car exp))
+      (setq letf (cons (cons (car f) (cadr exp)) letf))
+      (setf (cadr exp) (cdadr exp)))
+    (setq letf (cons (cons (caaddr exp) `((cons ,item ,(nth 4 exp)))) letf))
+    (setq letf (reverse letf))
+    `(block ,blocksym
+       (let ((,keysym (or ,key #'identity))
+	     (,tstsym (or ,test
+			  (if ,test-not (complement ,test-not))
+			  #'eql))
+	     ,@letf)
+	 (dolist (l ,(nth 4 exp))
+	   (if (funcall ,tstsym (car ,(caaddr exp)) (funcall ,keysym l))
+	       (return-from ,blocksym ,(nth 4 exp))))
+	 ,(nth 3 exp)))))
+
+
 (defmacro pop (place)
   `(let ((c (car ,place)))
      (setf ,place (cdr ,place))
@@ -2517,7 +2540,7 @@
 	  remove-duplicates delete-duplicates substitute substitute-if
 	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
 	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse
-	  revappend nreconc adjoin fill replace push pop set-difference
+	  revappend nreconc adjoin fill replace push pushnew pop set-difference
 	  nset-difference union nunion intersection nintersection
 	  set-exclusive-or nset-exclusive-or subsetp mismatch search sort
 	  stable-sort array-rank array-dimension array-total-size
