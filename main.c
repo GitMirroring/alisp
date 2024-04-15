@@ -5615,6 +5615,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     {
       ret = alloc_empty_cons_pair ();
 
+      SET_READER_MACRO_FLAG (ret);
+
       ret->value_ptr.cons_pair->car = env->function_sym;
       add_reference (ret, env->function_sym, 0);
 
@@ -30263,6 +30265,16 @@ print_object (const struct object *obj, struct environment *env,
       && WAS_A_READER_MACRO (obj))
     {
       if (write_to_stream (str, "'", 1) < 0)
+	return -1;
+
+      return print_object (obj->value_ptr.cons_pair->cdr->value_ptr.cons_pair->
+			   car, env, str);
+    }
+  else if (obj->type == TYPE_CONS_PAIR
+      && obj->value_ptr.cons_pair->car == env->function_sym
+      && WAS_A_READER_MACRO (obj))
+    {
+      if (write_to_stream (str, "#'", 2) < 0)
 	return -1;
 
       return print_object (obj->value_ptr.cons_pair->cdr->value_ptr.cons_pair->
