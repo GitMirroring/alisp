@@ -27333,8 +27333,6 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
       fun->value_ptr.function->name = sym;
       add_reference (fun, sym, 0);
 
-      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
-
       return fun;
     }
 
