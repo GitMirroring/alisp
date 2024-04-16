@@ -10729,7 +10729,10 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  INC_WEAK_REFCOUNT (SYMBOL (CAR (car)));
 
 	  if (IS_SYMBOL (CAR (CDR (car))))
-	    (*last)->typespec = SYMBOL (CAR (CDR (car)));
+	    {
+	      (*last)->typespec = SYMBOL (CAR (CDR (car)));
+	      increment_refcount ((*last)->typespec);
+	    }
 	  else if (CAR (CDR (car))->type == TYPE_CONS_PAIR)
 	    {
 	      eqlobj = evaluate_object (CAR (CDR (CAR (CDR (car)))), env,
@@ -10744,6 +10747,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	      eqlts->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 	      eqlts->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = eqlobj;
 	      add_reference (CDR (eqlts), CAR (CDR (eqlts)), 0);
+	      decrement_refcount (eqlobj);
 	      eqlts->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr
 		= &nil_object;
 
@@ -10752,6 +10756,7 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  else
 	    {
 	      (*last)->typespec = CAR (CDR (car));
+	      increment_refcount ((*last)->typespec);
 	    }
 	}
       else
@@ -12705,8 +12710,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 				struct environment *env,
 				struct outcome *outcome)
 {
-  struct object *args = evaluate_through_list (arglist, env, outcome), *ret,
-    *res, *tmp;
+  struct object *args = evaluate_through_list (arglist, env, outcome),
+    *ret = NULL, *res, *tmp;
   struct method_list *applm = NULL, *lapplm,
     *ml = func->value_ptr.function->methods;
   struct binding *bins;
@@ -12810,6 +12815,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
       if (lapplm->meth->value_ptr.method->qualifier == AROUND_METHOD)
 	{
+	  decrement_refcount (ret);
 	  ret = res;
 	  break;
 	}
@@ -12817,10 +12823,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 	       || lapplm->meth->value_ptr.method->qualifier == AFTER_METHOD)
 	{
 	  lapplm = lapplm->next;
+	  decrement_refcount (res);
 	}
       else
 	{
 	  lapplm = lapplm->next;
+	  decrement_refcount (ret);
 	  ret = res;
 
 	  while (lapplm && lapplm->meth->value_ptr.method->qualifier
@@ -27219,7 +27227,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 {
   struct object *sym, *lambdal = NULL, *allow_other_keys = NULL, *fun;
   struct parameter *ll;
-  int found_unknown_key = 0;
+  int found_unknown_key = 0, i;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -27320,6 +27328,11 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 
       if (outcome->type != EVAL_OK)
 	return NULL;
+
+      i = 2;
+      free_lambda_list_content (fun, fun->value_ptr.function->lambda_list, &i,
+				0);
+      free_lambda_list_structure (fun->value_ptr.function->lambda_list);
 
       fun->value_ptr.function->lambda_list = ll;
     }
@@ -27474,7 +27487,7 @@ struct object *
 evaluate_call_next_method (struct object *list, struct environment *env,
 			   struct outcome *outcome)
 {
-  struct object *args, *prevargs, *res, *ret;
+  struct object *args, *prevargs, *res, *ret = NULL;
   struct method_list *medl;
   struct binding *bins;
   int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
@@ -27526,6 +27539,7 @@ evaluate_call_next_method (struct object *list, struct environment *env,
 
       if (env->method_list->meth->value_ptr.method->qualifier == AROUND_METHOD)
 	{
+	  decrement_refcount (ret);
 	  ret = res;
 	  break;
 	}
@@ -27535,10 +27549,12 @@ evaluate_call_next_method (struct object *list, struct environment *env,
 	       == AFTER_METHOD)
 	{
 	  env->method_list = env->method_list->next;
+	  decrement_refcount (res);
 	}
       else
 	{
 	  env->method_list = env->method_list->next;
+	  decrement_refcount (ret);
 	  ret = res;
 
 	  while (env->method_list
@@ -31996,6 +32012,8 @@ free_lambda_list_content (struct object *obj, struct parameter *par, int *i,
 	  delete_reference (obj, par->init_form, (*i)++);
 	  delete_reference (obj, par->supplied_p_param, (*i)++);
 	  delete_reference (obj, par->key, (*i)++);
+
+	  decrement_refcount (par->typespec);
 
 	  if (!is_method)
 	    *i += 4;
