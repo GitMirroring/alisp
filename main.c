@@ -884,17 +884,28 @@ method_list
 };
 
 
+#define FILLING_CAR(c) ((c)->flags & 0x4)
+#define SET_FILLING_CAR(c) ((c)->flags |= 0x4)
+#define CLEAR_FILLING_CAR(c) ((c)->flags &= ~0x4)
+
+#define EMPTY_LIST_IN_CAR(c) ((c)->flags & 0x8)
+#define SET_EMPTY_LIST_IN_CAR(c) ((c)->flags |= 0x8)
+#define CLEAR_EMPTY_LIST_IN_CAR(c) ((c)->flags &= ~0x8)
+
+#define FOUND_DOT(c) ((c)->flags & 0x10)
+#define SET_FOUND_DOT(c) ((c)->flags |= 0x10)
+
+#define FILLING_CDR(c) ((c)->flags & 0x20)
+#define SET_FILLING_CDR(c) ((c)->flags |= 0x20)
+#define CLEAR_FILLING_CDR(c) ((c)->flags &= ~0x20)
+
+#define EMPTY_LIST_IN_CDR(c) ((c)->flags & 0x40)
+#define SET_EMPTY_LIST_IN_CDR(c) ((c)->flags |= 0x40)
+#define CLEAR_EMPTY_LIST_IN_CDR(c) ((c)->flags &= ~0x40)
+
 struct
 cons_pair
 {
-  int filling_car;
-  int empty_list_in_car;
-
-  int found_dot;
-
-  int filling_cdr;
-  int empty_list_in_cdr;
-
   struct object *car;
   struct object *cdr;
 };
@@ -4651,13 +4662,12 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (out == UNCLOSED_EMPTY_LIST)
 	    {
-	      ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->
-		empty_list_in_car = 1;
+	      SET_EMPTY_LIST_IN_CAR (ob->value_ptr.cons_pair->cdr);
 	      out = UNCLOSED_NONEMPTY_LIST;
 	    }
 	  else if (out != COMPLETE_OBJECT)
 	    {
-	      ob->value_ptr.cons_pair->cdr->value_ptr.cons_pair->filling_car = 1;
+	      SET_FILLING_CAR (ob->value_ptr.cons_pair->cdr);
 	      out = UNCLOSED_NONEMPTY_LIST;
 	    }
 
@@ -4789,13 +4799,12 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
   while (ob && ob->type == TYPE_CONS_PAIR)
     {
-      if (ob->value_ptr.cons_pair->found_dot)
+      if (FOUND_DOT (ob))
 	found_dot = 1;
 
-      if (ob->value_ptr.cons_pair->filling_car
-	  || ob->value_ptr.cons_pair->filling_cdr)
+      if (FILLING_CAR (ob) || FILLING_CDR (ob))
 	{
-	  out = read_object_continued (ob->value_ptr.cons_pair->filling_car
+	  out = read_object_continued (FILLING_CAR (ob)
 				       ? &ob->value_ptr.cons_pair->car
 				       : &ob->value_ptr.cons_pair->cdr,
 				       backts_commas_balance, 0, input, size,
@@ -4805,26 +4814,24 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (out == COMPLETE_OBJECT)
 	    {
-	      ob->value_ptr.cons_pair->filling_car =
-		ob->value_ptr.cons_pair->filling_cdr = 0;
+	      CLEAR_FILLING_CAR (ob);
+	      CLEAR_FILLING_CDR (ob);
 	    }
 	  else if (out == UNCLOSED_EMPTY_LIST)
 	    {
-	      ob->value_ptr.cons_pair->filling_car
-		? (ob->value_ptr.cons_pair->empty_list_in_car = 1)
-		: (ob->value_ptr.cons_pair->empty_list_in_cdr = 1);
+	      FILLING_CAR (ob) ? SET_EMPTY_LIST_IN_CAR (ob)
+		: SET_EMPTY_LIST_IN_CDR (ob);
 
-	      ob->value_ptr.cons_pair->filling_car =
-		ob->value_ptr.cons_pair->filling_cdr = 0;
+	      CLEAR_FILLING_CAR (ob);
+	      CLEAR_FILLING_CDR (ob);
 	    }
 
 	  if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
 	    return out;
 	}
-      else if (ob->value_ptr.cons_pair->empty_list_in_car
-	       || ob->value_ptr.cons_pair->empty_list_in_cdr)
+      else if (EMPTY_LIST_IN_CAR (ob) || EMPTY_LIST_IN_CDR (ob))
 	{
-	  out = read_object_continued (ob->value_ptr.cons_pair->empty_list_in_car
+	  out = read_object_continued (EMPTY_LIST_IN_CAR (ob)
 				       ? &ob->value_ptr.cons_pair->car
 				       : &ob->value_ptr.cons_pair->cdr,
 				       backts_commas_balance, 1, input, size,
@@ -4833,17 +4840,18 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 				       &obj_end);
 
 	  if (out == COMPLETE_OBJECT)
-	    ob->value_ptr.cons_pair->empty_list_in_car =
-	      ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
+	    {
+	      CLEAR_EMPTY_LIST_IN_CAR (ob);
+	      CLEAR_EMPTY_LIST_IN_CDR (ob);
+	    }
 
 	  if (IS_INCOMPLETE_OBJECT (out) && out != UNCLOSED_EMPTY_LIST)
 	    {
-	      ob->value_ptr.cons_pair->empty_list_in_car
-		? (ob->value_ptr.cons_pair->filling_car = 1)
-		: (ob->value_ptr.cons_pair->filling_cdr = 1);
+	      EMPTY_LIST_IN_CAR (ob) ? SET_FILLING_CAR (ob)
+		: SET_FILLING_CDR (ob);
 
-	      ob->value_ptr.cons_pair->empty_list_in_car =
-		ob->value_ptr.cons_pair->empty_list_in_cdr = 0;
+	      CLEAR_EMPTY_LIST_IN_CAR (ob);
+	      CLEAR_EMPTY_LIST_IN_CDR (ob);
 	    }
 
 	  if (IS_INCOMPLETE_OBJECT (out) || IS_READ_OR_EVAL_ERROR (out))
@@ -4892,11 +4900,10 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	      return COMPLETE_OBJECT;
 	    }
 
-	  if (last_cons->value_ptr.cons_pair->found_dot
-	      && !last_cons->value_ptr.cons_pair->cdr)
+	  if (FOUND_DOT (last_cons) && !last_cons->value_ptr.cons_pair->cdr)
 	    return NO_OBJ_AFTER_DOT_IN_LIST;
 
-	  if (!last_cons->value_ptr.cons_pair->found_dot)
+	  if (!FOUND_DOT (last_cons))
 	    last_cons->value_ptr.cons_pair->cdr = &nil_object;
 
 	  *list_end = obj_end;
@@ -4907,10 +4914,10 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	  if (!last_cons)
 	    return NO_OBJ_BEFORE_DOT_IN_LIST;
 
-	  if (last_cons->value_ptr.cons_pair->found_dot)
+	  if (FOUND_DOT (last_cons))
 	    return MORE_THAN_A_CONSING_DOT;
 
-	  last_cons->value_ptr.cons_pair->found_dot = 1;
+	  SET_FOUND_DOT (last_cons);
 	}
       else if (IS_READ_OR_EVAL_ERROR (out))
 	{
@@ -4918,17 +4925,17 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	}
       else if (out == COMPLETE_OBJECT || IS_INCOMPLETE_OBJECT (out))
 	{
-	  if (last_cons && last_cons->value_ptr.cons_pair->found_dot
+	  if (last_cons && FOUND_DOT (last_cons)
 	      && last_cons->value_ptr.cons_pair->cdr
-	      && !last_cons->value_ptr.cons_pair->filling_cdr)
+	      && !FILLING_CDR (last_cons))
 	    return MULTIPLE_OBJS_AFTER_DOT_IN_LIST;
-	  else if (last_cons && last_cons->value_ptr.cons_pair->found_dot)
+	  else if (last_cons && FOUND_DOT (last_cons))
 	    {
 	      last_cons->value_ptr.cons_pair->cdr = car;
 
 	      if (IS_INCOMPLETE_OBJECT (out))
 		{
-		  last_cons->value_ptr.cons_pair->filling_cdr = 1;
+		  SET_FILLING_CDR (last_cons);
 
 		  return UNCLOSED_NONEMPTY_LIST;
 		}
@@ -4945,7 +4952,7 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	      if (IS_INCOMPLETE_OBJECT (out))
 		{
-		  cons->value_ptr.cons_pair->filling_car = 1;
+		  SET_FILLING_CAR (cons);
 
 		  return UNCLOSED_NONEMPTY_LIST;
 		}
@@ -4962,16 +4969,16 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
   if (out == UNCLOSED_EMPTY_LIST)
     {
-      if (last_cons && last_cons->value_ptr.cons_pair->found_dot)
+      if (last_cons && FOUND_DOT (last_cons))
 	{
 	  last_cons->value_ptr.cons_pair->cdr = car;
-	  last_cons->value_ptr.cons_pair->empty_list_in_cdr = 1;
+	  SET_EMPTY_LIST_IN_CDR (last_cons);
 	}
       else
 	{
 	  cons = alloc_empty_cons_pair ();
 	  cons->value_ptr.cons_pair->car = car;
-	  cons->value_ptr.cons_pair->empty_list_in_car = 1;
+	  SET_EMPTY_LIST_IN_CAR (cons);
 
 	  if (last_cons)
 	    last_cons->value_ptr.cons_pair->cdr = cons;
@@ -6636,11 +6643,6 @@ alloc_empty_cons_pair (void)
   struct object *obj = alloc_object ();
   struct cons_pair *cons = malloc_and_check (sizeof (*cons));
 
-  cons->filling_car = 0;
-  cons->empty_list_in_car = 0;
-  cons->found_dot = 0;
-  cons->filling_cdr = 0;
-  cons->empty_list_in_cdr = 0;
   cons->car = NULL;
   cons->cdr = NULL;
 
