@@ -1349,6 +1349,7 @@ make_test ("(defmethod genfun5 ((x string) (y integer)) (write 'second))", "#<ST
 make_test ("(genfun5 \"\" 0)", "FIRST\nFIRST");
 make_test ("(genfun5 \"\" 1)", "SECOND\nSECOND");
 make_test ("(ensure-generic-function 'genfun6 :lambda-list '(x))", "#<STANDARD-GENERIC-FUNCTION GENFUN6>");
+make_test ("(ensure-generic-function 'genfun6 :lambda-list '(x))", "#<STANDARD-GENERIC-FUNCTION GENFUN6>");
 make_test ("(defgeneric genfun7 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN7>");
 make_test ("(defmethod genfun7 :around ((x integer)) (write 'first) (call-next-method))", "#<STANDARD-METHOD GENFUN7>");
 make_test ("(defmethod genfun7 :around ((x real)) (write 'second) (call-next-method))", "#<STANDARD-METHOD GENFUN7>");
