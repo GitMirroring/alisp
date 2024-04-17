@@ -557,6 +557,32 @@
 
 
 
+(defmacro defsetf (accessfn secondarg &rest args)
+  (if (listp secondarg)
+      (let (formsymsyms storesymsyms)
+	(dolist (arg secondarg)
+	  (setq formsymsyms (cons (gensym) formsymsyms)))
+	(setq formsymsyms (reverse formsymsyms))
+	(dolist (storevar (car args))
+	  (setq storesymsyms (cons (gensym) storesymsyms)))
+	(setq storesymsyms (reverse storesymsyms))
+	`(define-setf-expander ,accessfn ,secondarg
+	   (let (,@(mapcar (lambda (s) (list s '(gensym))) formsymsyms)
+		 ,@(mapcar (lambda (s) (list s '(gensym))) storesymsyms))
+	     (values
+	      (list ,@formsymsyms)
+	      (list ,@secondarg)
+	      (list ,@storesymsyms)
+	      (block ,accessfn
+		(let (,@(mapcar (lambda (s v) (list s v)) secondarg formsymsyms)
+		      ,@(mapcar (lambda (s v) (list s v)) (car args) storesymsyms))
+		  ,@(cdr args)))
+	      (list ',accessfn ,@formsymsyms)))))
+      (progn
+	)))
+
+
+
 (defmacro when (clause &body body)
   `(if ,clause (progn ,@body)))
 
@@ -2552,11 +2578,11 @@
 	  cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr caaaar
 	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
 	  cdaddr cddaar cddadr cdddar cddddr make-list copy-alist copy-tree
-	  tree-equal sublis nsublis endp butlast nbutlast acons pairlis when
-	  unless define-modify-macro incf decf and or cond otherwise case ccase
-	  ecase typecase ctypecase etypecase return multiple-value-bind prog
-	  prog* every some notany notevery member member-if member-if-not find
-	  find-if find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if
+	  tree-equal sublis nsublis endp butlast nbutlast acons pairlis defsetf
+	  when unless define-modify-macro incf decf and or cond otherwise case
+	  ccase ecase typecase ctypecase etypecase return multiple-value-bind
+	  prog prog* every some notany notevery member member-if member-if-not
+	  find find-if find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if
 	  rassoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  remove-duplicates delete-duplicates substitute substitute-if
