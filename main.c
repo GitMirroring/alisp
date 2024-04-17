@@ -5221,7 +5221,8 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	{
 	  prevpack = inspect_variable (env->package_sym, env);
 	  set_value (env->package_sym, env->keyword_package, 0, env, outcome);
-	  out = read_object_continued (&call->feature_test, 0,
+	  out = read_object_continued (&call->feature_test,
+				       backts_commas_balance,
 				       call->feat_test_is_empty_list, input,
 				       size, stream, preserve_whitespace,
 				       ends_with_eof, env, outcome, &obj_b,
@@ -5454,9 +5455,9 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       if (call->feat_test_result == (call->dispatch_ch == '+'))
 	{
 	  call->obj = NULL;
-	  out = read_object (&call->obj, 0, input, size, stream,
-			     preserve_whitespace, ends_with_eof, env, outcome,
-			     &obj_b, macro_end);
+	  out = read_object (&call->obj, backts_commas_balance, input, size,
+			     stream, preserve_whitespace, ends_with_eof, env,
+			     outcome, &obj_b, macro_end);
 
 	  if (out == UNCLOSED_EMPTY_LIST)
 	    call->is_empty_list = 1;
