@@ -649,8 +649,8 @@ environment
   struct object *gensym_counter_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
-    *print_escape_sym, *print_readably_sym, *print_base_sym, *print_array_sym,
-    *read_base_sym, *read_suppress_sym;
+    *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
+    *print_array_sym, *read_base_sym, *read_suppress_sym;
 
   struct object *abort_sym;
 };
@@ -3797,6 +3797,9 @@ add_standard_definitions (struct environment *env)
 						stdout);
 
   env->std_out_sym = define_variable ("*STANDARD-OUTPUT*", env->c_stdout, env);
+
+  env->err_out_sym = define_variable ("*ERROR-OUTPUT*", env->c_stdout, env);
+  add_reference (env->err_out_sym, env->c_stdout, 0);
 
   env->quote_sym = CREATE_BUILTIN_SYMBOL ("QUOTE");
   env->function_sym = CREATE_BUILTIN_SYMBOL ("FUNCTION");
