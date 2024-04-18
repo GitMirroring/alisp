@@ -975,10 +975,21 @@ hashtable
 };
 
 
+enum
+filename_type
+  {
+    REGULAR_FILENAME,
+
+    UNSPECIFIC_FILENAME,
+    WILD_FILENAME
+  };
+
+
 struct
 filename
 {
   struct object *value;
+  enum filename_type type;
 };
 
 
@@ -16371,20 +16382,38 @@ builtin_make_pathname (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (name && name->type != TYPE_STRING)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
 
-  if (!name)
+  if (!name || SYMBOL (name) == &nil_object)
     {
       ret = create_filename (alloc_string (0));
       decrement_refcount (ret->value_ptr.filename->value);
+
+      ret->value_ptr.filename->type = REGULAR_FILENAME;
+    }
+  else if (name->type == TYPE_STRING)
+    {
+      ret = create_filename (name);
+
+      ret->value_ptr.filename->type = REGULAR_FILENAME;
+    }
+  else if (symbol_equals (name, ":UNSPECIFIC", env))
+    {
+      ret = create_filename (alloc_string (0));
+      decrement_refcount (ret->value_ptr.filename->value);
+
+      ret->value_ptr.filename->type = UNSPECIFIC_FILENAME;
+    }
+  else if (symbol_equals (name, ":WILD", env))
+    {
+      ret = create_filename (alloc_string (0));
+      decrement_refcount (ret->value_ptr.filename->value);
+
+      ret->value_ptr.filename->type = WILD_FILENAME;
     }
   else
     {
-      ret = create_filename (name);
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
     }
 
   return ret;
