@@ -2005,6 +2005,13 @@
 
 
 
+(deftype logical-pathname ()
+  'pathname)
+
+(defun logical-pathname (fn)
+  (pathname fn))
+
+
 (defun pathname-host (fn &key case))
 
 (defun pathname-device (fn &key case))
@@ -2608,12 +2615,12 @@
 	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
 	  pathnamep streamp realp numberp check-type assert macroexpand equal
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
-	  merge pathname-host pathname-device pathname-directory pathname-type
-	  pathname-version namestring file-namestring directory-namestring
-	  host-namestring enough-namestring merge-pathnames file-author
-	  file-write-date user-homedir-pathname with-open-file terpri write-line
-	  write-sequence prin1 princ print do-all-symbols loop format
-	  encode-universal-time abort))
+	  merge logical-pathname pathname-host pathname-device
+	  pathname-directory pathname-type pathname-version namestring
+	  file-namestring directory-namestring host-namestring enough-namestring
+	  merge-pathnames file-author file-write-date user-homedir-pathname
+	  with-open-file terpri write-line write-sequence prin1 princ print
+	  do-all-symbols loop format encode-universal-time abort))
 
 
 
