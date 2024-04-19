@@ -25911,7 +25911,7 @@ evaluate_defvar (struct object *list, struct environment *env,
     {
       s->value_ptr.symbol->is_parameter = 1;
     }
-  else if (l == 2)
+  else
     {
       if (!s->value_ptr.symbol->value_cell)
 	return define_parameter (s, CAR (CDR (list)), env, outcome);
