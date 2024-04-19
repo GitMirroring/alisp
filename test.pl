@@ -299,6 +299,8 @@ make_test ("(constantp ''a)", "T");
 make_test ("(defparameter b 9)", "B");
 make_test ("(defvar b (0))", "B");
 make_test ("b", "9");
+make_test ("(defvar lol 0 \"\")", "LOL");
+make_test ("lol", "0");
 make_test ("(setf b 10)", "10");
 make_test ("(setf b 9)", "9");
 make_test ("(setf c 4)", "4");
