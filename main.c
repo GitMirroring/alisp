@@ -11431,6 +11431,7 @@ parse_declaration_specifier (struct object *spec, int is_local,
 {
   struct object *form, *declid, *sym;
   struct binding *vars;
+  int bn;
 
   if (spec->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (spec)))
     {
@@ -11536,8 +11537,9 @@ parse_declaration_specifier (struct object *spec, int is_local,
 	  if (is_local)
 	    {
 	      vars = env->vars;
+	      bn = bin_num;
 
-	      for (; bin_num; bin_num--)
+	      for (; bn; bn--)
 		{
 		  if (vars->sym == SYMBOL (CAR (form)))
 		    {
