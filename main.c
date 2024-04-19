@@ -327,6 +327,8 @@ binding
   struct object *sym;
   struct object *obj;
 
+  int prev_special;
+
   struct binding *closure_bin;
 
   struct binding *next;
@@ -2504,6 +2506,8 @@ struct object *evaluate_let_star
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_progv
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_locally
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct binding *create_binding_from_flet_form
 (struct object *form, struct environment *env, struct outcome *outcome,
@@ -3369,6 +3373,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, NULL, 1);
   add_builtin_form ("PROGV", env, evaluate_progv, TYPE_MACRO, NULL, 1);
+  add_builtin_form ("LOCALLY", env, evaluate_locally, TYPE_MACRO, NULL, 1);
   add_builtin_form ("FLET", env, evaluate_flet, TYPE_MACRO, NULL, 1);
   add_builtin_form ("LABELS", env, evaluate_labels, TYPE_MACRO, NULL, 1);
   add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, NULL, 1);
@@ -9245,6 +9250,7 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type,
   bin->refcount = 1;
   bin->sym = sym;
   bin->obj = obj;
+  bin->prev_special = 0;
   bin->next = NULL;
 
   if (inc_refcs)
@@ -9313,6 +9319,9 @@ remove_bindings (struct binding *env, int num)
   if (env->type == DYNAMIC_BINDING && !(env->type & DELETED_BINDING))
     env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
+  if (env->type == LEXICAL_BINDING)
+    env->sym->value_ptr.symbol->is_special = env->prev_special;
+
   env->refcount--;
 
   if (!env->refcount)
@@ -9359,6 +9368,8 @@ find_binding (struct symbol *sym, struct binding *bins, enum binding_type type,
 struct binding *
 bind_variable (struct object *sym, struct object *val, struct binding *bins)
 {
+  struct binding *b;
+
   if (sym->value_ptr.symbol->is_parameter)
     {
       sym->value_ptr.symbol->value_dyn_bins_num++;
@@ -9369,8 +9380,12 @@ bind_variable (struct object *sym, struct object *val, struct binding *bins)
     }
   else
     {
+      b = create_binding (sym, val, LEXICAL_BINDING, 0);
+      b->prev_special = sym->value_ptr.symbol->is_special;
+      sym->value_ptr.symbol->is_special = 0;
+
       increment_refcount (sym);
-      return add_binding (create_binding (sym, val, LEXICAL_BINDING, 0), bins);
+      return add_binding (b, bins);
     }
 }
 
@@ -24542,6 +24557,7 @@ create_binding_from_let_form (struct object *form, struct environment *env,
 			      struct outcome *outcome, int allow_three_elements)
 {
   struct object *sym, *val;
+  struct binding *b;
   int l;
 
   if (form->type == TYPE_SYMBOL_NAME || form->type == TYPE_SYMBOL)
@@ -24601,7 +24617,13 @@ create_binding_from_let_form (struct object *form, struct environment *env,
       return create_binding (sym, val, DYNAMIC_BINDING, 0);
     }
   else
-    return create_binding (sym, val, LEXICAL_BINDING, 0);
+    {
+      b = create_binding (sym, val, LEXICAL_BINDING, 0);
+      b->prev_special = sym->value_ptr.symbol->is_special;
+      sym->value_ptr.symbol->is_special = 0;
+
+      return b;
+    }
 }
 
 
@@ -24798,6 +24820,23 @@ evaluate_progv (struct object *list, struct environment *env,
 }
 
 
+struct object *
+evaluate_locally (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *res, *body;
+
+  if (!parse_declarations (list, env, 0, outcome, &body))
+    return NULL;
+
+  res = evaluate_body (body, 0, NULL, env, outcome);
+
+  undo_special_declarations (list, env);
+
+  return res;
+}
+
+
 struct binding *
 create_binding_from_flet_form (struct object *form, struct environment *env,
 			       struct outcome *outcome,
@@ -24987,7 +25026,7 @@ get_dynamic_value (struct object *sym, struct environment *env)
       return s->value_cell;
     }
 
-  b = find_binding (s, env->vars, ANY_BINDING, env->lex_env_vars_boundary,
+  b = find_binding (s, env->vars, DYNAMIC_BINDING, env->lex_env_vars_boundary,
 		    env->only_lexical);
 
   if (b)
