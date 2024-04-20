@@ -1841,8 +1841,8 @@ int parse_declaration_specifier (struct object *spec, int is_local,
 				 struct environment *env, int bin_num,
 				 struct outcome *outcome);
 int parse_declarations (struct object *body, struct environment *env,
-			int bin_num, struct outcome *outcome,
-			struct object **next);
+			int bin_num, int allow_docstring,
+			struct outcome *outcome, struct object **next);
 void undo_special_declarations (struct object *decl, struct environment *env);
 
 struct object *evaluate_body
@@ -11604,7 +11604,8 @@ parse_declaration_specifier (struct object *spec, int is_local,
 
 int
 parse_declarations (struct object *body, struct environment *env, int bin_num,
-		    struct outcome *outcome, struct object **next)
+		    int allow_docstring, struct outcome *outcome,
+		    struct object **next)
 {
   struct object *forms;
 
@@ -11612,6 +11613,14 @@ parse_declarations (struct object *body, struct environment *env, int bin_num,
 
   while (SYMBOL (*next) != &nil_object)
     {
+      if (allow_docstring && CAR (*next)->type == TYPE_STRING
+	  && SYMBOL (CDR (*next)) != &nil_object)
+	{
+	  allow_docstring = 0;
+	  *next = CDR (*next);
+	  continue;
+	}
+
       if (CAR (*next)->type != TYPE_CONS_PAIR
 	  || SYMBOL (CAR (CAR (*next))) != env->declare_sym)
 	return 1;
@@ -11640,10 +11649,20 @@ void
 undo_special_declarations (struct object *decl, struct environment *env)
 {
   struct object *forms, *vars;
+  int found_string = 0;
 
-  while (SYMBOL (decl) != &nil_object && CAR (decl)->type == TYPE_CONS_PAIR
-	 && SYMBOL (CAR (CAR (decl))) == env->declare_sym)
+  while (SYMBOL (decl) != &nil_object
+	 && ((CAR (decl)->type == TYPE_CONS_PAIR
+	      && SYMBOL (CAR (CAR (decl))) == env->declare_sym)
+	     || (!found_string && CAR (decl)->type == TYPE_STRING)))
     {
+      if (CAR (decl)->type == TYPE_STRING)
+	{
+	  found_string = 1;
+	  decl = CDR (decl);
+	  continue;
+	}
+
       forms = CDR (CAR (decl));
 
       while (forms->type == TYPE_CONS_PAIR)
@@ -12239,7 +12258,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	       int is_typespec, struct environment *env, struct outcome *outcome)
 {
   struct binding *bins, *b;
-  struct object *ret, *ret2, *args = NULL;
+  struct object *ret, *ret2, *args = NULL, *body;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
   unsigned isprof = 0, time, evaltime = 0;
 
@@ -12285,8 +12304,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	return NULL;
 
       ret = call_structure_constructor (func->value_ptr.function->
-					struct_constructor_class_name, args,
-					env, outcome);
+					struct_constructor_class_name, args, env,
+					outcome);
 
       decrement_refcount (args);
 
@@ -12302,8 +12321,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       ret = call_structure_accessor (func->value_ptr.function->
 				     struct_accessor_class_name,
 				     func->value_ptr.function->
-				     struct_accessor_field, args, NULL,
-				     env, outcome);
+				     struct_accessor_field, args, NULL, env,
+				     outcome);
 
       decrement_refcount (args);
 
@@ -12377,8 +12396,18 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  time = clock ();
 	}
 
-      ret = evaluate_body (func->value_ptr.function->body, 0,
-			   func->value_ptr.function->name, env, outcome);
+      if (!parse_declarations (func->value_ptr.function->body, env, argsnum, 1,
+			       outcome, &body))
+	{
+	  ret = NULL;
+	}
+      else
+	{
+	  ret = evaluate_body (body, 0, func->value_ptr.function->name, env,
+			       outcome);
+	}
+
+      undo_special_declarations (func->value_ptr.function->body, env);
 
       if (isprof)
 	{
@@ -24663,7 +24692,7 @@ evaluate_let (struct object *list, struct environment *env,
 
   env->lex_env_vars_boundary += bin_num;
 
-  if (!parse_declarations (CDR (list), env, bin_num, outcome, &body))
+  if (!parse_declarations (CDR (list), env, bin_num, 0, outcome, &body))
     {
       res = NULL;
       goto cleanup_and_leave;
@@ -24716,7 +24745,7 @@ evaluate_let_star (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  if (!parse_declarations (CDR (list), env, bin_num, outcome, &body))
+  if (!parse_declarations (CDR (list), env, bin_num, 0, outcome, &body))
     {
       env->vars = remove_bindings (env->vars, bin_num);
       env->lex_env_vars_boundary -= bin_num;
@@ -24828,7 +24857,7 @@ evaluate_locally (struct object *list, struct environment *env,
 {
   struct object *res, *body;
 
-  if (!parse_declarations (list, env, 0, outcome, &body))
+  if (!parse_declarations (list, env, 0, 0, outcome, &body))
     return NULL;
 
   res = evaluate_body (body, 0, NULL, env, outcome);
