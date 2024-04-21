@@ -16936,18 +16936,21 @@ builtin_read (struct object *list, struct environment *env,
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = out;
       return NULL;
     }
 
   if (IS_INCOMPLETE_OBJECT (out))
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
       return NULL;
     }
 
   if (out == NO_OBJECT)
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = GOT_EOF;
       return NULL;
     }
@@ -17018,18 +17021,21 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = out;
       return NULL;
     }
 
   if (IS_INCOMPLETE_OBJECT (out))
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
       return NULL;
     }
 
   if (out == NO_OBJECT)
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = GOT_EOF;
       return NULL;
     }
@@ -17080,18 +17086,21 @@ builtin_read_from_string (struct object *list, struct environment *env,
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = out;
       return NULL;
     }
 
   if (IS_INCOMPLETE_OBJECT (out))
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
       return NULL;
     }
 
   if (out == NO_OBJECT)
     {
+      CLEAR_READER_STATUS (*outcome);
       outcome->type = GOT_EOF;
       return NULL;
     }
