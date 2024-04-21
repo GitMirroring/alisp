@@ -1678,6 +1678,7 @@ make_test ("(machine-instance)", "NIL");
 make_test ("(machine-version)", "NIL");
 make_test ("(short-site-name)", "NIL");
 make_test ("(long-site-name)", "NIL");
+make_test ("(with-standard-io-syntax (write 10))", "10\n10");
 
 make_test ("#+common-lisp \"\" \"\"", "\"\"\n\"\"");
 make_test ("#-common-lisp \"\" \"\"", "\"\"");
