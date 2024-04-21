@@ -2563,6 +2563,19 @@
 
 
 
+(defmacro with-standard-io-syntax (&body forms)
+  `(let ((*package* (find-package 'cl-user))
+	 (*print-array* t)
+	 (*print-base* 10)
+	 (*print-escape* t)
+	 (*print-readably* t)
+	 (*read-base* 10)
+	 (*read-default-float-format* 'single-float)
+	 (*read-suppress* nil))
+     ,@forms))
+
+
+
 (defun abort (&optional cond)
   (invoke-restart 'abort))
 
@@ -2620,7 +2633,8 @@
 	  file-namestring directory-namestring host-namestring enough-namestring
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
-	  do-all-symbols loop format encode-universal-time abort))
+	  do-all-symbols loop format encode-universal-time
+	  with-standard-io-syntax abort))
 
 
 
