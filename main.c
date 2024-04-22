@@ -465,6 +465,7 @@ outcome_type
     EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT,
     KEYWORD_PACKAGE_CANT_USE_ANY_PACKAGE,
     CANT_USE_KEYWORD_PACKAGE,
+    CANT_SHADOW_IN_KEYWORD_PACKAGE,
     USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL,
     PACKAGE_IS_NOT_IN_USE,
     SLOT_NOT_FOUND,
@@ -659,17 +660,18 @@ environment
 
 
 enum
-package_record_visibility
+package_record_flags
   {
-    INTERNAL_VISIBILITY,
-    EXTERNAL_VISIBILITY
+    INTERNAL_VISIBILITY = 1,
+    EXTERNAL_VISIBILITY = 2,
+    IS_SHADOWING = 4
   };
 
 
 struct
 package_record
 {
-  enum package_record_visibility visibility;
+  enum package_record_flags flags;
 
   struct object *sym;
 
@@ -747,7 +749,7 @@ symbol_name
   size_t used_size;
 
   int packname_present;
-  enum package_record_visibility visibility;
+  enum package_record_flags visibility;
 
   char *actual_symname;
   size_t actual_symname_alloc_s;
@@ -1545,6 +1547,7 @@ struct package_record *inspect_accessible_symbol (const struct object *sym,
 						  int *is_present);
 struct package_record *inspect_accessible_symbol_by_name (char *name, size_t len,
 							  struct object *pack,
+							  int only_check_presence,
 							  int *is_present);
 struct object *inspect_package_by_designator (struct object *des,
 					      struct environment *env);
@@ -1618,7 +1621,7 @@ const char *find_end_of_symbol_name (const char *input, size_t size,
 				     int ends_with_eof, int preserve_whitespace,
 				     int already_begun, int found_package_sep,
 				     const char **start_of_package_separator,
-				     enum package_record_visibility *sym_visibility,
+				     enum package_record_flags *sym_visibility,
 				     size_t *name_length,
 				     size_t *act_name_length,
 				     struct outcome *out);
@@ -1694,7 +1697,7 @@ int compile_body (struct object *body, struct environment *env,
 
 struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     int do_copy,
-					     enum package_record_visibility vis,
+					     enum package_record_flags vis,
 					     int always_create_if_missing,
 					     struct object *package);
 struct object *intern_symbol_name (struct object *symname,
@@ -2472,6 +2475,11 @@ struct object *builtin_use_package (struct object *list, struct environment *env
 struct object *builtin_unuse_package (struct object *list,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *builtin_shadow (struct object *list, struct environment *env,
+			       struct outcome *outcome);
+struct object *builtin_package_shadowing_symbols (struct object *list,
+						  struct environment *env,
+						  struct outcome *outcome);
 struct object *builtin_do_symbols (struct object *list, struct environment *env,
 				   struct outcome *outcome);
 struct object *builtin_do_external_symbols (struct object *list,
@@ -3160,14 +3168,14 @@ add_standard_definitions (struct environment *env)
 
 
   rec = malloc_and_check (sizeof (*rec));
-  rec->visibility = EXTERNAL_VISIBILITY;
+  rec->flags = EXTERNAL_VISIBILITY;
   rec->sym = &t_object;
   rec->next = NULL;
   env->cl_package->value_ptr.package->symtable
     [hash_char_vector ("T", sizeof ("T"), SYMTABLE_SIZE)] = rec;
 
   rec = malloc_and_check (sizeof (*rec));
-  rec->visibility = EXTERNAL_VISIBILITY;
+  rec->flags = EXTERNAL_VISIBILITY;
   rec->sym = &nil_object;
   rec->next = NULL;
   env->cl_package->value_ptr.package->symtable
@@ -3552,6 +3560,9 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("SHADOW", env, builtin_shadow, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("PACKAGE-SHADOWING-SYMBOLS", env,
+		    builtin_package_shadowing_symbols, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DO-EXTERNAL-SYMBOLS", env, builtin_do_external_symbols,
 		    TYPE_MACRO, NULL, 0);
@@ -5100,7 +5111,7 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
   size_t name_l, act_name_l;
   struct object *ob = *obj;
   const char *start_of_pack_sep;
-  enum package_record_visibility visib;
+  enum package_record_flags visib;
   int escape_first_ch = out->single_escape, mult_esc = out->multiple_escape;
 
   out->type = NO_OBJECT;
@@ -6904,7 +6915,7 @@ inspect_accessible_symbol (const struct object *sym, const struct object *pack,
 
       while (cur)
 	{
-	  if (cur->visibility == EXTERNAL_VISIBILITY && sym == cur->sym)
+	  if (cur->flags & EXTERNAL_VISIBILITY && sym == cur->sym)
 	    {
 	      *is_present = 0;
 	      return cur;
@@ -6922,7 +6933,7 @@ inspect_accessible_symbol (const struct object *sym, const struct object *pack,
 
 struct package_record *
 inspect_accessible_symbol_by_name (char *name, size_t len, struct object *pack,
-				   int *is_present)
+				   int only_check_presence, int *is_present)
 {
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
   struct package_record *cur = pack->value_ptr.package->symtable [ind];
@@ -6940,6 +6951,12 @@ inspect_accessible_symbol_by_name (char *name, size_t len, struct object *pack,
       cur = cur->next;
     }
 
+  if (only_check_presence)
+    {
+      *is_present = 0;
+      return NULL;
+    }
+
   uses = pack->value_ptr.package->uses;
 
   while (uses)
@@ -6948,7 +6965,7 @@ inspect_accessible_symbol_by_name (char *name, size_t len, struct object *pack,
 
       while (cur)
 	{
-	  if (cur->visibility == EXTERNAL_VISIBILITY
+	  if (cur->flags & EXTERNAL_VISIBILITY
 	      && eqmem (cur->sym->value_ptr.symbol->name,
 			cur->sym->value_ptr.symbol->name_len, name, len))
 	    {
@@ -7053,7 +7070,7 @@ is_external_in_home_package (const struct object *sym)
 				 sym->value_ptr.symbol->home_package->
 				 value_ptr.package->symtable, &prev);
 
-  return entry->visibility == EXTERNAL_VISIBILITY;
+  return entry->flags & EXTERNAL_VISIBILITY;
 }
 
 
@@ -7066,7 +7083,7 @@ import_symbol (struct object *sym, struct object *pack,
 
   if ((r = inspect_accessible_symbol_by_name (sym->value_ptr.symbol->name,
 					      sym->value_ptr.symbol->name_len,
-					      pack, &pres))
+					      pack, 0, &pres))
       && pres && r->sym == sym)
     {
       if (rec)
@@ -7081,7 +7098,7 @@ import_symbol (struct object *sym, struct object *pack,
 			      sym->value_ptr.symbol->name_len, SYMTABLE_SIZE);
 
       new_cell = malloc_and_check (sizeof (*new_cell));
-      new_cell->visibility = INTERNAL_VISIBILITY;
+      new_cell->flags = INTERNAL_VISIBILITY;
       new_cell->sym = sym;
       new_cell->next = pack->value_ptr.package->symtable [ind];
 
@@ -7107,7 +7124,7 @@ use_package (struct object *used, struct object *pack,
 	     struct object **conflicting)
 {
   struct object_list *p = pack->value_ptr.package->uses;
-  struct package_record *r;
+  struct package_record *r, *r2;
   size_t i;
   int pres;
 
@@ -7125,11 +7142,11 @@ use_package (struct object *used, struct object *pack,
 
       while (r)
 	{
-	  if (r->visibility == EXTERNAL_VISIBILITY
-	      && inspect_accessible_symbol_by_name (r->sym->value_ptr.symbol->
-						    name, r->sym->
-						    value_ptr.symbol->name_len,
-						    pack, &pres))
+	  if (r->flags & EXTERNAL_VISIBILITY
+	      && (r2 = inspect_accessible_symbol_by_name
+		  (r->sym->value_ptr.symbol->name,
+		   r->sym->value_ptr.symbol->name_len, pack, 0, &pres))
+	      && (!pres || !(r2->flags & IS_SHADOWING)))
 	    {
 	      *conflicting = r->sym;
 
@@ -7806,7 +7823,7 @@ find_end_of_symbol_name (const char *input, size_t size, int ends_with_eof,
 			 int preserve_whitespace, int already_begun,
 			 int found_package_sep,
 			 const char **start_of_package_separator,
-			 enum package_record_visibility *sym_visibility,
+			 enum package_record_flags *sym_visibility,
 			 size_t *name_length, size_t *act_name_length,
 			 struct outcome *out)
 {
@@ -9081,7 +9098,7 @@ compile_body (struct object *body, struct environment *env,
 
 struct object *
 intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
-			      enum package_record_visibility vis,
+			      enum package_record_flags vis,
 			      int always_create_if_missing,
 			      struct object *package)
 {
@@ -9097,7 +9114,7 @@ intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
 		 cur->sym->value_ptr.symbol->name_len, name, len))
 	{
 	  if (vis == EXTERNAL_VISIBILITY
-	      && cur->visibility == INTERNAL_VISIBILITY)
+	      && cur->flags & INTERNAL_VISIBILITY)
 	    return NULL;
 
 	  return cur->sym;
@@ -9116,7 +9133,7 @@ intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
 
 	  while (cur)
 	    {
-	      if (cur->visibility == EXTERNAL_VISIBILITY
+	      if (cur->flags & EXTERNAL_VISIBILITY
 		  && eqmem (cur->sym->value_ptr.symbol->name,
 			    cur->sym->value_ptr.symbol->name_len, name, len))
 		{
@@ -9137,7 +9154,7 @@ intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
   sym->value_ptr.symbol->home_package = package;
 
   new_sym = malloc_and_check (sizeof (*new_sym));
-  new_sym->visibility = vis;
+  new_sym->flags = vis;
   new_sym->sym = sym;
   new_sym->next = cell;
 
@@ -22103,13 +22120,13 @@ builtin_intern (struct object *list, struct environment *env,
 
   ent = inspect_accessible_symbol_by_name (CAR (list)->value_ptr.string->value,
 					   CAR (list)->value_ptr.string->used_size,
-					   pack, &ispr);
+					   pack, 0, &ispr);
 
   if (ent)
     {
       ret = ent->sym;
       ret2 = KEYWORD (ispr ?
-		      (ent->visibility == INTERNAL_VISIBILITY ?
+		      (ent->flags & INTERNAL_VISIBILITY ?
 		       ":INTERNAL" : ":EXTERNAL") : ":INHERITED");
 
       increment_refcount (ret2);
@@ -22172,7 +22189,7 @@ builtin_find_symbol (struct object *list, struct environment *env,
 
   ent = inspect_accessible_symbol_by_name (CAR (list)->value_ptr.string->value,
 					   CAR (list)->value_ptr.string->used_size,
-					   pack, &ispr);
+					   pack, 0, &ispr);
 
   if (ent)
     {
@@ -22180,8 +22197,8 @@ builtin_find_symbol (struct object *list, struct environment *env,
       increment_refcount (ret);
 
       ret2 = KEYWORD (ispr ?
-		      (ent->visibility == INTERNAL_VISIBILITY ?
-		       ":INTERNAL" : ":EXTERNAL") : ":INHERITED");
+		      (ent->flags & INTERNAL_VISIBILITY ? ":INTERNAL"
+		       : ":EXTERNAL") : ":INHERITED");
       increment_refcount (ret2);
     }
   else
@@ -23898,7 +23915,7 @@ builtin_export (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (!pres || rec->visibility == INTERNAL_VISIBILITY)
+      if (!pres || rec->flags & INTERNAL_VISIBILITY)
 	{
 	  used = pack->value_ptr.package->used_by;
 
@@ -23906,7 +23923,7 @@ builtin_export (struct object *list, struct environment *env,
 	    {
 	      if (inspect_accessible_symbol_by_name (sym->value_ptr.symbol->name,
 						     sym->value_ptr.symbol->name_len,
-						     used->obj, &pres2))
+						     used->obj, 0, &pres2))
 		{
 		  outcome->type = EXPORTING_SYMBOL_WOULD_CAUSE_CONFLICT;
 		  return NULL;
@@ -23926,7 +23943,7 @@ builtin_export (struct object *list, struct environment *env,
 		}
 	    }
 
-	  rec->visibility = EXTERNAL_VISIBILITY;
+	  rec->flags = EXTERNAL_VISIBILITY | (rec->flags & IS_SHADOWING);
 	}
 
       if (cons)
@@ -24003,7 +24020,7 @@ builtin_unexport (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (rec->visibility == INTERNAL_VISIBILITY)
+      if (rec->flags & INTERNAL_VISIBILITY)
 	return &t_object;
 
       if (!pres)
@@ -24012,7 +24029,7 @@ builtin_unexport (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      rec->visibility = INTERNAL_VISIBILITY;
+      rec->flags = INTERNAL_VISIBILITY | (rec->flags & IS_SHADOWING);
 
       if (cons)
 	{
@@ -24209,6 +24226,164 @@ builtin_unuse_package (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_shadow (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  int l = list_length (list), ind;
+  struct object *pack, *cons = NULL, *des, *sym;
+  struct package_record *r;
+  char *s;
+  int sl, p;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l == 2)
+    {
+      if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      pack = inspect_package_by_designator (CAR (CDR (list)), env);
+
+      if (!pack)
+	{
+	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+	  return NULL;
+	}
+    }
+  else
+    pack = inspect_variable (env->package_sym, env);
+
+  if (pack == env->keyword_package)
+    {
+      outcome->type = CANT_SHADOW_IN_KEYWORD_PACKAGE;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      cons = CAR (list);
+      des = CAR (cons);
+    }
+  else if (SYMBOL (CAR (list)) == &nil_object)
+    {
+      return &t_object;
+    }
+  else
+    des = CAR (list);
+
+  do
+    {
+      if (des->type == TYPE_STRING)
+	{
+	  s = des->value_ptr.string->value;
+	  sl = des->value_ptr.string->used_size;
+	}
+      else if (des->type == TYPE_CHARACTER)
+	{
+	  s = des->value_ptr.character;
+	  sl = strlen (s);
+	}
+      else if (IS_SYMBOL (des))
+	{
+	  s = SYMBOL (des)->value_ptr.symbol->name;
+	  sl = SYMBOL (des)->value_ptr.symbol->name_len;
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      r = inspect_accessible_symbol_by_name (s, sl, pack, 1, &p);
+
+      if (!r)
+	{
+	  sym = create_symbol (s, sl, 1);
+	  sym->value_ptr.symbol->home_package = pack;
+
+	  r = malloc_and_check (sizeof (*r));
+	  r->flags = INTERNAL_VISIBILITY;
+	  r->sym = sym;
+
+	  ind = hash_char_vector (s, sl, SYMTABLE_SIZE);
+	  r->next = pack->value_ptr.package->symtable [ind];
+	  pack->value_ptr.package->symtable [ind] = r;
+	}
+
+      r->flags |= IS_SHADOWING;
+
+      if (cons)
+	{
+	  cons = CDR (cons);
+	  des = CAR (cons);
+	}
+    } while (cons && SYMBOL (cons) != &nil_object);
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_package_shadowing_symbols (struct object *list, struct environment *env,
+				   struct outcome *outcome)
+{
+  struct object *pack, *ret = &nil_object, *cons;
+  struct package_record *r;
+  int i;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  pack = inspect_package_by_designator (CAR (list), env);
+
+  if (!pack)
+    {
+      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
+      return NULL;
+    }
+
+  for (i = 0; i < SYMTABLE_SIZE; i++)
+    {
+      r = pack->value_ptr.package->symtable [i];
+
+      while (r)
+	{
+	  if (r->flags & IS_SHADOWING)
+	    {
+	      cons = alloc_empty_cons_pair ();
+
+	      cons->value_ptr.cons_pair->car = r->sym;
+	      add_reference (cons, r->sym, 0);
+
+	      cons->value_ptr.cons_pair->cdr = ret;
+	      ret = cons;
+	    }
+
+	  r = r->next;
+	}
+    }
+
+  return ret;
+}
+
+
+struct object *
 builtin_do_symbols (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
@@ -24265,7 +24440,7 @@ builtin_do_symbols (struct object *list, struct environment *env,
 
 	  while (rec)
 	    {
-	      if (u && rec->visibility != EXTERNAL_VISIBILITY)
+	      if (u && !(rec->flags & EXTERNAL_VISIBILITY))
 		{
 		  rec = rec->next;
 		  continue;
@@ -24402,7 +24577,7 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
       while (rec)
 	{
-	  if (rec->visibility != EXTERNAL_VISIBILITY)
+	  if (!(rec->flags & EXTERNAL_VISIBILITY))
 	    {
 	      rec = rec->next;
 	      continue;
@@ -31065,6 +31240,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == CANT_USE_KEYWORD_PACKAGE)
     {
       printf ("eval error: can't use keyword package\n");
+    }
+  else if (err->type == CANT_SHADOW_IN_KEYWORD_PACKAGE)
+    {
+      printf ("eval error: shadowing is not meaningful in keyword package\n");
     }
   else if (err->type == USING_PACKAGE_WOULD_CAUSE_CONFLICT_ON_SYMBOL)
     {
