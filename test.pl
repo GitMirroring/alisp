@@ -1767,6 +1767,18 @@ make_test ("'|aaa|:|sym|", "|aaa|:|sym|");
 make_test ("(make-package 'whatever :nicknames '(\"APPLE\" pear))", "#<PACKAGE \"WHATEVER\">");
 make_test ("(package-nicknames 'whatever)", "(\"APPLE\" \"PEAR\")");
 make_test ("(defpackage \"aaa\" (:nicknames \"bbb\" |ccc|) (:use cl-user) (:export \"sym\") (:intern \"eee\" \"fff\") (:import-from \"CL\" car caar) (:import-from \"CL-USER\" al-argc))", "#<PACKAGE \"aaa\">");
+make_test ("(make-package \"PACK1\")", "#<PACKAGE \"PACK1\">");
+make_test ("(export 'pack1::foo 'pack1)", "T");
+make_test ("(make-package \"PACK2\")", "#<PACKAGE \"PACK2\">");
+make_test ("(shadow \"FOO\" \"PACK2\")", "T");
+make_test ("'pack2::foo", "PACK2::FOO");
+make_test ("(use-package 'pack1 'pack2)", "T");
+make_test ("(find-symbol \"FOO\" 'pack2)", "PACK2::FOO\n:INTERNAL");
+make_test ("(shadow \"BAR\" \"PACK1\")", "T");
+make_test ("(package-shadowing-symbols 'pack1)", "(PACK1::BAR)");
+make_test ("(package-shadowing-symbols 'pack2)", "(PACK2::FOO)");
+make_test ("(import 'pack1::bar 'pack2)", "T");
+make_test ("(package-shadowing-symbols 'pack2)", "(PACK2::FOO)");
 
 
 # arithmetic tests
