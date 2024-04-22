@@ -2970,6 +2970,13 @@ main (int argc, char *argv [])
 				    value, &env, c_stdout->value_ptr.stream);
 		      fresh_line (c_stdout->value_ptr.stream);
 		    }
+		  else
+		    {
+		      printf ("unhandled condition of type ");
+		      print_object (eval_out.condition->value_ptr.condition->
+				    class_name, &env, c_stdout->value_ptr.stream);
+		      fresh_line (c_stdout->value_ptr.stream);
+		    }
 
 		  decrement_refcount (eval_out.condition);
 		  eval_out.condition = NULL;
