@@ -2905,7 +2905,7 @@ main (int argc, char *argv [])
   if (opts.load_before_repl)
     {
       if (!opts.load_and_exit)
-	printf ("Loading %s...\n", opts.load_and_exit);
+	printf ("Loading %s...\n", opts.load_before_repl);
 
       result = load_file (opts.load_before_repl, &env, &eval_out);
 
