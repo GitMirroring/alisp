@@ -7237,6 +7237,30 @@ unuse_package (struct object *used, struct object *pack)
 	      pack->value_ptr.package->uses = p->next;
 	    }
 
+	  free (p);
+	  break;
+	}
+
+      prev = p;
+      p = p->next;
+    }
+
+  p = used->value_ptr.package->used_by, prev = NULL;
+
+  while (p)
+    {
+      if (p->obj == pack)
+	{
+	  if (prev)
+	    {
+	      prev->next = p->next;
+	    }
+	  else
+	    {
+	      used->value_ptr.package->used_by = p->next;
+	    }
+
+	  free (p);
 	  return 1;
 	}
 
