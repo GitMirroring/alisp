@@ -10271,6 +10271,7 @@ define_constant_by_name (char *name, struct object *value,
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
+  mark_as_constant (value);
 
   return sym;
 }
