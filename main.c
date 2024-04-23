@@ -1743,6 +1743,8 @@ struct object *handle_condition (struct object *cond, struct environment *env,
 struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
 				 struct environment *env);
 
+struct object *create_room_pair (char *sym, int val, struct environment *env);
+
 void print_available_restarts (struct environment *env, struct object *str,
 			       int *restnum);
 struct object *enter_debugger (struct object *cond, struct environment *env,
@@ -2677,6 +2679,9 @@ struct object *evaluate_define_condition
 struct object *builtin_make_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_room
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_invoke_debugger
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -2832,6 +2837,16 @@ struct object t_object = {0, 0, 0, 0, TYPE_SYMBOL, {&t_symbol}};
 
 
 mpz_t integer_one;
+
+
+
+int num_objects;
+int num_symbols;
+int num_numbers;
+int num_conses;
+int num_strings;
+int num_arrays;
+int num_functions;
 
 
 
@@ -3482,6 +3497,7 @@ add_standard_definitions (struct environment *env)
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("ROOM", env, builtin_room, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("INVOKE-DEBUGGER", env, builtin_invoke_debugger,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
@@ -6245,6 +6261,8 @@ alloc_number (enum object_type numtype)
       *obj->value_ptr.floating = 0;
     }
 
+  num_numbers++;
+
   return obj;
 }
 
@@ -6293,6 +6311,8 @@ create_number (const char *token, size_t size, size_t exp_marker_pos, int radix,
 
   free (buf);
 
+  num_numbers++;
+
   return obj;
 }
 
@@ -6306,6 +6326,8 @@ alloc_complex (void)
   ret->value_ptr.complex = malloc_and_check (sizeof (*ret->value_ptr.complex));
   ret->value_ptr.complex->real = NULL;
   ret->value_ptr.complex->imag = NULL;
+
+  num_numbers++;
 
   return ret;
 }
@@ -6392,6 +6414,8 @@ create_integer_from_long (long num)
   mpz_init (obj->value_ptr.integer);
   mpz_set_si (obj->value_ptr.integer, num);
 
+  num_numbers++;
+
   return obj;
 }
 
@@ -6405,6 +6429,8 @@ create_integer_from_unsigned_long (unsigned long num)
 
   mpz_init (obj->value_ptr.integer);
   mpz_set_ui (obj->value_ptr.integer, num);
+
+  num_numbers++;
 
   return obj;
 }
@@ -6451,6 +6477,8 @@ create_ratio_from_longs (long num, long den)
   mpq_set_si (obj->value_ptr.ratio, num, den);
   mpq_canonicalize (obj->value_ptr.ratio);
 
+  num_numbers++;
+
   return obj;
 }
 
@@ -6464,6 +6492,8 @@ create_floating_from_double (double d)
 
   obj->value_ptr.floating = malloc_and_check (sizeof (*obj->value_ptr.floating));
   *obj->value_ptr.floating = d;
+
+  num_numbers++;
 
   return obj;
 }
@@ -6642,6 +6672,8 @@ alloc_object (void)
   obj->flags = 0;
   obj->mark = 0;
 
+  num_objects++;
+
   return obj;
 }
 
@@ -6686,6 +6718,8 @@ alloc_empty_cons_pair (void)
 
   obj->type = TYPE_CONS_PAIR;
   obj->value_ptr.cons_pair = cons;
+
+  num_conses++;
 
   return obj;
 }
@@ -6739,6 +6773,8 @@ alloc_function (void)
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
+
+  num_functions++;
 
   return obj;
 }
@@ -7674,6 +7710,8 @@ alloc_string (fixnum size)
   obj->value_ptr.string->used_size = 0;
   obj->value_ptr.string->fill_pointer = -1;
 
+  num_strings++;
+
   return obj;
 }
 
@@ -7708,6 +7746,8 @@ create_string_with_char_vector (char *str, fixnum size)
   ret->value_ptr.string->alloc_size = size;
 
   ret->value_ptr.string->used_size = size;
+
+  num_strings++;
 
   return ret;
 }
@@ -8047,6 +8087,8 @@ create_symbol (char *name, size_t size, int do_copy)
 
   obj->value_ptr.symbol = sym;
 
+  num_symbols++;
+
   return obj;
 }
 
@@ -8118,6 +8160,8 @@ alloc_vector (fixnum size, int fill_with_nil, int dont_store_size)
   obj->type = TYPE_ARRAY;
   obj->value_ptr.array = vec;
 
+  num_arrays++;
+
   return obj;
 }
 
@@ -8155,6 +8199,8 @@ create_vector_from_list (struct object *list, fixnum size)
       vec->value [i] = lastobj;
       add_reference (obj, vec->value [i], i);
     }
+
+  num_arrays++;
 
   return obj;
 }
@@ -9810,6 +9856,21 @@ list_lambda_list (struct parameter *par, int allow_other_keys,
     ret = &nil_object;
   else
     cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
+create_room_pair (char *sym, int val, struct environment *env)
+{
+  struct object *ret = alloc_empty_list (2);
+
+  ret->value_ptr.cons_pair->car = BUILTIN_SYMBOL (sym);
+  add_reference (ret, CAR (ret), 0);
+
+  ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car =
+    create_integer_from_long (val);
 
   return ret;
 }
@@ -28678,6 +28739,45 @@ builtin_make_condition (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_room (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  struct object *ret, *cons;
+
+  if (list_length (list) > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  cons = ret = alloc_empty_list (7);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("T", num_objects, env);
+  cons = CDR (cons);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("SYMBOL", num_symbols, env);
+  cons = CDR (cons);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("NUMBER", num_numbers, env);
+  cons = CDR (cons);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("CONS", num_conses, env);
+  cons = CDR (cons);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("STRING", num_strings, env);
+  cons = CDR (cons);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("ARRAY", num_arrays, env);
+  cons = CDR (cons);
+
+  cons->value_ptr.cons_pair->car = create_room_pair ("FUNCTION", num_functions,
+						     env);
+
+  return ret;
+}
+
+
+struct object *
 builtin_invoke_debugger (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
@@ -31966,6 +32066,8 @@ free_object (struct object *obj)
     {
       free (obj->value_ptr.fixnum);
       free (obj);
+
+      num_numbers--;
     }
   else if (obj->type == TYPE_RATIO)
     free_ratio (obj);
@@ -31978,6 +32080,8 @@ free_object (struct object *obj)
 
       free (obj->value_ptr.complex);
       free (obj);
+
+      num_numbers--;
     }
   else if (obj->type == TYPE_RANDOM_STATE)
     {
@@ -32028,6 +32132,8 @@ free_object (struct object *obj)
       free (obj->value_ptr.stream);
       free (obj);
     }
+
+  num_objects--;
 }
 
 
@@ -32037,6 +32143,8 @@ free_string (struct object *obj)
   free (obj->value_ptr.string->value);
   free (obj->value_ptr.string);
   free (obj);
+
+  num_strings--;
 }
 
 
@@ -32076,6 +32184,8 @@ free_symbol (struct object *obj)
   free (s->name);
   free (s);
   free (obj);
+
+  num_symbols--;
 }
 
 
@@ -32087,6 +32197,8 @@ free_cons_pair (struct object *obj)
 
   free (obj->value_ptr.cons_pair);
   free (obj);
+
+  num_conses--;
 }
 
 
@@ -32119,6 +32231,8 @@ free_array (struct object *obj)
   free (obj->value_ptr.array->reference_strength_factor);
   free (obj->value_ptr.array);
   free (obj);
+
+  num_arrays--;
 }
 
 
@@ -32147,6 +32261,8 @@ free_integer (struct object *obj)
 {
   mpz_clear (obj->value_ptr.integer);
   free (obj);
+
+  num_numbers--;
 }
 
 
@@ -32155,6 +32271,8 @@ free_ratio (struct object *obj)
 {
   mpq_clear (obj->value_ptr.ratio);
   free (obj);
+
+  num_numbers--;
 }
 
 
@@ -32163,6 +32281,8 @@ free_float (struct object *obj)
 {
   free (obj->value_ptr.floating);
   free (obj);
+
+  num_numbers--;
 }
 
 
@@ -32416,6 +32536,8 @@ free_function_or_macro (struct object *obj)
 
   free (obj->value_ptr.function);
   free (obj);
+
+  num_functions--;
 }
 
 
