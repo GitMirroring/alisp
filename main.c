@@ -19362,9 +19362,8 @@ builtin_remove_if (struct object *list, struct environment *env,
 	      ret->value_ptr.array->value [j++] = CAR (arg);
 	      add_reference (ret, ret->value_ptr.array->value [j-1], j-1);
 	    }
-	  else
-	    decrement_refcount (CAR (arg));
 
+	  decrement_refcount (CAR (arg));
 	  decrement_refcount (res);
 	}
 
