@@ -4292,6 +4292,8 @@ read_object_interactively_continued (const char *input, size_t input_size,
     {
       outcome->type = read_out;
 
+      free (*wholeline);
+
       ret = complete_object_interactively (obj,
 					   read_out == UNCLOSED_EMPTY_LIST,
 					   env, outcome, input_left,
@@ -4803,6 +4805,9 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 				  - (input ? input : token) + 1,
 				  exp_mark_pos, numbase, numtype);
 	      out = COMPLETE_OBJECT;
+
+	      if (!input)
+		free (token);
 	    }
 	  else
 	    {
@@ -6515,7 +6520,7 @@ append_newline (char *string)
 {
   size_t len = strlen (string);
   string = realloc_and_check (string, len + 2);
-  
+
   string [len] = '\n';
   string [len+1] = 0;
 
