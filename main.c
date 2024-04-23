@@ -15991,6 +15991,13 @@ builtin_adjust_array (struct object *list, struct environment *env,
 				 ind, ind->next);
 	    }
 
+	  while (ind)
+	    {
+	      in = ind->next;
+	      free (ind);
+	      ind = in;
+	    }
+
 	  return ret;
 	}
       else
