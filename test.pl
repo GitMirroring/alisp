@@ -1758,6 +1758,7 @@ make_test ("(car ())", "NIL");
 make_test ("(cl:unuse-package 'cl)", "COMMON-LISP:T");
 make_test ("(cl:unuse-package cl:nil \"newtest\")", "COMMON-LISP:T");
 make_test ("(cl:package-use-list cl:*package*)", "COMMON-LISP:NIL");
+make_test ("(cl:package-used-by-list 'cl)", "(#<PACKAGE \"COMMON-LISP-USER\">)");
 make_test ("(car ())", "COMMON-LISP:NIL");
 make_test ("(cl:in-package cl-user)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(defpackage \"aaa\" (:nicknames \"bbb\" |ccc|) (:use cl-user) (:export \"sym\") (:intern \"eee\" \"fff\") (:import-from \"CL\" car caar) (:import-from \"CL-USER\" al-argc))", "#<PACKAGE \"aaa\">");
