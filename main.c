@@ -12727,7 +12727,10 @@ call_structure_accessor (struct object *class_name, struct object *field,
       if (f->name == field)
 	{
 	  if (newval)
-	    f->value = newval;
+	    {
+	      decrement_refcount (f->value);
+	      f->value = newval;
+	    }
 
 	  increment_refcount (f->value);
 	  return f->value;
@@ -32351,6 +32354,7 @@ free_structure (struct object *obj)
   while (f)
     {
       n = f->next;
+      decrement_refcount (f->value);
       free (f);
       f = n;
     }
