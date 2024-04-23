@@ -24530,6 +24530,8 @@ builtin_do_symbols (struct object *list, struct environment *env,
 	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
 	  return NULL;
 	}
+
+      decrement_refcount (des);
     }
   else
     pack = inspect_variable (env->package_sym, env);
@@ -24670,6 +24672,8 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
 	  return NULL;
 	}
+
+      decrement_refcount (des);
     }
   else
     pack = inspect_variable (env->package_sym, env);
