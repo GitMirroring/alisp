@@ -2878,6 +2878,20 @@ main (int argc, char *argv [])
 
   c_stdout = env.c_stdout;
 
+
+  define_variable ("*AL-ARGC*", create_integer_from_long (argc), &env);
+
+  al_argv = alloc_vector (argc, 0, 0);
+
+  for (i = 0; i < argc; i++)
+    {
+      al_argv->value_ptr.array->value [i] =
+	create_string_copying_c_string (argv [i]);
+    }
+
+  define_variable ("*AL-ARGV*", al_argv, &env);
+
+
   if (!opts.load_and_exit)
     print_welcome_message ();
 
@@ -2926,19 +2940,6 @@ main (int argc, char *argv [])
 
       exit (0);
     }
-
-
-  define_variable ("AL-ARGC", create_integer_from_long (argc), &env);
-
-  al_argv = alloc_vector (argc, 0, 0);
-
-  for (i = 0; i < argc; i++)
-    {
-      al_argv->value_ptr.array->value [i] =
-	create_string_copying_c_string (argv [i]);
-    }
-
-  define_variable ("AL-ARGV", al_argv, &env);
 
 
 #ifdef HAVE_LIBREADLINE
