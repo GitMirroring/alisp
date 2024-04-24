@@ -11291,7 +11291,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (first)
     last->next = p;
   else
-    first = last = p;
+    first = p;
 
   last = ls;
 
@@ -11306,7 +11306,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       if (first)
 	last->next = p;
       else
-	first = last = p;
+	first = p;
 
       last = ls;
 
@@ -11390,7 +11390,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       if (first)
 	last->next = p;
       else
-	first = last = p;
+	first = p;
 
       last = ls;
 
@@ -12153,15 +12153,14 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	  as = CDR (as);
 	}
 
-      findk = par;
 
-      while (findk && findk->type == KEYWORD_PARAM)
+      while (par && par->type == KEYWORD_PARAM)
 	{
-	  if (!findk->key_passed)
+	  if (!par->key_passed)
 	    {
-	      if (findk->init_form)
+	      if (par->init_form)
 		{
-		  val = evaluate_object (findk->init_form, env, outcome);
+		  val = evaluate_object (par->init_form, env, outcome);
 		  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 		  if (!val)
@@ -12172,23 +12171,23 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	      else
 		val = &nil_object;
 
-	      *bins = bind_variable (findk->name, val, *bins);
+	      *bins = bind_variable (par->name, val, *bins);
 	      (*argsnum)++;
 
-	      if (findk->supplied_p_param)
+	      if (par->supplied_p_param)
 		{
-		  *bins = bind_variable (findk->supplied_p_param, &nil_object,
+		  *bins = bind_variable (par->supplied_p_param, &nil_object,
 					 *bins);
 		  (*argsnum)++;
 		}
 	    }
-	  else if (findk->supplied_p_param)
+	  else if (par->supplied_p_param)
 	    {
-	      *bins = bind_variable (findk->supplied_p_param, &t_object, *bins);
+	      *bins = bind_variable (par->supplied_p_param, &t_object, *bins);
 	      (*argsnum)++;
 	    }
 
-	  findk = findk->next;
+	  par = par->next;
 	}
     }
 
