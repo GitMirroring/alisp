@@ -1388,6 +1388,8 @@ make_test ("(defmethod genfun8 :after ((x integer)) (write 'first))", "#<STANDAR
 make_test ("(defmethod genfun8 :before ((x integer)) (write 'second))", "#<STANDARD-METHOD GENFUN8>");
 make_test ("(defmethod genfun8 ((x integer)) (write 'third))", "#<STANDARD-METHOD GENFUN8>");
 make_test ("(genfun8 0)", "SECONDTHIRDFIRST\nTHIRD");
+make_test ("(defgeneric genfun9 (x &key))", "#<STANDARD-GENERIC-FUNCTION GENFUN9>");
+make_test ("(defmethod genfun9 (x &key y))", "#<STANDARD-METHOD GENFUN9>");
 make_test ("(defun fle (b &optional c &rest d &key e &allow-other-keys &aux f) 0 1 2)", "FLE");
 make_test ("(function-lambda-expression #'fle)", "(LAMBDA (B &OPTIONAL C &REST D &KEY E &ALLOW-OTHER-KEYS &AUX F) 0 1 2)\nNIL\nFLE");
 make_test ("(function-lambda-expression (let ((i 0)) (lambda (x) 0 1)))", "(LAMBDA (X) 0 1)\nT\nNIL");
