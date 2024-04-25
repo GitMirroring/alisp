@@ -779,6 +779,7 @@ parameter
   struct object *name;
 
   struct parameter *sub_lambda_list;
+  int sub_found_amp_key;
   int sub_allow_other_keys;
 
   struct object *key;
@@ -799,7 +800,8 @@ enum
 function_flags
   {
     GENERIC_FUNCTION = 1,
-    COMPILED_FUNCTION
+    COMPILED_FUNCTION,
+    FOUND_AMP_KEY = 4
   };
 
 
@@ -869,6 +871,7 @@ method
   struct object *generic_func;
 
   struct parameter *lambda_list;
+  int found_amp_key;
   int allow_other_keys;
 
   enum method_qualifier qualifier;
@@ -1833,9 +1836,10 @@ struct parameter *parse_optional_parameters
 struct parameter *parse_keyword_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct outcome *outcome);
-struct parameter *parse_lambda_list
-(struct object *obj, int allow_destructuring, int is_specialized,
- struct environment *env, struct outcome *outcome, int *allow_other_keys);
+struct parameter *parse_lambda_list (struct object *obj, int allow_destructuring,
+				     int is_specialized, struct environment *env,
+				     struct outcome *outcome, int *found_amp_key,
+				     int *allow_other_keys);
 
 void count_parameters (struct parameter *par, int *req_params, int *opt_params,
 		       int *rest_or_key);
@@ -1855,9 +1859,9 @@ struct object *evaluate_body
  struct environment *env, struct outcome *outcome);
 int parse_argument_list (struct object *arglist, struct parameter *par,
 			 int eval_args, int also_pass_name, int is_typespec,
-			 int allow_other_keys, struct environment *env,
-			 struct outcome *outcome, struct binding **bins,
-			 int *argsnum);
+			 int found_amp_key, int allow_other_keys,
+			 struct environment *env, struct outcome *outcome,
+			 struct binding **bins, int *argsnum);
 int destructure_tree (struct object *template, struct object *vals,
 		      struct binding **bins, int *binnum,
 		      struct outcome *outcome);
@@ -7650,10 +7654,12 @@ create_function (struct object *lambda_list, struct object *body,
 {
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
+  int found_amp_key;
 
   outcome->type = EVAL_OK;
   f->lambda_list = parse_lambda_list (lambda_list, allow_destructuring, 0, env,
-				      outcome, &f->allow_other_keys);
+				      outcome, &found_amp_key,
+				      &f->allow_other_keys);
 
   if (outcome->type != EVAL_OK)
     {
@@ -7661,6 +7667,9 @@ create_function (struct object *lambda_list, struct object *body,
 
       return NULL;
     }
+
+  if (found_amp_key)
+    f->flags |= FOUND_AMP_KEY;
 
   capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
 			       env->lex_env_vars_boundary, env->funcs,
@@ -10841,6 +10850,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  outcome->type = EVAL_OK;
 	  (*last)->sub_lambda_list = parse_lambda_list (car, 1, 0, env, outcome,
 							&(*last)->
+							sub_found_amp_key,
+							&(*last)->
 							sub_allow_other_keys);
 
 	  if (outcome->type != EVAL_OK)
@@ -11241,13 +11252,14 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 struct parameter *
 parse_lambda_list (struct object *obj, int allow_destructuring,
 		   int is_specialized, struct environment *env,
-		   struct outcome *outcome, int *allow_other_keys)
+		   struct outcome *outcome, int *found_amp_key,
+		   int *allow_other_keys)
 {
   struct parameter *first = NULL, *last = NULL, *p, *ls;
   struct object *car, *restsym, *wholesym;
-  int found_amp_key = 0, dotted_ok = 0, l;
+  int dotted_ok = 0, l;
 
-  *allow_other_keys = 0;
+  *found_amp_key = 0, *allow_other_keys = 0;
 
   if (SYMBOL (obj) == &nil_object)
     {
@@ -11347,6 +11359,8 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 	  last->sub_lambda_list = parse_lambda_list (CAR (CDR (obj)), 1, 0, env,
 						     outcome,
 						     &last->
+						     sub_found_amp_key,
+						     &last->
 						     sub_allow_other_keys);
 
 	  if (outcome->type != EVAL_OK)
@@ -11383,7 +11397,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_key_sym)
     {
-      found_amp_key = 1;
+      *found_amp_key = 1;
 
       p = parse_keyword_parameters (CDR (obj), &ls, &obj, env, outcome);
 
@@ -11401,7 +11415,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_allow_other_keys_sym)
     {
-      if (!found_amp_key)
+      if (!*found_amp_key)
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -11898,9 +11912,9 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 int
 parse_argument_list (struct object *arglist, struct parameter *par,
 		     int eval_args, int also_pass_name, int is_typespec,
-		     int allow_other_keys, struct environment *env,
-		     struct outcome *outcome, struct binding **bins,
-		     int *argsnum)
+		     int found_amp_key, int allow_other_keys,
+		     struct environment *env, struct outcome *outcome,
+		     struct binding **bins, int *argsnum)
 {
   struct parameter *findk;
   struct object *val, *args = NULL, *as, *key_allow_other_k = NULL;
@@ -11936,6 +11950,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!parse_argument_list (CAR (arglist), par->sub_lambda_list,
 				    eval_args, 0, is_typespec,
+				    par->sub_found_amp_key,
 				    par->sub_allow_other_keys, env, outcome,
 				    &subbins, &subargs))
 	    {
@@ -11987,8 +12002,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
     }
 
   if (SYMBOL (arglist) != &nil_object
-      && (!par || (par && par->type != REST_PARAM && par->type != KEYWORD_PARAM))
-      && !allow_other_keys)
+      && !found_amp_key && (!par || par->type != REST_PARAM))
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return 0;
@@ -12031,8 +12045,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       par = par->next;
     }
 
-  if (par && ((par->type == REST_PARAM && par->name)
-	      || par->type == KEYWORD_PARAM))
+  if (found_amp_key || (par && (par->type == REST_PARAM) && par->name))
     {
       if (eval_args)
 	{
@@ -12061,8 +12074,9 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    }
 
 	  if (!parse_argument_list (arglist, par->sub_lambda_list, eval_args, 0,
-				    is_typespec, par->sub_allow_other_keys, env,
-				    outcome, &subbins, &subargs))
+				    is_typespec, par->sub_found_amp_key,
+				    par->sub_allow_other_keys, env, outcome,
+				    &subbins, &subargs))
 	    {
 	      return 0;
 	    }
@@ -12084,7 +12098,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
   as = args;
 
-  if (par && par->type == KEYWORD_PARAM)
+  if (found_amp_key)
     {
       findk = par;
 
@@ -12490,6 +12504,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
 			   eval_args, also_pass_name, is_typespec,
+			   func->value_ptr.function->flags & FOUND_AMP_KEY,
 			   func->value_ptr.function->allow_other_keys, env,
 			   outcome, &bins, &argsnum))
     {
@@ -12971,7 +12986,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
   while (lapplm)
     {
       if (parse_argument_list (args, lapplm->meth->value_ptr.method->lambda_list,
-			       0, 0, 0, 0, env, outcome, &bins, &argsnum))
+			       0, 0, 0,
+			       lapplm->meth->value_ptr.method->found_amp_key, 0,
+			       env, outcome, &bins, &argsnum))
 	{
 	  env->method_args = args;
 	  env->method_list = lapplm;
@@ -27627,7 +27644,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 {
   struct object *sym, *lambdal = NULL, *allow_other_keys = NULL, *fun;
   struct parameter *ll;
-  int found_unknown_key = 0, i;
+  int found_unknown_key = 0, i, found_amp_key;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -27723,11 +27740,14 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
     {
       outcome->type = EVAL_OK;
       ll = parse_lambda_list (lambdal ? lambdal : &nil_object, 0, 1, env,
-			      outcome,
+			      outcome, &found_amp_key,
 			      &fun->value_ptr.function->allow_other_keys);
 
       if (outcome->type != EVAL_OK)
 	return NULL;
+
+      if (found_amp_key)
+	fun->value_ptr.function->flags |= FOUND_AMP_KEY;
 
       i = 2;
       free_lambda_list_content (fun, fun->value_ptr.function->lambda_list, &i,
@@ -27814,7 +27834,7 @@ evaluate_defmethod (struct object *list, struct environment *env,
   outcome->type = EVAL_OK;
   m->lambda_list = NULL;
   m->lambda_list = parse_lambda_list (lambdal, 0, 1, env, outcome,
-				      &m->allow_other_keys);
+				      &m->found_amp_key, &m->allow_other_keys);
 
   if (outcome->type != EVAL_OK)
     {
@@ -27919,8 +27939,9 @@ evaluate_call_next_method (struct object *list, struct environment *env,
   while (env->method_list)
     {
       if (parse_argument_list (args, env->method_list->meth->value_ptr.method->
-			       lambda_list, 0, 0, 0, 0, env, outcome, &bins,
-			       &argsnum))
+			       lambda_list, 0, 0, 0,
+			       env->method_list->meth->value_ptr.method->
+			       found_amp_key, 0, env, outcome, &bins, &argsnum))
 	{
 	  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
 	  env->lex_env_vars_boundary += argsnum;
