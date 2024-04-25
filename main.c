@@ -1842,9 +1842,10 @@ struct parameter *parse_lambda_list (struct object *obj, int allow_destructuring
 				     int *allow_other_keys);
 
 void count_parameters (struct parameter *par, int *req_params, int *opt_params,
-		       int *rest_or_key);
+		       int *rest);
 int are_lambda_lists_congruent (struct parameter *meth_list,
-				struct parameter *gen_list);
+				int meth_has_amp_key,
+				struct parameter *gen_list, int gen_has_amp_key);
 
 int parse_declaration_specifier (struct object *spec, int is_local,
 				 struct environment *env, int bin_num,
@@ -11515,9 +11516,9 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 
 void
 count_parameters (struct parameter *par, int *req_params, int *opt_params,
-		  int *rest_or_key)
+		  int *rest)
 {
-  *req_params = 0, *opt_params = 0, *rest_or_key = 0;
+  *req_params = 0, *opt_params = 0, *rest = 0;
 
   while (par)
     {
@@ -11527,8 +11528,8 @@ count_parameters (struct parameter *par, int *req_params, int *opt_params,
       if (par->type == OPTIONAL_PARAM)
 	(*opt_params)++;
 
-      if (par->type == REST_PARAM || par->type == KEYWORD_PARAM)
-	*rest_or_key = 1;
+      if (par->type == REST_PARAM)
+	*rest = 1;
 
       par = par->next;
     }
@@ -11536,18 +11537,19 @@ count_parameters (struct parameter *par, int *req_params, int *opt_params,
 
 
 int
-are_lambda_lists_congruent (struct parameter *meth_list,
-			    struct parameter *gen_list)
+are_lambda_lists_congruent (struct parameter *meth_list, int meth_has_amp_key,
+			    struct parameter *gen_list, int gen_has_amp_key)
 {
-  int req1, req2, opt1, opt2, rok1, rok2;
+  int req1, req2, opt1, opt2, r1, r2;
 
   if (!gen_list)
     return 1;
 
-  count_parameters (meth_list, &req1, &opt1, &rok1);
-  count_parameters (gen_list, &req2, &opt2, &rok2);
+  count_parameters (meth_list, &req1, &opt1, &r1);
+  count_parameters (gen_list, &req2, &opt2, &r2);
 
-  if (req1 == req2 && opt1 == opt2 && rok1 == rok2)
+  if (req1 == req2 && opt1 == opt2
+      && (r1 || meth_has_amp_key) == (r2 || gen_has_amp_key))
     return 1;
 
   return 0;
@@ -27860,8 +27862,10 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
       decrement_refcount (fun);
     }
-  else if (!are_lambda_lists_congruent (m->lambda_list,
-					fun->value_ptr.function->lambda_list))
+  else if (!are_lambda_lists_congruent (m->lambda_list, m->found_amp_key,
+					fun->value_ptr.function->lambda_list,
+					fun->value_ptr.function->flags
+					& FOUND_AMP_KEY))
     {
       free_method (meth);
       outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
