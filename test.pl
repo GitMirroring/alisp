@@ -424,6 +424,8 @@ make_test ("(f2 :x 0 :allow-other-keys t)", "NIL");
 make_test ("(defun f2 (&key x allow-other-keys) allow-other-keys)", "F2");
 make_test ("(f2)", "NIL");
 make_test ("(f2 :x 0 :y 0 :allow-other-keys t)", "T");
+make_test ("(defun f4 (&key))", "F4");
+make_test ("(f4 :a 0 :allow-other-keys t)", "NIL");
 make_test ("(defun f (x y &aux (z (+ x y)) w) (list z w))", "F");
 make_test ("(f 1 2)", "(3 NIL)");
 make_test ("(defun f3 (x &key y &aux (z x)) z)", "F3");
