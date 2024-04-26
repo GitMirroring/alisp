@@ -2125,6 +2125,8 @@ struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_wild_pathname_p
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_truename
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_probe_file
@@ -3288,6 +3290,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("WILD-PATHNAME-P", env, builtin_wild_pathname_p,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TRUENAME", env, builtin_truename, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PROBE-FILE", env, builtin_probe_file, TYPE_FUNCTION, NULL,
 		    0);
@@ -16678,6 +16682,49 @@ builtin_pathname_name (struct object *list, struct environment *env,
 
   increment_refcount (fn->value_ptr.filename->value);
   return fn->value_ptr.filename->value;
+}
+
+
+struct object *
+builtin_wild_pathname_p (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  int l = list_length (list);
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list))
+      || (l == 2 && !IS_SYMBOL (CAR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l == 1 || symbol_equals (CAR (CDR (list)), ":NAME", env))
+    {
+      if (CAR (list)->type == TYPE_STREAM || CAR (list)->type == TYPE_STRING
+	  || CAR (list)->value_ptr.filename->type != WILD_FILENAME)
+	return &nil_object;
+
+      return &t_object;
+    }
+  else if (symbol_equals (CAR (CDR (list)), ":HOST", env)
+	   || symbol_equals (CAR (CDR (list)), ":DEVICE", env)
+	   || symbol_equals (CAR (CDR (list)), ":DIRECTORY", env)
+	   || symbol_equals (CAR (CDR (list)), ":TYPE", env)
+	   || symbol_equals (CAR (CDR (list)), ":VERSION", env))
+    {
+      return &nil_object;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
 }
 
 
