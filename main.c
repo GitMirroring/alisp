@@ -7200,6 +7200,7 @@ use_package (struct object *used, struct object *pack,
 	      && (r2 = inspect_accessible_symbol_by_name
 		  (r->sym->value_ptr.symbol->name,
 		   r->sym->value_ptr.symbol->name_len, pack, 0, &pres))
+	      && (r2->sym != r->sym)
 	      && (!pres || !(r2->flags & IS_SHADOWING)))
 	    {
 	      *conflicting = r->sym;
