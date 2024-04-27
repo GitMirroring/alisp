@@ -1456,6 +1456,11 @@ make_test ("(handler-bind ((condition (lambda (e) (write (signal \"w\"))))) (sig
 make_test ("(block nil (handler-bind ((condition (lambda (e) (return 0)))) (signal \"blah\")))", "0");
 make_test ("(handler-bind ((condition (lambda (e) (write (simple-condition-format-control e))))) (signal \"blah\"))", "\"blah\"\nNIL");
 make_test ("(handler-bind ((arithmetic-error (lambda (e) (write 'oh)))) (signal 'arithmetic-error))", "OH\nNIL");
+make_test ("(handler-case (/ 1 0) (arithmetic-error (e)))", "NIL");
+make_test ("(handler-case (values 1 2) (arithmetic-error (e)))", "1\n2");
+make_test ("(handler-case (/ 1 0) (division-by-zero nil (write 'first)) (arithmetic-error (e) (write 'second)) (:no-error nil 'noerror))", "FIRST\nFIRST");
+make_test ("(handler-case (/ 1 0) (file-error nil (write 'first)) (arithmetic-error (e) (write 'second)) (:no-error nil 'noerror))", "SECOND\nSECOND");
+make_test ("(handler-case (/ 1 1) (file-error nil (write 'first)) (arithmetic-error (e) (write 'second)) (:no-error (n) n))", "1");
 make_test ("(error \"bah\")", "\"bah\"");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
