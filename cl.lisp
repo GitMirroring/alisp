@@ -2576,6 +2576,29 @@
 
 
 
+(defmacro handler-case (expr &rest clauses)
+  (let ((blockname (gensym))
+	(valssym (gensym))
+	handlers
+	noerrfunc)
+    (mapcar (lambda (cl)
+	      (if (eq (car cl) :no-error)
+		  (setq noerrfunc `(lambda ,(cadr cl) ,@(cddr cl)))
+		  (setq handlers (cons `(,(car cl)
+					  (lambda ,(or (cadr cl) (list (gensym))) (return-from ,blockname ,@(cddr cl))))
+				       handlers))))
+	    clauses)
+    `(let (,valssym)
+       (block ,blockname
+	 (handler-bind
+	     ,(reverse handlers)
+	   (setq ,valssym (multiple-value-list ,expr)))
+	 ,(if noerrfunc
+	      `(apply ,noerrfunc ,valssym)
+	      `(values-list ,valssym))))))
+
+
+
 (defun abort (&optional cond)
   (invoke-restart 'abort))
 
@@ -2634,7 +2657,7 @@
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  do-all-symbols loop format encode-universal-time
-	  with-standard-io-syntax abort))
+	  with-standard-io-syntax handler-case abort))
 
 
 
