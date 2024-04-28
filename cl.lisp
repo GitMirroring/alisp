@@ -2531,7 +2531,12 @@
 
 
 (defun format (out fstr &rest args)
-  (let (in-spec at-sign colon sign num dirargs)
+  (let ((*standard-output* (if (not out)
+			       (make-string-output-stream)
+			       (if (streamp out)
+				   out
+				   *standard-output*)))
+	in-spec at-sign colon sign num dirargs)
     (dotimes (i (length fstr))
       (let ((ch (elt fstr i)))
 	(if in-spec
@@ -2546,7 +2551,9 @@
 	      ((char-equal ch #\a) (princ (car args)) (setq args (cdr args)) (setq in-spec nil)))
 	    (if (char= ch #\~)
 		(setq in-spec t at-sign nil colon nil sign nil num nil dirargs nil)
-		(write-char ch)))))))
+		(write-char ch)))))
+    (if (not out)
+	(get-output-stream-string *standard-output*))))
 
 
 
