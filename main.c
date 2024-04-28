@@ -25042,7 +25042,10 @@ evaluate_let (struct object *list, struct environment *env,
       bin = create_binding_from_let_form (CAR (bind_forms), env, outcome, 0);
 
       if (!bin)
-	return NULL;
+	{
+	  remove_bindings (bins, bin_num);
+	  return NULL;
+	}
 
       bins = add_binding (bin, bins);
       bin_num++;
