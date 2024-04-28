@@ -1176,8 +1176,9 @@ make_test ("(format t \"aaa\")", "aaa\nNIL");
 make_test ("(format t \"aaa~~\")", "aaa~\nNIL");
 make_test ("(format t \"aaa~%~%\")", "aaa\n\nNIL");
 make_test ("(format t \"aa~&~&bb\")", "aa\nbb\nNIL");
-make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))",
-	   "the number is 10 and the list is (1 2 3)\nNIL");
+make_test ("(format t \"the number is ~a and the list is ~s\" 10 '(1 2 3))", "the number is 10 and the list is (1 2 3)\nNIL");
+make_test ("(format nil \"the number is ~a and the list is ~s\" 10 '(1 2 3))", "\"the number is 10 and the list is (1 2 3)\"");
+make_test ("(let ((s (make-string-output-stream))) (list (format s \"the number is ~a and the list is ~s\" 10 '(1 2 3)) (get-output-stream-string s)))", "(NIL \"the number is 10 and the list is (1 2 3)\")");
 make_test ("(open \"README\" :foo 'what :allow-other-keys t :allow-other-keys nil)", "#<STREAM ?>");
 make_test ("(with-open-file (s \"writetest2\" :direction :io) (write 'hello :stream s) (file-position s 0) (read s))", "HELLO");
 make_test ("(with-open-file (s \"writetest2\" :direction :io) (list (input-stream-p s) (output-stream-p s)))", "(T T)");
