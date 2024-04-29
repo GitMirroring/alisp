@@ -11923,7 +11923,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 		     struct environment *env, struct outcome *outcome,
 		     struct binding **bins, int *argsnum)
 {
-  struct parameter *findk;
+  struct parameter *findk, *opts = NULL;
   struct object *val, *args = NULL, *as, *key_allow_other_k = NULL;
   struct binding *subbins, *lastbin = NULL;
   int rest_found = 0, subargs, found_unknown_key = 0;
@@ -12015,42 +12015,12 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       return 0;
     }
 
+  if (par && par->type == OPTIONAL_PARAM)
+    opts = par;
+
   while (par && par->type == OPTIONAL_PARAM)
-    {
-      if (par->init_form)
-	{
-	  val = evaluate_object (par->init_form, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+    par = par->next;
 
-	  if (!val)
-	    {
-	      return 0;
-	    }
-
-	  *bins = bind_variable (par->name, val, *bins);
-
-	  (*argsnum)++;
-	}
-      else
-	{
-	  if (is_typespec)
-	    increment_refcount (env->star_sym);
-
-	  *bins = bind_variable (par->name, is_typespec ? env->star_sym
-				 : &nil_object, *bins);
-
-	  (*argsnum)++;
-	}
-
-      if (par->supplied_p_param)
-	{
-	  *bins = bind_variable (par->supplied_p_param, &nil_object, *bins);
-
-	  (*argsnum)++;
-	}
-
-      par = par->next;
-    }
 
   if (found_amp_key || (par && (par->type == REST_PARAM) && par->name))
     {
@@ -12173,43 +12143,6 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  as = CDR (as);
 	}
-
-
-      while (par && par->type == KEYWORD_PARAM)
-	{
-	  if (!par->key_passed)
-	    {
-	      if (par->init_form)
-		{
-		  val = evaluate_object (par->init_form, env, outcome);
-		  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-		  if (!val)
-		    {
-		      return 0;
-		    }
-		}
-	      else
-		val = &nil_object;
-
-	      *bins = bind_variable (par->name, val, *bins);
-	      (*argsnum)++;
-
-	      if (par->supplied_p_param)
-		{
-		  *bins = bind_variable (par->supplied_p_param, &nil_object,
-					 *bins);
-		  (*argsnum)++;
-		}
-	    }
-	  else if (par->supplied_p_param)
-	    {
-	      *bins = bind_variable (par->supplied_p_param, &t_object, *bins);
-	      (*argsnum)++;
-	    }
-
-	  par = par->next;
-	}
     }
 
   if (args && !rest_found)
@@ -12223,10 +12156,83 @@ parse_argument_list (struct object *arglist, struct parameter *par,
     }
 
 
-  if (par && par->type == AUXILIARY_VAR)
+  if (opts || (par && (par->type == KEYWORD_PARAM
+		       || par->type == AUXILIARY_VAR)))
     {
       env->vars = chain_bindings (*bins, env->vars, NULL, &lastbin);
       env->lex_env_vars_boundary += *argsnum;
+    }
+
+  while (opts && opts->type == OPTIONAL_PARAM)
+    {
+      if (opts->init_form)
+	{
+	  val = evaluate_object (opts->init_form, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!val)
+	    {
+	      return 0;
+	    }
+
+	  env->vars = bind_variable (opts->name, val, env->vars);
+	  env->lex_env_vars_boundary++, (*argsnum)++;
+	}
+      else
+	{
+	  if (is_typespec)
+	    increment_refcount (env->star_sym);
+
+	  env->vars = bind_variable (opts->name, is_typespec ? env->star_sym
+				     : &nil_object, env->vars);
+	  env->lex_env_vars_boundary++, (*argsnum)++;
+	}
+
+      if (opts->supplied_p_param)
+	{
+	  env->vars = bind_variable (opts->supplied_p_param, &nil_object,
+				     env->vars);
+	  env->lex_env_vars_boundary++, (*argsnum)++;
+	}
+
+      opts = opts->next;
+    }
+
+  while (par && par->type == KEYWORD_PARAM)
+    {
+      if (!par->key_passed)
+	{
+	  if (par->init_form)
+	    {
+	      val = evaluate_object (par->init_form, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!val)
+		{
+		  return 0;
+		}
+	    }
+	  else
+	    val = &nil_object;
+
+	  env->vars = bind_variable (par->name, val, env->vars);
+	  env->lex_env_vars_boundary++, (*argsnum)++;
+
+	  if (par->supplied_p_param)
+	    {
+	      env->vars = bind_variable (par->supplied_p_param, &nil_object,
+					 env->vars);
+	      env->lex_env_vars_boundary++, (*argsnum)++;
+	    }
+	}
+      else if (par->supplied_p_param)
+	{
+	  env->vars = bind_variable (par->supplied_p_param, &t_object,
+				     env->vars);
+	  env->lex_env_vars_boundary++, (*argsnum)++;
+	}
+
+      par = par->next;
     }
 
   while (par && par->type == AUXILIARY_VAR)
@@ -12238,23 +12244,16 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!val)
 	    {
-	      *bins = env->vars;
-	      env->vars = lastbin->next;
-	      lastbin->next = NULL;
-	      env->lex_env_vars_boundary -= *argsnum;
-
 	      return 0;
 	    }
 
 	  env->vars = bind_variable (par->name, val, env->vars);
-
-	  (*argsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
       else
 	{
 	  env->vars = bind_variable (par->name, &nil_object, env->vars);
-
-	  (*argsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
 
       par = par->next;
