@@ -53,6 +53,10 @@ You can freely redefine standard functions and macros.  If you redefine a
 builtin with your lisp code though, there's no way to get the C definition back.
 Be careful, you can easily make your image unusable this way.
 
+Also note that the compiler has special knowledge of many builtin macros, so if
+you change those to something completely different, you probably want to change
+COMPILE too.
+
 
 
 __alisp extensions__
@@ -60,9 +64,9 @@ __alisp extensions__
 al has a small number of non-standard builtins; they are interned in the CL-USER
 package.
 
-- AL-ARGC (an integer) and AL-ARGV (a vector of strings) let you access argc and
-  argv of C, respectively, so they contain the number and value of command-line
-  arguments passed to the interpreter
+- *AL-ARGC* (an integer) and *AL-ARGV* (a vector of strings) let you access argc
+  and argv of C, respectively, so they contain the number and value of
+  command-line arguments passed to the interpreter
 
 - AL-GETENV takes a string and returns the environment variable with that name,
   or NIL if such does not exist
@@ -150,6 +154,14 @@ point.  I don't know about libreadline, but you can still build without it.
 
 
 
+__Loading cl.lisp__
+
+If you don't load cl.lisp, you still have a decent subset of Common Lisp, but
+note that you must define *FEATURES* yourself, otherwise the interpreter will
+crash when you use the #+ and #- macros.
+
+
+
 __Number bases__
 
 *READ-BASE* works correctly, so you can read numbers in any base from 2 to 36.
@@ -168,6 +180,28 @@ string or accessing characters by index.
 
 Input that is not well-formed UTF-8 may cause incorrect behavior in string
 manipulation functions, but should not cause a crash.
+
+
+
+__Garbage collection__
+
+For garbage collection, alisp uses the algorithm described in "A cyclic
+reference counting algorithm and its proof" by Pepels, van Eekelen, Plasmeijer
+(1988).  This is a kind of enhanced reference counting that also collects loops.
+The paper contains a proof of termination and correctness.  I don't know of
+other implementations using this, so this is somewhat experimental.
+
+Constants defined with DEFCONSTANT are skipped when doing traversals of the
+reference graph, so using constants has true performance benefits.
+
+Packages are also skipped in reference counting.
+
+
+
+__The ROOM function__
+
+Calling ROOM shows the number of living objects of various types.  T means all
+living objects; FUNCTION also includes macros.
 
 
 
