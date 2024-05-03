@@ -4719,6 +4719,9 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 			     input, size, stream, preserve_whitespace,
 			     ends_with_eof, env, outcome, obj_begin, obj_end);
 
+	  if (IS_READ_OR_EVAL_ERROR (out))
+	    return out;
+
 	  if (input)
 	    {
 	      size = size - (*obj_end - input);
