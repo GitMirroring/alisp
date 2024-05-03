@@ -4953,12 +4953,6 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
   if (out == NO_OBJECT && !last_cons)
     return UNCLOSED_EMPTY_LIST;
 
-  if (out == CLOSING_PARENTHESIS && !last_cons)
-    {
-      *list_end = obj_end;
-      *obj = &nil_object;
-      return COMPLETE_OBJECT;
-    }
 
   while (out != NO_OBJECT && out != UNCLOSED_EMPTY_LIST)
     {
@@ -5236,6 +5230,9 @@ read_prefix (struct object **obj, const char *input, size_t size, FILE *stream,
 	  return JUST_PREFIX;
 	}
 
+      if (ch == ',' && !(*backts_commas_balance))
+	return TOO_MANY_COMMAS;
+
       if (input)
 	*prefix_end = input;
 
@@ -5248,9 +5245,6 @@ read_prefix (struct object **obj, const char *input, size_t size, FILE *stream,
 	(*backts_commas_balance)++;
       else if (ch == ',')
 	(*backts_commas_balance)--;
-
-      if (*backts_commas_balance < 0)
-	return TOO_MANY_COMMAS;
 
       if (ch == ',')
 	found_comma = 1;
