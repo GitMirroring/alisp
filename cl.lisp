@@ -75,6 +75,8 @@
 
 (defun identity (x) x)
 
+(defun constantly (x) (lambda (&rest r) x))
+
 
 
 (defparameter *READ-DEFAULT-FLOAT-FORMAT* 'single-float)
@@ -2635,10 +2637,10 @@
 	  require describe describe-object inspect lambda-parameters-limit
 	  call-arguments-limit multiple-values-limit array-rank-limit
 	  array-dimension-limit array-total-size-limit char-code-limit
-	  lambda-list-keywords identity *read-default-float-format* pi 1+ 1-
-	  minusp plusp abs zerop signum mod rem evenp oddp gcd lcm isqrt
-	  conjugate cis upgraded-complex-part-type logand logandc1 logandc2
-	  logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
+	  lambda-list-keywords identity constantly *read-default-float-format*
+	  pi 1+ 1- minusp plusp abs zerop signum mod rem evenp oddp gcd lcm
+	  isqrt conjugate cis upgraded-complex-part-type logand logandc1
+	  logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
 	  boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
 	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
 	  boole-set boole-xor boole *gensym-counter* gensym gentemp first second
