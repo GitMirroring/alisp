@@ -483,6 +483,8 @@ make_test ("(lower-case-p #\\a)", "T");
 make_test ("(both-case-p #\\a)", "T");
 make_test ("(both-case-p #\\1)", "NIL");
 make_test ("(identity \"hi\")", "\"hi\"");
+make_test ("(funcall (constantly nil))", "NIL");
+make_test ("(funcall (constantly 20) 21 22 23)", "20");
 make_test ("(1+ 5)", "6");
 make_test ("(1- .5)", "-0.5");
 make_test ("(byte 20 100)", "#<BYTE-SPECIFIER size 20 position 100>");
