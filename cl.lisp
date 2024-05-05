@@ -2556,8 +2556,9 @@
 			       (if (streamp out)
 				   out
 				   *standard-output*)))
-	in-spec at-sign colon sign num dirargs)
-    (dotimes (i (length fstr))
+	in-spec at-sign colon sign num dirargs iterbegin otherargs)
+    (do ((i 0 (+ 1 i)))
+	((= i (length fstr)))
       (let ((ch (elt fstr i)))
 	(if in-spec
 	    (cond
@@ -2568,6 +2569,10 @@
 	      ((char= ch #\~) (write-char #\~) (setq in-spec nil))
 	      ((char= ch #\%) (write-char #\newline) (setq in-spec nil))
 	      ((char= ch #\&) (fresh-line) (setq in-spec nil))
+	      ((char= ch #\{) (setq iterbegin i otherargs args args (car args) in-spec nil))
+	      ((char= ch #\}) (if args
+				  (setq i iterbegin in-spec nil)
+				  (setq iterbegin nil args (cdr otherargs) in-spec nil)))
 	      ((char-equal ch #\s) (prin1 (car args)) (setq args (cdr args)) (setq in-spec nil))
 	      ((char-equal ch #\a) (princ (car args)) (setq args (cdr args)) (setq in-spec nil))
 	      ((find (char-downcase ch) "doxr")
