@@ -2577,7 +2577,10 @@
 							      s))
 				    in-spec nil))
 	      ((char= ch #\)) (setq case-conv #'identity in-spec nil))
-	      ((char= ch #\{) (setq iterbegin i otherargs args args (car args) in-spec nil))
+	      ((char= ch #\{) (setq iterbegin i in-spec nil)
+	       (if at-sign
+		   (setq otherargs nil)
+		   (setq otherargs args args (car args))))
 	      ((char= ch #\}) (if args
 				  (setq i iterbegin)
 				  (setq iterbegin nil args (cdr otherargs)))
