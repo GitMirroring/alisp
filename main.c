@@ -30323,24 +30323,23 @@ print_symbol (const struct object *sym, struct environment *env,
   struct object *pack = inspect_variable (env->package_sym, env),
     *home = sym->value_ptr.symbol->home_package;
 
-  if (home == &nil_object)
+  if (pesc)
     {
-      if (pesc && write_to_stream (str, "#:", 2) < 0)
+      if (home == &nil_object && write_to_stream (str, "#:", 2) < 0)
 	return -1;
-    }
-  else if (home == env->keyword_package && write_to_stream (str, ":", 1) < 0)
-    return -1;
+      else if (home == env->keyword_package && write_to_stream (str, ":", 1) < 0)
+	return -1;
+      else if (home != &nil_object && home != env->keyword_package
+	       && !inspect_accessible_symbol (sym, pack, &ispres))
+	{
+	  print_as_symbol (home->value_ptr.package->name,
+			   home->value_ptr.package->name_len, pesc, str);
 
-  if (home != &nil_object && home != env->keyword_package
-      && !inspect_accessible_symbol (sym, pack, &ispres))
-    {
-      print_as_symbol (home->value_ptr.package->name,
-		       home->value_ptr.package->name_len, pesc, str);
-
-      if (is_external_in_home_package (sym))
-	write_to_stream (str, ":", 1);
-      else
-	write_to_stream (str, "::", 2);
+	  if (is_external_in_home_package (sym))
+	    write_to_stream (str, ":", 1);
+	  else
+	    write_to_stream (str, "::", 2);
+	}
     }
 
   return print_as_symbol (sym->value_ptr.symbol->name,
