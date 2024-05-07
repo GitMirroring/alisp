@@ -26008,6 +26008,8 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
 
   ret = cons = alloc_empty_cons_pair ();
   ret->value_ptr.cons_pair->car = res;
+  add_reference (ret, res, 0);
+  decrement_refcount (res);
 
   vals = outcome->other_values;
 
@@ -26016,6 +26018,8 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
       cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
       cons->value_ptr.cons_pair->car = vals->obj;
+      add_reference (cons, vals->obj, 0);
+      decrement_refcount (vals->obj);
 
       vals = vals->next;
     }
