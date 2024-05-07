@@ -26997,7 +26997,7 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
       add_reference (l, CAR (l), 0);
 
       l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = SYMBOL (CAR (list));
-      increment_refcount (SYMBOL (CAR (list)));
+      add_reference (CDR (l), SYMBOL (CAR (list)), 0);
 
       l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
 	value_ptr.cons_pair->car = tmp;
