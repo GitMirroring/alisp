@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2023 Andrea G. Monaco
+# Copyright (C) 2022-2024 Andrea G. Monaco
 # 
 # This file is part of alisp, a lisp implementation.
 #
@@ -29,195 +29,175 @@ class AlPrintObject (gdb.Command):
 
 
     def invoke (self, arg, from_tty):
-        out = print_object (arg, False)
-        gdb.write ("%s\n%s\n" % out)
+        desc = print_object (arg)
+        gdb.write ("%s\n%s\n" % (desc [0], desc [1]))
 
 
 
-def print_object (arg, in_cons):
-    if in_cons:
-        type = gdb.execute ("output %s->value_ptr.cons_pair->car->type" % arg, False, True)
-    else:
-        type = gdb.execute ("output %s->type" % arg, False, True)
+
+def print_object (arg):
+    type = gdb.execute ("output %s->type" % arg, False, True)
 
     if type == "TYPE_STRING":
-        out = print_string (arg, in_cons)
+        return print_string (arg)
     elif type == "TYPE_SYMBOL_NAME":
-        out = print_symbol_name (arg, in_cons)
+        return print_symbol_name (arg)
     elif type == "TYPE_SYMBOL":
-        out = print_symbol (arg, in_cons)
+        return print_symbol (arg)
     elif type == "TYPE_CONS_PAIR":
-        out = print_cons (arg, in_cons)
+        return print_list (arg)
     elif type == "TYPE_QUOTE" or type == "TYPE_BACKQUOTE" or type == "TYPE_COMMA" or type == "TYPE_AT" or type == "TYPE_DOT":
-        out = print_prefix (arg, type, in_cons)
+        return print_prefix (arg)
     else:
         if type == "TYPE_INTEGER":
-            obj = "#<INTEGER>"
+            return justify_right (["#<INTEGER>", print_refcounts (arg)])
         elif type == "TYPE_RATIO":
-            obj = "#<RATIO>"
-        elif type == "TYPE_FLOATING":
-            obj = "#<FLOAT>"
+            return justify_right (["#<RATIO>", print_refcounts (arg)])
+        elif type == "TYPE_FLOAT":
+            return justify_right (["#<FLOAT>", print_refcounts (arg)])
+        elif type == "TYPE_COMPLEX":
+            return justify_right (["#<COMPLEX>", print_refcounts (arg)])
+        elif type == "TYPE_CHARACTER":
+            return justify_right (["#<CHARACTER>", print_refcounts (arg)])
         elif type == "TYPE_FUNCTION":
-            obj = "#<FUNCTION>"
+            return justify_right (["#<FUNCTION>", print_refcounts (arg)])
         elif type == "TYPE_MACRO":
-            obj = "#<MACRO>"
+            return justify_right (["#<MACRO>", print_refcounts (arg)])
+        elif type == "TYPE_ARRAY":
+            return justify_right (["#<ARRAY>", print_refcounts (arg)])
+        elif type == "TYPE_HASHTABLE":
+            return justify_right (["#<HASHTABLE>", print_refcounts (arg)])
+        elif type == "TYPE_STREAM":
+            return justify_right (["#<STREAM>", print_refcounts (arg)])
+        elif type == "TYPE_FILENAME":
+            return justify_right (["#<FILENAME>", print_refcounts (arg)])
+        elif type == "TYPE_PACKAGE":
+            return justify_right (["#<PACKAGE>", print_refcounts (arg)])
         else:
-            obj = "???"
-
-        ref = print_refcount (arg, in_cons)
-
-        out = justify_right (obj, ref)
-
-
-    return out
+            return justify_right (["#<???>", print_refcounts (arg)])
 
 
 
-def print_string (arg, in_cons):
-    if in_cons:
-        str = "%s->value_ptr.cons_pair->car" % arg
+def justify_right (list):
+    field = max (len (list [0]), len (list [1]))
+
+    return [list [0].rjust (field), list [1].rjust (field)]
+
+
+
+def print_refcounts (arg):
+    if gdb.execute ("output %s->flags & 0x100" % arg, False, True) == "0":
+        weakr = gdb.execute ("output %s->refcount1" % arg, False, True)
+        strongr = gdb.execute ("output %s->refcount2" % arg, False, True)
     else:
-        str = arg
+        weakr = gdb.execute ("output %s->refcount2" % arg, False, True)
+        strongr = gdb.execute ("output %s->refcount1" % arg, False, True)
 
-    if gdb.execute ("output %s->value_ptr.string->used_size" % str, False, True) == "0":
-        obj = "\"\""
+    return "%s(%s)" % (strongr, weakr)
+
+
+
+def print_string (arg):
+    ret = list ()
+
+    if gdb.execute ("output %s->value_ptr.string->used_size" % arg, False, True) == "0":
+        ret.append ("\"\"")
     else:
-        obj = gdb.execute ("output *%s->value_ptr.string->value@%s->value_ptr.string->used_size" % (str, str), False, True)
+        val = gdb.execute ("output *%s->value_ptr.string->value@%s->value_ptr.string->used_size" % (arg, arg), False, True)
+        ret.append ("%s" % val)
 
-    ref = print_refcount (arg, in_cons)
+    ret.append (print_refcounts (arg))
 
-    return justify_right (obj, ref)
+    return justify_right (ret)
 
 
 
-def print_symbol_name (arg, in_cons):
-    if in_cons:
-        sym = "%s->value_ptr.cons_pair->car" % arg
-    else:
-        sym = arg
+def print_symbol_name (arg):
+    ret = list ()
 
-    obj = gdb.execute ("output *%s->value_ptr.symbol_name->value@%s->value_ptr.string->used_size" % (sym, sym), False, True)
+    obj = gdb.execute ("output *%s->value_ptr.symbol_name->value@%s->value_ptr.symbol_name->used_size" % (arg, arg), False, True)
     obj = obj [1 : len(obj) - 1]
 
-    ref = print_refcount (arg, in_cons)
+    ret.append (obj)
 
-    return justify_right (obj, ref)
+    ret.append (print_refcounts (arg))
+
+    return justify_right (ret)
 
 
 
-def print_symbol (arg, in_cons):
-    if in_cons:
-        sym = "%s->value_ptr.cons_pair->car" % arg
-    else:
-        sym = arg
+def print_symbol (arg):
+    ret = list ()
 
-    obj = gdb.execute ("output *%s->value_ptr.symbol->name@%s->value_ptr.symbol->name_len" % (sym, sym), False, True)
+    obj = gdb.execute ("output *%s->value_ptr.symbol->name@%s->value_ptr.symbol->name_len" % (arg, arg), False, True)
     obj = obj [1 : len (obj) - 1]
 
-    ref = print_refcount (arg, in_cons)
+    ret.append (obj)
 
-    return justify_right (obj, ref)
+    ret.append (print_refcounts (arg))
+
+    return justify_right (ret)
 
 
 
-def print_prefix (arg, type, in_cons):
-    if in_cons:
-        pr = "%s->value_ptr.cons_pair->car" % arg
-    else:
-        pr = arg
+def print_prefix (arg):
+    ret = list ()
+    type = gdb.execute ("output %s->type" % arg, False, True)
 
     if type == "TYPE_QUOTE":
-        obj = "'"
+        ret.append ("'")
     elif type == "TYPE_BACKQUOTE":
-        obj = "`"
+        ret.append ("`")
     elif type == "TYPE_COMMA":
-        obj = ","
+        ret.append (",")
     elif type == "TYPE_AT":
-        obj = "@"
+        ret.append ("@")
     else:
-        obj = "."
+        ret.append (".")
 
-    ref = print_refcount (arg, in_cons)
+    ret.append (print_refcounts (arg))
 
-    (obj, ref) = justify_right (obj, ref)
+    ret = justify_right (ret)
 
-    obj += " "
-    ref += " "
+    next = print_object ("%s->value_ptr.next" % arg)
 
-    out = print_object (pr + "->value_ptr.next", False)
+    ret [0] = "%s %s" % (ret [0], next [0])
+    ret [1] = "%s %s" % (ret [1], next [1])
 
-    obj += out [0]
-    ref += out [1]
-
-    return (obj, ref)
+    return ret
 
 
 
-def print_refcount (arg, in_cons):
-    out = gdb.execute ("output %s->refcount" % arg, False, True)
+def print_list (arg):
+    ret = ["(", " "]
 
-    if in_cons:
-        out += "(%s)" % gdb.execute ("output %s->value_ptr.cons_pair->car->refcount" % arg, False, True)
+    while True:
+        obj = [" ", print_refcounts (arg)]
+        obj = justify_right (obj)
 
-    return out
-
-
-
-def justify_right (str1, str2):
-    field = max (len (str1), len (str2))
-
-    return (str1.rjust (field), str2.rjust (field))
+        ret = [ret [0] + obj [0] + " ", ret [1] + obj [1] + " "]
 
 
+        car = arg + "->value_ptr.cons_pair->car"
 
-def nthcdr (arg, n):
-    for i in range (n):
+        obj = print_object (car)
+        obj = justify_right (obj)
+
+        ret = [ret [0] + obj [0], ret [1] + obj [1]]
+
+
         arg = arg + "->value_ptr.cons_pair->cdr"
 
-    return arg
+        cdr = gdb.execute ("output %s" % arg, False, True).split ()
 
+        if (len (cdr) > 4 and cdr [4] == "<nil_object>"):
+            ret = [ret [0] + ")", ret [1] + " "]
+            break
 
+        ret = [ret [0] + " ", ret [1] + " "]
 
-def nth (arg, n):
-    return nthcdr (arg, n) + "->value_ptr.cons_pair->car"
+    return ret
 
-
-
-def print_cons (arg, in_cons):
-    if in_cons:
-        o = "("
-        r = print_refcount (arg, False)
-        (obj, ref) = justify_right (o, r)
-        obj += " "
-        ref += " "
-        arg = "%s->value_ptr.cons_pair->car" % arg
-    else:
-        obj = "("
-        ref = " "
-
-    list_length = int (gdb.execute ("output list_length (%s)" % arg, False, True))
-
-    for i in range (list_length):
-        out = print_object (nthcdr (arg, i), True)
-
-        obj += out [0]
-        ref += out [1]
-
-        if i < list_length - 1:
-            obj += " "
-            ref += " "
-
-    last_cdr = gdb.execute ("output nthcdr (%d, %s)" % (list_length, arg), False, True)
-
-    if len (last_cdr.split ()) <= 4:
-        out = print_object (nthcdr (arg, list_length), False)
-        obj = "%s . %s" % (obj, out [0])
-        ref = "%s   %s" % (ref, out [1])
-
-    obj += ")"
-    ref += " "
-
-    return (obj, ref)
 
 
 
