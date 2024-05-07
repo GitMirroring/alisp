@@ -66,9 +66,28 @@ of the times.
 
 __Debugging__
 
-The file al_gdb_debug.py defines a gdb command called al_print_object.  This
-command was written around the old reference counting algorithm of alisp, so it
-doesn't work right now.
+The file al_gdb_debug.py defines a gdb command called al_print_object.  You may
+load it with "source al_gdb_debug.py" in your gdb session.
+
+Then the gdb command al_print_object takes a C pointer as argument and displays
+the attached lisp object.  A string may be displayed like this
+
+  (gdb) al_print_object obj
+  "abc"
+   1(0)
+
+below the string you see the strong refcount and (in parenthesis) the weak
+refcount of the object.
+
+A list will be printed like this
+
+  (        A         B         C)
+   1(0) 1(0) 1(0) 1(0) 1(0) 1(0)
+
+For each cons cell, the command displays the refcounts of the cell and then
+those of the car.
+
+Currently the command doesn't descend into arrays nor hash tables.
 
 
 
