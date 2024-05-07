@@ -6747,7 +6747,6 @@ alloc_empty_list (size_t sz)
   for (sz--; sz; sz--)
     {
       cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-      set_reference_strength_factor (cons, 1, CDR (cons), 0, 0, 0);
       cons = CDR (cons);
     }
 
@@ -10609,16 +10608,12 @@ copy_list_structure (struct object *list, const struct object *prefix,
       cdr = alloc_empty_cons_pair ();
 
       cons->value_ptr.cons_pair->cdr = cdr;
-      add_reference (cons, cdr, 1);
-      decrement_refcount (cdr);
 
       cons = CDR (cons);
 
       if (prefix)
 	{
 	  cons->value_ptr.cons_pair->car = copy_prefix (prefix, NULL, &lastpref);
-	  add_reference (cons, CAR (cons), 0);
-	  decrement_refcount (CAR (cons));
 
 	  lastpref->value_ptr.next = CAR (list);
 	  add_reference (lastpref, CAR (list), 0);
