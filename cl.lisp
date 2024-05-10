@@ -2093,6 +2093,26 @@
   obj)
 
 
+(defun write-to-string (obj &rest opts &key array base case circle escape gensym
+			      length level lines miser-width pprint-dispatch
+			      pretty radix readably right-margin)
+  (let ((out (make-string-output-stream)))
+    (apply 'write obj :stream out opts)
+    (get-output-stream-string out)))
+
+
+(defun prin1-to-string (obj)
+  (let ((out (make-string-output-stream)))
+    (prin1 obj out)
+    (get-output-stream-string out)))
+
+
+(defun princ-to-string (obj)
+  (let ((out (make-string-output-stream)))
+    (princ obj out)
+    (get-output-stream-string out)))
+
+
 (defmacro do-all-symbols (varres &body body)
   (let ((packsym (gensym)))
     `(progn
@@ -2718,8 +2738,9 @@
 	  file-namestring directory-namestring host-namestring enough-namestring
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
-	  do-all-symbols loop format encode-universal-time
-	  with-standard-io-syntax handler-case abort))
+	  write-to-string prin1-to-string princ-to-string do-all-symbols loop
+	  format encode-universal-time with-standard-io-syntax handler-case
+	  abort))
 
 
 
