@@ -26078,6 +26078,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 	    }
 
 	  cons->value_ptr.cons_pair->car = res;
+	  add_reference (cons, res, 0);
 
 	  l = outcome->other_values;
 
@@ -26086,11 +26087,13 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 	      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
 	      cons->value_ptr.cons_pair->car = l->obj;
+	      add_reference (cons, l->obj, 0);
 
 	      l = l->next;
 	    }
 
-	  free_object_list_structure (outcome->other_values);
+	  decrement_refcount (res);
+	  free_object_list (outcome->other_values);
 	  outcome->other_values = NULL;
 	}
       else
