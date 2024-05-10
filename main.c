@@ -7636,8 +7636,6 @@ capture_lexical_environment (struct binding **lex_vars,
 	  bin->closure_bin = b;
 	  bin->next = NULL;
 
-	  increment_refcount (b->sym);
-	  increment_refcount (b->obj);
 	  b->refcount++;
 	}
 
