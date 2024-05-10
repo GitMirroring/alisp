@@ -10038,6 +10038,13 @@ enter_debugger (struct object *cond, struct environment *env,
 				    fields->value, env, std_out->value_ptr.stream);
 		      fresh_line (std_out->value_ptr.stream);
 		    }
+		  else
+		    {
+		      printf ("unhandled condition of type ");
+		      print_object (outcome->condition->value_ptr.condition->
+				    class_name, env, std_out->value_ptr.stream);
+		      fresh_line (std_out->value_ptr.stream);
+		    }
 
 		  decrement_refcount (outcome->condition);
 		  outcome->condition = NULL;
