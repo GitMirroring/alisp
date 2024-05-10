@@ -626,6 +626,8 @@ environment
   struct object *c_stdout;
 
 
+  struct object_list *traced_funcs;
+
   int debugging_depth;
 
   int is_profiling;
@@ -802,7 +804,8 @@ function_flags
   {
     GENERIC_FUNCTION = 1,
     COMPILED_FUNCTION,
-    FOUND_AMP_KEY = 4
+    FOUND_AMP_KEY = 4,
+    TRACED_FUNCTION = 8
   };
 
 
@@ -1749,6 +1752,9 @@ struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
 
 struct object *create_room_pair (char *sym, int val, struct environment *env);
 
+void print_bindings_in_reverse (struct binding *bins, int num,
+				struct environment *env, struct object *str);
+
 void print_available_restarts (struct environment *env, struct object *str,
 			       int *restnum);
 struct object *enter_debugger (struct object *cond, struct environment *env,
@@ -2690,6 +2696,11 @@ struct object *builtin_make_condition
 struct object *builtin_room
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_trace
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_untrace
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_invoke_debugger
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -3509,6 +3520,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("ROOM", env, builtin_room, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("TRACE", env, builtin_trace, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("UNTRACE", env, builtin_untrace, TYPE_MACRO, NULL, 0);
   add_builtin_form ("INVOKE-DEBUGGER", env, builtin_invoke_debugger,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
@@ -9919,6 +9932,34 @@ create_room_pair (char *sym, int val, struct environment *env)
 
 
 void
+print_bindings_in_reverse (struct binding *bins, int num,
+			   struct environment *env, struct object *str)
+{
+  struct binding *b;
+  int i;
+
+  printf ("(");
+
+  for (; num; num--)
+    {
+      b = bins;
+
+      for (i = 1; i < num; i++)
+	b = b->next;
+
+      print_object (b->sym, env, str->value_ptr.stream);
+      printf ("=");
+      print_object (b->obj, env, str->value_ptr.stream);
+
+      if (num > 1)
+	printf (" ");
+    }
+
+  printf (")");
+}
+
+
+void
 print_available_restarts (struct environment *env, struct object *str,
 			  int *restnum)
 {
@@ -12410,6 +12451,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       else
 	args = arglist;
 
+      if (func->value_ptr.function->flags & TRACED_FUNCTION)
+	{
+	  printf ("calling builtin ");
+	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			value_ptr.stream);
+	  printf (" ");
+	  print_object (args, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	}
+
       if (env->is_profiling && func->value_ptr.function->name)
 	{
 	  isprof = 1;
@@ -12424,6 +12476,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  add_profiling_data (&env->profiling_data,
 			      SYMBOL (func->value_ptr.function->name), time,
 			      evaltime);
+	}
+
+      if ((func->value_ptr.function->flags & TRACED_FUNCTION) && ret)
+	{
+	  printf ("builtin ");
+	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			value_ptr.stream);
+	  printf (" returned ");
+	  print_object (ret, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
       if (eval_args)
@@ -12526,6 +12589,18 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->lex_env_vars_boundary += argsnum;
 
 
+      if (func->value_ptr.function->flags & TRACED_FUNCTION)
+	{
+	  printf ("calling ");
+	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			value_ptr.stream);
+	  printf (" ");
+	  print_bindings_in_reverse (env->vars, argsnum+closnum, env,
+				     env->c_stdout);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	}
+
       if (env->is_profiling && func->value_ptr.function->name)
 	{
 	  isprof = 1;
@@ -12548,6 +12623,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (isprof)
 	{
 	  time = clock () - time;
+	}
+
+      if ((func->value_ptr.function->flags & TRACED_FUNCTION) && ret)
+	{
+	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			value_ptr.stream);
+	  printf (" returned ");
+	  print_object (ret, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
 
@@ -28947,6 +29032,118 @@ builtin_room (struct object *list, struct environment *env,
 						     env);
 
   return ret;
+}
+
+
+struct object *
+builtin_trace (struct object *list, struct environment *env,
+	       struct outcome *outcome)
+{
+  struct object *ret = &nil_object, *cons, *fun;
+  struct object_list *l;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      l = env->traced_funcs;
+
+      while (l)
+	{
+	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car = l->obj;
+	  add_reference (cons, l->obj, 0);
+
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+
+	  l = l->next;
+	}
+
+      return ret;
+    }
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (list))
+	  || !(fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (!(fun->value_ptr.function->flags & TRACED_FUNCTION))
+	{
+	  fun->value_ptr.function->flags |= TRACED_FUNCTION;
+
+	  l = malloc_and_check (sizeof (*l));
+	  l->obj = fun;
+	  l->next = env->traced_funcs;
+	  env->traced_funcs = l;
+	}
+
+      list = CDR (list);
+    }
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_untrace (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  struct object *fun;
+  struct object_list *l, *prev = NULL;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      while (env->traced_funcs)
+	{
+	  l = env->traced_funcs->next;
+	  env->traced_funcs->obj->value_ptr.function->flags &= ~TRACED_FUNCTION;
+	  free (env->traced_funcs);
+	  env->traced_funcs = l;
+	}
+
+      return &t_object;
+    }
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (list))
+	  || !(fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (fun->value_ptr.function->flags & TRACED_FUNCTION)
+	{
+	  fun->value_ptr.function->flags &= ~TRACED_FUNCTION;
+
+	  l = env->traced_funcs;
+
+	  while (l)
+	    {
+	      if (l->obj == fun)
+		{
+		  if (prev)
+		    prev->next = l->next;
+		  else
+		    env->traced_funcs = l->next;
+
+		  free (l);
+		  break;
+		}
+
+	      prev = l;
+	      l = l->next;
+	    }
+	}
+
+      list = CDR (list);
+    }
+
+  return &t_object;
 }
 
 
