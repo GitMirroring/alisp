@@ -15561,6 +15561,12 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -16138,6 +16144,12 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -16561,6 +16573,12 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -16664,6 +16682,12 @@ builtin_pathname_name (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -17495,6 +17519,12 @@ builtin_write (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -17788,6 +17818,12 @@ builtin_open (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -23855,6 +23891,12 @@ builtin_make_package (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
@@ -27767,6 +27809,12 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 	}
       else
 	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
 	  found_unknown_key = 1;
 
 	  list = CDR (list);
