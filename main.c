@@ -13266,6 +13266,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  free_cons_pair (cons);
+	  num_objects--;
 
 	  if (!res)
 	    return -1;
@@ -19560,6 +19561,8 @@ builtin_remove_if (struct object *list, struct environment *env,
 
   free (arg->value_ptr.cons_pair);
   free (arg);
+  num_conses--;
+  num_objects--;
 
   return ret;
 }
@@ -20348,6 +20351,8 @@ reciprocate_number (struct object *num)
 {
   struct object *ret, *x, *x2, *y, *y2, *x2py2, *r, *i;
 
+  num_numbers++;
+
   if (num->type == TYPE_INTEGER)
     {
       ret = alloc_object ();
@@ -20726,6 +20731,8 @@ copy_number (const struct object *num)
       ret->value_ptr.complex->imag = copy_number (num->value_ptr.complex->imag);
     }
 
+  num_numbers++;
+
   return ret;
 }
 
@@ -20743,6 +20750,8 @@ promote_number (struct object *num, enum object_type type)
 
   ret = alloc_object ();
   ret->type = type;
+
+  num_numbers++;
 
   if (type == TYPE_RATIO)
     {
@@ -22367,6 +22376,8 @@ builtin_make_string (struct object *list, struct environment *env,
   ret->value_ptr.string->value = calloc_and_check (sz, 1);
   ret->value_ptr.string->alloc_size = ret->value_ptr.string->used_size = sz;
   ret->value_ptr.string->fill_pointer = -1;
+
+  num_strings++;
 
   return ret;
 }
@@ -32984,6 +32995,8 @@ free_list_structure (struct object *list)
       free_list_structure (CDR (list));
       free (list->value_ptr.cons_pair);
       free (list);
+      num_conses--;
+      num_objects--;
     }
 }
 
