@@ -653,7 +653,8 @@ environment
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
-    *print_array_sym, *read_base_sym, *read_suppress_sym;
+    *print_radix_sym, *print_array_sym, *print_gensym_sym, *read_base_sym,
+    *read_suppress_sym;
 
   struct object *abort_sym;
 };
@@ -3886,7 +3887,9 @@ add_standard_definitions (struct environment *env)
 					     env);
   env->print_base_sym = define_variable ("*PRINT-BASE*",
 					 create_integer_from_long (10), env);
+  env->print_radix_sym = define_variable ("*PRINT-RADIX*", &nil_object, env);
   env->print_array_sym = define_variable ("*PRINT-ARRAY*", &t_object, env);
+  env->print_gensym_sym = define_variable ("*PRINT-GENSYM*", &t_object, env);
 
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
@@ -30332,8 +30335,12 @@ print_symbol (const struct object *sym, struct environment *env,
 
   if (pesc)
     {
-      if (home == &nil_object && write_to_stream (str, "#:", 2) < 0)
-	return -1;
+      if (home == &nil_object)
+	{
+	  if (inspect_variable (env->print_gensym_sym, env) != &nil_object
+	      && write_to_stream (str, "#:", 2) < 0)
+	    return -1;
+	}
       else if (home == env->keyword_package && write_to_stream (str, ":", 1) < 0)
 	return -1;
       else if (home != &nil_object && home != env->keyword_package
@@ -30359,11 +30366,22 @@ print_bignum (const mpz_t z, struct environment *env, struct stream *str)
 {
   char *out;
   int ret, base = get_print_base (env);
+  struct object *rad = inspect_variable (env->print_radix_sym, env);
 
   if (base == 8)
-    gmp_asprintf (&out, "%Zo", z);
+    {
+      if (rad != &nil_object && write_to_stream (str, "#o", 2) < 0)
+	return -1;
+
+      gmp_asprintf (&out, "%Zo", z);
+    }
   else if (base == 16)
-    gmp_asprintf (&out, "%Zx", z);
+    {
+      if (rad != &nil_object && write_to_stream (str, "#x", 2) < 0)
+	return -1;
+
+      gmp_asprintf (&out, "%Zx", z);
+    }
   else
     gmp_asprintf (&out, "%Zd", z);
 
@@ -30375,6 +30393,11 @@ print_bignum (const mpz_t z, struct environment *env, struct stream *str)
 
   ret = write_to_stream (str, out, strlen (out));
   free (out);
+
+  if (rad != &nil_object && base != 8 && base != 16
+      && write_to_stream (str, ".", 1) < 0)
+    return -1;
+
   return ret;
 }
 
@@ -30790,6 +30813,7 @@ print_object (const struct object *obj, struct environment *env,
 {
   char *out;
   int ret, base;
+  struct object *rad;
 
   if (obj->type == TYPE_CONS_PAIR
       && obj->value_ptr.cons_pair->car == env->quote_sym
@@ -30850,13 +30874,29 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_RATIO)
 	{
 	  base = get_print_base (env);
+	  rad = inspect_variable (env->print_radix_sym, env);
 
 	  if (base == 8)
-	    gmp_asprintf (&out, "%Qo", obj->value_ptr.ratio);
+	    {
+	      if (rad != &nil_object && write_to_stream (str, "#o", 2) < 0)
+		return -1;
+
+	      gmp_asprintf (&out, "%Qo", obj->value_ptr.ratio);
+	    }
 	  else if (base == 16)
-	    gmp_asprintf (&out, "%Qx", obj->value_ptr.ratio);
+	    {
+	      if (rad != &nil_object && write_to_stream (str, "#x", 2) < 0)
+		return -1;
+
+	      gmp_asprintf (&out, "%Qx", obj->value_ptr.ratio);
+	    }
 	  else
-	    gmp_asprintf (&out, "%Qd", obj->value_ptr.ratio);
+	    {
+	      if (rad != &nil_object && write_to_stream (str, "#10r", 4) < 0)
+		return -1;
+
+	      gmp_asprintf (&out, "%Qd", obj->value_ptr.ratio);
+	    }
 
 	  if (!out)
 	    {
