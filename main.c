@@ -10035,6 +10035,8 @@ enter_debugger (struct object *cond, struct environment *env,
 		  printf ("\n");
 		  env->debugging_depth--;
 		  outcome->type = ABORT_TO_TOP_LEVEL;
+		  free (wholel);
+		  decrement_refcount (obj);
 		  return NULL;
 		}
 	      else
@@ -10096,6 +10098,9 @@ enter_debugger (struct object *cond, struct environment *env,
 	      else if (outcome->type == ABORT_TO_TOP_LEVEL)
 		{
 		  env->debugging_depth--;
+		  free (wholel);
+		  decrement_refcount (result);
+		  decrement_refcount (obj);
 		  return NULL;
 		}
 	      else
