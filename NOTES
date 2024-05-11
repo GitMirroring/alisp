@@ -82,6 +82,13 @@ package.
 - the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
   legal information
 
+- the function AL-DUMP-BINDINGS returns a list with all the live bindings,
+  starting with the most recently established.  Each binding is a list
+  containing the symbol, the value, the type of the binding (:LEXICAL or
+  :SPECIAL); for lexical bindings, there's also a fourth element of T if the
+  binding is in scope at that moment.  This function is intended to be called in
+  the debugger, but works everywhere
+
 - the functions AL-START-PROFILING, AL-STOP-PROFILING, AL-CLEAR-PROFILING and
   AL-REPORT-PROFILING govern the profiler, see "Profiling".
 
