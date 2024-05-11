@@ -2709,6 +2709,9 @@ struct object *evaluate_al_loopy_destructuring_bind
 struct object *evaluate_al_loopy_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_dump_bindings
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_start_profiling
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_stop_profiling
@@ -3916,6 +3919,9 @@ add_standard_definitions (struct environment *env)
 		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
   add_builtin_form ("AL-LOOPY-SETQ", env, evaluate_al_loopy_setq, TYPE_MACRO,
 		    NULL, 0);
+
+  add_builtin_form ("AL-DUMP-BINDINGS", env, builtin_al_dump_bindings,
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
 		    TYPE_FUNCTION, NULL, 0);
@@ -29255,6 +29261,58 @@ evaluate_al_loopy_setq (struct object *list, struct environment *env,
       decrement_refcount (vals);
 
       list = CDR (CDR (list));
+    }
+
+  return ret;
+}
+
+
+struct object *
+builtin_al_dump_bindings (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *ret = &nil_object, *cons, *l;
+  struct binding *bin = env->vars;
+  int i = 0;
+
+  if (SYMBOL (list) != &nil_object)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  while (bin)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      cons->value_ptr.cons_pair->car = l = alloc_empty_list (3);
+
+      l->value_ptr.cons_pair->car = bin->sym;
+      add_reference (l, bin->sym, 0);
+
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
+      add_reference (CDR (l), bin->obj, 0);
+
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->car = bin->type == LEXICAL_BINDING
+	? KEYWORD (":LEXICAL") : KEYWORD (":SPECIAL");
+      add_reference (CDR (CDR (l)), CAR (CDR (CDR (l))), 0);
+
+      if (bin->type == LEXICAL_BINDING && i < env->lex_env_vars_boundary)
+	{
+	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &t_object;
+	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+	}
+
+      i++;
+      bin = bin->next;
     }
 
   return ret;
