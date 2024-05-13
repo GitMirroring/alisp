@@ -276,6 +276,26 @@ go_tag_frame
 
 
 struct
+block
+{
+  int refcount;
+
+  struct object *name;
+
+  struct block *next;
+};
+
+
+struct
+block_frame
+{
+  struct block *frame;
+
+  struct block_frame *next;
+};
+
+
+struct
 handler_binding
 {
   struct object *condition;
@@ -541,7 +561,7 @@ outcome
 
   struct object *tag_to_jump_to;
 
-  struct object *block_to_leave;
+  struct block *block_to_leave;
 
   struct object *catching_tag;
 
@@ -613,7 +633,7 @@ environment
 
   struct go_tag_frame *go_tag_stack;
 
-  struct object_list *blocks;
+  struct block_frame *blocks;
 
   struct object_list *catches;
 
@@ -823,6 +843,9 @@ function
 
   struct binding *lex_vars;
   struct binding *lex_funcs;
+
+  struct block *encl_blocks;
+
 
   struct object *body;
 
@@ -1732,8 +1755,8 @@ struct go_tag *add_go_tag (struct object *tagname, struct object *tagdest,
 struct go_tag_frame *remove_go_tag_frame (struct go_tag_frame *stack);
 struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 
-struct object_list *add_block (struct object *name, struct object_list *blocks);
-struct object_list *remove_block (struct object_list *blocks);
+struct block_frame *add_block (struct object *name, struct block_frame *blocks);
+struct block *remove_block (struct block *blocks);
 
 struct object *create_condition (struct object *type, va_list valist);
 struct object *create_condition_by_class (struct object *type, ...);
@@ -6792,6 +6815,7 @@ alloc_function (void)
   fun->allow_other_keys = 0;
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
+  fun->encl_blocks = NULL;
   fun->body = NULL;
   fun->flags = 0;
   fun->methods = NULL;
@@ -7696,6 +7720,11 @@ create_function (struct object *lambda_list, struct object *body,
   capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
 			       env->lex_env_vars_boundary, env->funcs,
 			       env->lex_env_funcs_boundary);
+
+  f->encl_blocks = env->blocks ? env->blocks->frame : NULL;
+
+  if (f->encl_blocks)
+    f->encl_blocks->refcount++;
 
   f->body = body;
   add_reference (fun, body, 1);
@@ -9617,26 +9646,52 @@ find_go_tag (struct object *tagname, struct go_tag_frame *frame)
 }
 
 
-struct object_list *
-add_block (struct object *name, struct object_list *blocks)
+struct block_frame *
+add_block (struct object *name, struct block_frame *blocks)
 {
-  struct object_list *new = malloc_and_check (sizeof (*new));
+  struct block *b = malloc_and_check (sizeof (*b));
+  struct block_frame *f;
 
-  new->obj = name;
-  new->next = blocks;
+  b->name = name;
+  b->refcount = 1;
 
-  return new;
+  if (!blocks)
+    {
+      f = malloc_and_check (sizeof (*blocks));
+      f->frame = b;
+      b->next = NULL;
+      f->next = blocks;
+      blocks = f;
+    }
+  else
+    {
+      b->next = blocks->frame;
+      blocks->frame = b;
+
+      if (b->next)
+	b->next->refcount++;
+    }
+
+  return blocks;
 }
 
 
-struct object_list *
-remove_block (struct object_list *blocks)
+struct block *
+remove_block (struct block *blocks)
 {
-  struct object_list *next = blocks->next;
+  struct block *n = blocks->next;
 
-  free (blocks);
+  blocks->refcount--;
 
-  return next;
+  if (!blocks->refcount)
+    {
+      free (blocks);
+
+      if (n)
+	remove_block (n);
+    }
+
+  return n;
 }
 
 
@@ -11929,7 +11984,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 		}
 	      else if (outcome->block_to_leave)
 		{
-		  if (block_name && outcome->block_to_leave == env->blocks->obj)
+		  if (block_name && outcome->block_to_leave == env->blocks->frame)
 		    {
 		      outcome->block_to_leave = NULL;
 
@@ -11962,7 +12017,7 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
     }
 
   if (block_name)
-    env->blocks = remove_block (env->blocks);
+    env->blocks->frame = remove_block (env->blocks->frame);
 
   return res;
 }
@@ -12445,6 +12500,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	       int is_typespec, struct environment *env, struct outcome *outcome)
 {
   struct binding *bins, *b;
+  struct block_frame *f;
   struct object *ret, *ret2, *args = NULL, *body;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
   unsigned isprof = 0, time, evaltime = 0;
@@ -12625,8 +12681,35 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	}
       else
 	{
-	  ret = evaluate_body (body, 0, func->value_ptr.function->name, env,
-			       outcome);
+	  f = malloc_and_check (sizeof (*f));
+	  f->next = env->blocks;
+	  env->blocks = f;
+	  f->frame = malloc_and_check (sizeof (*f->frame));
+	  f->frame->name = func->value_ptr.function->name;
+	  f->frame->refcount = 1;
+	  f->frame->next = func->value_ptr.function->encl_blocks;
+
+	  if (f->frame->next)
+	    f->frame->next->refcount++;
+
+	  ret = evaluate_body (body, 0, NULL, env, outcome);
+
+	  if (!ret && outcome->block_to_leave
+	      && outcome->block_to_leave == f->frame)
+	    {
+	      outcome->block_to_leave = NULL;
+
+	      ret = outcome->return_value;
+
+	      outcome->no_value = outcome->return_no_value;
+	      outcome->other_values = outcome->return_other_values;
+	    }
+
+	  env->blocks->frame = remove_block (env->blocks->frame);
+
+	  f = env->blocks->next;
+	  free (env->blocks);
+	  env->blocks = f;
 	}
 
       undo_special_declarations (func->value_ptr.function->body, env);
@@ -13098,8 +13181,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 	  env->vars = chain_bindings (bins, env->vars, NULL, NULL);
 	  env->lex_env_vars_boundary += argsnum;
 
-	  res = evaluate_body (lapplm->meth->value_ptr.method->body, 0, NULL, env,
-			       outcome);
+	  res = evaluate_body (lapplm->meth->value_ptr.method->body, 0, NULL,
+			       env, outcome);
 
 	  env->vars = remove_bindings (env->vars, argsnum);
 	  env->lex_env_vars_boundary = prev_lex_bin_num;
@@ -18598,7 +18681,7 @@ builtin_do (struct object *list, struct environment *env,
 
       if (!bin)
 	{
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
@@ -18630,7 +18713,7 @@ builtin_do (struct object *list, struct environment *env,
 
   if (!testres)
     {
-      if (outcome->block_to_leave == &nil_object)
+      if (outcome->block_to_leave == env->blocks->frame)
 	{
 	  outcome->block_to_leave = NULL;
 	  ret = outcome->return_value;
@@ -18657,7 +18740,7 @@ builtin_do (struct object *list, struct environment *env,
 
       if (!bodyres)
 	{
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
@@ -18685,7 +18768,7 @@ builtin_do (struct object *list, struct environment *env,
 
 	      if (!res)
 		{
-		  if (outcome->block_to_leave == &nil_object)
+		  if (outcome->block_to_leave == env->blocks->frame)
 		    {
 		      outcome->block_to_leave = NULL;
 		      ret = outcome->return_value;
@@ -18727,7 +18810,7 @@ builtin_do (struct object *list, struct environment *env,
 
       if (!testres)
 	{
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
@@ -18744,7 +18827,7 @@ builtin_do (struct object *list, struct environment *env,
 
   ret = evaluate_body (CDR (CAR (CDR (list))), 0, NULL, env, outcome);
 
-  if (!ret && outcome->block_to_leave == &nil_object)
+  if (!ret && outcome->block_to_leave == env->blocks->frame)
     {
       outcome->block_to_leave = NULL;
       ret = outcome->return_value;
@@ -18758,7 +18841,7 @@ builtin_do (struct object *list, struct environment *env,
 
   env->lex_env_vars_boundary -= bin_num;
 
-  env->blocks = remove_block (env->blocks);
+  env->blocks->frame = remove_block (env->blocks->frame);
 
   free_object_list_structure (incr);
 
@@ -18791,7 +18874,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
       if (!bin)
 	{
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
@@ -18818,7 +18901,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
   if (!testres)
     {
-      if (outcome->block_to_leave == &nil_object)
+      if (outcome->block_to_leave == env->blocks->frame)
 	{
 	  outcome->block_to_leave = NULL;
 	  ret = outcome->return_value;
@@ -18843,7 +18926,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
       if (!bodyres)
 	{
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
@@ -18871,7 +18954,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
 	      if (!res)
 		{
-		  if (outcome->block_to_leave == &nil_object)
+		  if (outcome->block_to_leave == env->blocks->frame)
 		    {
 		      outcome->block_to_leave = NULL;
 		      ret = outcome->return_value;
@@ -18896,7 +18979,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
       if (!testres)
 	{
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
 	      outcome->block_to_leave = NULL;
 	      ret = outcome->return_value;
@@ -18913,7 +18996,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
   ret = evaluate_body (CDR (CAR (CDR (list))), 0, NULL, env, outcome);
 
-  if (!ret && outcome->block_to_leave == &nil_object)
+  if (!ret && outcome->block_to_leave == env->blocks->frame)
     {
       outcome->block_to_leave = NULL;
       ret = outcome->return_value;
@@ -18927,7 +19010,7 @@ builtin_do_star (struct object *list, struct environment *env,
 
   env->lex_env_vars_boundary -= bin_num;
 
-  env->blocks = remove_block (env->blocks);
+  env->blocks->frame = remove_block (env->blocks->frame);
 
   return ret;
 }
@@ -18955,22 +19038,24 @@ builtin_dotimes (struct object *list, struct environment *env,
 
   if (!count)
     {
-      env->blocks = remove_block (env->blocks);
-
-      if (outcome->block_to_leave == &nil_object)
+      if (outcome->block_to_leave == env->blocks->frame)
 	{
+	  env->blocks->frame = remove_block (env->blocks->frame);
 	  outcome->block_to_leave = NULL;
 	  outcome->no_value = outcome->return_no_value;
 	  outcome->other_values = outcome->return_other_values;
 	  return outcome->return_value;
 	}
       else
-	return NULL;
+	{
+	  env->blocks->frame = remove_block (env->blocks->frame);
+	  return NULL;
+	}
     }
 
   if (count->type != TYPE_INTEGER)
     {
-      env->blocks = remove_block (env->blocks);
+      env->blocks->frame = remove_block (env->blocks->frame);
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       decrement_refcount (count);
       return NULL;
@@ -18994,17 +19079,19 @@ builtin_dotimes (struct object *list, struct environment *env,
 
       if (!ret)
 	{
-	  env->blocks = remove_block (env->blocks);
-
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
 	      outcome->block_to_leave = NULL;
 	      outcome->no_value = outcome->return_no_value;
 	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
-	    return NULL;
+	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
+	      return NULL;
+	    }
 	}
 
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
@@ -19025,25 +19112,27 @@ builtin_dotimes (struct object *list, struct environment *env,
 
       if (!ret)
 	{
-	  env->blocks = remove_block (env->blocks);
-
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
 	      outcome->block_to_leave = NULL;
 	      outcome->no_value = outcome->return_no_value;
 	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
-	    return NULL;
+	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
+	      return NULL;
+	    }
 	}
 
-      env->blocks = remove_block (env->blocks);
+      env->blocks->frame = remove_block (env->blocks->frame);
 
       return ret;
     }
 
-  env->blocks = remove_block (env->blocks);
+  env->blocks->frame = remove_block (env->blocks->frame);
 
   return &nil_object;
 }
@@ -19071,22 +19160,24 @@ builtin_dolist (struct object *list, struct environment *env,
 
   if (!lst)
     {
-      env->blocks = remove_block (env->blocks);
-
-      if (outcome->block_to_leave == &nil_object)
+      if (outcome->block_to_leave == env->blocks->frame)
 	{
+	  env->blocks->frame = remove_block (env->blocks->frame);
 	  outcome->block_to_leave = NULL;
 	  outcome->no_value = outcome->return_no_value;
 	  outcome->other_values = outcome->return_other_values;
 	  return outcome->return_value;
 	}
       else
-	return NULL;
+	{
+	  env->blocks->frame = remove_block (env->blocks->frame);
+	  return NULL;
+	}
     }
 
   if (lst->type != TYPE_CONS_PAIR && SYMBOL (lst) != &nil_object)
     {
-      env->blocks = remove_block (env->blocks);
+      env->blocks->frame = remove_block (env->blocks->frame);
       outcome->type = INCORRECT_SYNTAX_IN_LOOP_CONSTRUCT;
       decrement_refcount (lst);
       return NULL;
@@ -19110,18 +19201,21 @@ builtin_dolist (struct object *list, struct environment *env,
 
       if (!ret)
 	{
-	  env->blocks = remove_block (env->blocks);
 	  decrement_refcount (lst);
 
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
 	      outcome->block_to_leave = NULL;
 	      outcome->no_value = outcome->return_no_value;
 	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
-	    return NULL;
+	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
+	      return NULL;
+	    }
 	}
 
       decrement_refcount (ret);
@@ -19145,25 +19239,27 @@ builtin_dolist (struct object *list, struct environment *env,
 
       if (!ret)
 	{
-	  env->blocks = remove_block (env->blocks);
-
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
 	      outcome->block_to_leave = NULL;
 	      outcome->no_value = outcome->return_no_value;
 	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
-	    return NULL;
+	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
+	      return NULL;
+	    }
 	}
 
-      env->blocks = remove_block (env->blocks);
+      env->blocks->frame = remove_block (env->blocks->frame);
 
       return ret;
     }
 
-  env->blocks = remove_block (env->blocks);
+  env->blocks->frame = remove_block (env->blocks->frame);
   decrement_refcount (lst);
   return &nil_object;
 }
@@ -24733,7 +24829,7 @@ builtin_do_symbols (struct object *list, struct environment *env,
 
       if (!IS_PACKAGE_DESIGNATOR (des))
 	{
-	  env->blocks = remove_block (env->blocks);
+	  env->blocks->frame = remove_block (env->blocks->frame);
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
@@ -24742,7 +24838,7 @@ builtin_do_symbols (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  env->blocks = remove_block (env->blocks);
+	  env->blocks->frame = remove_block (env->blocks->frame);
 	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
 	  return NULL;
 	}
@@ -24783,17 +24879,19 @@ builtin_do_symbols (struct object *list, struct environment *env,
 
 	      if (!ret)
 		{
-		  env->blocks = remove_block (env->blocks);
-
-		  if (outcome->block_to_leave == &nil_object)
+		  if (outcome->block_to_leave == env->blocks->frame)
 		    {
+		      env->blocks->frame = remove_block (env->blocks->frame);
 		      outcome->block_to_leave = NULL;
 		      outcome->no_value = outcome->return_no_value;
 		      outcome->other_values = outcome->return_other_values;
 		      return outcome->return_value;
 		    }
 		  else
-		    return NULL;
+		    {
+		      env->blocks->frame = remove_block (env->blocks->frame);
+		      return NULL;
+		    }
 		}
 
 	      rec = rec->next;
@@ -24825,25 +24923,27 @@ builtin_do_symbols (struct object *list, struct environment *env,
 
       if (!ret)
 	{
-	  env->blocks = remove_block (env->blocks);
-
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
 	      outcome->block_to_leave = NULL;
 	      outcome->no_value = outcome->return_no_value;
 	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
-	    return NULL;
+	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
+	      return NULL;
+	    }
 	}
 
-      env->blocks = remove_block (env->blocks);
+      env->blocks->frame = remove_block (env->blocks->frame);
 
       return ret;
     }
 
-  env->blocks = remove_block (env->blocks);
+  env->blocks->frame = remove_block (env->blocks->frame);
   return &nil_object;
 }
 
@@ -24875,7 +24975,7 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
       if (!IS_PACKAGE_DESIGNATOR (des))
 	{
-	  env->blocks = remove_block (env->blocks);
+	  env->blocks->frame = remove_block (env->blocks->frame);
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
@@ -24884,7 +24984,7 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  env->blocks = remove_block (env->blocks);
+	  env->blocks->frame = remove_block (env->blocks->frame);
 	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
 	  return NULL;
 	}
@@ -24922,17 +25022,19 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
 	  if (!ret)
 	    {
-	      env->blocks = remove_block (env->blocks);
-
-	      if (outcome->block_to_leave == &nil_object)
+	      if (outcome->block_to_leave == env->blocks->frame)
 		{
+		  env->blocks->frame = remove_block (env->blocks->frame);
 		  outcome->block_to_leave = NULL;
 		  outcome->no_value = outcome->return_no_value;
 		  outcome->other_values = outcome->return_other_values;
 		  return outcome->return_value;
 		}
 	      else
-		return NULL;
+		{
+		  env->blocks->frame = remove_block (env->blocks->frame);
+		  return NULL;
+		}
 	    }
 
 	  rec = rec->next;
@@ -24953,25 +25055,27 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
       if (!ret)
 	{
-	  env->blocks = remove_block (env->blocks);
-
-	  if (outcome->block_to_leave == &nil_object)
+	  if (outcome->block_to_leave == env->blocks->frame)
 	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
 	      outcome->block_to_leave = NULL;
 	      outcome->no_value = outcome->return_no_value;
 	      outcome->other_values = outcome->return_other_values;
 	      return outcome->return_value;
 	    }
 	  else
-	    return NULL;
+	    {
+	      env->blocks->frame = remove_block (env->blocks->frame);
+	      return NULL;
+	    }
 	}
 
-      env->blocks = remove_block (env->blocks);
+      env->blocks->frame = remove_block (env->blocks->frame);
 
       return ret;
     }
 
-  env->blocks = remove_block (env->blocks);
+  env->blocks->frame = remove_block (env->blocks->frame);
   return &nil_object;
 }
 
@@ -28357,6 +28461,7 @@ evaluate_return_from (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
   int l = list_length (list);
+  struct block *b = env->blocks->frame;
   struct object *ret;
 
   if (!l || l > 2)
@@ -28381,12 +28486,30 @@ evaluate_return_from (struct object *list, struct environment *env,
   else
     ret = &nil_object;
 
-  outcome->block_to_leave = SYMBOL (CAR (list));
+  while (b)
+    {
+      if (SYMBOL (CAR (list)) == b->name)
+	{
+	  outcome->block_to_leave = b;
+	  break;
+	}
+
+      b = b->next;
+    }
+
+  if (!b)
+    {
+      outcome->type = BLOCK_NOT_FOUND;
+      outcome->no_value = 0;
+      outcome->other_values = NULL;
+      return NULL;
+    }
+
   outcome->return_value = ret;
   outcome->return_no_value = outcome->no_value;
   outcome->return_other_values = outcome->other_values;
   outcome->no_value = 0;
-  outcome->other_values = 0;
+  outcome->other_values = NULL;
 
   return NULL;
 }
@@ -28397,6 +28520,7 @@ evaluate_catch (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
   struct object *tag, *ret;
+  struct object_list *c;
 
   if (!list_length (list))
     {
@@ -28410,7 +28534,10 @@ evaluate_catch (struct object *list, struct environment *env,
   if (!tag)
     return NULL;
 
-  env->catches = add_block (tag, env->catches);
+  c = malloc_and_check (sizeof (*c));
+  c->obj = tag;
+  c->next = env->catches;
+  env->catches = c;
 
   ret = evaluate_body (CDR (list), 0, NULL, env, outcome);
 
@@ -28429,7 +28556,10 @@ evaluate_catch (struct object *list, struct environment *env,
     }
 
   decrement_refcount (tag);
-  env->catches = remove_block (env->catches);
+
+  c = env->catches->next;
+  free (env->catches);
+  env->catches = c;
 
   return ret;
 }
@@ -33014,6 +33144,9 @@ free_function_or_macro (struct object *obj)
       free (b);
       b = nx;
     }
+
+  if (obj->value_ptr.function->encl_blocks)
+    remove_block (obj->value_ptr.function->encl_blocks);
 
   free (obj->value_ptr.function);
   free (obj);
