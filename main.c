@@ -407,6 +407,7 @@ outcome_type
 
 
     ABORT_TO_TOP_LEVEL,
+    ABORT_ONE_LEVEL,
 
 
     EVAL_OK,
@@ -10040,6 +10041,11 @@ print_available_restarts (struct environment *env, struct object *str,
       r = r->next;
     }
 
+  if (env->debugging_depth > 1)
+    {
+      printf ("%d: ABORT ONE LEVEL OF DEBUGGING\n", ind++);
+    }
+
   printf ("%d: ABORT\n", ind++);
 
   str->value_ptr.stream->dirty_line = 0;
@@ -10091,7 +10097,16 @@ enter_debugger (struct object *cond, struct environment *env,
 	    {
 	      restind = mpz_get_si (obj->value_ptr.integer);
 
-	      if (restind == restnum-1)
+	      if (env->debugging_depth > 1 && restind == restnum-2)
+		{
+		  printf ("\n");
+		  env->debugging_depth--;
+		  outcome->type = ABORT_ONE_LEVEL;
+		  free (wholel);
+		  decrement_refcount (obj);
+		  return NULL;
+		}
+	      else if (restind == restnum-1)
 		{
 		  printf ("\n");
 		  env->debugging_depth--;
@@ -10164,7 +10179,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  decrement_refcount (obj);
 		  return NULL;
 		}
-	      else
+	      else if (outcome->type != ABORT_ONE_LEVEL)
 		{
 		  print_error (outcome, env);
 		}
