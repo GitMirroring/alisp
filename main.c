@@ -12128,6 +12128,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	      if (!val)
 		{
+		  remove_bindings (*bins, *argsnum);
 		  return 0;
 		}
 	    }
@@ -12157,6 +12158,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (par && par->type == REQUIRED_PARAM)
     {
       outcome->type = TOO_FEW_ARGUMENTS;
+      remove_bindings (*bins, *argsnum);
       return 0;
     }
 
@@ -12164,6 +12166,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       && !found_amp_key && (!par || par->type != REST_PARAM))
     {
       outcome->type = TOO_MANY_ARGUMENTS;
+      remove_bindings (*bins, *argsnum);
       return 0;
     }
 
@@ -12182,6 +12185,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!args)
 	    {
+	      remove_bindings (*bins, *argsnum);
 	      return 0;
 	    }
 	}
@@ -12198,6 +12202,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	{
 	  if (!IS_LIST (arglist))
 	    {
+	      remove_bindings (*bins, *argsnum);
 	      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
 	      return 0;
 	    }
@@ -12207,6 +12212,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 				    par->sub_allow_other_keys, env, outcome,
 				    &subbins, &subargs))
 	    {
+	      remove_bindings (*bins, *argsnum);
 	      return 0;
 	    }
 
@@ -12254,6 +12260,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    {
 	      if (SYMBOL (CDR (as)) == &nil_object)
 		{
+		  remove_bindings (*bins, *argsnum);
 		  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 		  return 0;
 		}
@@ -12274,6 +12281,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (SYMBOL (as) == &nil_object)
 	    {
+	      remove_bindings (*bins, *argsnum);
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 	      return 0;
 	    }
@@ -12303,6 +12311,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (found_unknown_key && !allow_other_keys
       && (!key_allow_other_k || SYMBOL (key_allow_other_k) == &nil_object))
     {
+      remove_bindings (*bins, *argsnum);
       outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
       return 0;
     }
@@ -12324,6 +12333,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!val)
 	    {
+	      env->vars = remove_bindings (env->vars, *argsnum);
+	      env->lex_env_vars_boundary -= *argsnum;
 	      return 0;
 	    }
 
@@ -12361,6 +12372,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	      if (!val)
 		{
+		  env->vars = remove_bindings (env->vars, *argsnum);
+		  env->lex_env_vars_boundary -= *argsnum;
 		  return 0;
 		}
 	    }
@@ -12396,6 +12409,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!val)
 	    {
+	      env->vars = remove_bindings (env->vars, *argsnum);
+	      env->lex_env_vars_boundary -= *argsnum;
 	      return 0;
 	    }
 
