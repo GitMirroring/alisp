@@ -269,6 +269,8 @@ go_tag
 struct
 go_tag_frame
 {
+  int refcount;
+
   struct go_tag *frame;
 
   struct go_tag_frame *next;
@@ -560,7 +562,7 @@ outcome
   struct object *obj;
   struct object *pack;
 
-  struct object *tag_to_jump_to;
+  struct go_tag *tag_to_jump_to;
 
   struct block *block_to_leave;
 
@@ -846,6 +848,8 @@ function
   struct binding *lex_funcs;
 
   struct block *encl_blocks;
+
+  struct go_tag_frame *encl_tags;
 
 
   struct object *body;
@@ -6817,6 +6821,7 @@ alloc_function (void)
   fun->lex_vars = NULL;
   fun->lex_funcs = NULL;
   fun->encl_blocks = NULL;
+  fun->encl_tags = NULL;
   fun->body = NULL;
   fun->flags = 0;
   fun->methods = NULL;
@@ -7726,6 +7731,11 @@ create_function (struct object *lambda_list, struct object *body,
 
   if (f->encl_blocks)
     f->encl_blocks->refcount++;
+
+  f->encl_tags = env->go_tag_stack;
+
+  if (f->encl_tags)
+    f->encl_tags->refcount++;
 
   f->body = body;
   add_reference (fun, body, 1);
@@ -9584,8 +9594,12 @@ add_go_tag_frame (struct go_tag_frame *stack)
 {
   struct go_tag_frame *f = malloc_and_check (sizeof (*f));
 
+  f->refcount = 1;
   f->frame = NULL;
   f->next = stack;
+
+  if (stack)
+    stack->refcount++;
 
   return f;
 }
@@ -9610,14 +9624,22 @@ remove_go_tag_frame (struct go_tag_frame *stack)
   struct go_tag_frame *next = stack->next;
   struct go_tag *n, *t = stack->frame;
 
-  while (t)
-    {
-      n = t->next;
-      free (t);
-      t = n;
-    }
+  stack->refcount--;
 
-  free (stack);
+  if (!stack->refcount)
+    {
+      while (t)
+	{
+	  n = t->next;
+	  free (t);
+	  t = n;
+	}
+
+      free (stack);
+
+      if (next)
+	remove_go_tag_frame (next);
+    }
 
   return next;
 }
@@ -11985,7 +12007,15 @@ evaluate_body (struct object *body, int is_tagbody, struct object *block_name,
 		{
 		  if (is_tagbody && tags)
 		    {
-		      t = find_go_tag (outcome->tag_to_jump_to, env->go_tag_stack);
+		      t = tags;
+
+		      while (t)
+			{
+			  if (outcome->tag_to_jump_to == t)
+			    break;
+
+			  t = t->next;
+			}
 
 		      if (!t)
 			goto cleanup_and_leave;
@@ -12516,6 +12546,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 {
   struct binding *bins, *b;
   struct block_frame *f;
+  struct go_tag_frame *prevf;
   struct object *ret, *ret2, *args = NULL, *body;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
   unsigned isprof = 0, time, evaltime = 0;
@@ -12707,7 +12738,12 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  if (f->frame->next)
 	    f->frame->next->refcount++;
 
+	  prevf = env->go_tag_stack;
+	  env->go_tag_stack = func->value_ptr.function->encl_tags;
+
 	  ret = evaluate_body (body, 0, NULL, env, outcome);
+
+	  env->go_tag_stack = prevf;
 
 	  if (!ret && outcome->block_to_leave
 	      && outcome->block_to_leave == f->frame)
@@ -28433,6 +28469,8 @@ struct object *
 evaluate_go (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
+  struct go_tag_frame *f = env->go_tag_stack;
+
   if (list_length (list) != 1)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
@@ -28445,7 +28483,16 @@ evaluate_go (struct object *list, struct environment *env,
       return NULL;
     }
 
-  outcome->tag_to_jump_to = CAR (list);
+  while (f)
+    {
+      if ((outcome->tag_to_jump_to = find_go_tag (CAR (list), f)))
+	break;
+
+      f = f->next;
+    }
+
+  if (!outcome->tag_to_jump_to)
+    outcome->type = TAG_NOT_FOUND;
 
   return NULL;
 }
@@ -33162,6 +33209,9 @@ free_function_or_macro (struct object *obj)
 
   if (obj->value_ptr.function->encl_blocks)
     remove_block (obj->value_ptr.function->encl_blocks);
+
+  if (obj->value_ptr.function->encl_tags)
+    remove_go_tag_frame (obj->value_ptr.function->encl_tags);
 
   free (obj->value_ptr.function);
   free (obj);
