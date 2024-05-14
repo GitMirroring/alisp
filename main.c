@@ -28476,7 +28476,7 @@ evaluate_return_from (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
   int l = list_length (list);
-  struct block *b = env->blocks->frame;
+  struct block *b = env->blocks ? env->blocks->frame : NULL;
   struct object *ret;
 
   if (!l || l > 2)
