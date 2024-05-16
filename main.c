@@ -173,6 +173,9 @@ typedef long fixnum;
 					   | TYPE_BYTESPEC | TYPE_STRING \
 					   | TYPE_CHARACTER | TYPE_BITARRAY)*/
 
+#define IS_SELF_EVALUATING(obj) ((obj)->type != TYPE_BACKQUOTE	\
+				 && !IS_SYMBOL (obj)			\
+				 && (obj)->type != TYPE_CONS_PAIR)
 
 
 #define CLEAR_READER_STATUS(out)		\
@@ -607,6 +610,18 @@ string
 };
 
 
+enum
+stepping_flags
+  {
+    NO_STEPPING,
+
+    STEP_INSIDE_FORM,
+    STEP_OVER_FORM,
+
+    STEPPING_OVER_FORM = 4
+  };
+
+
 struct
 profiling_record
 {
@@ -652,6 +667,9 @@ environment
   struct object_list *traced_funcs;
 
   int debugging_depth;
+
+  enum stepping_flags stepping_flags;
+  struct object *last_result, *next_eval;
 
   int is_profiling;
   struct profiling_record *profiling_data;
@@ -1783,8 +1801,8 @@ struct object *create_room_pair (char *sym, int val, struct environment *env);
 void print_bindings_in_reverse (struct binding *bins, int num,
 				struct environment *env, struct object *str);
 
-void print_available_restarts (struct environment *env, struct object *str,
-			       int *restnum);
+void print_available_restarts (struct environment *env, struct object *str);
+void print_stepping_help (void);
 struct object *enter_debugger (struct object *cond, struct environment *env,
 			       struct outcome *outcome);
 
@@ -3079,6 +3097,14 @@ main (int argc, char *argv [])
 
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
+
+	  env.stepping_flags = 0;
+
+	  if (env.last_result)
+	    {
+	      decrement_refcount (env.last_result);
+	      env.last_result = NULL;
+	    }
 
 	  if (input_left && input_left_s > 0)
 	    obj = read_object_interactively_continued (input_left, input_left_s,
@@ -10044,14 +10070,14 @@ print_bindings_in_reverse (struct binding *bins, int num,
 
 
 void
-print_available_restarts (struct environment *env, struct object *str,
-			  int *restnum)
+print_available_restarts (struct environment *env, struct object *str)
 {
   struct restart_binding *r = env->restarts;
   int ind = 0;
 
-  printf ("available restarts (from most recently established):\n");
-  printf ("(select by number)\n");
+  printf ("available restarts (from most recently established):\n"
+	  "(select by number)\n"
+	  "(type h or ? for help about stepping)\n");
 
   while (r)
     {
@@ -10071,8 +10097,17 @@ print_available_restarts (struct environment *env, struct object *str,
   printf ("%d: ABORT\n", ind++);
 
   str->value_ptr.stream->dirty_line = 0;
+}
 
-  *restnum = ind;
+
+void
+print_stepping_help (void)
+{
+  printf ("Debugger help:\n\n"
+	  " h or ?  Print this help\n"
+	  " c       Resume execution\n"
+	  " n       Step over next form\n"
+	  " s       Step inside next form\n\n");
 }
 
 
@@ -10080,11 +10115,10 @@ struct object *
 enter_debugger (struct object *cond, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *std_out = inspect_variable (env->std_out_sym, env), *obj,
-    *result;
+  struct object *obj, *result;
   struct object_list *vals;
-  struct restart_binding *r;
-  int end_repl = 0, restnum, restind;
+  struct restart_binding *r = env->restarts;
+  int end_repl = 0, restnum = 1, restind;
   const char *input_left;
   char *wholel = NULL;
   size_t input_left_s;
@@ -10092,18 +10126,47 @@ enter_debugger (struct object *cond, struct environment *env,
 
   env->debugging_depth++;
 
+  while (r)
+    {
+      restnum++;
+      r = r->next;
+    }
 
-  fresh_line (std_out->value_ptr.stream);
+  if (env->debugging_depth > 1)
+    restnum++;
 
-  printf ("\nentered debugger (with condition ");
-  print_object (cond, env, std_out->value_ptr.stream);
-  printf (")\n\n");
+  fresh_line (env->c_stdout->value_ptr.stream);
 
-  std_out->value_ptr.stream->dirty_line = 0;
-  print_available_restarts (env, std_out, &restnum);
+  if (env->stepping_flags)
+    {
+      if (env->last_result)
+	{
+	  printf (" -> ");
+	  print_object (env->last_result, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n\n");
+	  decrement_refcount (env->last_result);
+	  env->last_result = NULL;
+	}
 
-  printf ("\n");
+      print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
+      printf ("\n");
+    }
+  else if (cond)
+    {
+      printf ("\nentered debugger (with condition ");
+      print_object (cond, env, env->c_stdout->value_ptr.stream);
+      printf (")\n\n");
+    }
+  else
+    printf ("\nentered debugger\n\n");
 
+  if (!env->stepping_flags)
+    {
+      print_available_restarts (env, env->c_stdout);
+      printf ("\n");
+    }
+
+  env->c_stdout->value_ptr.stream->dirty_line = 0;
 
   while (!end_repl)
     {
@@ -10151,8 +10214,37 @@ enter_debugger (struct object *cond, struct environment *env,
 					  env, outcome);
 		}
 	    }
+	  else if (IS_SYMBOL (obj)
+		   && (symbol_equals (obj, "H", env)
+		       || symbol_equals (obj, "?", env)
+		       || symbol_equals (obj, "C", env)
+		       || symbol_equals (obj, "N", env)
+		       || symbol_equals (obj, "S", env)))
+	    {
+	      if (symbol_equals (obj, "H", env) || symbol_equals (obj, "?", env))
+		{
+		  print_stepping_help ();
+		  result = &nil_object;
+		  outcome->no_value = 1;
+		}
+	      else
+		{
+		  if (symbol_equals (obj, "C", env))
+		    env->stepping_flags = 0;
+		  else if (symbol_equals (obj, "N", env))
+		    env->stepping_flags = STEP_OVER_FORM;
+		  else if (symbol_equals (obj, "S", env))
+		    env->stepping_flags = STEP_INSIDE_FORM;
+
+		  env->debugging_depth--;
+		  free (wholel);
+		  decrement_refcount (obj);
+		  return &nil_object;
+		}
+	    }
 	  else
 	    {
+	      env->stepping_flags = 0;
 	      result = evaluate_object (obj, env, outcome);
 	    }
 
@@ -10179,15 +10271,17 @@ enter_debugger (struct object *cond, struct environment *env,
 		       "TYPE-ERROR", env))
 		    {
 		      print_object (outcome->condition->value_ptr.condition->
-				    fields->value, env, std_out->value_ptr.stream);
-		      fresh_line (std_out->value_ptr.stream);
+				    fields->value, env,
+				    env->c_stdout->value_ptr.stream);
+		      fresh_line (env->c_stdout->value_ptr.stream);
 		    }
 		  else
 		    {
 		      printf ("unhandled condition of type ");
 		      print_object (outcome->condition->value_ptr.condition->
-				    class_name, env, std_out->value_ptr.stream);
-		      fresh_line (std_out->value_ptr.stream);
+				    class_name, env,
+				    env->c_stdout->value_ptr.stream);
+		      fresh_line (env->c_stdout->value_ptr.stream);
 		    }
 
 		  decrement_refcount (outcome->condition);
@@ -10212,19 +10306,19 @@ enter_debugger (struct object *cond, struct environment *env,
 	    }
 	  else
 	    {
-	      fresh_line (std_out->value_ptr.stream);
+	      fresh_line (env->c_stdout->value_ptr.stream);
 
-	      print_object (result, env, std_out->value_ptr.stream);
+	      print_object (result, env, env->c_stdout->value_ptr.stream);
 	      printf ("\n");
-	      std_out->value_ptr.stream->dirty_line = 0;
+	      env->c_stdout->value_ptr.stream->dirty_line = 0;
 
 	      vals = outcome->other_values;
 
 	      while (vals)
 		{
-		  print_object (vals->obj, env, std_out->value_ptr.stream);
+		  print_object (vals->obj, env, env->c_stdout->value_ptr.stream);
 		  printf ("\n");
-		  std_out->value_ptr.stream->dirty_line = 0;
+		  env->c_stdout->value_ptr.stream->dirty_line = 0;
 		  vals = vals->next;
 		}
 
@@ -12563,9 +12657,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct block_frame *f;
   struct go_tag_frame *prevf;
   struct object *ret, *ret2, *args = NULL, *body;
-  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
+    stepping_over_this_func = (env->stepping_flags & STEP_OVER_FORM)
+    && !(env->stepping_flags & STEPPING_OVER_FORM);
   unsigned isprof = 0, time, evaltime = 0;
 
+
+  if (stepping_over_this_func)
+    env->stepping_flags = STEP_OVER_FORM | STEPPING_OVER_FORM;
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -12579,7 +12678,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       else
 	args = arglist;
 
-      if (func->value_ptr.function->flags & TRACED_FUNCTION)
+      if (func->value_ptr.function->flags & TRACED_FUNCTION
+	  || env->stepping_flags & STEP_INSIDE_FORM)
 	{
 	  printf ("calling builtin ");
 	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
@@ -12606,7 +12706,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 			      evaltime);
 	}
 
-      if ((func->value_ptr.function->flags & TRACED_FUNCTION) && ret)
+      if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+		  || (env->stepping_flags
+		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  printf ("builtin ");
 	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
@@ -12619,6 +12721,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       if (eval_args)
 	decrement_refcount (args);
+
+      if (stepping_over_this_func
+	  && (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM)))
+	{
+	  env->last_result = ret;
+	  env->next_eval = NULL;
+	  env->stepping_flags = STEP_OVER_FORM;
+	}
 
       return ret;
     }
@@ -12717,7 +12827,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->lex_env_vars_boundary += argsnum;
 
 
-      if (func->value_ptr.function->flags & TRACED_FUNCTION)
+      if (func->value_ptr.function->flags & TRACED_FUNCTION
+	  || env->stepping_flags & STEP_INSIDE_FORM)
 	{
 	  printf ("calling ");
 	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
@@ -12785,7 +12896,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  time = clock () - time;
 	}
 
-      if ((func->value_ptr.function->flags & TRACED_FUNCTION) && ret)
+      if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+		  || (env->stepping_flags
+		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
 			value_ptr.stream);
@@ -12842,6 +12955,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       add_profiling_data (&env->profiling_data,
 			  SYMBOL (func->value_ptr.function->name), time,
 			  evaltime);
+    }
+
+  if (stepping_over_this_func
+      && (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM)))
+    {
+      env->last_result = ret;
+      env->next_eval = NULL;
+      env->stepping_flags = STEP_OVER_FORM;
     }
 
 
@@ -13708,10 +13829,17 @@ evaluate_object (struct object *obj, struct environment *env,
   struct binding *bind;
   struct object *sym, *ret;
 
+  if (env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM)
+      && !IS_SELF_EVALUATING (obj))
+    {
+      env->next_eval = obj;
+      enter_debugger (NULL, env, outcome);
+    }
+
   if (obj->type == TYPE_BACKQUOTE)
     {
-      return apply_backquote (obj->value_ptr.next, 1, env, outcome, 1, NULL,
-			      NULL);
+      ret = apply_backquote (obj->value_ptr.next, 1, env, outcome, 1, NULL,
+			     NULL);
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
@@ -13729,8 +13857,6 @@ evaluate_object (struct object *obj, struct environment *env,
 	      outcome->obj = sym;
 	      return NULL;
 	    }
-
-	  return ret;
 	}
       else
 	{
@@ -13741,7 +13867,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	  if (bind)
 	    {
 	      increment_refcount (bind->obj);
-	      return bind->obj;
+	      ret = bind->obj;
 	    }
 	  else if (sym->value_ptr.symbol->value_dyn_bins_num
 		   && !env->only_lexical)
@@ -13749,7 +13875,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	      bind = find_binding (sym->value_ptr.symbol, env->vars,
 				   DYNAMIC_BINDING, -1, 0);
 	      increment_refcount (bind->obj);
-	      return bind->obj;
+	      ret = bind->obj;
 	    }
 	  else
 	    {
@@ -13762,13 +13888,23 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else if (obj->type == TYPE_CONS_PAIR)
     {
-      return evaluate_list (obj, env, outcome);
+      ret = evaluate_list (obj, env, outcome);
     }
   else
     {
       increment_refcount (obj);
       return obj;
     }
+
+  if (env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
+    {
+      if (ret)
+	increment_refcount (ret);
+
+      env->last_result = ret;
+    }
+
+  return ret;
 }
 
 
