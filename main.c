@@ -25829,7 +25829,7 @@ inspect_variable (struct object *sym, struct environment *env)
   struct symbol *s = sym->value_ptr.symbol;
   struct binding *b;
 
-  if (s->is_const || !s->value_dyn_bins_num)
+  if (s->is_const)
     {
       return s->value_cell;
     }
@@ -25841,7 +25841,7 @@ inspect_variable (struct object *sym, struct environment *env)
       return b->obj;
     }
 
-  return NULL;
+  return s->value_cell;
 }
 
 
