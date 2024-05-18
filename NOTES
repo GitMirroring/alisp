@@ -82,10 +82,10 @@ package.
 - the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
   legal information
 
-- the function AL-DUMP-BINDINGS returns a list with all the live bindings,
-  starting with the most recently established.  Each binding is a list
-  containing the symbol, the value, the type of the binding (:LEXICAL or
-  :SPECIAL); for lexical bindings, there's also a fourth element of T if the
+- the function AL-DUMP-BINDINGS returns a list with all the non-global live
+  variable bindings, starting with the most recently established.  Each binding
+  is a list containing the symbol, the value, the type of the binding (:LEXICAL
+  or :SPECIAL); for lexical bindings, there's also a fourth element of T if the
   binding is in scope at that moment.  This function is intended to be called in
   the debugger, but works everywhere
 
@@ -199,7 +199,7 @@ The paper contains a proof of termination and correctness.  I don't know of
 other implementations using this, so this is somewhat experimental.
 
 Constants defined with DEFCONSTANT are skipped when doing traversals of the
-reference graph, so using constants has true performance benefits.
+reference graph, so defining constants has true performance benefits.
 
 Packages are also skipped in reference counting.
 
@@ -222,13 +222,31 @@ calling AL-CLEAR-PROFILING clears all data.
 
 AL-REPORT-PROFILING returns a list in which each element is a list which
 contains a name, a counter of all the times that function or macro has been
-called, and all the time spent in that function or macro.  For functions, the
-time doesn't include evaluation of arguments.  For macros, the time includes
-both expansion and evaluation of result.
+called, and all the time spent in that function or macro (including the time
+spent in all descendants in the call graph).  For functions, the time doesn't
+include evaluation of arguments.  For macros, the time includes both expansion
+and evaluation of result.
 
 The profiler has a few limitations: generic functions, structure constructor and
 accessors, condition readers, functions obtained as macro functions and macros
 defined with macro functions are not tracked.
+
+
+
+__Debugging__
+
+Stepping is always available in the debugger, no matter if you enter it with
+BREAK or in any other way.  The following commands are available:
+
+- N executes the next form and then breaks again
+
+- S steps inside the next form and breaks; for function forms, it will first
+  step in the argument forms; for unexpanded macro forms, it will first step in
+  the macro expansion process, then in the resulting form
+
+- C continues execution at normal speed
+
+- H or ? display help.
 
 
 
