@@ -2054,7 +2054,10 @@
 
 (defmacro with-open-file ((str fn &rest opts) &body forms)
   `(let ((,str (open ,fn ,@opts)))
-     ,@forms))
+     (unwind-protect
+	  (progn
+	    ,@forms)
+       (close ,str))))
 
 
 
