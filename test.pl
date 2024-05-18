@@ -1483,6 +1483,8 @@ make_test ("(restart-case (values 1 2) (rest1 (x y) 0) (rest2 (x) 10))", "1\n2")
 make_test ("(restart-case (invoke-restart 'rest2 0 1) (rest1 (x) 10) (rest2 (x y) (values x y)) (rest2 (x) 10))", "0\n1");
 make_test ("(restart-case (invoke-restart 'rest1 0 1) (rest1 (x y)) (rest1 (x y) 10))", "NIL");
 make_test ("(restart-bind ((rest1 (lambda (x) 20))) (restart-case (invoke-restart 'rest2 0 1) (rest2 (x y) (invoke-restart 'rest1 40)) (rest1 (x y) 30)))", "20");
+make_test ("(with-simple-restart (continue \"\") (values 1 2))", "1\n2");
+make_test ("(with-simple-restart (continue \"\") 1 2 (invoke-restart 'continue))", "NIL\nT");
 make_test ("(block test (unwind-protect 0 (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
