@@ -29009,6 +29009,7 @@ evaluate_restart_bind (struct object *list, struct environment *env,
 	{
 	  b->next = last->next;
 	  last->next = b;
+	  last = b;
 	}
 
       restarts++;
