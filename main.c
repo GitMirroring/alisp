@@ -2751,6 +2751,8 @@ struct object *builtin_untrace
 
 struct object *builtin_invoke_debugger
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_step
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_al_loopy_destructuring_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3585,6 +3587,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("UNTRACE", env, builtin_untrace, TYPE_MACRO, NULL, 0);
   add_builtin_form ("INVOKE-DEBUGGER", env, builtin_invoke_debugger,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("STEP", env, builtin_step, TYPE_MACRO, NULL, 0);
   add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SUBTYPEP", env, builtin_subtypep, TYPE_FUNCTION, NULL, 0);
@@ -29570,6 +29573,28 @@ builtin_invoke_debugger (struct object *list, struct environment *env,
     }
 
   return enter_debugger (CAR (list), env, outcome);
+}
+
+
+struct object *
+builtin_step (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  env->stepping_flags = STEP_INSIDE_FORM;
+
+  ret = evaluate_object (CAR (list), env, outcome);
+
+  env->stepping_flags = 0;
+
+  return ret;
 }
 
 

@@ -2722,6 +2722,13 @@
 
 
 
+(defun break (&optional form &rest args)
+  (with-simple-restart (continue "")
+    (invoke-debugger (make-condition 'simple-condition)))
+  nil)
+
+
+
 (defun abort (&optional cond)
   (invoke-restart 'abort))
 
@@ -2787,7 +2794,7 @@
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  write-to-string prin1-to-string princ-to-string do-all-symbols loop
 	  format encode-universal-time with-standard-io-syntax handler-case
-	  restart-case with-simple-restart find-restart abort continue))
+	  restart-case with-simple-restart find-restart break abort continue))
 
 
 
