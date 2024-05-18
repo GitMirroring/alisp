@@ -248,6 +248,10 @@ BREAK or in any other way.  The following commands are available:
 
 - H or ? display help.
 
+When the debugger is entered due to stepping, the result of evaluating the last
+form is displayed preceded by " -> ", then a blank line, then the next form is
+showed.
+
 
 
 __Minor details__
