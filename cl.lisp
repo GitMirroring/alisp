@@ -2681,6 +2681,33 @@
 
 
 
+(defmacro restart-case (form &rest clauses)
+  (let (restarts
+	tail
+	(blockname (gensym))
+	(argssym (gensym))
+	tagsyms)
+    (mapcar (lambda (cl)
+	      (let ((tag (gensym)))
+		(setq tagsyms (cons tag tagsyms))
+		(setq restarts (cons `(,(car cl) (lambda (&rest args)
+						   (setq ,argssym args)
+						   (go ,tag))) restarts))
+		(setq tail (list* tag
+				  `(return-from ,blockname
+				     (apply #'(lambda ,(cadr cl) . ,(cddr cl)) ,argssym))
+				  tail))))
+	    clauses)
+    `(let (,argssym)
+       (block ,blockname
+	 (tagbody
+	    (restart-bind
+		,(reverse restarts)
+	      (return-from ,blockname ,form))
+	    ,@tail)))))
+
+
+
 (defun abort (&optional cond)
   (invoke-restart 'abort))
 
@@ -2740,7 +2767,7 @@
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  write-to-string prin1-to-string princ-to-string do-all-symbols loop
 	  format encode-universal-time with-standard-io-syntax handler-case
-	  abort))
+	  restart-case abort))
 
 
 
