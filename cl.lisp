@@ -2715,8 +2715,21 @@
 
 
 
+(defun find-restart (id &optional cond)
+  (let ((rs (compute-restarts)))
+    (or (find id rs :key #'car)
+	(find id rs :key #'cdr))))
+
+
+
 (defun abort (&optional cond)
   (invoke-restart 'abort))
+
+
+
+(defun continue (&optional cond)
+  (let ((r (find-restart 'continue)))
+    (if r (invoke-restart r))))
 
 
 
@@ -2774,7 +2787,7 @@
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  write-to-string prin1-to-string princ-to-string do-all-symbols loop
 	  format encode-universal-time with-standard-io-syntax handler-case
-	  restart-case with-simple-restart abort))
+	  restart-case with-simple-restart find-restart abort continue))
 
 
 

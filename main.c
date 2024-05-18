@@ -2726,6 +2726,8 @@ struct object *evaluate_handler_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_restart_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_compute_restarts
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_invoke_restart
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_unwind_protect
@@ -3566,6 +3568,8 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("RESTART-BIND", env, evaluate_restart_bind, TYPE_MACRO, NULL,
 		    0);
+  add_builtin_form ("COMPUTE-RESTARTS", env, builtin_compute_restarts,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("INVOKE-RESTART", env, builtin_invoke_restart, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
@@ -29027,6 +29031,42 @@ evaluate_restart_bind (struct object *list, struct environment *env,
       free (env->restarts);
       env->restarts = b;
     }
+
+  return ret;
+}
+
+
+struct object *
+builtin_compute_restarts (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct restart_binding *r = env->restarts;
+  struct object *ret = &nil_object, *cons;
+
+  if (list_length (list) > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  while (r)
+    {
+      if (ret != &nil_object)
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      else
+	ret = cons = alloc_empty_cons_pair ();
+
+      cons->value_ptr.cons_pair->car = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->car = r->name;
+      add_reference (CAR (cons), CAR (CAR (cons)), 0);
+      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr = r->restart;
+      add_reference (CAR (cons), CDR (CAR (cons)), 1);
+
+      r = r->next;
+    }
+
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
 }
