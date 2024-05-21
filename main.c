@@ -464,6 +464,7 @@ outcome_type
     COULD_NOT_SEEK_FILE,
     COULD_NOT_TELL_FILE,
     ERROR_READING_FILE,
+    ERROR_DURING_OUTPUT,
     INVALID_TYPE_SPECIFIER,
     UNKNOWN_TYPE,
     CLASS_NOT_FOUND,
@@ -696,8 +697,8 @@ environment
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
-    *print_radix_sym, *print_array_sym, *print_gensym_sym, *read_base_sym,
-    *read_suppress_sym;
+    *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_pretty_sym,
+    *print_pprint_dispatch_sym, *read_base_sym, *read_suppress_sym;
 
   struct object *abort_sym;
 };
@@ -2840,6 +2841,9 @@ int print_method (const struct object *obj, struct environment *env,
 int print_object (const struct object *obj, struct environment *env,
 		  struct stream *str);
 
+int print_object_nicely (struct object *obj, struct environment *env,
+			 struct outcome *outcome, struct object *str);
+
 void print_error (struct outcome *err, struct environment *env);
 
 void mark_as_constant (struct object *obj);
@@ -3968,14 +3972,19 @@ add_standard_definitions (struct environment *env)
   env->print_radix_sym = define_variable ("*PRINT-RADIX*", &nil_object, env);
   env->print_array_sym = define_variable ("*PRINT-ARRAY*", &t_object, env);
   env->print_gensym_sym = define_variable ("*PRINT-GENSYM*", &t_object, env);
+  env->print_pretty_sym = define_variable ("*PRINT-PRETTY*", &nil_object, env);
+  env->print_pprint_dispatch_sym = define_variable ("*PRINT-PPRINT-DISPATCH*",
+						    &nil_object, env);
 
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
   env->read_suppress_sym = define_variable ("*READ-SUPPRESS*", &nil_object, env);
 
-  env->package_sym->value_ptr.symbol->value_cell = cluser_package;
-
   env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
+
+
+
+  env->package_sym->value_ptr.symbol->value_cell = cluser_package;
 
   add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
 		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
@@ -4002,6 +4011,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
+
+  define_variable ("*AL-PPRINT-DEPTH*", create_integer_from_long (0), env);
 }
 
 
@@ -17860,8 +17871,9 @@ struct object *
 builtin_write (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *obj, *str = NULL, *allow_other_keys = NULL;
-  int found_unknown_key = 0;
+  struct object *obj, *str = NULL, *allow_other_keys = NULL,
+    *ppretty = inspect_variable (env->print_pretty_sym, env);
+  int found_unknown_key = 0, ret;
 
   if (list_length (list) < 1)
     {
@@ -17940,7 +17952,18 @@ builtin_write (struct object *list, struct environment *env,
       return NULL;
     }
 
-  print_object (obj, env, str->value_ptr.stream);
+  if (SYMBOL (ppretty) == &nil_object)
+    {
+      ret = print_object (obj, env, str->value_ptr.stream);
+
+      if (ret < 0)
+	outcome->type = ERROR_DURING_OUTPUT;
+    }
+  else
+    ret = print_object_nicely (obj, env, outcome, str);
+
+  if (ret < 0)
+    return NULL;
 
   increment_refcount (obj);
   return obj;
@@ -31080,9 +31103,12 @@ print_symbol (const struct object *sym, struct environment *env,
 			   home->value_ptr.package->name_len, pesc, str);
 
 	  if (is_external_in_home_package (sym))
-	    write_to_stream (str, ":", 1);
-	  else
-	    write_to_stream (str, "::", 2);
+	    {
+	      if (write_to_stream (str, ":", 1) < 0)
+		return -1;
+	    }
+	  else if (write_to_stream (str, "::", 2) < 0)
+	    return -1;
 	}
     }
 
@@ -31124,11 +31150,14 @@ print_bignum (const mpz_t z, struct environment *env, struct stream *str)
   ret = write_to_stream (str, out, strlen (out));
   free (out);
 
+  if (ret < 0)
+    return -1;
+
   if (rad != &nil_object && base != 8 && base != 16
       && write_to_stream (str, ".", 1) < 0)
     return -1;
 
-  return ret;
+  return 0;
 }
 
 
@@ -31530,7 +31559,7 @@ print_method (const struct object *obj, struct environment *env,
       < 0
       || print_symbol (obj->value_ptr.method->generic_func->
 		       value_ptr.function->name, env, str) < 0
-      || write_to_stream (str, ">", 1))
+      || write_to_stream (str, ">", 1) < 0)
       return -1;
 
   return 0;
@@ -31736,7 +31765,7 @@ print_object (const struct object *obj, struct environment *env,
 	  if (write_to_stream (str, "#<STRUCTURE CLASS ",
 			       strlen ("#<STRUCTURE CLASS ")) < 0
 	      || print_symbol (obj->value_ptr.structure_class->name, env, str)
-	      || write_to_stream (str, ">", 1))
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
@@ -31746,7 +31775,7 @@ print_object (const struct object *obj, struct environment *env,
 	  if (write_to_stream (str, "#<STRUCTURE OF CLASS ",
 			       strlen ("#<STRUCTURE OF CLASS ")) < 0
 	      || print_symbol (obj->value_ptr.structure->class_name, env, str)
-	      || write_to_stream (str, ">", 1))
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
@@ -31756,7 +31785,7 @@ print_object (const struct object *obj, struct environment *env,
 	  if (write_to_stream (str, "#<STANDARD-CLASS ",
 			       strlen ("#<STANDARD-CLASS ")) < 0
 	      || print_symbol (obj->value_ptr.standard_class->name, env, str)
-	      || write_to_stream (str, ">", 1))
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
@@ -31776,7 +31805,7 @@ print_object (const struct object *obj, struct environment *env,
 	  if (write_to_stream (str, "#<CONDITION-CLASS ",
 			       strlen ("#<CONDITION-CLASS ")) < 0
 	      || print_symbol (obj->value_ptr.condition_class->name, env, str)
-	      || write_to_stream (str, ">", 1))
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
@@ -31786,7 +31815,7 @@ print_object (const struct object *obj, struct environment *env,
 	  if (write_to_stream (str, "#<CONDITION OF CLASS ",
 			       strlen ("#<CONDITION OF CLASS ")) < 0
 	      || print_symbol (obj->value_ptr.condition->class_name, env, str)
-	      || write_to_stream (str, ">", 1))
+	      || write_to_stream (str, ">", 1) < 0)
 	    return -1;
 
 	  return 0;
@@ -31795,6 +31824,75 @@ print_object (const struct object *obj, struct environment *env,
 	return write_to_stream (str, "#<print not implemented>",
 				strlen ("#<print not implemented>"));
     }
+}
+
+
+int
+print_object_nicely (struct object *obj, struct environment *env,
+		     struct outcome *outcome, struct object *str)
+{
+  struct object *disptbl = inspect_variable (env->print_pprint_dispatch_sym, env),
+    *func = NULL, *priority, *args, *res;
+  int ret;
+
+  if (IS_LIST (disptbl))
+    {
+      while (SYMBOL (disptbl) != &nil_object)
+	{
+	  if (CAR (disptbl)->type == TYPE_CONS_PAIR
+	      && list_length (CAR (disptbl)) == 3)
+	    {
+	      ret = check_type (obj, CAR (CAR (disptbl)), env, outcome);
+
+	      if (ret == -1)
+		return -1;
+
+	      if (ret == 1)
+		{
+		  if (!func
+		      || compare_two_numbers (priority,
+					      CAR (CDR (CDR (CAR (disptbl)))))
+		      > 0)
+		    {
+		      func = CAR (CDR (CAR (disptbl)));
+		      priority = CAR (CDR (CDR (CAR (disptbl))));
+		    }
+		}
+	    }
+
+	  disptbl = CDR (disptbl);
+	}
+    }
+
+  if (func)
+    {
+      args = alloc_empty_list (2);
+
+      args->value_ptr.cons_pair->car = str;
+      add_reference (args, str, 0);
+
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = obj;
+      add_reference (CDR (args), obj, 0);
+
+      res = call_function (func, args, 0, 0, 1, 0, 0, env, outcome);
+      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+      decrement_refcount (args);
+
+      if (!res)
+	return -1;
+
+      decrement_refcount (res);
+
+      return 0;
+    }
+
+  ret = print_object (obj, env, str->value_ptr.stream);
+
+  if (ret < 0)
+    outcome->type = ERROR_DURING_OUTPUT;
+
+  return ret;
 }
 
 
@@ -32129,6 +32227,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == ERROR_READING_FILE)
     {
       printf ("file error: could not read file\n");
+    }
+  else if (err->type == ERROR_DURING_OUTPUT)
+    {
+      printf ("eval error: there was an error during output\n");
     }
   else if (err->type == INVALID_TYPE_SPECIFIER)
     {

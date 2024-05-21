@@ -2116,6 +2116,45 @@
     (get-output-stream-string out)))
 
 
+
+(defun pprint (obj &optional (out *standard-output*))
+  (terpri out)
+  (let ((*print-pretty* t))
+    (prin1 obj out))
+  (values))
+
+
+(defun indent (str n)
+  (dotimes (i n)
+    (write-string "  " str)))
+
+(defun print-object-nicely (str obj)
+  (indent str cl-user::*al-pprint-depth*)
+  (let (*print-pretty*)
+    (if (atom obj)
+	(format str "~a" obj)
+	(format str "(~a" (car obj))))
+  (when (consp obj)
+    (incf cl-user::*al-pprint-depth*)
+    (setq obj (cdr obj))
+    (unless obj
+      (let (*print-pretty*)
+	(format str ")")))
+    (dotimes (i (length obj))
+      (if (atom (car obj))
+	  (let (*print-pretty*)
+	    (format str " ~a" (car obj)))
+	  (format str "~%~a" (car obj)))
+      (unless (cdr obj)
+	(let (*print-pretty*)
+	  (format str ")")))
+      (setq obj (cdr obj)))
+    (decf cl-user::*al-pprint-depth*)))
+
+(setq *print-pprint-dispatch* (cons (list 't #'print-object-nicely 0) *print-pprint-dispatch*))
+
+
+
 (defmacro do-all-symbols (varres &body body)
   (let ((packsym (gensym)))
     `(progn
@@ -2795,8 +2834,8 @@
 	  file-namestring directory-namestring host-namestring enough-namestring
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
-	  write-to-string prin1-to-string princ-to-string do-all-symbols loop
-	  format encode-universal-time with-standard-io-syntax handler-case
+	  write-to-string prin1-to-string princ-to-string pprint do-all-symbols
+	  loop format encode-universal-time with-standard-io-syntax handler-case
 	  restart-case with-simple-restart find-restart break abort continue))
 
 
