@@ -3074,6 +3074,7 @@ main (int argc, char *argv [])
 	    }
 	  else if (eval_out.no_value)
 	    {
+	      fresh_line (c_stdout->value_ptr.stream);
 	      eval_out.no_value = 0;
 	    }
 	  else
@@ -10309,6 +10310,7 @@ enter_debugger (struct object *cond, struct environment *env,
 	    }
 	  else if (outcome->no_value)
 	    {
+	      fresh_line (env->c_stdout->value_ptr.stream);
 	      outcome->no_value = 0;
 	    }
 	  else
