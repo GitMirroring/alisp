@@ -1113,6 +1113,10 @@ make_test ("(compile 'testfun6)", "TESTFUN6\nNIL\nNIL");
 make_test ("(testfun6)", "NIL");
 make_test ("(write \"\")", "\"\"\n\"\"");
 make_test ("(write 'hello :stream *error-output*)", "HELLO\nHELLO");
+make_test ("(defun f nil (write 0) (write 1))", "F");
+make_test ("(f)", "01\n1");
+make_test ("(defun f nil (write 0) (values))", "F");
+make_test ("(f)", "0");
 make_test ("(let ((*standard-output* *standard-output*) (var (write 0))))", "0\nNIL");
 make_test ("(write-string \"aaa\\n\")", "aaan\n\"aaan\"");
 make_test ("(write-string \"\n" .
