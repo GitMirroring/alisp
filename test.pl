@@ -255,6 +255,8 @@ make_test ("(nconc (list 'a 'b 'c) NIL (list 'd 'e) NIL 'f)", "(A B C D E . F)")
 make_test ("(let ((a 2)) a)", "2");
 make_test ("(let ((x 0)) x x x)", "0");
 make_test ("(let ((a)) a)", "NIL");
+make_test ("(defparameter var20 0)", "VAR20");
+make_test ("(let ((var20 0) (j (setq var20 1))))", "NIL");
 make_test ("(let () (declare (ignore a b (function c)) (ignorable x (function y))) (declare (ignore)) (+ 1 2))", "3");
 make_test ("(let () (declare (inline a b (setf c)) (notinline x (setf y))) (+ 1 2))", "3");
 make_test ("(let () (declare (optimize safety speed (compilation-speed 0) (debug 3))) (+ 1 2))", "3");
