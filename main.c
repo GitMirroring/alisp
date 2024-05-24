@@ -2552,6 +2552,8 @@ struct object *builtin_do_external_symbols (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
 
+struct object *builtin_time (struct object *list, struct environment *env,
+			     struct outcome *outcome);
 struct object *builtin_get_internal_run_time (struct object *list,
 					      struct environment *env,
 					      struct outcome *outcome);
@@ -3685,6 +3687,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DO-EXTERNAL-SYMBOLS", env, builtin_do_external_symbols,
 		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("TIME", env, builtin_time, TYPE_MACRO, NULL, 0);
   add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("GET-DECODED-TIME", env, builtin_get_decoded_time,
@@ -25335,6 +25338,34 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
   env->blocks->frame = remove_block (env->blocks->frame);
   return &nil_object;
+}
+
+
+struct object *
+builtin_time (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  struct object *ret;
+  clock_t t;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  t = clock ();
+
+  ret = evaluate_object (CAR (list), env, outcome);
+
+  if (!ret)
+    return NULL;
+
+  t = clock ()-t;
+
+  printf ("process time: %lu * (1/%lu s)\n", t, CLOCKS_PER_SEC);
+
+  return ret;
 }
 
 
