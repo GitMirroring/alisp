@@ -12552,7 +12552,20 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (lastbin)
     {
       *bins = env->vars;
-      env->vars = lastbin->next;
+
+      while (env->vars != lastbin)
+	{
+	  if (env->vars->type == DYNAMIC_BINDING)
+	    env->vars->sym->value_ptr.symbol->value_dyn_bins_num--;
+
+	  env->vars = env->vars->next;
+	}
+
+      if (env->vars->type == DYNAMIC_BINDING)
+	env->vars->sym->value_ptr.symbol->value_dyn_bins_num--;
+
+      env->vars = env->vars->next;
+
       lastbin->next = NULL;
       env->lex_env_vars_boundary -= *argsnum;
     }
