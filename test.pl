@@ -264,6 +264,7 @@ make_test ("(let ((x 0)) (declare (special x)) x)", "0");
 make_test ("(let ((x 0)) (declare (special x)) (let ((x 1)) x))", "1");
 make_test ("(let ((x 0)) (declare (special x)) (let ((x 1)) (eval 'x)))", "0");
 make_test ("(let ((x 0)) (let ((x 1)) (declare (special x)) (let () x)))", "1");
+make_test ("(let ((x 0)) (declare (special x)) (let ((x 1)) (declare (special x))) x)", "0");
 make_test ("(let ((var2 0)) (let ((var2 1)) (declare (special var2)) (let ((var2 1))) var2))", "1");
 make_test ("(let ((vars 0)) (declare (special vars1 vars)) vars)", "0");
 make_test ("(defparameter var3 0)", "VAR3");
