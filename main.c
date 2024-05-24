@@ -9469,7 +9469,7 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type,
   bin->refcount = 1;
   bin->sym = sym;
   bin->obj = obj;
-  bin->prev_special = 0;
+  bin->prev_special = -1;
   bin->next = NULL;
 
   if (inc_refcs)
@@ -9542,7 +9542,7 @@ remove_bindings (struct binding *env, int num, int decrement_dyn_bin_count)
       && !(env->type & DELETED_BINDING))
     env->sym->value_ptr.symbol->value_dyn_bins_num--;
 
-  if (env->type == LEXICAL_BINDING)
+  if (env->prev_special >= 0)
     env->sym->value_ptr.symbol->is_special = env->prev_special;
 
   env->refcount--;
