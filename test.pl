@@ -513,6 +513,8 @@ make_test ("(setf (macro-function 'foo) (lambda (form env) `(incf ,(cadr form)))
 make_test ("(let ((mf (macro-function 'foo))) (funcall mf '(foo var) nil))", "(INCF VAR)");
 make_test ("(macroexpand-1 '(foo var))", "(INCF VAR)\nT");
 make_test ("(let ((i 0)) (foo i) i)", "1");
+make_test ("(defmacro mac (&whole wh) wh)", "MAC");
+make_test ("(funcall (macro-function 'mac) nil nil)", "NIL");
 
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep () 'atom)", "T");
