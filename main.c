@@ -12219,7 +12219,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       par = par->next;
     }
 
-  if (also_pass_name)
+  if (also_pass_name && SYMBOL (arglist) != &nil_object)
     arglist = CDR (arglist);
 
   while (SYMBOL (arglist) != &nil_object && par
