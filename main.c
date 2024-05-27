@@ -611,6 +611,19 @@ string
 };
 
 
+struct
+compiler_macro
+{
+  struct object *name;
+
+  struct object *macro;
+
+  int is_setf;
+
+  struct compiler_macro *next;
+};
+
+
 enum
 stepping_flags
   {
@@ -660,9 +673,7 @@ environment
 
   struct restart_binding *restarts;
 
-  struct binding *structs;
-
-  struct object *c_stdout;
+  struct compiler_macro *compiler_macros;
 
 
   struct object_list *traced_funcs;
@@ -678,6 +689,9 @@ environment
 
   struct object *method_args;
   struct method_list *method_list;
+
+
+  struct object *c_stdout;
 
 
   struct object *quote_sym, *function_sym, *lambda_sym, *setf_sym;
@@ -2481,6 +2495,9 @@ struct object *builtin_macroexpand_1 (struct object *list,
 struct object *builtin_macro_function (struct object *list,
 				       struct environment *env,
 				       struct outcome *outcome);
+struct object *builtin_compiler_macro_function (struct object *list,
+						struct environment *env,
+						struct outcome *outcome);
 struct object *builtin_string (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 /*struct object *builtin_string_eq (struct object *list, struct environment *env,
@@ -2745,6 +2762,9 @@ struct object *builtin_error
 struct object *evaluate_define_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_condition
+(struct object *list, struct environment *env, struct outcome *outcome);
+
+struct object *evaluate_define_compiler_macro
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_room
@@ -3592,6 +3612,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("DEFINE-COMPILER-MACRO", env, evaluate_define_compiler_macro,
+		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("ROOM", env, builtin_room, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TRACE", env, builtin_trace, TYPE_MACRO, NULL, 0);
   add_builtin_form ("UNTRACE", env, builtin_untrace, TYPE_MACRO, NULL, 0);
@@ -3643,6 +3665,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
 		    builtin_setf_macro_function, 0);
+  add_builtin_form ("COMPILER-MACRO-FUNCTION", env,
+		    builtin_compiler_macro_function, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
   /*add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);*/
   add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
@@ -23525,6 +23549,49 @@ builtin_macro_function (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_compiler_macro_function (struct object *list, struct environment *env,
+				 struct outcome *outcome)
+{
+  struct object *sym, *ret;
+  struct compiler_macro *cm;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+
+  cm = env->compiler_macros;
+
+  while (cm)
+    {
+      if (cm->name == sym)
+	break;
+
+      cm = cm->next;
+    }
+
+  if (!cm)
+    return &nil_object;
+
+  ret = alloc_function ();
+
+  ret->value_ptr.function->function_macro = cm->macro;
+
+  return ret;
+}
+
+
+struct object *
 builtin_string (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
@@ -29486,6 +29553,62 @@ builtin_make_condition (struct object *list, struct environment *env,
 
   return create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
 				    (struct object *)NULL);
+}
+
+
+struct object *
+evaluate_define_compiler_macro (struct object *list, struct environment *env,
+				struct outcome *outcome)
+{
+  struct object *mac, *sym;
+  struct compiler_macro *cm;
+
+  if (list_length (list) < 2)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list)) || (!IS_LIST (CAR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = SYMBOL (CAR (list));
+
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1);
+
+  if (!mac)
+    return NULL;
+
+  mac->type = TYPE_MACRO;
+
+  cm = env->compiler_macros;
+
+  while (cm)
+    {
+      if (cm->name == sym)
+	break;
+
+      cm = cm->next;
+    }
+
+  if (!cm)
+    {
+      cm = malloc_and_check (sizeof (*cm));
+      cm->name = sym;
+      cm->is_setf = 0;
+      cm->next = env->compiler_macros;
+      env->compiler_macros = cm;
+    }
+  else
+    decrement_refcount (cm->macro);
+
+  cm->macro = mac;
+
+  increment_refcount (sym);
+  return sym;
 }
 
 
