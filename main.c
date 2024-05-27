@@ -11573,15 +11573,16 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       obj = CDR (CDR (obj));
     }
 
-  p = parse_required_parameters (obj, &ls, &obj, allow_destructuring,
-				 is_specialized, env, outcome);
+  if ((p = parse_required_parameters (obj, &ls, &obj, allow_destructuring,
+				      is_specialized, env, outcome)))
+    {
+      if (first)
+	last->next = p;
+      else
+	first = p;
 
-  if (first)
-    last->next = p;
-  else
-    first = p;
-
-  last = ls;
+      last = ls;
+    }
 
   if (outcome->type != EVAL_OK)
     return NULL;
@@ -11589,14 +11590,15 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_optional_sym)
     {
-      p = parse_optional_parameters (CDR (obj), &ls, &obj, env, outcome);
+      if ((p = parse_optional_parameters (CDR (obj), &ls, &obj, env, outcome)))
+	{
+	  if (first)
+	    last->next = p;
+	  else
+	    first = p;
 
-      if (first)
-	last->next = p;
-      else
-	first = p;
-
-      last = ls;
+	  last = ls;
+	}
 
       if (outcome->type != EVAL_OK)
 	return NULL;
@@ -11675,14 +11677,15 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
     {
       *found_amp_key = 1;
 
-      p = parse_keyword_parameters (CDR (obj), &ls, &obj, env, outcome);
+      if ((p = parse_keyword_parameters (CDR (obj), &ls, &obj, env, outcome)))
+	{
+	  if (first)
+	    last->next = p;
+	  else
+	    first = p;
 
-      if (first)
-	last->next = p;
-      else
-	first = p;
-
-      last = ls;
+	  last = ls;
+	}
 
       if (outcome->type != EVAL_OK)
 	return NULL;
