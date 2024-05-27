@@ -474,6 +474,8 @@ make_test ("(defmacro mac (z (&whole wh f g)) `(list ,wh ,f ,g))", "MAC");
 make_test ("(macroexpand-1 '(mac x (y z)))", "(LIST (Y Z) Y Z)\nT");
 make_test ("(defmacro mac (&whole wh f g h) `(list ',wh ',f ',g ',h))", "MAC");
 make_test ("(mac 0 1 2)", "((MAC 0 1 2) 0 1 2)");
+make_test ("(defmacro mac2 (&whole wh &rest args) wh)", "MAC2");
+make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 
 make_test ("(load \"cl.lisp\")", "T");
 make_test ("(open-stream-p *standard-input*)", "T");
