@@ -2421,7 +2421,8 @@
 	lets l
 	initial-setup iteration-setup
 	out o
-	returnvar)
+	returnvar
+	defaultret)
     (do ()
 	((not forms))
       (let ((form (car forms)))
@@ -2481,6 +2482,17 @@
 		 (multiple-value-bind (res frm) (loop-parse-iteration forms)
 		   (setq iters (append iters `(,res)))
 		   (setq forms frm)))
+		((string= sym "REPEAT")
+		 (setq iters (append iters `((:repeat ,(gensym) ,(gensym) ,(cadr forms)))))
+		 (setq forms (cddr forms)))
+		((string= sym "ALWAYS")
+		 (setq do-forms (append do-forms `((if (not ,(cadr forms)) (return-from ,block-name nil)))))
+		 (setq defaultret t)
+		 (setq forms (cddr forms)))
+		((string= sym "NEVER")
+		 (setq do-forms (append do-forms `((if ,(cadr forms) (return-from ,block-name nil)))))
+		 (setq defaultret t)
+		 (setq forms (cddr forms)))
 		((or (string= sym "COLLECT")
 		     (string= sym "COLLECTING")
 		     (string= sym "APPEND")
@@ -2570,6 +2582,16 @@
 				      (return-from ,inner-block-name nil))
 				  (incf ,(elt i 2))
 				  . ,iteration-setup)))
+	(when (eq (car i) :repeat)
+	  (setq vrs (list* (elt i 1) (elt i 2) vrs))
+	  (setq initial-setup `((if (>= ,(elt i 1) ,(elt i 2))
+				    (setq ,skip-body-sym t))
+				(setq ,(elt i 1) 0 ,(elt i 2) ,(elt i 3))
+				. ,initial-setup))
+	  (setq iteration-setup `((if (>= ,(elt i 1) ,(elt i 2))
+				      (return-from ,inner-block-name nil))
+				  (incf ,(elt i 1))
+				  . ,iteration-setup)))
 	(when (eq (car i) :hashtable)
 	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
 				(cl-user:al-loopy-setq ,(elt i 1) (caar ,(elt i 3)))
@@ -2594,20 +2616,24 @@
 	     (o (cddr out)))
 	(setf (car o) lets)
 	(setq o l)
-	(setf (car o) `(tagbody
-			  (progn ,@(reverse initial-setup))
-			  ,prologue-tag
-			  ,@initially-forms
-			  (unless ,skip-body-sym
-			    (block ,inner-block-name
-			      (tagbody
-				 ,body-tag
-				 ,@do-forms
-				 (progn ,@(reverse iteration-setup))
-				 (go ,body-tag))))
-			  ,@finally-forms
-			  ,(if returnvar
-			       `(return-from ,block-name ,returnvar))))
+	(setf (car o) `(progn
+			 (tagbody
+			    ,@(if initial-setup
+				  `((progn ,@(reverse initial-setup))))
+			    ,prologue-tag
+			    ,@initially-forms
+			    (unless ,skip-body-sym
+			      (block ,inner-block-name
+				(tagbody
+				   ,body-tag
+				   ,@do-forms
+				   ,@(if iteration-setup
+					 `((progn ,@(reverse iteration-setup))))
+				   (go ,body-tag))))
+			    ,@finally-forms)
+			 ,(if returnvar
+			      `(return-from ,block-name ,returnvar)
+			      defaultret)))
 	out))))
 
 
