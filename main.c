@@ -1170,6 +1170,8 @@ class_field_decl
 
   struct object *initform;
 
+  struct object *initarg;
+
   struct class_field_decl *next;
 };
 
@@ -1191,6 +1193,8 @@ class_field
   struct object *name;
 
   struct object *value;
+
+  struct class_field_decl *decl;
 
   struct class_field *next;
 };
@@ -1748,9 +1752,15 @@ struct class_field_decl *create_class_field_decl
 struct condition_field_decl *create_condition_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
-struct object *create_object_fields (struct object *stdobj, struct object *class,
-				     struct environment *env,
-				     struct outcome *outcome);
+struct object *allocate_object_fields (struct object *stdobj,
+				       struct object *class);
+struct class_field *find_object_field_by_initarg (struct object *stdobj,
+						  struct object *initarg);
+struct object *fill_object_fields (struct object *stdobj, struct object *class,
+				   struct object *initargs,
+				   struct environment *env,
+				   struct outcome *outcome);
+
 void create_condition_fields (struct object *stdobj, struct object *class);
 
 struct object *load_file (const char *filename, struct environment *env,
@@ -8915,7 +8925,7 @@ struct class_field_decl *
 create_class_field_decl (struct object *fieldform, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct object *name, *initform = NULL;
+  struct object *name, *initform = NULL, *initarg = NULL;
   struct class_field_decl *ret;
 
   if (IS_SYMBOL (fieldform))
@@ -8949,6 +8959,22 @@ create_class_field_decl (struct object *fieldform, struct environment *env,
 
 	  initform = CAR (CDR (fieldform));
 	}
+      else if (symbol_equals (CAR (fieldform), ":INITARG", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (initarg)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  initarg = CAR (CDR (fieldform));
+	}
       else
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -8965,7 +8991,11 @@ create_class_field_decl (struct object *fieldform, struct environment *env,
   if (initform)
     increment_refcount (initform);
 
+  if (initarg)
+    increment_refcount (initarg);
+
   ret->initform = initform;
+  ret->initarg = initarg;
   ret->next = NULL;
 
   return ret;
@@ -8999,8 +9029,7 @@ create_condition_field_decl (struct object *fieldform, struct environment *env,
 
 
 struct object *
-create_object_fields (struct object *stdobj, struct object *class,
-		      struct environment *env, struct outcome *outcome)
+allocate_object_fields (struct object *stdobj, struct object *class)
 {
   struct class_field_decl *fd = class->value_ptr.standard_class->fields;
   struct object_list *p = class->value_ptr.standard_class->parents;
@@ -9011,18 +9040,8 @@ create_object_fields (struct object *stdobj, struct object *class,
       f = malloc_and_check (sizeof (*f));
 
       f->name = fd->name;
-
-      if (fd->initform)
-	{
-	  f->value = evaluate_object (fd->initform, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  if (!f->value)
-	    return NULL;
-	}
-      else
-	f->value = NULL;
-
+      f->value = NULL;
+      f->decl = fd;
       f->next = stdobj->value_ptr.standard_object->fields;
       stdobj->value_ptr.standard_object->fields = f;
 
@@ -9031,11 +9050,76 @@ create_object_fields (struct object *stdobj, struct object *class,
 
   while (p)
     {
-      if (!create_object_fields (stdobj, p->obj->value_ptr.symbol->typespec, env,
-				 outcome))
-	return NULL;
+      allocate_object_fields (stdobj, p->obj->value_ptr.symbol->typespec);
 
       p = p->next;
+    }
+
+  return stdobj;
+}
+
+
+struct class_field *
+find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
+{
+  struct class_field *fd = stdobj->value_ptr.standard_object->fields;
+
+  while (fd)
+    {
+      if (eq_objects (fd->decl->initarg, initarg) == &t_object)
+	return fd;
+
+      fd = fd->next;
+    }
+
+  return NULL;
+}
+
+
+struct object *
+fill_object_fields (struct object *stdobj, struct object *class,
+		    struct object *initargs, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct class_field *f;
+
+  while (SYMBOL (initargs) != &nil_object)
+    {
+      if (!(f = find_object_field_by_initarg (stdobj, CAR (initargs))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (SYMBOL (CDR (initargs)) == &nil_object)
+	{
+	  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	  return NULL;
+	}
+
+      if (!f->value)
+	{
+	  f->value = CAR (CDR (initargs));
+	  increment_refcount (f->value);
+	}
+
+      initargs = CDR (CDR (initargs));
+    }
+
+  f = stdobj->value_ptr.standard_object->fields;
+
+  while (f)
+    {
+      if (!f->value && f->decl->initform)
+	{
+	  f->value = evaluate_object (f->decl->initform, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!f->value)
+	    return NULL;
+	}
+
+      f = f->next;
     }
 
   return stdobj;
@@ -28022,7 +28106,9 @@ builtin_make_instance (struct object *list, struct environment *env,
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
-  return create_object_fields (ret, class, env, outcome);
+  allocate_object_fields (ret, class);
+
+  return fill_object_fields (ret, class, CDR (list), env, outcome);
 }
 
 
@@ -33524,6 +33610,7 @@ free_standard_class (struct object *obj)
     {
       nf = f->next;
       decrement_refcount (f->initform);
+      decrement_refcount (f->initarg);
       free (f);
       f = nf;
     }
