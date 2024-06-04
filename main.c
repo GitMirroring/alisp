@@ -8975,6 +8975,20 @@ create_class_field_decl (struct object *fieldform, struct environment *env,
 
 	  initarg = CAR (CDR (fieldform));
 	}
+      else if (symbol_equals (CAR (fieldform), ":DOCUMENTATION", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (fieldform))->type != TYPE_STRING)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+	}
       else
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
