@@ -25952,13 +25952,20 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 
   if (form->type == TYPE_CONS_PAIR)
     {
-      if (list_length (form) < 2 || !IS_SYMBOL (CAR (form)))
+      if (list_length (form) < 2
+	  || (!IS_SYMBOL (CAR (form))
+	      && (type == TYPE_MACRO
+		  || !(CAR (form)->type == TYPE_CONS_PAIR
+		       && list_length (CAR (form)) == 2
+		       && SYMBOL (CAR (CAR (form))) == env->setf_sym
+		       && IS_SYMBOL (CAR (CDR (CAR (form))))))))
 	{
 	  outcome->type = INCORRECT_SYNTAX_IN_LET;
 	  return NULL;
 	}
 
-      sym = SYMBOL (CAR (form));
+      sym = IS_SYMBOL (CAR (form)) ? SYMBOL (CAR (form))
+	: SYMBOL (CAR (CDR (CAR (form))));
 
       if (sym->value_ptr.symbol->is_const)
 	{
@@ -25973,6 +25980,7 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	return NULL;
 
       fun->type = type;
+      fun->value_ptr.function->is_setf_func = CAR (form)->type == TYPE_CONS_PAIR;
     }
   else
     {
