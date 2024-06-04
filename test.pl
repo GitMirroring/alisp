@@ -1405,6 +1405,8 @@ make_test ("(slot-value inst 'legs)", "0");
 make_test ("(defparameter inst (make-instance 'martian :legsnum 5))", "INST");
 make_test ("(slot-value inst 'legs)", "5");
 make_test ("(slot-value inst 'arms)", "4");
+make_test ("(defclass martian () ((legs :initform (+) :documentation \"Number of legs\")))", "#<STANDARD-CLASS MARTIAN>");
+make_test ("(make-instance 'martian)", "#<MARTIAN OBJECT ...>");
 make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
 make_test ("(typep #'genfun 'generic-function)", "T");
 make_test ("(typep #'genfun 'standard-generic-function)", "T");
