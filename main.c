@@ -14420,7 +14420,6 @@ struct object *
 evaluate_list (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct binding *bind;
   struct object *sym, *fun = NULL;
 
   if (is_dotted_list (list))
@@ -14441,23 +14440,7 @@ evaluate_list (struct object *list, struct environment *env,
 
   sym = SYMBOL (CAR (list));
 
-  if (sym->value_ptr.symbol->function_dyn_bins_num)
-    {
-      bind = find_binding (sym->value_ptr.symbol, env->funcs, DYNAMIC_BINDING,
-			   -1, 0);
-
-      fun = bind->obj;
-    }
-  else if ((bind = find_binding (sym->value_ptr.symbol, env->funcs,
-				 LEXICAL_BINDING, env->lex_env_funcs_boundary,
-				 0)))
-    {
-      fun = bind->obj;
-    }
-  else
-    {
-      fun = sym->value_ptr.symbol->function_cell;
-    }
+  fun = get_function (sym, env, 0, 0, 0, 0);
 
   if (fun && fun->type == TYPE_FUNCTION)
     return call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
@@ -26166,22 +26149,23 @@ get_function (struct object *sym, struct environment *env, int only_functions,
 	      int setf_func, int only_globals, int increment_refc)
 {
   struct object *f;
-  struct binding *b = NULL, *n = NULL;
+  struct binding *b = env->funcs;
+  int lexb = env->lex_env_funcs_boundary;
 
   if (!only_globals)
     {
-      do
+      while (b && lexb)
 	{
-	  if (n)
-	    n = b->next;
-	  else
-	    n = env->funcs;
+	  if (SYMBOL (sym) == b->sym
+	      && !setf_func == !b->obj->value_ptr.function->is_setf_func)
+	    break;
 
-	  b = find_binding (SYMBOL (sym)->value_ptr.symbol, n, ANY_BINDING,
-			    env->lex_env_funcs_boundary, 0);
+	  b = b->next;
+	  lexb--;
+	}
 
-	} while (b && setf_func && (b->obj->type != TYPE_FUNCTION
-				    || !b->obj->value_ptr.function->is_setf_func));
+      if (!lexb)
+	b = NULL;
     }
 
   if ((only_globals || !b)
