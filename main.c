@@ -28363,13 +28363,19 @@ evaluate_defgeneric (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+  if ((!IS_SYMBOL (CAR (list))
+       && !(CAR (list)->type == TYPE_CONS_PAIR
+	    && list_length (CAR (list)) == 2
+	    && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	    && IS_SYMBOL (CAR (CDR (CAR (list))))))
+      || !IS_LIST (CAR (CDR (list))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  sym = SYMBOL (CAR (list));
+  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
 
   if (sym->value_ptr.symbol->function_cell
       && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
@@ -28387,13 +28393,28 @@ evaluate_defgeneric (struct object *list, struct environment *env,
 
   fun->value_ptr.function->flags |= GENERIC_FUNCTION;
 
-  if (sym->value_ptr.symbol->function_cell)
+  if (IS_SYMBOL (CAR (list)))
     {
-      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
-    }
+      if (sym->value_ptr.symbol->function_cell)
+	{
+	  delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+	}
 
-  sym->value_ptr.symbol->function_cell = fun;
-  add_reference (sym, fun, 1);
+      sym->value_ptr.symbol->function_cell = fun;
+      add_reference (sym, fun, 1);
+    }
+  else
+    {
+      if (sym->value_ptr.symbol->setf_func_cell)
+	{
+	  delete_reference (sym, sym->value_ptr.symbol->setf_func_cell, 2);
+	}
+
+      sym->value_ptr.symbol->setf_func_cell = fun;
+      add_reference (sym, fun, 2);
+
+      fun->value_ptr.function->is_setf_func = 1;
+    }
 
   fun->value_ptr.function->name = sym;
   add_reference (fun, sym, 0);
@@ -28548,7 +28569,7 @@ struct object *
 evaluate_defmethod (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct object *fun, *meth, *lambdal;
+  struct object *fun, *meth, *lambdal, *sym;
   struct method *m;
   struct method_list *ml;
   enum method_qualifier q = PRIMARY_METHOD;
@@ -28559,14 +28580,22 @@ evaluate_defmethod (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) ||
-      (!IS_SYMBOL (CAR (CDR (list))) && CAR (CDR (list))->type != TYPE_CONS_PAIR))
+  if ((!IS_SYMBOL (CAR (list))
+       && !(CAR (list)->type == TYPE_CONS_PAIR
+	    && list_length (CAR (list)) == 2
+	    && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	    && IS_SYMBOL (CAR (CDR (CAR (list))))))
+      || (!IS_SYMBOL (CAR (CDR (list)))
+	  && CAR (CDR (list))->type != TYPE_CONS_PAIR))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 1, 0);
+  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
+
+  fun = get_function (sym, env, 0, CAR (list)->type == TYPE_CONS_PAIR, 1, 0);
 
   if (fun && (fun->type == TYPE_MACRO
 	      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
@@ -28622,11 +28651,20 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
       fun->value_ptr.function->flags |= GENERIC_FUNCTION;
 
-      SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
-      add_reference (SYMBOL (CAR (list)), fun, 1);
+      if (CAR (list)->type == TYPE_CONS_PAIR)
+	{
+	  sym->value_ptr.symbol->setf_func_cell = fun;
+	  add_reference (sym, fun, 2);
+	  fun->value_ptr.function->is_setf_func = 1;
+	}
+      else
+	{
+	  sym->value_ptr.symbol->function_cell = fun;
+	  add_reference (SYMBOL (CAR (list)), fun, 1);
+	}
 
-      fun->value_ptr.function->name = SYMBOL (CAR (list));
-      add_reference (fun, SYMBOL (CAR (list)), 0);
+      fun->value_ptr.function->name = sym;
+      add_reference (fun, sym, 0);
 
       decrement_refcount (fun);
     }
@@ -31830,10 +31868,26 @@ print_method (const struct object *obj, struct environment *env,
 	      struct stream *str)
 {
   if (write_to_stream (str, "#<STANDARD-METHOD ", strlen ("#<STANDARD-METHOD "))
-      < 0
-      || print_symbol (obj->value_ptr.method->generic_func->
-		       value_ptr.function->name, env, str) < 0
-      || write_to_stream (str, ">", 1) < 0)
+      < 0)
+    return -1;
+
+  if (obj->value_ptr.method->generic_func->value_ptr.function->is_setf_func)
+    {
+      if (write_to_stream (str, "(SETF ", strlen ("(SETF ")) < 0)
+	return -1;
+    }
+
+  if (print_symbol (obj->value_ptr.method->generic_func->
+		    value_ptr.function->name, env, str) < 0)
+    return -1;
+
+  if (obj->value_ptr.method->generic_func->value_ptr.function->is_setf_func)
+    {
+      if (write_to_stream (str, ")>", strlen (")>")) < 0)
+	return -1;
+    }
+  else
+    if (write_to_stream (str, ">", 1) < 0)
       return -1;
 
   return 0;
