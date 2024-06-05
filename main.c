@@ -4020,6 +4020,8 @@ add_standard_definitions (struct environment *env)
 					create_integer_from_long (10), env);
   env->read_suppress_sym = define_variable ("*READ-SUPPRESS*", &nil_object, env);
 
+  define_variable ("*FEATURES*", &nil_object, env);
+
   env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
 
 
