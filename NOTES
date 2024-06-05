@@ -89,6 +89,13 @@ package.
   binding is in scope at that moment.  This function is intended to be called in
   the debugger, but works everywhere
 
+- the special operators AL-LOOPY-DESTRUCTURING-BIND and AL-LOOPY-SETQ are
+  similar to DESTRUCTURING-BIND and SETQ respectively, but they allow the kind
+  of destructuring that LOOP uses, which has more lax rules than
+  DESTRUCTURING-BIND.  In particular, you can provide more or less elements in
+  the template than values, and you can put a NIL in the template to ignore the
+  corresponding subtree
+
 - the functions AL-START-PROFILING, AL-STOP-PROFILING, AL-CLEAR-PROFILING and
   AL-REPORT-PROFILING govern the profiler, see "Profiling".
 
