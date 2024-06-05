@@ -68,8 +68,8 @@ package.
   and argv of C, respectively, so they contain the number and value of
   command-line arguments passed to the interpreter
 
-- AL-GETENV takes a string and returns the environment variable with that name,
-  or NIL if such does not exist
+- AL-GETENV takes a string and returns the value of the environment variable
+  with that name, or NIL if such does not exist
 
 - AL-SYSTEM takes a string or NIL; in the first case it tries executing that
   command, in the second it tells whether an execution environment is actually
@@ -163,9 +163,8 @@ point.  I don't know about libreadline, but you can still build without it.
 
 __Loading cl.lisp__
 
-If you don't load cl.lisp, you still have a decent subset of Common Lisp, but
-note that you must define *FEATURES* yourself, otherwise the interpreter will
-crash when you use the #+ and #- macros.
+If you don't load cl.lisp, you still have a decent and self-sufficient subset of
+Common Lisp.
 
 
 
