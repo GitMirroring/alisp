@@ -1486,6 +1486,8 @@ make_test ("(funcall (compiler-macro-function 'foo) '(foo 0) nil)", "0");
 make_test ("(compiler-macro-function 'bar)", "NIL");
 make_test ("(define-compiler-macro foo (x) 10)", "FOO");
 make_test ("(funcall (compiler-macro-function 'foo) '(foo 0) nil)", "10");
+make_test ("(define-compiler-macro (setf foo) (x y) (list y x))", "(SETF FOO)");
+make_test ("(funcall (compiler-macro-function '(setf foo)) '(setf (foo 10) 11) nil)", "(11 (FOO 10))");
 make_test ("(declaim (optimize speed (safety 0) (debug 3)))", "T");
 make_test ("(declaim (ignorable a) (ignore b c) (inline e) (notinline d f))", "T");
 make_test ("(declaim (type list a) (ftype (function nil nil) b))", "T");
