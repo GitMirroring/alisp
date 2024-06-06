@@ -2708,6 +2708,10 @@ struct object *builtin_find_class
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_allocate_instance
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_initialize_instance
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_name
@@ -3574,6 +3578,10 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("ALLOCATE-INSTANCE", env, builtin_allocate_instance,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("INITIALIZE-INSTANCE", env, builtin_initialize_instance,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLASS-NAME", env, builtin_class_name, TYPE_FUNCTION, NULL,
 		    0);
@@ -28122,6 +28130,68 @@ builtin_make_instance (struct object *list, struct environment *env,
   allocate_object_fields (ret, class);
 
   return fill_object_fields (ret, class, CDR (list), env, outcome);
+}
+
+
+struct object *
+builtin_allocate_instance (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  struct object *ret;
+  struct standard_object *so;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_CLASS)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!is_class_completely_defined (CAR (list)))
+    {
+      outcome->type = CLASS_DEFINITION_NOT_COMPLETE;
+      return NULL;
+    }
+
+  ret = alloc_object ();
+  ret->type = TYPE_STANDARD_OBJECT;
+
+  so = malloc_and_check (sizeof (*so));
+  so->class_name = CAR (list)->value_ptr.standard_class->name;
+  so->fields = NULL;
+  ret->value_ptr.standard_object = so;
+
+  allocate_object_fields (ret, CAR (list));
+
+  return ret;
+}
+
+
+struct object *
+builtin_initialize_instance (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list));
+  return fill_object_fields (CAR (list), CAR (list)->value_ptr.standard_object->
+			     class_name->value_ptr.symbol->typespec, CDR (list),
+			     env, outcome);
 }
 
 
