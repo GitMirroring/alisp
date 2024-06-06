@@ -23644,20 +23644,25 @@ builtin_compiler_macro_function (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)))
+  if (!IS_SYMBOL (CAR (list))
+      && !(CAR (list)->type == TYPE_CONS_PAIR
+	   && list_length (CAR (list)) == 2
+	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  sym = SYMBOL (CAR (list));
+  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
 
 
   cm = env->compiler_macros;
 
   while (cm)
     {
-      if (cm->name == sym)
+      if (cm->name == sym && cm->is_setf == (CAR (list)->type == TYPE_CONS_PAIR))
 	break;
 
       cm = cm->next;
@@ -29692,7 +29697,7 @@ struct object *
 evaluate_define_compiler_macro (struct object *list, struct environment *env,
 				struct outcome *outcome)
 {
-  struct object *mac, *sym;
+  struct object *mac, *sym, *ret;
   struct compiler_macro *cm;
 
   if (list_length (list) < 2)
@@ -29701,13 +29706,19 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || (!IS_LIST (CAR (CDR (list)))))
+  if ((!IS_SYMBOL (CAR (list))
+       && !(CAR (list)->type == TYPE_CONS_PAIR
+	    && list_length (CAR (list)) == 2
+	    && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	    && IS_SYMBOL (CAR (CDR (CAR (list))))))
+      || !IS_LIST (CAR (CDR (list))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  sym = SYMBOL (CAR (list));
+  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
 
   mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1);
 
@@ -29720,7 +29731,7 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
 
   while (cm)
     {
-      if (cm->name == sym)
+      if (cm->name == sym && cm->is_setf == (CAR (list)->type == TYPE_CONS_PAIR))
 	break;
 
       cm = cm->next;
@@ -29730,7 +29741,7 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
     {
       cm = malloc_and_check (sizeof (*cm));
       cm->name = sym;
-      cm->is_setf = 0;
+      cm->is_setf = CAR (list)->type == TYPE_CONS_PAIR;
       cm->next = env->compiler_macros;
       env->compiler_macros = cm;
     }
@@ -29738,6 +29749,22 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
     decrement_refcount (cm->macro);
 
   cm->macro = mac;
+
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      ret = alloc_empty_cons_pair ();
+
+      ret->value_ptr.cons_pair->car = env->setf_sym;
+      add_reference (ret, CAR (ret), 0);
+
+      ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = sym;
+      add_reference (CDR (ret), CAR (CDR (ret)), 0);
+
+      return ret;
+    }
 
   increment_refcount (sym);
   return sym;
