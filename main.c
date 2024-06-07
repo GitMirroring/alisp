@@ -1973,6 +1973,11 @@ int is_class_completely_defined (struct object *class);
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
 int compare_method_specificity (struct object *first, struct object *second);
+struct object *find_method (struct object *func, enum method_qualifier qualifier,
+			    struct object *c_specifiers,
+			    struct parameter *l_specifiers,
+			    struct method_list **mlist, int *ind,
+			    struct environment *env, struct outcome *outcome);
 struct object *dispatch_generic_function_call (struct object *func,
 					       struct object *arglist,
 					       struct environment *env,
@@ -2729,6 +2734,12 @@ struct object *evaluate_defgeneric
 struct object *builtin_ensure_generic_function
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defmethod
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_add_method
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_find_method
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_remove_method
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_next_method_p
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3597,6 +3608,12 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("ENSURE-GENERIC-FUNCTION", env,
 		    builtin_ensure_generic_function, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("ADD-METHOD", env, builtin_add_method, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("FIND-METHOD", env, builtin_find_method, TYPE_FUNCTION, NULL,
+		    0);
+  add_builtin_form ("REMOVE-METHOD", env, builtin_remove_method, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("NEXT-METHOD-P", env, builtin_next_method_p, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("CALL-NEXT-METHOD", env, evaluate_call_next_method,
@@ -13452,6 +13469,105 @@ compare_method_specificity (struct object *first, struct object *second)
     }
 
   return 0;
+}
+
+
+struct object *
+find_method (struct object *func, enum method_qualifier qualifier,
+	     struct object *c_specifiers, struct parameter *l_specifiers,
+	     struct method_list **mlist, int *ind, struct environment *env,
+	     struct outcome *outcome)
+{
+  struct method_list *ml = func->value_ptr.function->methods;
+  struct parameter *par, *sp;
+  struct object *cons;
+  int i = 0;
+
+  while (ml)
+    {
+      if (qualifier != ml->meth->value_ptr.method->qualifier)
+	{
+	  ml = ml->next;
+	  continue;
+	}
+
+      par = ml->meth->value_ptr.method->lambda_list;
+
+      if (c_specifiers)
+	cons = c_specifiers;
+      else
+	sp = l_specifiers;
+
+      while (par && par->type == REQUIRED_PARAM)
+	{
+	  if (c_specifiers && SYMBOL (cons) == &nil_object)
+	    break;
+
+	  if (IS_SYMBOL (par->typespec))
+	    {
+	      if (c_specifiers)
+		{
+		  if (!is_subtype (par->typespec, CAR (cons), NULL)
+		      || !is_subtype (CAR (cons), par->typespec, NULL))
+		    break;
+		}
+	      else
+		{
+		  if (!is_subtype (par->typespec, sp->typespec, NULL)
+		      || !is_subtype (sp->typespec, par->typespec, NULL))
+		    break;
+		}
+	    }
+	  else
+	    {
+	      if (c_specifiers)
+		{
+		  if (CAR (cons)->type != TYPE_CONS_PAIR
+		      || list_length (CAR (cons)) != 2
+		      || CAR (CAR (cons)) != env->eql_sym)
+		    break;
+
+		  if (eql_objects (CAR (CDR (par->typespec)),
+				   CAR (CDR (CAR (cons)))) == &nil_object)
+		    break;
+		}
+	      else
+		{
+		  if (sp->typespec->type != TYPE_CONS_PAIR
+		      || list_length (sp->typespec) != 2
+		      || CAR (sp->typespec) != env->eql_sym)
+		    break;
+
+		  if (eql_objects (CAR (CDR (par->typespec)),
+				   CAR (CDR (sp->typespec))) == &nil_object)
+		    break;
+		}
+	    }
+
+	  if (c_specifiers)
+	    cons = CDR (cons);
+	  else
+	    sp = sp->next;
+
+	  par = par->next;
+	}
+
+      if (!par || par->type != REQUIRED_PARAM)
+	{
+	  if (mlist)
+	    *mlist = ml;
+
+	  if (ind)
+	    *ind = i;
+
+	  return ml->meth;
+	}
+
+      i++;
+      ml = ml->next;
+    }
+
+  return &nil_object;
 }
 
 
@@ -28770,6 +28886,144 @@ evaluate_defmethod (struct object *list, struct environment *env,
   INC_WEAK_REFCOUNT (meth);
 
   return meth;
+}
+
+
+struct object *
+builtin_add_method (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct object *meth;
+  struct method_list *ml;
+  int ind;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION
+      || !(CAR (list)->value_ptr.function->flags & GENERIC_FUNCTION)
+      || CAR (CDR (list))->type != TYPE_METHOD)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  meth = find_method (CAR (list), CAR (CDR (list))->value_ptr.method->qualifier,
+		      NULL, CAR (CDR (list))->value_ptr.method->lambda_list, &ml,
+		      &ind, env, outcome);
+
+  if (!meth)
+    return NULL;
+
+  if (meth == &nil_object)
+    {
+      ml = malloc_and_check (sizeof (*ml));
+      ml->meth = CAR (CDR (list));
+      ml->next = CAR (list)->value_ptr.function->methods;
+      CAR (list)->value_ptr.function->methods = ml;
+      add_reference (CAR (list), ml->meth, 0);
+    }
+  else
+    {
+      delete_reference (CAR (list), ml->meth, 6+ind*8);
+      ml->meth = CAR (CDR (list));
+      add_reference (CAR (list), ml->meth, 6+ind*8);
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
+builtin_find_method (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 3)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION
+      || !(CAR (list)->value_ptr.function->flags & GENERIC_FUNCTION)
+      || !IS_LIST (CAR (CDR (list))) || !IS_LIST (CAR (CDR (CDR (list)))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (list_length (CAR (CDR (list))) > 1)
+    return &nil_object;
+
+  ret = find_method (CAR (list),
+		     CAR (CDR (list)) == &nil_object ? PRIMARY_METHOD
+		     : SYMBOL (CAR (CAR (CDR (list)))) == KEYWORD (":BEFORE")
+		     ? BEFORE_METHOD :
+		     SYMBOL (CAR (CAR (CDR (list)))) == KEYWORD (":AFTER")
+		     ? AFTER_METHOD
+		     : SYMBOL (CAR (CAR (CDR (list)))) == KEYWORD (":AROUND")
+		     ? AROUND_METHOD : 0, CAR (CDR (CDR (list))), NULL, NULL,
+		     NULL, env, outcome);
+
+  if (!ret)
+    return NULL;
+
+  increment_refcount (ret);
+  return ret;
+}
+
+
+struct object *
+builtin_remove_method (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct method_list *ml, *prev = NULL;
+  int i = 6;
+
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION
+      || !(CAR (list)->value_ptr.function->flags & GENERIC_FUNCTION)
+      || CAR (CDR (list))->type != TYPE_METHOD)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ml = CAR (list)->value_ptr.function->methods;
+
+  while (ml)
+    {
+      if (ml->meth == CAR (CDR (list)))
+	{
+	  delete_reference (CAR (list), ml->meth, i);
+
+	  if (prev)
+	    prev->next = ml->next;
+	  else
+	    CAR (list)->value_ptr.function->methods = ml->next;
+
+	  free (ml);
+	  break;
+	}
+
+      i += 8;
+      prev = ml;
+      ml = ml->next;
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
