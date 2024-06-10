@@ -2583,6 +2583,9 @@ struct object *builtin_do_symbols (struct object *list, struct environment *env,
 struct object *builtin_do_external_symbols (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
+struct object *builtin_find_all_symbols (struct object *list,
+					 struct environment *env,
+					 struct outcome *outcome);
 
 struct object *builtin_time (struct object *list, struct environment *env,
 			     struct outcome *outcome);
@@ -3746,6 +3749,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DO-EXTERNAL-SYMBOLS", env, builtin_do_external_symbols,
 		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("FIND-ALL-SYMBOLS", env, builtin_find_all_symbols,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TIME", env, builtin_time, TYPE_MACRO, NULL, 0);
   add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
 		    TYPE_FUNCTION, NULL, 0);
@@ -25620,6 +25625,72 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
   env->blocks->frame = remove_block (env->blocks->frame);
   return &nil_object;
+}
+
+
+struct object *
+builtin_find_all_symbols (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  char *name;
+  int len, i;
+  struct object_list *l = env->packages;
+  struct package_record *rec;
+  struct object *cons, *ret = &nil_object;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      name = CAR (list)->value_ptr.string->value;
+      len = CAR (list)->value_ptr.string->used_size;
+    }
+  else if (CAR (list)->type == TYPE_CHARACTER)
+    {
+      name = CAR (list)->value_ptr.character;
+      len = strlen (name);
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      name = CAR (list)->value_ptr.symbol->name;
+      len = CAR (list)->value_ptr.symbol->name_len;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  while (l)
+    {
+      for (i = 0; i < SYMTABLE_SIZE; i++)
+	{
+	  rec = l->obj->value_ptr.package->symtable [i];
+
+	  while (rec)
+	    {
+	      if (eqmem (name, len, rec->sym->value_ptr.symbol->name,
+			 rec->sym->value_ptr.symbol->name_len))
+		{
+		  cons = alloc_empty_cons_pair ();
+		  cons->value_ptr.cons_pair->car = rec->sym;
+		  add_reference (cons, rec->sym, 0);
+		  cons->value_ptr.cons_pair->cdr = ret;
+		  ret = cons;
+		}
+
+	      rec = rec->next;
+	    }
+	}
+
+      l = l->next;
+    }
+
+  return ret;
 }
 
 
