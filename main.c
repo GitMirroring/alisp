@@ -25442,6 +25442,8 @@ builtin_do_symbols (struct object *list, struct environment *env,
 		    }
 		}
 
+	      decrement_refcount (ret);
+
 	      rec = rec->next;
 	    }
 	}
@@ -25584,6 +25586,8 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 		  return NULL;
 		}
 	    }
+
+	  decrement_refcount (ret);
 
 	  rec = rec->next;
 	}
