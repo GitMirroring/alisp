@@ -1870,7 +1870,7 @@ make_test ("(cl:package-use-list cl:*package*)", "(#<PACKAGE \"COMMON-LISP\">)")
 make_test ("(cadr '(0 1))", "1");
 make_test ("(cl:import 'cl:car)", "T");
 make_test ("(cl:import '(cl:car) '|newtest|)", "T");
-make_test ("(cl:find-all-symbols \"CAR\")", "(CAR CAR)");
+make_test ("(cl:find-all-symbols \"CAR\")", "(CAR)");
 make_test ("(cl:find-all-symbols 'cdr)", "(CDR)");
 make_test ("(cl:find-all-symbols 'al-exit)", "(COMMON-LISP-USER:AL-EXIT AL-EXIT)");
 make_test ("(cl:export nil \"newtest\")", "T");
