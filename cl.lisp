@@ -2168,6 +2168,13 @@
 	 ,(cadr varres)))))
 
 
+(defun find-all-symbols (sym)
+  (let (out)
+    (do-all-symbols (s (remove-duplicates out :test #'eq))
+      (if (string= sym s)
+	  (setq out (cons s out))))))
+
+
 
 (defun loop-parse-accumulation (forms)
   (let ((sym (string (car forms)))
@@ -2864,8 +2871,9 @@
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  write-to-string prin1-to-string princ-to-string pprint do-all-symbols
-	  loop format encode-universal-time with-standard-io-syntax handler-case
-	  restart-case with-simple-restart find-restart break abort continue))
+	  find-all-symbols loop format encode-universal-time
+	  with-standard-io-syntax handler-case restart-case with-simple-restart
+	  find-restart break abort continue))
 
 
 
