@@ -941,6 +941,9 @@ method
 
   enum method_qualifier qualifier;
 
+  struct object *(*builtin_method)
+    (struct object *list, struct environment *env, struct outcome *outcome);
+
   struct object *body;
 };
 
@@ -1852,6 +1855,13 @@ struct object *add_builtin_form (char *name, struct environment *env,
 				  struct outcome *outcome),
 				 int is_special_operator);
 
+struct object *define_generic_function (char *name, struct environment *env,
+					struct parameter *lambda_list,
+					struct object *(*default_method)
+					(struct object *list,
+					 struct environment *env,
+					 struct outcome *outcome));
+
 struct object *define_constant
 (struct object *sym, struct object *form, struct environment *env,
  struct outcome *outcome);
@@ -1922,6 +1932,10 @@ struct parameter *parse_lambda_list (struct object *obj, int allow_destructuring
 				     struct outcome *outcome, int *found_amp_key,
 				     int *allow_other_keys);
 
+struct parameter *create_lambda_list (struct environment *env, ...);
+struct parameter *copy_lambda_list (struct parameter *list,
+				    int fill_typespecs_with_t);
+
 void count_parameters (struct parameter *par, int *req_params, int *opt_params,
 		       int *rest);
 int are_lambda_lists_congruent (struct parameter *meth_list,
@@ -1967,6 +1981,8 @@ struct object *call_condition_reader (struct object *class_name,
 				      struct object *field, struct object *args,
 				      struct environment *env,
 				      struct outcome *outcome);
+struct object *call_method (struct method_list *methlist, struct object *arglist,
+			    struct environment *env, struct outcome *outcome);
 
 int is_class_completely_defined (struct object *class);
 
@@ -2333,6 +2349,10 @@ struct object *builtin_setf_slot_value (struct object *list,
 					struct environment *env,
 					struct outcome *outcome);
 struct object *builtin_setf_macro_function (struct object *list,
+					    struct environment *env,
+					    struct outcome *outcome);
+
+struct object *builtin_method_print_object (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
 
@@ -4049,6 +4069,11 @@ add_standard_definitions (struct environment *env)
 
   env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
 
+
+  define_generic_function ("PRINT-OBJECT", env,
+			   create_lambda_list (env, "OBJECT", "STREAM",
+					       (char *)NULL),
+			   builtin_method_print_object);
 
 
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
@@ -10634,6 +10659,54 @@ add_builtin_form (char *name, struct environment *env,
 
 
 struct object *
+define_generic_function (char *name, struct environment *env,
+			 struct parameter *lambda_list,
+			 struct object *(*default_method)
+			 (struct object *list, struct environment *env,
+			  struct outcome *outcome))
+{
+  struct object *pack = inspect_variable (env->package_sym, env),
+    *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
+					 EXTERNAL_VISIBILITY, 1,
+					 pack),
+    *fun = alloc_function (), *meth;
+  struct function *f = fun->value_ptr.function;
+  struct method *m;
+  struct method_list *ml;
+
+  fun->type = TYPE_FUNCTION;
+
+  sym->value_ptr.symbol->function_cell = fun;
+
+  f->name = sym;
+  add_reference (fun, sym, 0);
+
+  f->lambda_list = lambda_list;
+
+  f->flags = GENERIC_FUNCTION;
+
+  meth = alloc_object ();
+  meth->type = TYPE_METHOD;
+  m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
+  m->generic_func = fun;
+  add_reference (meth, fun, 0);
+  m->qualifier = PRIMARY_METHOD;
+  m->lambda_list = copy_lambda_list (lambda_list, 1);
+  m->builtin_method = default_method;
+  m->body = NULL;
+
+  ml = malloc_and_check (sizeof (*ml));
+  ml->reference_strength_factor = 0;
+  ml->meth = meth;
+  ml->next = fun->value_ptr.function->methods;
+
+  fun->value_ptr.function->methods = ml;
+
+  return sym;
+}
+
+
+struct object *
 define_constant (struct object *sym, struct object *form,
 		 struct environment *env, struct outcome *outcome)
 {
@@ -11938,6 +12011,69 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
     }
 
   return first;
+}
+
+
+struct parameter *
+create_lambda_list (struct environment *env, ...)
+{
+  struct parameter *ret = NULL, *par;
+  struct object *pack = inspect_variable (env->package_sym, env);
+  va_list valist;
+  char *n;
+
+  va_start (valist, env);
+
+  while ((n = va_arg (valist, char *)))
+    {
+      if (ret)
+	par = par->next
+	  = alloc_parameter (REQUIRED_PARAM,
+			     intern_symbol_by_char_vector (n, strlen (n), 1,
+							   INTERNAL_VISIBILITY,
+							   1, pack));
+      else
+	ret = par =
+	  alloc_parameter (REQUIRED_PARAM,
+			   intern_symbol_by_char_vector (n, strlen (n), 1,
+							 INTERNAL_VISIBILITY, 1,
+							 pack));
+
+      par->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (par->name);
+      INC_WEAK_REFCOUNT (par->name);
+    }
+
+  va_end (valist);
+
+  return ret;
+}
+
+
+struct parameter *
+copy_lambda_list (struct parameter *list, int fill_typespecs_with_t)
+{
+  struct parameter *ret = NULL, *par;
+
+  while (list)
+    {
+      if (ret)
+	par = par->next = alloc_parameter (REQUIRED_PARAM, list->name);
+      else
+	ret = par = alloc_parameter (REQUIRED_PARAM, list->name);
+
+      par->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (list->name);
+      INC_WEAK_REFCOUNT (list->name);
+
+      if (fill_typespecs_with_t)
+	par->typespec = &t_object;
+
+      list = list->next;
+    }
+
+  if (ret)
+    par->next = NULL;
+
+  return ret;
 }
 
 
@@ -13368,6 +13504,54 @@ call_condition_reader (struct object *class_name, struct object *field,
 }
 
 
+struct object *
+call_method (struct method_list *methlist, struct object *arglist,
+	     struct environment *env, struct outcome *outcome)
+{
+  struct binding *bins;
+  struct object *ret;
+  struct method_list *methl;
+  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+
+
+  if (!methlist->meth->value_ptr.method->body)
+    {
+      ret = methlist->meth->value_ptr.method->builtin_method (arglist, env,
+							      outcome);
+
+      return ret;
+    }
+
+
+  if (parse_argument_list (arglist, methlist->meth->value_ptr.method->lambda_list,
+			   0, 0, 0, methlist->meth->value_ptr.method->found_amp_key,
+			   0, env, outcome, &bins, &argsnum))
+    {
+      env->method_args = arglist;
+      methl = env->method_list;
+      env->method_list = methlist;
+
+      env->vars = chain_bindings (bins, env->vars, 1, NULL, NULL);
+      env->lex_env_vars_boundary += argsnum;
+
+      ret = evaluate_body (methlist->meth->value_ptr.method->body, 0, NULL, env,
+			   outcome);
+
+      env->vars = remove_bindings (env->vars, argsnum, 1);
+      env->lex_env_vars_boundary = prev_lex_bin_num;
+
+      env->method_args = NULL;
+      env->method_list = methl;
+    }
+  else
+    {
+      ret = NULL;
+    }
+
+  return ret;
+}
+
+
 int
 is_class_completely_defined (struct object *class)
 {
@@ -13580,9 +13764,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     *ret = NULL, *res, *tmp;
   struct method_list *applm = NULL, *lapplm,
     *ml = func->value_ptr.function->methods;
-  struct binding *bins;
-  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary, applnum = 0, i,
-    found_primary = 0;
+  int applnum = 0, i, found_primary = 0;
 
   if (!args)
     return NULL;
@@ -13655,27 +13837,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
   while (lapplm)
     {
-      if (parse_argument_list (args, lapplm->meth->value_ptr.method->lambda_list,
-			       0, 0, 0,
-			       lapplm->meth->value_ptr.method->found_amp_key, 0,
-			       env, outcome, &bins, &argsnum))
-	{
-	  env->method_args = args;
-	  env->method_list = lapplm;
+      res = call_method (lapplm, args, env, outcome);
 
-	  env->vars = chain_bindings (bins, env->vars, 1, NULL, NULL);
-	  env->lex_env_vars_boundary += argsnum;
-
-	  res = evaluate_body (lapplm->meth->value_ptr.method->body, 0, NULL,
-			       env, outcome);
-
-	  env->vars = remove_bindings (env->vars, argsnum, 1);
-	  env->lex_env_vars_boundary = prev_lex_bin_num;
-
-	  env->method_args = NULL;
-	  env->method_list = NULL;
-	}
-      else
+      if (!res)
 	{
 	  ret = NULL;
 	  break;
@@ -20782,6 +20946,33 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
 
   increment_refcount (newval);
   return newval;
+}
+
+
+struct object *
+builtin_method_print_object (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type != TYPE_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (print_object (CAR (list), env, CAR (CDR (list))->value_ptr.stream) < 0)
+    {
+      outcome->type = ERROR_DURING_OUTPUT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
@@ -29054,8 +29245,6 @@ evaluate_call_next_method (struct object *list, struct environment *env,
 {
   struct object *args, *prevargs, *res, *ret = NULL;
   struct method_list *medl;
-  struct binding *bins;
-  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
 
 
   if (!env->method_list || !env->method_list->next
@@ -29083,21 +29272,9 @@ evaluate_call_next_method (struct object *list, struct environment *env,
 
   while (env->method_list)
     {
-      if (parse_argument_list (args, env->method_list->meth->value_ptr.method->
-			       lambda_list, 0, 0, 0,
-			       env->method_list->meth->value_ptr.method->
-			       found_amp_key, 0, env, outcome, &bins, &argsnum))
-	{
-	  env->vars = chain_bindings (bins, env->vars, 1, NULL, NULL);
-	  env->lex_env_vars_boundary += argsnum;
+      res = call_method (env->method_list, args, env, outcome);
 
-	  res = evaluate_body (env->method_list->meth->value_ptr.method->body, 0,
-			       NULL, env, outcome);
-
-	  env->vars = remove_bindings (env->vars, argsnum, 1);
-	  env->lex_env_vars_boundary = prev_lex_bin_num;
-	}
-      else
+      if (!res)
 	{
 	  ret = NULL;
 	  break;
