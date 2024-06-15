@@ -945,6 +945,15 @@ method
     (struct object *list, struct environment *env, struct outcome *outcome);
 
   struct object *body;
+
+  struct object *object_reader_class_name;
+  struct object *object_reader_field;
+
+  struct object *object_writer_class_name;
+  struct object *object_writer_field;
+
+  struct object *object_accessor_class_name;
+  struct object *object_accessor_field;
 };
 
 
@@ -1609,6 +1618,7 @@ struct object *alloc_prefix (unsigned char pr);
 struct object *alloc_empty_cons_pair (void);
 struct object *alloc_empty_list (size_t sz);
 struct object *alloc_function (void);
+struct object *alloc_method (void);
 struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
 struct object_list *alloc_empty_object_list (size_t sz);
@@ -1674,6 +1684,9 @@ struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
 				struct outcome *outcome, int is_macro,
 				int allow_destructuring);
+
+struct object *create_empty_generic_function (struct object *name, int is_setf,
+					      struct environment *env);
 
 const char *find_end_of_string
 (const char *input, size_t size, size_t *new_size, size_t *string_length);
@@ -1749,8 +1762,10 @@ struct object *create_synonym_stream (struct object *sym);
 struct structure_field_decl *create_structure_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
-struct class_field_decl *create_class_field_decl
-(struct object *fieldform, struct environment *env, struct outcome *outcome);
+struct class_field_decl *create_class_field_decl (struct object *classname,
+						  struct object *fieldform,
+						  struct environment *env,
+						  struct outcome *outcome);
 
 struct condition_field_decl *create_condition_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
@@ -1989,6 +2004,7 @@ int is_class_completely_defined (struct object *class);
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
 int compare_method_specificity (struct object *first, struct object *second);
+void add_method (struct object *genfun, struct object *meth);
 struct object *find_method (struct object *func, enum method_qualifier qualifier,
 			    struct object *c_specifiers,
 			    struct parameter *l_specifiers,
@@ -6981,6 +6997,26 @@ alloc_function (void)
 
 
 struct object *
+alloc_method (void)
+{
+  struct method *m;
+  struct object *meth = alloc_object ();
+
+  meth->type = TYPE_METHOD;
+  m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
+  m->qualifier = PRIMARY_METHOD;
+  m->body = NULL;
+  m->builtin_method = NULL;
+  m->object_reader_class_name = NULL;
+  m->object_writer_class_name = NULL;
+  m->object_accessor_class_name = NULL;
+  m->generic_func = NULL;
+
+  return meth;
+}
+
+
+struct object *
 alloc_sharp_macro_call (void)
 {
   struct object *obj = alloc_object ();
@@ -7876,6 +7912,34 @@ create_function (struct object *lambda_list, struct object *body,
 
   f->body = body;
   add_reference (fun, body, 1);
+
+  return fun;
+}
+
+
+struct object *
+create_empty_generic_function (struct object *name, int is_setf,
+			       struct environment *env)
+{
+  struct outcome out;
+  struct object *fun = create_function (&nil_object, &nil_object, env, &out, 0,
+					0);
+  fun->value_ptr.function->flags |= GENERIC_FUNCTION;
+  fun->value_ptr.function->is_setf_func = is_setf;
+
+  if (is_setf)
+    {
+      name->value_ptr.symbol->setf_func_cell = fun;
+      add_reference (name, fun, 2);
+    }
+  else
+    {
+      name->value_ptr.symbol->function_cell = fun;
+      add_reference (name, fun, 1);
+    }
+
+  fun->value_ptr.function->name = name;
+  add_reference (fun, name, 0);
 
   return fun;
 }
@@ -8974,11 +9038,13 @@ create_structure_field_decl (struct object *fieldform, struct environment *env,
 
 
 struct class_field_decl *
-create_class_field_decl (struct object *fieldform, struct environment *env,
-			 struct outcome *outcome)
+create_class_field_decl (struct object *classname, struct object *fieldform,
+			 struct environment *env, struct outcome *outcome)
 {
-  struct object *name, *initform = NULL, *initarg = NULL;
+  struct object *name, *initform = NULL, *initarg = NULL, *reader = NULL,
+    *writer = NULL, *accessor = NULL, *fun, *meth;
   struct class_field_decl *ret;
+  struct parameter *lambdal;
 
   if (IS_SYMBOL (fieldform))
     name = SYMBOL (fieldform);
@@ -9027,6 +9093,54 @@ create_class_field_decl (struct object *fieldform, struct environment *env,
 
 	  initarg = CAR (CDR (fieldform));
 	}
+      else if (symbol_equals (CAR (fieldform), ":READER", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (reader || !IS_SYMBOL (CAR (CDR (fieldform))))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  reader = SYMBOL (CAR (CDR (fieldform)));
+	}
+      else if (symbol_equals (CAR (fieldform), ":WRITER", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (writer || !IS_SYMBOL (CAR (CDR (fieldform))))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  writer = SYMBOL (CAR (CDR (fieldform)));
+	}
+      else if (symbol_equals (CAR (fieldform), ":ACCESSOR", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (accessor || !IS_SYMBOL (CAR (CDR (fieldform))))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  accessor = SYMBOL (CAR (CDR (fieldform)));
+	}
       else if (symbol_equals (CAR (fieldform), ":DOCUMENTATION", env))
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
@@ -9059,6 +9173,170 @@ create_class_field_decl (struct object *fieldform, struct environment *env,
 
   if (initarg)
     increment_refcount (initarg);
+
+  if (reader)
+    {
+      fun = reader->value_ptr.symbol->function_cell;
+
+      if (fun && (fun->type == TYPE_MACRO
+		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	{
+	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	  return NULL;
+	}
+
+      lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
+      lambdal->typespec = classname;
+      increment_refcount (classname);
+
+      if (!fun)
+	{
+	  fun = create_empty_generic_function (reader, 0, env);
+	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
+	  decrement_refcount (fun);
+	}
+      else
+	{
+	  if (!are_lambda_lists_congruent (lambdal, 0,
+					   fun->value_ptr.function->lambda_list,
+					   fun->value_ptr.function->flags
+					   & FOUND_AMP_KEY))
+	    {
+	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+	      return NULL;
+	    }
+	}
+
+      meth = alloc_method ();
+      meth->value_ptr.method->lambda_list = lambdal;
+      meth->value_ptr.method->object_reader_class_name = classname;
+      meth->value_ptr.method->object_reader_field = name;
+      add_method (fun, meth);
+      decrement_refcount (meth);
+    }
+
+  if (writer)
+    {
+      fun = writer->value_ptr.symbol->function_cell;
+
+      if (fun && (fun->type == TYPE_MACRO
+		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	{
+	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	  return NULL;
+	}
+
+      lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
+      lambdal->typespec = &t_object;
+      lambdal->next->typespec = classname;
+      increment_refcount (classname);
+
+      if (!fun)
+	{
+	  fun = create_empty_generic_function (writer, 0, env);
+	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
+	  decrement_refcount (fun);
+	}
+      else
+	{
+	  if (!are_lambda_lists_congruent (lambdal, 0,
+					   fun->value_ptr.function->lambda_list,
+					   fun->value_ptr.function->flags
+					   & FOUND_AMP_KEY))
+	    {
+	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+	      return NULL;
+	    }
+	}
+
+      meth = alloc_method ();
+      meth->value_ptr.method->lambda_list = lambdal;
+      meth->value_ptr.method->object_writer_class_name = classname;
+      meth->value_ptr.method->object_writer_field = name;
+      add_method (fun, meth);
+      decrement_refcount (meth);
+    }
+
+  if (accessor)
+    {
+      fun = accessor->value_ptr.symbol->function_cell;
+
+      if (fun && (fun->type == TYPE_MACRO
+		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	{
+	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	  return NULL;
+	}
+
+      lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
+      lambdal->typespec = classname;
+      increment_refcount (classname);
+
+      if (!fun)
+	{
+	  fun = create_empty_generic_function (accessor, 0, env);
+	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
+	  decrement_refcount (fun);
+	}
+      else
+	{
+	  if (!are_lambda_lists_congruent (lambdal, 0,
+					   fun->value_ptr.function->lambda_list,
+					   fun->value_ptr.function->flags
+					   & FOUND_AMP_KEY))
+	    {
+	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+	      return NULL;
+	    }
+	}
+
+      meth = alloc_method ();
+      meth->value_ptr.method->lambda_list = lambdal;
+      meth->value_ptr.method->object_accessor_class_name = classname;
+      meth->value_ptr.method->object_accessor_field = name;
+      add_method (fun, meth);
+      decrement_refcount (meth);
+
+
+      fun = accessor->value_ptr.symbol->setf_func_cell;
+
+      if (fun && (fun->type == TYPE_MACRO
+		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	{
+	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	  return NULL;
+	}
+
+      lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
+      lambdal->typespec = &t_object;
+      lambdal->next->typespec = classname;
+      increment_refcount (classname);
+
+      if (!fun)
+	{
+	  fun = create_empty_generic_function (accessor, 1, env);
+	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
+	  decrement_refcount (fun);
+	}
+      else
+	{
+	  if (!are_lambda_lists_congruent (lambdal, 0,
+					   fun->value_ptr.function->lambda_list,
+					   fun->value_ptr.function->flags
+					   & FOUND_AMP_KEY))
+	    {
+	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+	      return NULL;
+	    }
+	}
+
+      meth = alloc_method ();
+      meth->value_ptr.method->lambda_list = lambdal;
+      meth->value_ptr.method->object_accessor_class_name = classname;
+      meth->value_ptr.method->object_accessor_field = name;
+      add_method (fun, meth);
+      decrement_refcount (meth);
+    }
 
   ret->initform = initform;
   ret->initarg = initarg;
@@ -13511,15 +13789,173 @@ call_method (struct method_list *methlist, struct object *arglist,
   struct binding *bins;
   struct object *ret;
   struct method_list *methl;
+  struct class_field *f;
   int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
 
 
   if (!methlist->meth->value_ptr.method->body)
     {
-      ret = methlist->meth->value_ptr.method->builtin_method (arglist, env,
-							      outcome);
+      if (methlist->meth->value_ptr.method->builtin_method)
+	{
+	  ret = methlist->meth->value_ptr.method->builtin_method (arglist, env,
+								  outcome);
 
-      return ret;
+	  return ret;
+	}
+      else if (methlist->meth->value_ptr.method->object_reader_class_name)
+	{
+	  if (list_length (arglist) != 1)
+	    {
+	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
+	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class_name,
+			      methlist->meth->value_ptr.method->
+			      object_reader_class_name, NULL))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  f = CAR (arglist)->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (f->name
+		  == methlist->meth->value_ptr.method->object_reader_field)
+		{
+		  if (!f->value)
+		    {
+		      outcome->type = SLOT_NOT_BOUND;
+		      return NULL;
+		    }
+
+		  increment_refcount (f->value);
+		  return f->value;
+		}
+
+	      f = f->next;
+	    }
+
+	  return NULL;
+	}
+      else if (methlist->meth->value_ptr.method->object_writer_class_name)
+	{
+	  if (list_length (arglist) != 2)
+	    {
+	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
+	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
+			      class_name,
+			      methlist->meth->value_ptr.method->
+			      object_writer_class_name, NULL))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  f = CAR (CDR (arglist))->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (f->name
+		  == methlist->meth->value_ptr.method->object_writer_field)
+		{
+		  decrement_refcount (f->value);
+		  f->value = CAR (arglist);
+		  increment_refcount (f->value);
+		  increment_refcount (f->value);
+		  return f->value;
+		}
+
+	      f = f->next;
+	    }
+
+	  return NULL;
+	}
+      else if (methlist->meth->value_ptr.method->object_accessor_class_name
+	       && !methlist->meth->value_ptr.method->generic_func->
+	       value_ptr.function->is_setf_func)
+	{
+	  if (list_length (arglist) != 1)
+	    {
+	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
+	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class_name,
+			      methlist->meth->value_ptr.method->
+			      object_accessor_class_name, NULL))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  f = CAR (arglist)->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (f->name
+		  == methlist->meth->value_ptr.method->object_accessor_field)
+		{
+		  if (!f->value)
+		    {
+		      outcome->type = SLOT_NOT_BOUND;
+		      return NULL;
+		    }
+
+		  increment_refcount (f->value);
+		  return f->value;
+		}
+
+	      f = f->next;
+	    }
+
+	  return NULL;
+	}
+      else if (methlist->meth->value_ptr.method->object_accessor_class_name)
+	{
+	  if (list_length (arglist) != 2)
+	    {
+	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
+	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
+			      class_name,
+			      methlist->meth->value_ptr.method->
+			      object_accessor_class_name, NULL))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  f = CAR (CDR (arglist))->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (f->name
+		  == methlist->meth->value_ptr.method->object_accessor_field)
+		{
+		  decrement_refcount (f->value);
+		  f->value = CAR (arglist);
+		  increment_refcount (f->value);
+		  increment_refcount (f->value);
+		  return f->value;
+		}
+
+	      f = f->next;
+	    }
+
+	  return NULL;
+	}
     }
 
 
@@ -13653,6 +14089,25 @@ compare_method_specificity (struct object *first, struct object *second)
     }
 
   return 0;
+}
+
+
+void
+add_method (struct object *genfun, struct object *meth)
+{
+  struct method_list *ml = malloc_and_check (sizeof (*ml));
+
+  ml->meth = meth;
+
+  ml->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (meth);
+  INC_WEAK_REFCOUNT (meth);
+
+  ml->next = genfun->value_ptr.function->methods;
+
+  genfun->value_ptr.function->methods = ml;
+
+  meth->value_ptr.method->generic_func = genfun;
+  add_reference (meth, genfun, 0);
 }
 
 
@@ -28339,7 +28794,7 @@ evaluate_defclass (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      f = create_class_field_decl (CAR (list), env, outcome);
+      f = create_class_field_decl (name, CAR (list), env, outcome);
 
       if (!f)
 	return NULL;
