@@ -1437,6 +1437,8 @@ make_test ("(sl1-cl inst)", "10");
 make_test ("(setf (accsl2-cl inst) 20)", "20");
 make_test ("(accsl2-cl inst)", "20");
 make_test ("(sl2-cl inst)", "20");
+make_test ("(defclass cl2 nil ((f1 :type string)))", "#<STANDARD-CLASS CL2>");
+make_test ("(make-instance 'cl2)", "#<CL2 OBJECT ...>");
 make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
 make_test ("(typep #'genfun 'generic-function)", "T");
 make_test ("(typep #'genfun 'standard-generic-function)", "T");
