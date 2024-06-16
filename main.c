@@ -9155,6 +9155,14 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	      return NULL;
 	    }
 	}
+      else if (symbol_equals (CAR (fieldform), ":TYPE", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+	}
       else
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
