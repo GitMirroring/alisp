@@ -2747,11 +2747,11 @@ struct object *evaluate_defclass
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_find_class
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_make_instance
+struct object *builtin_method_make_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_allocate_instance
+struct object *builtin_method_allocate_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_initialize_instance
+struct object *builtin_method_initialize_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3336,6 +3336,7 @@ add_standard_definitions (struct environment *env)
 {
   struct object *cluser_package, *rs, *stdobjsym, *stdobjcl;
   struct package_record *rec;
+  struct parameter *lambdal;
 
   env->keyword_package = create_package_from_c_strings ("KEYWORD", (char *)NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
@@ -3623,12 +3624,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFCLASS", env, evaluate_defclass, TYPE_MACRO, NULL, 0);
   add_builtin_form ("FIND-CLASS", env, builtin_find_class, TYPE_FUNCTION, NULL,
 		    0);
-  add_builtin_form ("MAKE-INSTANCE", env, builtin_make_instance, TYPE_FUNCTION,
-		    NULL, 0);
-  add_builtin_form ("ALLOCATE-INSTANCE", env, builtin_allocate_instance,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("INITIALIZE-INSTANCE", env, builtin_initialize_instance,
-		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("CLASS-NAME", env, builtin_class_name, TYPE_FUNCTION, NULL,
 		    0);
@@ -4090,6 +4085,27 @@ add_standard_definitions (struct environment *env)
 			   create_lambda_list (env, "OBJECT", "STREAM",
 					       (char *)NULL),
 			   builtin_method_print_object);
+
+  lambdal = create_lambda_list (env, "CLASS", (char *)NULL);
+  lambdal->next = alloc_parameter (REST_PARAM, NULL);
+  lambdal->next->name = intern_symbol_by_char_vector ("INITARGS",
+						      strlen ("INITARGS"), 1,
+						      INTERNAL_VISIBILITY, 0,
+						      env->cl_package);
+  lambdal->next->reference_strength_factor
+    = !STRENGTH_FACTOR_OF_OBJECT (lambdal->next->name);
+  INC_WEAK_REFCOUNT (lambdal->next->name);
+
+  define_generic_function ("MAKE-INSTANCE", env, lambdal,
+			   builtin_method_make_instance);
+
+  define_generic_function ("ALLOCATE-INSTANCE", env,
+			   copy_lambda_list (lambdal, 0),
+			   builtin_method_allocate_instance);
+
+  define_generic_function ("INITIALIZE-INSTANCE", env,
+			   copy_lambda_list (lambdal, 0),
+			   builtin_method_initialize_instance);
 
 
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
@@ -12343,9 +12359,9 @@ copy_lambda_list (struct parameter *list, int fill_typespecs_with_t)
   while (list)
     {
       if (ret)
-	par = par->next = alloc_parameter (REQUIRED_PARAM, list->name);
+	par = par->next = alloc_parameter (list->type, list->name);
       else
-	ret = par = alloc_parameter (REQUIRED_PARAM, list->name);
+	ret = par = alloc_parameter (list->type, list->name);
 
       par->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (list->name);
       INC_WEAK_REFCOUNT (list->name);
@@ -28851,8 +28867,8 @@ builtin_find_class (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_make_instance (struct object *list, struct environment *env,
-		       struct outcome *outcome)
+builtin_method_make_instance (struct object *list, struct environment *env,
+			      struct outcome *outcome)
 {
   struct object *class = NULL, *ret;
   struct standard_object *so;
@@ -28908,8 +28924,8 @@ builtin_make_instance (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_allocate_instance (struct object *list, struct environment *env,
-			   struct outcome *outcome)
+builtin_method_allocate_instance (struct object *list, struct environment *env,
+				  struct outcome *outcome)
 {
   struct object *ret;
   struct standard_object *so;
@@ -28947,8 +28963,8 @@ builtin_allocate_instance (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_initialize_instance (struct object *list, struct environment *env,
-			     struct outcome *outcome)
+builtin_method_initialize_instance (struct object *list, struct environment *env,
+				    struct outcome *outcome)
 {
   if (SYMBOL (list) == &nil_object)
     {
