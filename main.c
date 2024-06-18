@@ -168,6 +168,12 @@ typedef long fixnum;
 				       == FILE_STREAM)			\
 				   || ((s)->type == TYPE_FILENAME))
 
+#define IS_FUNCTION_NAME(s) (IS_SYMBOL (s)				\
+			     || ((s)->type == TYPE_CONS_PAIR		\
+				 && list_length (s) == 2		\
+				 && SYMBOL (CAR (s)) == env->setf_sym	\
+				 && IS_SYMBOL (CAR (CDR (s)))))
+
 /*#define HAS_LEAF_TYPE(obj) ((obj)->type & (TYPE_INTEGER | TYPE_FIXNUM	\
 					   | TYPE_RATIO | TYPE_FLOAT \
 					   | TYPE_BYTESPEC | TYPE_STRING \
@@ -9058,7 +9064,7 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 			 struct environment *env, struct outcome *outcome)
 {
   struct object *name, *initform = NULL, *initarg = NULL, *reader = NULL,
-    *writer = NULL, *accessor = NULL, *fun, *meth;
+    *writer = NULL, *accessor = NULL, *fun, *meth, *funcname;
   struct class_field_decl *ret;
   struct parameter *lambdal;
 
@@ -9133,13 +9139,13 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	      return NULL;
 	    }
 
-	  if (writer || !IS_SYMBOL (CAR (CDR (fieldform))))
+	  if (writer || !IS_FUNCTION_NAME (CAR (CDR (fieldform))))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
-	  writer = SYMBOL (CAR (CDR (fieldform)));
+	  writer = CAR (CDR (fieldform));
 	}
       else if (symbol_equals (CAR (fieldform), ":ACCESSOR", env))
 	{
@@ -9241,7 +9247,11 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
   if (writer)
     {
-      fun = writer->value_ptr.symbol->function_cell;
+      funcname = writer->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (writer)))
+	: SYMBOL (writer);
+      fun = writer->type == TYPE_CONS_PAIR
+	? funcname->value_ptr.symbol->setf_func_cell
+	: funcname->value_ptr.symbol->function_cell;
 
       if (fun && (fun->type == TYPE_MACRO
 		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
@@ -9257,7 +9267,9 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
       if (!fun)
 	{
-	  fun = create_empty_generic_function (writer, 0, env);
+	  fun = create_empty_generic_function (funcname,
+					       writer->type == TYPE_CONS_PAIR,
+					       env);
 	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
 	  decrement_refcount (fun);
 	}
