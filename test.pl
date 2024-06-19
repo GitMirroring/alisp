@@ -1444,6 +1444,12 @@ make_test ("(defclass cl nil ((sl :writer (setf sl-cl))))", "#<STANDARD-CLASS CL
 make_test ("(defparameter inst (make-instance 'cl))", "INST");
 make_test ("(setf (sl-cl inst) 30)", "30");
 make_test ("(slot-value inst 'sl)", "30");
+make_test ("(defclass cl nil ((sl :reader rcl1 :writer wcl1 :reader rcl2 :writer wcl2)))", "#<STANDARD-CLASS CL>");
+make_test ("(defparameter inst (make-instance 'cl))", "INST");
+make_test ("(wcl1 40 inst)", "40");
+make_test ("(rcl1 inst)", "40");
+make_test ("(wcl2 50 inst)", "50");
+make_test ("(rcl2 inst)", "50");
 make_test ("(defclass cl2 nil ((f1 :type string)))", "#<STANDARD-CLASS CL2>");
 make_test ("(make-instance 'cl2)", "#<CL2 OBJECT ...>");
 make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
