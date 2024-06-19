@@ -1188,7 +1188,7 @@ class_field_decl
 
   struct object *initform;
 
-  struct object *initarg;
+  struct object_list *initargs;
 
   struct class_field_decl *next;
 };
@@ -9063,8 +9063,9 @@ struct class_field_decl *
 create_class_field_decl (struct object *classname, struct object *fieldform,
 			 struct environment *env, struct outcome *outcome)
 {
-  struct object *name, *initform = NULL, *initarg = NULL, *reader = NULL,
-    *writer = NULL, *accessor = NULL, *fun, *meth, *funcname;
+  struct object *name, *initform = NULL, *reader = NULL, *writer = NULL,
+    *accessor = NULL, *fun, *meth, *funcname;
+  struct object_list *initargs = NULL, *l;
   struct class_field_decl *ret;
   struct parameter *lambdal;
 
@@ -9107,13 +9108,11 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	      return NULL;
 	    }
 
-	  if (initarg)
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  initarg = CAR (CDR (fieldform));
+	  l = malloc_and_check (sizeof (*l));
+	  l->obj = CAR (CDR (fieldform));
+	  increment_refcount (l->obj);
+	  l->next = initargs;
+	  initargs = l;
 	}
       else if (symbol_equals (CAR (fieldform), ":READER", env))
 	{
@@ -9362,11 +9361,8 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
   if (initform)
     increment_refcount (initform);
 
-  if (initarg)
-    increment_refcount (initarg);
-
   ret->initform = initform;
-  ret->initarg = initarg;
+  ret->initargs = initargs;
   ret->next = NULL;
 
   return ret;
@@ -9434,11 +9430,19 @@ struct class_field *
 find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
 {
   struct class_field *fd = stdobj->value_ptr.standard_object->fields;
+  struct object_list *l;
 
   while (fd)
     {
-      if (eq_objects (fd->decl->initarg, initarg) == &t_object)
-	return fd;
+      l = fd->decl->initargs;
+
+      while (l)
+	{
+	  if (eq_objects (l->obj, initarg) == &t_object)
+	    return fd;
+
+	  l = l->next;
+	}
 
       fd = fd->next;
     }
@@ -34672,7 +34676,7 @@ free_structure (struct object *obj)
 void
 free_standard_class (struct object *obj)
 {
-  struct object_list *p = obj->value_ptr.standard_class->parents, *n;
+  struct object_list *p = obj->value_ptr.standard_class->parents, *n, *l;
   struct class_field_decl *f = obj->value_ptr.standard_class->fields, *nf;
 
   while (p)
@@ -34686,7 +34690,17 @@ free_standard_class (struct object *obj)
     {
       nf = f->next;
       decrement_refcount (f->initform);
-      decrement_refcount (f->initarg);
+
+      l = f->initargs;
+
+      while (l)
+	{
+	  n = l->next;
+	  decrement_refcount (l->obj);
+	  free (l);
+	  l = n;
+	}
+
       free (f);
       f = nf;
     }
