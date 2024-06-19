@@ -9123,13 +9123,51 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	      return NULL;
 	    }
 
-	  if (reader || !IS_SYMBOL (CAR (CDR (fieldform))))
+	  if (!IS_SYMBOL (CAR (CDR (fieldform))))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
 	  reader = SYMBOL (CAR (CDR (fieldform)));
+	  fun = reader->value_ptr.symbol->function_cell;
+
+	  if (fun && (fun->type == TYPE_MACRO
+		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	    {
+	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	      return NULL;
+	    }
+
+	  lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
+	  lambdal->typespec = classname;
+	  increment_refcount (classname);
+
+	  if (!fun)
+	    {
+	      fun = create_empty_generic_function (reader, 0, env);
+	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal,
+								       0);
+	      decrement_refcount (fun);
+	    }
+	  else
+	    {
+	      if (!are_lambda_lists_congruent (lambdal, 0,
+					       fun->value_ptr.function->lambda_list,
+					       fun->value_ptr.function->flags
+					       & FOUND_AMP_KEY))
+		{
+		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+		  return NULL;
+		}
+	    }
+
+	  meth = alloc_method ();
+	  meth->value_ptr.method->lambda_list = lambdal;
+	  meth->value_ptr.method->object_reader_class_name = classname;
+	  meth->value_ptr.method->object_reader_field = name;
+	  add_method (fun, meth);
+	  decrement_refcount (meth);
 	}
       else if (symbol_equals (CAR (fieldform), ":WRITER", env))
 	{
@@ -9139,13 +9177,58 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	      return NULL;
 	    }
 
-	  if (writer || !IS_FUNCTION_NAME (CAR (CDR (fieldform))))
+	  if (!IS_FUNCTION_NAME (CAR (CDR (fieldform))))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
 	  writer = CAR (CDR (fieldform));
+	  funcname = writer->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (writer)))
+	    : SYMBOL (writer);
+	  fun = writer->type == TYPE_CONS_PAIR
+	    ? funcname->value_ptr.symbol->setf_func_cell
+	    : funcname->value_ptr.symbol->function_cell;
+
+	  if (fun && (fun->type == TYPE_MACRO
+		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	    {
+	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	      return NULL;
+	    }
+
+	  lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
+	  lambdal->typespec = &t_object;
+	  lambdal->next->typespec = classname;
+	  increment_refcount (classname);
+
+	  if (!fun)
+	    {
+	      fun = create_empty_generic_function (funcname,
+						   writer->type == TYPE_CONS_PAIR,
+						   env);
+	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal,
+								       0);
+	      decrement_refcount (fun);
+	    }
+	  else
+	    {
+	      if (!are_lambda_lists_congruent (lambdal, 0,
+					       fun->value_ptr.function->lambda_list,
+					       fun->value_ptr.function->flags
+					       & FOUND_AMP_KEY))
+		{
+		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+		  return NULL;
+		}
+	    }
+
+	  meth = alloc_method ();
+	  meth->value_ptr.method->lambda_list = lambdal;
+	  meth->value_ptr.method->object_writer_class_name = classname;
+	  meth->value_ptr.method->object_writer_field = name;
+	  add_method (fun, meth);
+	  decrement_refcount (meth);
 	}
       else if (symbol_equals (CAR (fieldform), ":ACCESSOR", env))
 	{
@@ -9155,13 +9238,91 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	      return NULL;
 	    }
 
-	  if (accessor || !IS_SYMBOL (CAR (CDR (fieldform))))
+	  if (!IS_SYMBOL (CAR (CDR (fieldform))))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
 	  accessor = SYMBOL (CAR (CDR (fieldform)));
+	  fun = accessor->value_ptr.symbol->function_cell;
+
+	  if (fun && (fun->type == TYPE_MACRO
+		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	    {
+	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	      return NULL;
+	    }
+
+	  lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
+	  lambdal->typespec = classname;
+	  increment_refcount (classname);
+
+	  if (!fun)
+	    {
+	      fun = create_empty_generic_function (accessor, 0, env);
+	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal,
+								       0);
+	      decrement_refcount (fun);
+	    }
+	  else
+	    {
+	      if (!are_lambda_lists_congruent (lambdal, 0,
+					       fun->value_ptr.function->lambda_list,
+					       fun->value_ptr.function->flags
+					       & FOUND_AMP_KEY))
+		{
+		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+		  return NULL;
+		}
+	    }
+
+	  meth = alloc_method ();
+	  meth->value_ptr.method->lambda_list = lambdal;
+	  meth->value_ptr.method->object_accessor_class_name = classname;
+	  meth->value_ptr.method->object_accessor_field = name;
+	  add_method (fun, meth);
+	  decrement_refcount (meth);
+
+
+	  fun = accessor->value_ptr.symbol->setf_func_cell;
+
+	  if (fun && (fun->type == TYPE_MACRO
+		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
+	    {
+	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
+	      return NULL;
+	    }
+
+	  lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
+	  lambdal->typespec = &t_object;
+	  lambdal->next->typespec = classname;
+	  increment_refcount (classname);
+
+	  if (!fun)
+	    {
+	      fun = create_empty_generic_function (accessor, 1, env);
+	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
+	      decrement_refcount (fun);
+	    }
+	  else
+	    {
+	      if (!are_lambda_lists_congruent (lambdal, 0,
+					       fun->value_ptr.function->lambda_list,
+					       fun->value_ptr.function->flags
+					       & FOUND_AMP_KEY))
+		{
+		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
+		  return NULL;
+		}
+	    }
+
+	  meth = alloc_method ();
+	  meth->value_ptr.method->lambda_list = lambdal;
+	  meth->value_ptr.method->object_accessor_class_name = classname;
+	  meth->value_ptr.method->object_accessor_field = name;
+	  add_method (fun, meth);
+	  decrement_refcount (meth);
 	}
       else if (symbol_equals (CAR (fieldform), ":DOCUMENTATION", env))
 	{
@@ -9203,176 +9364,6 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
   if (initarg)
     increment_refcount (initarg);
-
-  if (reader)
-    {
-      fun = reader->value_ptr.symbol->function_cell;
-
-      if (fun && (fun->type == TYPE_MACRO
-		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	{
-	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	  return NULL;
-	}
-
-      lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
-      lambdal->typespec = classname;
-      increment_refcount (classname);
-
-      if (!fun)
-	{
-	  fun = create_empty_generic_function (reader, 0, env);
-	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
-	  decrement_refcount (fun);
-	}
-      else
-	{
-	  if (!are_lambda_lists_congruent (lambdal, 0,
-					   fun->value_ptr.function->lambda_list,
-					   fun->value_ptr.function->flags
-					   & FOUND_AMP_KEY))
-	    {
-	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-	      return NULL;
-	    }
-	}
-
-      meth = alloc_method ();
-      meth->value_ptr.method->lambda_list = lambdal;
-      meth->value_ptr.method->object_reader_class_name = classname;
-      meth->value_ptr.method->object_reader_field = name;
-      add_method (fun, meth);
-      decrement_refcount (meth);
-    }
-
-  if (writer)
-    {
-      funcname = writer->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (writer)))
-	: SYMBOL (writer);
-      fun = writer->type == TYPE_CONS_PAIR
-	? funcname->value_ptr.symbol->setf_func_cell
-	: funcname->value_ptr.symbol->function_cell;
-
-      if (fun && (fun->type == TYPE_MACRO
-		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	{
-	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	  return NULL;
-	}
-
-      lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
-      lambdal->typespec = &t_object;
-      lambdal->next->typespec = classname;
-      increment_refcount (classname);
-
-      if (!fun)
-	{
-	  fun = create_empty_generic_function (funcname,
-					       writer->type == TYPE_CONS_PAIR,
-					       env);
-	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
-	  decrement_refcount (fun);
-	}
-      else
-	{
-	  if (!are_lambda_lists_congruent (lambdal, 0,
-					   fun->value_ptr.function->lambda_list,
-					   fun->value_ptr.function->flags
-					   & FOUND_AMP_KEY))
-	    {
-	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-	      return NULL;
-	    }
-	}
-
-      meth = alloc_method ();
-      meth->value_ptr.method->lambda_list = lambdal;
-      meth->value_ptr.method->object_writer_class_name = classname;
-      meth->value_ptr.method->object_writer_field = name;
-      add_method (fun, meth);
-      decrement_refcount (meth);
-    }
-
-  if (accessor)
-    {
-      fun = accessor->value_ptr.symbol->function_cell;
-
-      if (fun && (fun->type == TYPE_MACRO
-		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	{
-	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	  return NULL;
-	}
-
-      lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
-      lambdal->typespec = classname;
-      increment_refcount (classname);
-
-      if (!fun)
-	{
-	  fun = create_empty_generic_function (accessor, 0, env);
-	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
-	  decrement_refcount (fun);
-	}
-      else
-	{
-	  if (!are_lambda_lists_congruent (lambdal, 0,
-					   fun->value_ptr.function->lambda_list,
-					   fun->value_ptr.function->flags
-					   & FOUND_AMP_KEY))
-	    {
-	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-	      return NULL;
-	    }
-	}
-
-      meth = alloc_method ();
-      meth->value_ptr.method->lambda_list = lambdal;
-      meth->value_ptr.method->object_accessor_class_name = classname;
-      meth->value_ptr.method->object_accessor_field = name;
-      add_method (fun, meth);
-      decrement_refcount (meth);
-
-
-      fun = accessor->value_ptr.symbol->setf_func_cell;
-
-      if (fun && (fun->type == TYPE_MACRO
-		  || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	{
-	  outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	  return NULL;
-	}
-
-      lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
-      lambdal->typespec = &t_object;
-      lambdal->next->typespec = classname;
-      increment_refcount (classname);
-
-      if (!fun)
-	{
-	  fun = create_empty_generic_function (accessor, 1, env);
-	  fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
-	  decrement_refcount (fun);
-	}
-      else
-	{
-	  if (!are_lambda_lists_congruent (lambdal, 0,
-					   fun->value_ptr.function->lambda_list,
-					   fun->value_ptr.function->flags
-					   & FOUND_AMP_KEY))
-	    {
-	      outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-	      return NULL;
-	    }
-	}
-
-      meth = alloc_method ();
-      meth->value_ptr.method->lambda_list = lambdal;
-      meth->value_ptr.method->object_accessor_class_name = classname;
-      meth->value_ptr.method->object_accessor_field = name;
-      add_method (fun, meth);
-      decrement_refcount (meth);
-    }
 
   ret->initform = initform;
   ret->initarg = initarg;
