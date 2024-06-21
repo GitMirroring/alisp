@@ -1181,10 +1181,23 @@ structure
 };
 
 
+enum
+field_allocation_type
+  {
+    UNKNOWN_ALLOCATION,
+    INSTANCE_ALLOCATION,
+    CLASS_ALLOCATION
+  };
+
+
 struct
 class_field_decl
 {
   struct object *name;
+
+  enum field_allocation_type alloc_type;
+
+  struct object *value;
 
   struct object *initform;
 
@@ -9066,6 +9079,7 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
   struct object *name, *initform = NULL, *reader = NULL, *writer = NULL,
     *accessor = NULL, *fun, *meth, *funcname;
   struct object_list *initargs = NULL, *l;
+  enum field_allocation_type alloctype = UNKNOWN_ALLOCATION;
   struct class_field_decl *ret;
   struct parameter *lambdal;
 
@@ -9323,6 +9337,30 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 	  add_method (fun, meth);
 	  decrement_refcount (meth);
 	}
+      else if (symbol_equals (CAR (fieldform), ":ALLOCATION", env))
+	{
+	  if (SYMBOL (CDR (fieldform)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (alloctype != UNKNOWN_ALLOCATION)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  if (symbol_equals (CAR (CDR (fieldform)), ":INSTANCE", env))
+	    alloctype = INSTANCE_ALLOCATION;
+	  else if (symbol_equals (CAR (CDR (fieldform)), ":CLASS", env))
+	    alloctype = CLASS_ALLOCATION;
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+	}
       else if (symbol_equals (CAR (fieldform), ":DOCUMENTATION", env))
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
@@ -9356,7 +9394,14 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
   ret = malloc_and_check (sizeof (*ret));
 
+  if (alloctype == UNKNOWN_ALLOCATION)
+    alloctype = INSTANCE_ALLOCATION;
+
   ret->name = name;
+
+  ret->alloc_type = alloctype;
+
+  ret->value = NULL;
 
   if (initform)
     increment_refcount (initform);
@@ -9406,7 +9451,11 @@ allocate_object_fields (struct object *stdobj, struct object *class)
     {
       f = malloc_and_check (sizeof (*f));
 
-      f->name = fd->name;
+      if (fd->alloc_type == INSTANCE_ALLOCATION)
+	f->name = fd->name;
+      else
+	f->name = NULL;
+
       f->value = NULL;
       f->decl = fd;
       f->next = stdobj->value_ptr.standard_object->fields;
@@ -9472,10 +9521,23 @@ fill_object_fields (struct object *stdobj, struct object *class,
 	  return NULL;
 	}
 
-      if (!f->value)
+      if (!f->name)
 	{
-	  f->value = CAR (CDR (initargs));
-	  increment_refcount (f->value);
+	  if (!f->value)
+	    {
+	      decrement_refcount (f->decl->value);
+	      f->decl->value = CAR (CDR (initargs));
+	      increment_refcount (f->decl->value);
+	      f->value = &t_object;
+	    }
+	}
+      else
+	{
+	  if (!f->value)
+	    {
+	      f->value = CAR (CDR (initargs));
+	      increment_refcount (f->value);
+	    }
 	}
 
       initargs = CDR (CDR (initargs));
@@ -9485,13 +9547,27 @@ fill_object_fields (struct object *stdobj, struct object *class,
 
   while (f)
     {
-      if (!f->value && f->decl->initform)
+      if (!f->name)
 	{
-	  f->value = evaluate_object (f->decl->initform, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+	  if (!f->decl->value && f->decl->initform)
+	    {
+	      f->decl->value = evaluate_object (f->decl->initform, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
-	  if (!f->value)
-	    return NULL;
+	      if (!f->decl->value)
+		return NULL;
+	    }
+	}
+      else
+	{
+	  if (!f->value && f->decl->initform)
+	    {
+	      f->value = evaluate_object (f->decl->initform, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!f->value)
+		return NULL;
+	    }
 	}
 
       f = f->next;
@@ -21368,15 +21444,23 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
 
   while (f)
     {
-      if (f->name == req)
+      if (f->decl->name == req)
 	{
 	  increment_refcount (newval);
-	  decrement_refcount (f->value);
 
-	  f->value = newval;
+	  if (f->name)
+	    {
+	      decrement_refcount (f->value);
+	      f->value = newval;
+	    }
+	  else
+	    {
+	      decrement_refcount (f->decl->value);
+	      f->decl->value = newval;
+	    }
 
-	  increment_refcount (f->value);
-	  return f->value;
+	  increment_refcount (newval);
+	  return newval;
 	}
 
       f = f->next;
@@ -29216,16 +29300,24 @@ builtin_slot_value (struct object *list, struct environment *env,
 
   while (f)
     {
-      if (f->name == req)
+      if (f->decl->name == req)
 	{
-	  if (!f->value)
+	  if ((f->name && !f->value) || (!f->name && !f->decl->value))
 	    {
 	      outcome->type = SLOT_NOT_BOUND;
 	      return NULL;
 	    }
 
-	  increment_refcount (f->value);
-	  return f->value;
+	  if (f->name)
+	    {
+	      increment_refcount (f->value);
+	      return f->value;
+	    }
+	  else
+	    {
+	      increment_refcount (f->decl->value);
+	      return f->decl->value;
+	    }
 	}
 
       f = f->next;
