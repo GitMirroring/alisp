@@ -670,6 +670,7 @@ make_test ("(defsetf 2dlist (l x y) (newval) `(setf (elt (elt ,l ,x) ,y) ,newval
 make_test ("(let ((ls '((1 2) (3 4))) (x_ 1) (y_ 0)) (list (setf (2dlist ls x_ y_) 10) ls))", "(10 ((1 2) (10 4)))");
 
 make_test ("(make-string 3)", "\"\0\0\0\"");
+make_test ("(make-string 2 :element-type 'character)", "\"\0\0\"");
 make_test ("(intern \"hi\")", "|hi|\nNIL");
 make_test ("(intern \"hi\")", "|hi|\n:INTERNAL");
 make_test ("(intern \"hi\" 'keyword)", ":|hi|\nNIL");
