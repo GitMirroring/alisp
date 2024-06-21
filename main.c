@@ -23622,12 +23622,12 @@ struct object *
 builtin_make_string (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
-  int sz;
-  struct object *ret;
+  int sz, found_unknown_key = 0;
+  struct object *ret, *allow_other_keys = NULL;
 
-  if (list_length (list) != 1)
+  if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
 
       return NULL;
     }
@@ -23647,6 +23647,58 @@ builtin_make_string (struct object *list, struct environment *env,
 
       return NULL;
     }
+
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":ELEMENT-TYPE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
+	}
+
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
+    }
+
 
   ret = alloc_object ();
 
