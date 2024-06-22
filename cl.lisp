@@ -2831,6 +2831,16 @@
 
 
 
+(defgeneric documentation (x doc-type))
+
+(defmethod documentation ((x t) (doc-type t)))
+
+(defgeneric (setf documentation) (newval x doc-type))
+
+(defmethod (setf documentation) ((newval t) (x t) (doc-type t)))
+
+
+
 
 (export '(*features* *default-pathname-defaults* machine-instance machine-type
 	  machine-version short-site-name long-site-name *modules* provide
@@ -2886,7 +2896,7 @@
 	  write-to-string prin1-to-string princ-to-string pprint do-all-symbols
 	  find-all-symbols loop format encode-universal-time *readtable*
 	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart break abort continue))
+	  find-restart break abort continue documentation))
 
 
 
