@@ -2732,6 +2732,10 @@
 
 
 
+(defparameter *readtable* nil)
+
+
+
 (defmacro with-standard-io-syntax (&body forms)
   `(let ((*package* (find-package 'cl-user))
 	 (*print-array* t)
@@ -2880,7 +2884,7 @@
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  write-to-string prin1-to-string princ-to-string pprint do-all-symbols
-	  find-all-symbols loop format encode-universal-time
+	  find-all-symbols loop format encode-universal-time *readtable*
 	  with-standard-io-syntax handler-case restart-case with-simple-restart
 	  find-restart break abort continue))
 
