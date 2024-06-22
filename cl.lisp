@@ -1389,6 +1389,30 @@
 	    (setq propl (cddr propl)))))))
 
 
+(defun getf (plist ind &optional def)
+  (let ((l (length plist)))
+    (do ((i 0 (+ i 2)))
+	((>= i l))
+      (if (eq (car plist) ind)
+	  (return-from getf (cadr plist)))
+      (setq plist (cddr plist))))
+  def)
+
+
+(defun (setf getf) (newval plist ind &optional def)
+  (let ((l (length plist)))
+    (do ((i 0 (+ i 2)))
+	((>= i l))
+      (when (eq (car plist) ind)
+	(setf (cadr plist) newval)
+	(return-from getf newval))
+      (unless (cddr plist)
+	(setf (cddr plist) (list ind newval))
+	(return-from getf newval))
+      (setq plist (cddr plist))))
+  def)
+
+
 
 (defun char (str ind)
   (aref str ind))
@@ -2873,7 +2897,7 @@
 	  set-exclusive-or nset-exclusive-or subsetp mismatch search sort
 	  stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p array-element-type upgraded-array-element-type
-	  adjustable-array-p get get-properties remprop char schar bit sbit
+	  adjustable-array-p get get-properties remprop getf char schar bit sbit
 	  svref vector-pop vector-push vector-push-extend string= string/=
 	  string< string<= string> string>= string-equal string-not-equal
 	  string-lessp string-not-greaterp string-greaterp string-not-lessp
