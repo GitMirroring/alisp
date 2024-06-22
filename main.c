@@ -2031,6 +2031,7 @@ struct object *find_method (struct object *func, enum method_qualifier qualifier
 			    struct environment *env, struct outcome *outcome);
 struct object *dispatch_generic_function_call (struct object *func,
 					       struct object *arglist,
+					       int eval_args,
 					       struct environment *env,
 					       struct outcome *outcome);
 
@@ -13524,7 +13525,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (func->value_ptr.function->flags & GENERIC_FUNCTION)
     {
-      return dispatch_generic_function_call (func, arglist, env, outcome);
+      return dispatch_generic_function_call (func, arglist, eval_args, env,
+					     outcome);
     }
 
 
@@ -14321,17 +14323,26 @@ find_method (struct object *func, enum method_qualifier qualifier,
 
 struct object *
 dispatch_generic_function_call (struct object *func, struct object *arglist,
-				struct environment *env,
+				int eval_args, struct environment *env,
 				struct outcome *outcome)
 {
-  struct object *args = evaluate_through_list (arglist, env, outcome),
-    *ret = NULL, *res, *tmp;
+  struct object *args, *ret = NULL, *res, *tmp;
   struct method_list *applm = NULL, *lapplm,
     *ml = func->value_ptr.function->methods;
   int applnum = 0, i, found_primary = 0;
 
-  if (!args)
-    return NULL;
+  if (eval_args)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	return NULL;
+    }
+  else
+    {
+      increment_refcount (arglist);
+      args = arglist;
+    }
 
   while (ml)
     {
