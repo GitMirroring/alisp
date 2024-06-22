@@ -725,6 +725,12 @@ make_test ("(setf (symbol-plist 'foo) '(:a 0 :b 1 :c 2 :b 3))", "(:A 0 :B 1 :C 2
 make_test ("(remprop 'foo :b)", "T");
 make_test ("(symbol-plist 'foo)", "(:A 0 :C 2 :B 3)");
 make_test ("(remprop 'foo :d)", "NIL");
+make_test ("(getf (symbol-plist 'foo) :c)", "2");
+make_test ("(getf (symbol-plist 'foo) :d)", "NIL");
+make_test ("(getf (symbol-plist 'foo) :d 10)", "10");
+make_test ("(setf (getf (symbol-plist 'foo) :c) 11)", "11");
+make_test ("(setf (getf (symbol-plist 'foo) :d) 12)", "12");
+make_test ("(symbol-plist 'foo)", "(:A 0 :C 11 :B 3 :D 12)");
 make_test ("(special-operator-p 'if)", "T");
 make_test ("(special-operator-p 'car)", "NIL");
 make_test ("(special-operator-p 'aaa)", "NIL");
