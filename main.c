@@ -10807,11 +10807,12 @@ enter_debugger (struct object *cond, struct environment *env,
 	{
 	  printf (" -> ");
 	  print_object (env->last_result, env, env->c_stdout->value_ptr.stream);
-	  printf ("\n\n");
+	  printf ("\n");
 	  decrement_refcount (env->last_result);
 	  env->last_result = NULL;
 	}
 
+      printf ("\n");
       print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
       printf ("\n");
     }
