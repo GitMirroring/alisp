@@ -1862,6 +1862,9 @@ struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
 				 struct environment *env);
 
 struct object *create_room_pair (char *sym, int val, struct environment *env);
+struct object *create_pair (struct object *car, struct object *cdr);
+struct object *dump_bindings (struct binding *bin, int lex_boundary,
+			      struct environment *env);
 
 void print_bindings_in_reverse (struct binding *bins, int num,
 				struct environment *env, struct object *str);
@@ -2867,6 +2870,10 @@ struct object *evaluate_al_loopy_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_dump_bindings
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_dump_function_bindings
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_dump_fields
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_start_profiling
@@ -4139,6 +4146,10 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("AL-DUMP-BINDINGS", env, builtin_al_dump_bindings,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-DUMP-FUNCTION-BINDINGS", env,
+		    builtin_al_dump_function_bindings, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-DUMP-FIELDS", env, builtin_al_dump_fields, TYPE_FUNCTION,
+		    NULL, 0);
 
   add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
 		    TYPE_FUNCTION, NULL, 0);
@@ -10629,6 +10640,65 @@ create_room_pair (char *sym, int val, struct environment *env)
 
   ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car =
     create_integer_from_long (val);
+
+  return ret;
+}
+
+
+struct object *
+create_pair (struct object *car, struct object *cdr)
+{
+  struct object *ret = alloc_empty_cons_pair ();
+
+  ret->value_ptr.cons_pair->car = car;
+  add_reference (ret, car, 0);
+
+  ret->value_ptr.cons_pair->cdr = cdr;
+  add_reference (ret, cdr, 1);
+
+  return ret;
+}
+
+
+struct object *
+dump_bindings (struct binding *bin, int lex_boundary, struct environment *env)
+{
+  struct object *ret = &nil_object, *cons, *l;
+  int i = 0;
+
+  while (bin)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+
+      cons->value_ptr.cons_pair->car = l = alloc_empty_list (3);
+
+      l->value_ptr.cons_pair->car = bin->sym;
+      add_reference (l, bin->sym, 0);
+
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
+      add_reference (CDR (l), bin->obj, 0);
+
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	value_ptr.cons_pair->car = bin->type == LEXICAL_BINDING
+	? KEYWORD (":LEXICAL") : KEYWORD (":SPECIAL");
+      add_reference (CDR (CDR (l)), CAR (CDR (CDR (l))), 0);
+
+      if (bin->type == LEXICAL_BINDING && i < lex_boundary)
+	{
+	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &t_object;
+	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+	}
+
+      i++;
+      bin = bin->next;
+    }
 
   return ret;
 }
@@ -31194,48 +31264,107 @@ struct object *
 builtin_al_dump_bindings (struct object *list, struct environment *env,
 			  struct outcome *outcome)
 {
-  struct object *ret = &nil_object, *cons, *l;
-  struct binding *bin = env->vars;
-  int i = 0;
-
   if (SYMBOL (list) != &nil_object)
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
-  while (bin)
+  return dump_bindings (env->vars, env->lex_env_vars_boundary, env);
+}
+
+
+struct object *
+builtin_al_dump_function_bindings (struct object *list, struct environment *env,
+				   struct outcome *outcome)
+{
+  if (SYMBOL (list) != &nil_object)
     {
-      if (ret == &nil_object)
-	ret = cons = alloc_empty_cons_pair ();
-      else
-	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
 
-      cons->value_ptr.cons_pair->car = l = alloc_empty_list (3);
+  return dump_bindings (env->funcs, env->lex_env_funcs_boundary, env);
+}
 
-      l->value_ptr.cons_pair->car = bin->sym;
-      add_reference (l, bin->sym, 0);
 
-      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
-      add_reference (CDR (l), bin->obj, 0);
+struct object *
+builtin_al_dump_fields (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  struct object *obj, *ret = &nil_object, *cons;
+  struct structure_field *sf;
+  struct class_field *of;
+  struct condition_field *cf;
 
-      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
-	value_ptr.cons_pair->car = bin->type == LEXICAL_BINDING
-	? KEYWORD (":LEXICAL") : KEYWORD (":SPECIAL");
-      add_reference (CDR (CDR (l)), CAR (CDR (CDR (l))), 0);
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
 
-      if (bin->type == LEXICAL_BINDING && i < env->lex_env_vars_boundary)
+  obj = CAR (list);
+
+  if (obj->type == TYPE_STRUCTURE)
+    {
+      sf = obj->value_ptr.structure->fields;
+
+      while (sf)
 	{
-	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
-	    value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
-	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &t_object;
-	  l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
-	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
-	}
+	  cons = alloc_empty_cons_pair ();
 
-      i++;
-      bin = bin->next;
+	  cons->value_ptr.cons_pair->car = create_pair (sf->name, sf->value);
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+
+	  sf = sf->next;
+	}
+    }
+  else if (obj->type == TYPE_STANDARD_OBJECT)
+    {
+      of = obj->value_ptr.standard_object->fields;
+
+      while (of)
+	{
+	  cons = alloc_empty_cons_pair ();
+
+	  if (of->value)
+	    {
+	      cons->value_ptr.cons_pair->car =
+		create_pair (of->decl->name,
+			     of->name ? of->value : of->decl->value);
+	    }
+	  else
+	    {
+	      cons->value_ptr.cons_pair->car = of->decl->name;
+	      add_reference (cons, CAR (cons), 0);
+	    }
+
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+
+	  of = of->next;
+	}
+    }
+  else if (obj->type == TYPE_CONDITION)
+    {
+      cf = obj->value_ptr.condition->fields;
+
+      while (cf)
+	{
+	  cons = alloc_empty_cons_pair ();
+
+	  cons->value_ptr.cons_pair->car = create_pair (cf->name, cf->value);
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+
+	  cf = cf->next;
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
     }
 
   return ret;
