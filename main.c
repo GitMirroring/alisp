@@ -10675,11 +10675,12 @@ dump_bindings (struct binding *bin, int lex_boundary, struct environment *env)
 
       cons->value_ptr.cons_pair->car = l = alloc_empty_list (3);
 
-      l->value_ptr.cons_pair->car = bin->sym;
-      add_reference (l, bin->sym, 0);
+      l->value_ptr.cons_pair->car = bin->sym ? bin->sym : bin->closure_bin->sym;
+      add_reference (l, CAR (l), 0);
 
-      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
-      add_reference (CDR (l), bin->obj, 0);
+      l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= bin->sym ? bin->obj : bin->closure_bin->obj;
+      add_reference (CDR (l), CAR (CDR (l)), 0);
 
       l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
 	value_ptr.cons_pair->car = bin->type == LEXICAL_BINDING
