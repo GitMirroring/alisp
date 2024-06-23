@@ -76,18 +76,26 @@ package.
   available.  AL-SYSTEM uses system from C, so the precise working depends on
   your C library
 
-- the AL-EXIT function takes an optional integer (defaulting to 0) and exit the
+- the AL-EXIT function takes an optional integer (defaulting to 0) and exits the
   interpreter with that return value
 
 - the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
   legal information
 
-- the function AL-DUMP-BINDINGS returns a list with all the non-global live
-  variable bindings, starting with the most recently established.  Each binding
-  is a list containing the symbol, the value, the type of the binding (:LEXICAL
-  or :SPECIAL); for lexical bindings, there's also a fourth element of T if the
-  binding is in scope at that moment.  This function is intended to be called in
-  the debugger, but works everywhere
+- the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
+  the non-global live variable bindings, starting with the most recently
+  established.  Each binding is a list containing the symbol, the value, the
+  type of the binding (:LEXICAL or :SPECIAL); for lexical bindings, there's also
+  a fourth element of T if the binding is in scope at that moment.  This
+  function is intended to be called in the debugger, but works everywhere
+
+- the function AL-DUMP-FUNCTION-BINDINGS does the same thing as
+  AL-DUMP-BINDINGS, but with local function bindings
+
+- the function AL-DUMP-FIELDS takes either a structure object, a standard object
+  or a condition object and dumps the slots of that object as a list.  Each slot
+  is represented as a symbol with its name, if it is unbound, or as a name-value
+  pair, if it is bound
 
 - the special operators AL-LOOPY-DESTRUCTURING-BIND and AL-LOOPY-SETQ are
   similar to DESTRUCTURING-BIND and SETQ respectively, but they allow the kind
