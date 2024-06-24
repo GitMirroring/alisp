@@ -9494,6 +9494,7 @@ find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
 {
   struct class_field *fd = stdobj->value_ptr.standard_object->fields;
   struct object_list *l;
+  struct object *sym = NULL;
 
   while (fd)
     {
@@ -9502,10 +9503,29 @@ find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
       while (l)
 	{
 	  if (eq_objects (l->obj, initarg) == &t_object)
-	    return fd;
+	    {
+	      sym = fd->decl->name;
+	      break;
+	    }
 
 	  l = l->next;
 	}
+
+      if (l)
+	break;
+
+      fd = fd->next;
+    }
+
+  if (!sym)
+    return NULL;
+
+  fd = stdobj->value_ptr.standard_object->fields;
+
+  while (fd)
+    {
+      if (fd->decl->name == sym)
+	return fd;
 
       fd = fd->next;
     }
