@@ -29087,7 +29087,10 @@ struct object *
 builtin_find_class (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  if (list_length (list) != 1)
+  int l = list_length (list);
+  struct object *errorp = &t_object;
+
+  if (!l || l > 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
@@ -29099,6 +29102,9 @@ builtin_find_class (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (l > 1)
+    errorp = CAR (CDR (list));
+
   if (SYMBOL (CAR (list))->value_ptr.symbol->typespec &&
       SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
       == TYPE_STANDARD_CLASS)
@@ -29106,11 +29112,11 @@ builtin_find_class (struct object *list, struct environment *env,
       increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->typespec);
       return SYMBOL (CAR (list))->value_ptr.symbol->typespec;
     }
-  else
-    {
-      outcome->type = CLASS_NOT_FOUND;
-      return NULL;
-    }
+  else if (SYMBOL (errorp) == &nil_object)
+    return &nil_object;
+
+  outcome->type = CLASS_NOT_FOUND;
+  return NULL;
 }
 
 
