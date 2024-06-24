@@ -1387,6 +1387,7 @@ make_test ("(find-class 'starship)", "#<STANDARD-CLASS STARSHIP>");
 make_test ("(typep (find-class 'starship) 'standard-class)", "T");
 make_test ("(typep (make-instance 'starship) (find-class 'starship))", "T");
 make_test ("(typep 0 (find-class 'starship))", "NIL");
+make_test ("(find-class 'blah nil)", "NIL");
 make_test ("(defparameter inst (make-instance 'starship))", "INST");
 make_test ("inst", "#<STARSHIP OBJECT ...>");
 make_test ("(class-of inst)", "#<STANDARD-CLASS STARSHIP>");
