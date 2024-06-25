@@ -475,6 +475,7 @@ outcome_type
     UNKNOWN_TYPE,
     CLASS_NOT_FOUND,
     CLASS_DEFINITION_NOT_COMPLETE,
+    CLASS_ANCESTRY_NOT_CONSISTENT,
     INVALID_GO_TAG,
     TAG_NOT_FOUND,
     BLOCK_NOT_FOUND,
@@ -1208,13 +1209,28 @@ class_field_decl
 
 
 struct
+precedence_relation
+{
+  struct object *first;
+  struct object *second;
+  int is_parent;
+  struct precedence_relation *next;
+};
+
+
+struct
 standard_class
 {
   struct object *name;
 
   struct object_list *parents;
+  struct object_list *descendants;
+
+  struct object_list *class_precedence_list;
 
   struct class_field_decl *fields;
+
+  struct object_list *instances;
 };
 
 
@@ -2022,6 +2038,20 @@ struct object *call_method (struct method_list *methlist, struct object *arglist
 			    struct environment *env, struct outcome *outcome);
 
 int is_class_completely_defined (struct object *class);
+struct precedence_relation *add_precedence_relations (struct object *class,
+						      struct precedence_relation *rels,
+						      int *not_completely_defined);
+struct object_list *collect_superclasses (struct object *class,
+					  struct object_list *scs);
+int is_direct_subclass (struct object *first, struct object *second);
+struct object *compute_next_element_in_precedence_list
+(struct object_list *precedence_list, struct object_list *superclasses,
+ struct precedence_relation *prec_relations);
+struct object_list *remove_element_from_obj_list (struct object *el,
+						  struct object_list *l);
+struct precedence_relation *remove_relations_with_given_first
+(struct object *el, struct precedence_relation *rels);
+int compute_class_precedence_list (struct object *class, struct outcome *outcome);
 
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
@@ -3904,11 +3934,13 @@ add_standard_definitions (struct environment *env)
   stdobjcl->value_ptr.standard_class =
     malloc_and_check (sizeof (*stdobjcl->value_ptr.standard_class));
   stdobjcl->value_ptr.standard_class->parents = NULL;
+  stdobjcl->value_ptr.standard_class->descendants = NULL;
   stdobjcl->value_ptr.standard_class->fields = NULL;
 
   stdobjsym = CREATE_BUILTIN_SYMBOL ("STANDARD-OBJECT");
   stdobjsym->value_ptr.symbol->is_type = 1;
   stdobjsym->value_ptr.symbol->typespec = stdobjcl;
+  stdobjcl->value_ptr.standard_class->name = stdobjsym;
 
 
   add_condition_class ("PACKAGE-ERROR", env, 1, "ERROR", (char *)NULL, "PACKAGE",
@@ -9480,7 +9512,7 @@ allocate_object_fields (struct object *stdobj, struct object *class)
 
   while (p)
     {
-      allocate_object_fields (stdobj, p->obj->value_ptr.symbol->typespec);
+      allocate_object_fields (stdobj, p->obj);
 
       p = p->next;
     }
@@ -14224,6 +14256,313 @@ is_class_completely_defined (struct object *class)
 }
 
 
+struct precedence_relation *
+add_precedence_relations (struct object *class, struct precedence_relation *rels,
+			  int *not_completely_defined)
+{
+  struct precedence_relation *r = rels;
+  struct object_list *p = class->value_ptr.standard_class->parents;
+
+  *not_completely_defined = 0;
+
+  while (p)
+    {
+      if (IS_SYMBOL (p->obj) && SYMBOL (p->obj)->value_ptr.symbol->typespec
+	  && SYMBOL (p->obj)->value_ptr.symbol->typespec->type
+	  == TYPE_STANDARD_CLASS)
+	{
+	  p->obj = SYMBOL (p->obj)->value_ptr.symbol->typespec;
+	  increment_refcount (p->obj);
+	}
+      else if (p->obj->type != TYPE_STANDARD_CLASS)
+	{
+	  *not_completely_defined = 1;
+	  return NULL;
+	}
+
+      p = p->next;
+    }
+
+  while (r)
+    {
+      if (r->is_parent && r->first == class)
+	return rels;
+
+      r = r->next;
+    }
+
+  p = class->value_ptr.standard_class->parents;
+
+  if (p)
+    {
+      r = malloc_and_check (sizeof (*r));
+      r->first = class;
+      r->second = p->obj;
+      r->is_parent = 1;
+
+      r->next = rels;
+      rels = r;
+    }
+
+  while (p)
+    {
+      if (!(rels = add_precedence_relations (p->obj, rels,
+					     not_completely_defined)))
+	{
+	  return NULL;
+	}
+
+      if (!p->next)
+	break;
+
+      r = malloc_and_check (sizeof (*r));
+      r->first = p->obj;
+      r->second = p->next->obj;
+      r->is_parent = 0;
+
+      r->next = rels;
+      rels = r;
+
+      p = p->next;
+    }
+
+  return rels;
+}
+
+
+struct object_list *
+collect_superclasses (struct object *class, struct object_list *scs)
+{
+  struct object_list *s = scs, *l;
+
+  while (s)
+    {
+      if (s->obj == class)
+	return scs;
+
+      s = s->next;
+    }
+
+  l = malloc_and_check (sizeof (*l));
+  l->obj = class;
+  l->next = scs;
+  scs = l;
+
+
+  s = class->value_ptr.standard_class->parents;
+
+  while (s)
+    {
+      scs = collect_superclasses (s->obj, scs);
+      s = s->next;
+    }
+
+  return scs;
+}
+
+
+int
+is_direct_subclass (struct object *first, struct object *second)
+{
+  struct object_list *p = first->value_ptr.standard_class->parents;
+
+  while (p)
+    {
+      if (p->obj == second)
+	return 1;
+
+      p = p->next;
+    }
+
+  return 0;
+}
+
+
+struct object *
+compute_next_element_in_precedence_list (struct object_list *precedence_list,
+					 struct object_list *superclasses,
+					 struct precedence_relation *prec_relations)
+{
+  struct object_list *s = superclasses, *woprec = NULL, *w;
+  struct precedence_relation *pr;
+  struct object *rightmost_subcl, *ret;
+  int passed_rightmost;
+
+  while (s)
+    {
+      pr = prec_relations;
+
+      while (pr)
+	{
+	  if (s->obj == pr->second)
+	    break;
+
+	  pr = pr->next;
+	}
+
+      if (!pr)
+	{
+	  w = malloc_and_check (sizeof (*w));
+	  w->obj = s->obj;
+	  w->next = woprec;
+	  woprec = w;
+	}
+
+      s = s->next;
+    }
+
+  if (!woprec)
+    return NULL;
+
+  if (woprec->next)
+    {
+      rightmost_subcl = NULL;
+      ret = NULL;
+      w = woprec;
+
+      while (w)
+	{
+	  s = precedence_list;
+	  passed_rightmost = 0;
+
+	  while (s)
+	    {
+	      if (is_direct_subclass (s->obj, w->obj)
+		  && (!rightmost_subcl || passed_rightmost))
+		{
+		  rightmost_subcl = s->obj;
+		  ret = w->obj;
+		}
+
+	      if (s->obj == rightmost_subcl)
+		passed_rightmost = 1;
+
+	      s = s->next;
+	    }
+
+	  w = w->next;
+	}
+    }
+  else
+    ret = woprec->obj;
+
+  if (!ret)
+    return NULL;
+
+  while (woprec)
+    {
+      w = woprec->next;
+      free (woprec);
+      woprec = w;
+    }
+
+  return ret;
+}
+
+
+struct object_list *
+remove_element_from_obj_list (struct object *el, struct object_list *l)
+{
+  struct object_list *p = NULL, *ret = l;
+
+  while (l)
+    {
+      if (l->obj == el)
+	{
+	  if (p)
+	    p->next = l->next;
+
+	  if (ret == l)
+	    ret = ret->next;
+
+	  free (l);
+	  return ret;
+	}
+
+      p = l;
+      l = l->next;
+    }
+
+  return ret;
+}
+
+
+struct precedence_relation *
+remove_relations_with_given_first (struct object *el,
+				   struct precedence_relation *rels)
+{
+  struct precedence_relation *pr = NULL, *ret = rels, *tmp;
+
+  while (rels)
+    {
+      if (rels->first == el)
+	{
+	  if (pr)
+	    pr->next = rels->next;
+
+	  if (ret == rels)
+	    ret = ret->next;
+
+	  tmp = rels->next;
+	  free (rels);
+	  rels = tmp;
+	}
+      else
+	{
+	  pr = rels;
+	  rels = rels->next;
+	}
+    }
+
+  return ret;
+}
+
+
+int
+compute_class_precedence_list (struct object *class, struct outcome *outcome)
+{
+  int ncd;
+  struct precedence_relation *prec = add_precedence_relations (class, NULL,
+							       &ncd);
+  struct object_list *scs, *preclist = NULL, *last = NULL;
+  struct object *nextel;
+
+  if (ncd)
+    {
+      outcome->type = CLASS_DEFINITION_NOT_COMPLETE;
+      return 0;
+    }
+
+  scs = collect_superclasses (class, NULL);
+
+  while (scs)
+    {
+      nextel = compute_next_element_in_precedence_list (preclist, scs, prec);
+
+      if (!nextel)
+	{
+	  outcome->type = CLASS_ANCESTRY_NOT_CONSISTENT;
+	  return 0;
+	}
+
+      if (preclist)
+	last = last->next = malloc_and_check (sizeof (*last));
+      else
+	preclist = last = malloc_and_check (sizeof (*last));
+
+      last->obj = nextel;
+      last->next = NULL;
+
+      scs = remove_element_from_obj_list (nextel, scs);
+      prec = remove_relations_with_given_first (nextel, prec);
+    }
+
+  class->value_ptr.standard_class->class_precedence_list = preclist;
+
+  return 1;
+}
+
+
 int
 is_method_applicable (struct object *meth, struct object *args,
 		      struct environment *env, struct outcome *outcome)
@@ -14785,7 +15124,8 @@ is_descendant (const struct object *first, const struct object_list *parents,
 
   while (p)
     {
-      if (p->obj == SYMBOL (second))
+      if ((IS_SYMBOL (p->obj) && p->obj == SYMBOL (second))
+	  || p->obj == SYMBOL (second)->value_ptr.symbol->typespec)
 	return 1;
 
       p = p->next;
@@ -14797,7 +15137,9 @@ is_descendant (const struct object *first, const struct object_list *parents,
     {
       if (p->obj != prev)
 	{
-	  ret = is_subtype (p->obj, SYMBOL (second), first ? SYMBOL (first)
+	  ret = is_subtype (IS_SYMBOL (p->obj) ? p->obj
+			    : p->obj->value_ptr.standard_class->name,
+			    SYMBOL (second), first ? SYMBOL (first)
 			    : NULL);
 
 	  if (ret)
@@ -29060,7 +29402,8 @@ evaluate_defclass (struct object *list, struct environment *env,
       sc->parents->next = NULL;
     }
 
-
+  sc->descendants = NULL;
+  sc->class_precedence_list = NULL;
   sc->fields = NULL;
   list = CAR (CDR (CDR (list)));
 
@@ -29079,6 +29422,7 @@ evaluate_defclass (struct object *list, struct environment *env,
       list = CDR (list);
     }
 
+  sc->instances = NULL;
   return class;
 }
 
@@ -29157,9 +29501,9 @@ builtin_method_make_instance (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!is_class_completely_defined (class))
+  if (!class->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (class, outcome))
     {
-      outcome->type = CLASS_DEFINITION_NOT_COMPLETE;
       return NULL;
     }
 
@@ -29168,8 +29512,10 @@ builtin_method_make_instance (struct object *list, struct environment *env,
 
   so = malloc_and_check (sizeof (*so));
   so->class_name = class->value_ptr.standard_class->name;
+  increment_refcount (class);
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
+  prepend_object_to_obj_list (ret, &class->value_ptr.standard_class->instances);
 
   allocate_object_fields (ret, class);
 
@@ -29196,9 +29542,9 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!is_class_completely_defined (CAR (list)))
+  if (!CAR (list)->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (CAR (list), outcome))
     {
-      outcome->type = CLASS_DEFINITION_NOT_COMPLETE;
       return NULL;
     }
 
@@ -29209,6 +29555,8 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
   so->class_name = CAR (list)->value_ptr.standard_class->name;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
+  prepend_object_to_obj_list (ret, &CAR (list)->value_ptr.standard_class->
+			      instances);
 
   allocate_object_fields (ret, CAR (list));
 
@@ -33910,6 +34258,10 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: class definition is not complete\n");
     }
+  else if (err->type == CLASS_ANCESTRY_NOT_CONSISTENT)
+    {
+      printf ("eval error: class ancestry is not consistent\n");
+    }
   else if (err->type == INVALID_GO_TAG)
     {
       printf ("eval error: not a valid go tag\n");
@@ -35000,6 +35352,24 @@ free_standard_class (struct object *obj)
       p = n;
     }
 
+  p = obj->value_ptr.standard_class->class_precedence_list;
+
+  while (p)
+    {
+      n = p->next;
+      free (p);
+      p = n;
+    }
+
+  p = obj->value_ptr.standard_class->instances;
+
+  while (p)
+    {
+      n = p->next;
+      free (p);
+      p = n;
+    }
+
   while (f)
     {
       nf = f->next;
@@ -35028,6 +35398,8 @@ void
 free_standard_object (struct object *obj)
 {
   struct class_field *f = obj->value_ptr.standard_object->fields, *n;
+  struct object_list *l = obj->value_ptr.standard_object->class_name->
+    value_ptr.symbol->typespec->value_ptr.standard_class->instances, *p = NULL;
 
   while (f)
     {
@@ -35035,6 +35407,25 @@ free_standard_object (struct object *obj)
       decrement_refcount (f->value);
       free (f);
       f = n;
+    }
+
+  while (l)
+    {
+      if (l->obj == obj)
+	{
+	  if (p)
+	    p->next = l->next;
+	  else
+	    obj->value_ptr.standard_object->class_name->
+	      value_ptr.symbol->typespec->value_ptr.standard_class->instances
+	      = l->next;
+
+	  free (l);
+	  break;
+	}
+
+      p = l;
+      l = l->next;
     }
 
   free (obj->value_ptr.standard_object);
