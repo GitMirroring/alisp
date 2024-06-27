@@ -11451,8 +11451,10 @@ nthcdr (unsigned int ind, struct object *list)
     {
       if (list->type == TYPE_CONS_PAIR)
 	list = list->value_ptr.cons_pair->cdr;
-      else
+      else if (SYMBOL (list) == &nil_object)
 	return &nil_object;
+      else
+	return NULL;
     }
 
   return list;
@@ -16681,6 +16683,12 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
   ret = nthcdr (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
 
+  if (!ret)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
   increment_refcount (ret);
 
   return ret;
@@ -21519,13 +21527,13 @@ builtin_setf_nth (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (i >= list_length (CAR (CDR (list))))
+  cons = nthcdr (i, CAR (CDR (list)));
+
+  if (!cons)
     {
       outcome->type = OUT_OF_BOUND_INDEX;
       return NULL;
     }
-
-  cons = nthcdr (i, CAR (CDR (list)));
 
   delete_reference (cons, CAR (cons), 0);
   add_reference (cons, newval, 0);
@@ -21712,13 +21720,13 @@ builtin_setf_elt (struct object *list, struct environment *env,
     }
   else
     {
-      if (ind >= list_length (CAR (list)))
+      cons = nthcdr (ind, CAR (list));
+
+      if (!cons)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
-
-      cons = nthcdr (ind, CAR (list));
 
       delete_reference (cons, CAR (cons), 0);
       add_reference (cons, newval, 0);
