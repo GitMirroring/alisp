@@ -340,6 +340,7 @@ make_test ("tt", "(F B D)");
 make_test ("(setf (cdr tt) 'g)", "G");
 make_test ("tt", "(F . G)");
 make_test ("(let ((l '(1 2))) (setf (nth 1 l) 3) l)", "(1 3)");
+make_test ("(let ((l '(1 2 3))) (setf (nth 2 l) 4) l)", "(1 2 4)");
 make_test ("(defparameter str \"abcdef\")", "STR");
 make_test ("(setf (aref str 2) #\\z)", "#\\z");
 make_test ("str", "\"abzdef\"");
