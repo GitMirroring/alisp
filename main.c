@@ -953,13 +953,13 @@ method
 
   struct object *body;
 
-  struct object *object_reader_class_name;
+  struct object *object_reader_class;
   struct object *object_reader_field;
 
-  struct object *object_writer_class_name;
+  struct object *object_writer_class;
   struct object *object_writer_field;
 
-  struct object *object_accessor_class_name;
+  struct object *object_accessor_class;
   struct object *object_accessor_field;
 };
 
@@ -1250,7 +1250,7 @@ class_field
 struct
 standard_object
 {
-  struct object *class_name;
+  struct object *class;
 
   struct class_field *fields;
 };
@@ -1797,7 +1797,7 @@ struct object *create_synonym_stream (struct object *sym);
 struct structure_field_decl *create_structure_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
-struct class_field_decl *create_class_field_decl (struct object *classname,
+struct class_field_decl *create_class_field_decl (struct object *class,
 						  struct object *fieldform,
 						  struct environment *env,
 						  struct outcome *outcome);
@@ -7088,9 +7088,9 @@ alloc_method (void)
   m->qualifier = PRIMARY_METHOD;
   m->body = NULL;
   m->builtin_method = NULL;
-  m->object_reader_class_name = NULL;
-  m->object_writer_class_name = NULL;
-  m->object_accessor_class_name = NULL;
+  m->object_reader_class = NULL;
+  m->object_writer_class = NULL;
+  m->object_accessor_class = NULL;
   m->generic_func = NULL;
 
   return meth;
@@ -9119,11 +9119,12 @@ create_structure_field_decl (struct object *fieldform, struct environment *env,
 
 
 struct class_field_decl *
-create_class_field_decl (struct object *classname, struct object *fieldform,
+create_class_field_decl (struct object *class, struct object *fieldform,
 			 struct environment *env, struct outcome *outcome)
 {
   struct object *name, *initform = NULL, *reader = NULL, *writer = NULL,
-    *accessor = NULL, *fun, *meth, *funcname;
+    *accessor = NULL, *fun, *meth, *funcname,
+    *classname = class->value_ptr.standard_class->name;
   struct object_list *initargs = NULL, *l;
   enum field_allocation_type alloctype = UNKNOWN_ALLOCATION;
   struct class_field_decl *ret;
@@ -9223,7 +9224,7 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
 	  meth = alloc_method ();
 	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_reader_class_name = classname;
+	  meth->value_ptr.method->object_reader_class = class;
 	  meth->value_ptr.method->object_reader_field = name;
 	  add_method (fun, meth);
 	  decrement_refcount (meth);
@@ -9284,7 +9285,7 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
 	  meth = alloc_method ();
 	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_writer_class_name = classname;
+	  meth->value_ptr.method->object_writer_class = class;
 	  meth->value_ptr.method->object_writer_field = name;
 	  add_method (fun, meth);
 	  decrement_refcount (meth);
@@ -9338,7 +9339,7 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
 	  meth = alloc_method ();
 	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_accessor_class_name = classname;
+	  meth->value_ptr.method->object_accessor_class = class;
 	  meth->value_ptr.method->object_accessor_field = name;
 	  add_method (fun, meth);
 	  decrement_refcount (meth);
@@ -9378,7 +9379,7 @@ create_class_field_decl (struct object *classname, struct object *fieldform,
 
 	  meth = alloc_method ();
 	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_accessor_class_name = classname;
+	  meth->value_ptr.method->object_accessor_class = class;
 	  meth->value_ptr.method->object_accessor_field = name;
 	  add_method (fun, meth);
 	  decrement_refcount (meth);
@@ -14037,7 +14038,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  return ret;
 	}
-      else if (methlist->meth->value_ptr.method->object_reader_class_name)
+      else if (methlist->meth->value_ptr.method->object_reader_class)
 	{
 	  if (list_length (arglist) != 1)
 	    {
@@ -14046,9 +14047,9 @@ call_method (struct method_list *methlist, struct object *arglist,
 	    }
 
 	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
-	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class_name,
+	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class,
 			      methlist->meth->value_ptr.method->
-			      object_reader_class_name, NULL))
+			      object_reader_class, NULL))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14076,7 +14077,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  return NULL;
 	}
-      else if (methlist->meth->value_ptr.method->object_writer_class_name)
+      else if (methlist->meth->value_ptr.method->object_writer_class)
 	{
 	  if (list_length (arglist) != 2)
 	    {
@@ -14086,9 +14087,9 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
 	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
-			      class_name,
+			      class,
 			      methlist->meth->value_ptr.method->
-			      object_writer_class_name, NULL))
+			      object_writer_class, NULL))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14113,7 +14114,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  return NULL;
 	}
-      else if (methlist->meth->value_ptr.method->object_accessor_class_name
+      else if (methlist->meth->value_ptr.method->object_accessor_class
 	       && !methlist->meth->value_ptr.method->generic_func->
 	       value_ptr.function->is_setf_func)
 	{
@@ -14124,9 +14125,9 @@ call_method (struct method_list *methlist, struct object *arglist,
 	    }
 
 	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
-	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class_name,
+	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class,
 			      methlist->meth->value_ptr.method->
-			      object_accessor_class_name, NULL))
+			      object_accessor_class, NULL))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14154,7 +14155,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  return NULL;
 	}
-      else if (methlist->meth->value_ptr.method->object_accessor_class_name)
+      else if (methlist->meth->value_ptr.method->object_accessor_class)
 	{
 	  if (list_length (arglist) != 2)
 	    {
@@ -14164,9 +14165,9 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
 	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
-			      class_name,
+			      class,
 			      methlist->meth->value_ptr.method->
-			      object_accessor_class_name, NULL))
+			      object_accessor_class, NULL))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -15039,10 +15040,10 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
 	{
 	  return obj->type == TYPE_STANDARD_OBJECT
-	    && (obj->value_ptr.standard_object->class_name == sym
+	    && (obj->value_ptr.standard_object->class->value_ptr.standard_class
+		->name == sym
 		|| is_descendant (NULL, obj->value_ptr.standard_object->
-				  class_name->value_ptr.symbol->typespec->
-				  value_ptr.standard_class->parents,
+				  class->value_ptr.standard_class->parents,
 				  sym, NULL));
 	}
       else if (sym->value_ptr.symbol->is_type
@@ -23981,7 +23982,8 @@ builtin_type_of (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_STANDARD_OBJECT)
     {
-      ret = CAR (list)->value_ptr.standard_object->class_name;
+      ret = CAR (list)->value_ptr.standard_object->class->
+	value_ptr.standard_class->name;
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
@@ -29409,7 +29411,7 @@ evaluate_defclass (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      f = create_class_field_decl (name, CAR (list), env, outcome);
+      f = create_class_field_decl (class, CAR (list), env, outcome);
 
       if (!f)
 	return NULL;
@@ -29511,7 +29513,7 @@ builtin_method_make_instance (struct object *list, struct environment *env,
   ret->type = TYPE_STANDARD_OBJECT;
 
   so = malloc_and_check (sizeof (*so));
-  so->class_name = class->value_ptr.standard_class->name;
+  so->class = class;
   increment_refcount (class);
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
@@ -29552,7 +29554,8 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
   ret->type = TYPE_STANDARD_OBJECT;
 
   so = malloc_and_check (sizeof (*so));
-  so->class_name = CAR (list)->value_ptr.standard_class->name;
+  so->class = CAR (list);
+  increment_refcount (CAR (list));
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
   prepend_object_to_obj_list (ret, &CAR (list)->value_ptr.standard_class->
@@ -29582,8 +29585,7 @@ builtin_method_initialize_instance (struct object *list, struct environment *env
 
   increment_refcount (CAR (list));
   return fill_object_fields (CAR (list), CAR (list)->value_ptr.standard_object->
-			     class_name->value_ptr.symbol->typespec, CDR (list),
-			     env, outcome);
+			     class, CDR (list), env, outcome);
 }
 
 
@@ -29599,10 +29601,8 @@ builtin_class_of (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STANDARD_OBJECT)
     {
-      increment_refcount (CAR (list)->value_ptr.standard_object->class_name->
-			  value_ptr.symbol->typespec);
-      return CAR (list)->value_ptr.standard_object->class_name->
-	value_ptr.symbol->typespec;
+      increment_refcount (CAR (list)->value_ptr.standard_object->class);
+      return CAR (list)->value_ptr.standard_object->class;
     }
   else if (CAR (list)->type == TYPE_STRUCTURE)
     {
@@ -33803,8 +33803,8 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_STANDARD_OBJECT)
 	{
 	  if (write_to_stream (str, "#<", strlen ("#<")) < 0
-	      || print_symbol (obj->value_ptr.standard_object->class_name, env,
-			       str)
+	      || print_symbol (obj->value_ptr.standard_object->class->
+			       value_ptr.standard_class->name, env, str)
 	      || write_to_stream (str, " OBJECT ...>", strlen (" OBJECT ...>")) < 0)
 	    return -1;
 
@@ -35398,8 +35398,8 @@ void
 free_standard_object (struct object *obj)
 {
   struct class_field *f = obj->value_ptr.standard_object->fields, *n;
-  struct object_list *l = obj->value_ptr.standard_object->class_name->
-    value_ptr.symbol->typespec->value_ptr.standard_class->instances, *p = NULL;
+  struct object_list *l = obj->value_ptr.standard_object->class->
+    value_ptr.standard_class->instances, *p = NULL;
 
   while (f)
     {
@@ -35416,9 +35416,8 @@ free_standard_object (struct object *obj)
 	  if (p)
 	    p->next = l->next;
 	  else
-	    obj->value_ptr.standard_object->class_name->
-	      value_ptr.symbol->typespec->value_ptr.standard_class->instances
-	      = l->next;
+	    obj->value_ptr.standard_object->class->value_ptr.standard_class->
+	      instances = l->next;
 
 	  free (l);
 	  break;
@@ -35427,6 +35426,8 @@ free_standard_object (struct object *obj)
       p = l;
       l = l->next;
     }
+
+  decrement_refcount (obj->value_ptr.standard_object->class);
 
   free (obj->value_ptr.standard_object);
   free (obj);
