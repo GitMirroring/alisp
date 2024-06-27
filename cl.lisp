@@ -617,28 +617,6 @@
 (define-modify-macro decf (&optional (delta 1)) -)
 
 
-(defmacro and (&rest forms)
-  (if (not forms)
-      t
-      (let ((valsym (gensym)))
-	`(let ((,valsym (multiple-value-list ,(car forms))))
-           (if (car ,valsym)
-               ,(if (not (cdr forms))
-                    `(values-list ,valsym)
-                    `(and ,@(cdr forms))))))))
-
-
-(defmacro or (&rest forms)
-  (if (not forms)
-      nil
-      (let ((valsym (gensym)))
-	`(let ((,valsym (multiple-value-list ,(car forms))))
-	   (if (car ,valsym)
-	       ,(if (not (cdr forms))
-		    `(values-list ,valsym)
-		    `(car ,valsym))
-               (or ,@(cdr forms)))))))
-
 
 (defmacro cond (&body body)
   (when body
@@ -2883,10 +2861,10 @@
 	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
 	  cdaddr cddaar cddadr cdddar cddddr make-list copy-alist copy-tree
 	  tree-equal sublis nsublis endp butlast nbutlast acons pairlis defsetf
-	  when unless define-modify-macro incf decf and or cond otherwise case
-	  ccase ecase typecase ctypecase etypecase return multiple-value-bind
-	  prog prog* every some notany notevery member member-if member-if-not
-	  find find-if find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if
+	  when unless define-modify-macro incf decf cond otherwise case ccase
+	  ecase typecase ctypecase etypecase return multiple-value-bind prog
+	  prog* every some notany notevery member member-if member-if-not find
+	  find-if find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if
 	  rassoc-if-not position position-if position-if-not count count-if
 	  count-if-not remove remove-if-not delete delete-if delete-if-not
 	  remove-duplicates delete-duplicates substitute substitute-if
