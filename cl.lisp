@@ -619,14 +619,31 @@
 
 
 (defmacro cond (&body body)
-  (when body
-    (let ((first (car body))
-	  (rest (cdr body))
-	  (valsym (gensym)))
-      `(let ((,valsym ,(car first)))
-	 (if ,valsym
-	     (progn ,valsym ,@(cdr first))
-	     (cond ,@rest))))))
+  (let (ret l)
+    (dolist (f body)
+      (if (cdr f)
+	  (progn
+	    (let ((cl
+		   `(if ,(car f)
+			,(if (cddr f)
+			     `(progn ,@(cdr f))
+			     (if (cdr f)
+				 (cadr f)))
+			nil)))
+	      (if ret
+		  (setf (car l) cl l (cdddr cl))
+		  (setf ret cl l (cdddr cl)))))
+	  (progn
+	    (let* ((s (gensym))
+		   (cl
+		    `(let ((,s ,(car f)))
+		       (if ,s
+			   ,s
+			   nil))))
+	      (if ret
+		  (setf (car l) cl l (cddr (cdaddr cl)))
+		  (setf ret cl l (cddr (cdaddr cl))))))))
+    ret))
 
 
 
