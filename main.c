@@ -21512,7 +21512,7 @@ builtin_setf_nth (struct object *list, struct environment *env,
   list = CDR (list);
 
   if (CAR (list)->type != TYPE_INTEGER
-      || (i = mpz_cmp_si (CAR (list)->value_ptr.integer, 0)) < 0
+      || (i = mpz_get_si (CAR (list)->value_ptr.integer)) < 0
       || (CAR (CDR (list))->type != TYPE_CONS_PAIR))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
