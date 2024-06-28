@@ -67,6 +67,10 @@ typedef long fixnum;
 
 
 
+#define LISP_STACK_SIZE 8192
+
+
+
 #define CAR(list) ((list)->value_ptr.cons_pair->car)
 
 #define CDR(list) ((list)->value_ptr.cons_pair->cdr)
@@ -427,6 +431,7 @@ outcome_type
     UNKNOWN_KEYWORD_ARGUMENT,
     ODD_NUMBER_OF_ARGUMENTS,
     ODD_NUMBER_OF_KEYWORD_ARGUMENTS,
+    MAX_STACK_DEPTH_REACHED,
     DOTTED_LIST_NOT_ALLOWED_HERE,
     COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
     CANT_SPLICE_AN_ATOM_HERE,
@@ -681,6 +686,9 @@ environment
   struct restart_binding *restarts;
 
   struct compiler_macro *compiler_macros;
+
+
+  int stack_depth;
 
 
   struct object_list *traced_funcs;
@@ -3176,6 +3184,8 @@ main (int argc, char *argv [])
   while (!end_repl)
     {
       free (wholel);
+      env.stack_depth = 0;
+
       obj = read_object_interactively (&env, &eval_out, &input_left,
 				       &input_left_s, &wholel);
 
@@ -3261,6 +3271,8 @@ main (int argc, char *argv [])
 	      decrement_refcount (env.last_result);
 	      env.last_result = NULL;
 	    }
+
+	  env.stack_depth = 0;
 
 	  if (input_left && input_left_s > 0)
 	    obj = read_object_interactively_continued (input_left, input_left_s,
@@ -10895,6 +10907,7 @@ enter_debugger (struct object *cond, struct environment *env,
   while (!end_repl)
     {
       free (wholel);
+      env->stack_depth = 0;
       obj = read_object_interactively (env, outcome, &input_left, &input_left_s,
 				       &wholel);
 
@@ -11054,6 +11067,8 @@ enter_debugger (struct object *cond, struct environment *env,
 
 	  decrement_refcount (result);
 	  decrement_refcount (obj);
+
+	  env->stack_depth = 0;
 
 	  if (input_left && input_left_s > 0)
 	    obj = read_object_interactively_continued (input_left, input_left_s,
@@ -13519,6 +13534,14 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   unsigned isprof = 0, time, evaltime = 0;
 
 
+  env->stack_depth++;
+
+  if (env->stack_depth > LISP_STACK_SIZE)
+    {
+      outcome->type = MAX_STACK_DEPTH_REACHED;
+      return NULL;
+    }
+
   if (stepping_over_this_func)
     env->stepping_flags = STEP_OVER_FORM | STEPPING_OVER_FORM;
 
@@ -13529,7 +13552,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  args = evaluate_through_list (arglist, env, outcome);
 
 	  if (!args)
-	    return NULL;
+	    {
+	      env->stack_depth--;
+	      return NULL;
+	    }
 	}
       else
 	args = arglist;
@@ -13586,6 +13612,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  env->stepping_flags = STEP_OVER_FORM;
 	}
 
+      env->stack_depth--;
+
       return ret;
     }
   else if (func->value_ptr.function->struct_constructor_class_name)
@@ -13593,7 +13621,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       args = evaluate_through_list (arglist, env, outcome);
 
       if (!args)
-	return NULL;
+	{
+	  env->stack_depth--;
+	  return NULL;
+	}
 
       ret = call_structure_constructor (func->value_ptr.function->
 					struct_constructor_class_name, args, env,
@@ -13601,6 +13632,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       decrement_refcount (args);
 
+      env->stack_depth--;
       return ret;
     }
   else if (func->value_ptr.function->struct_accessor_class_name)
@@ -13608,7 +13640,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       args = evaluate_through_list (arglist, env, outcome);
 
       if (!args)
-	return NULL;
+	{
+	  env->stack_depth--;
+	  return NULL;
+	}
 
       ret = call_structure_accessor (func->value_ptr.function->
 				     struct_accessor_class_name,
@@ -13618,6 +13653,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       decrement_refcount (args);
 
+      env->stack_depth--;
       return ret;
     }
   else if (func->value_ptr.function->condition_reader_class_name)
@@ -13625,7 +13661,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       args = evaluate_through_list (arglist, env, outcome);
 
       if (!args)
-	return NULL;
+	{
+	  env->stack_depth--;
+	  return NULL;
+	}
 
       ret = call_condition_reader (func->value_ptr.function->
 				   condition_reader_class_name,
@@ -13634,12 +13673,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       decrement_refcount (args);
 
+      env->stack_depth--;
       return ret;
     }
   else if (func->value_ptr.function->function_macro)
     {
-      return call_function (func->value_ptr.function->function_macro,
-			    CAR (arglist), 0, 1, 1, 0, 0, env, outcome);
+      ret = call_function (func->value_ptr.function->function_macro,
+			   CAR (arglist), 0, 1, 1, 0, 0, env, outcome);
+
+      env->stack_depth--;
+      return ret;
     }
   else if (func->value_ptr.function->macro_function)
     {
@@ -13652,14 +13695,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       free_list_structure (args);
 
+      env->stack_depth--;
       return ret;
     }
 
 
   if (func->value_ptr.function->flags & GENERIC_FUNCTION)
     {
-      return dispatch_generic_function_call (func, arglist, eval_args, env,
-					     outcome);
+      ret = dispatch_generic_function_call (func, arglist, eval_args, env,
+					    outcome);
+      env->stack_depth--;
+      return ret;
     }
 
 
@@ -13822,7 +13868,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->stepping_flags = STEP_OVER_FORM;
     }
 
-
+  env->stack_depth--;
   return ret;
 }
 
@@ -34137,6 +34183,10 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: odd number of arguments in keyword part of function "
 	      "call\n");
+    }
+  else if (err->type == MAX_STACK_DEPTH_REACHED)
+    {
+      printf ("eval error: maximum stack depth exceeded\n");
     }
   else if (err->type == DOTTED_LIST_NOT_ALLOWED_HERE)
     {
