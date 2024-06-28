@@ -34,11 +34,9 @@ Currently, these behaviors can't be changed.
 
 __Stack overflows__
 
-alisp makes no attempt to intercept stack overflows of lisp code; if your code
-has an endless recursion, or a very high call depth, the interpreter will crash.
-
-Ideally, al should only crash in these two cases: for a stack overflow in lisp
-code, or after a wrong assignment to a standard variable (see "Type checking").
+As a protection against stack overflows in lisp code, al has a limit on stack
+depth set by the LISP_STACK_SIZE macro in C.  If that limit is reached, the
+interpreter will print an error message and abort to top level.
 
 
 
