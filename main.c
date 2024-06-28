@@ -10745,6 +10745,7 @@ dump_bindings (struct binding *bin, int lex_boundary, struct environment *env)
 	cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
 
       cons->value_ptr.cons_pair->car = l = alloc_empty_list (3);
+      cons->value_ptr.cons_pair->cdr = &nil_object;
 
       l->value_ptr.cons_pair->car = bin->sym ? bin->sym : bin->closure_bin->sym;
       add_reference (l, CAR (l), 0);
