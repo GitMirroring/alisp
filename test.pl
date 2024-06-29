@@ -1660,6 +1660,7 @@ make_test ("(handler-bind ((condition (lambda (e) (write (signal \"w\"))))) (sig
 make_test ("(block nil (handler-bind ((condition (lambda (e) (return 0)))) (signal \"blah\")))", "0");
 make_test ("(handler-bind ((condition (lambda (e) (write (simple-condition-format-control e))))) (signal \"blah\"))", "\"blah\"\nNIL");
 make_test ("(handler-bind ((arithmetic-error (lambda (e) (write 'oh)))) (signal 'arithmetic-error))", "OH\nNIL");
+make_test ("(handler-bind (((or file-error division-by-zero) (lambda (e) (write 0)))) (signal 'division-by-zero))", "0\nNIL");
 make_test ("(handler-case (/ 1 0) (arithmetic-error (e)))", "NIL");
 make_test ("(handler-case (values 1 2) (arithmetic-error (e)))", "1\n2");
 make_test ("(handler-case (/ 1 0) (division-by-zero nil (write 'first)) (arithmetic-error (e) (write 'second)) (:no-error nil 'noerror))", "FIRST\nFIRST");
