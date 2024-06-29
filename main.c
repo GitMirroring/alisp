@@ -10491,13 +10491,16 @@ int
 does_condition_include_outcome_type (struct object *cond, enum outcome_type type,
 				     struct environment *env)
 {
-  if ((cond == BUILTIN_SYMBOL ("TYPE-ERROR")
+  if (!IS_SYMBOL (cond))
+    return 0;
+
+  if ((SYMBOL (cond) == BUILTIN_SYMBOL ("TYPE-ERROR")
       && type == WRONG_TYPE_OF_ARGUMENT)
-      || (cond == BUILTIN_SYMBOL ("DIVISION-BY-ZERO")
+      || (SYMBOL (cond) == BUILTIN_SYMBOL ("DIVISION-BY-ZERO")
        && type == CANT_DIVIDE_BY_ZERO)
-      || (cond == BUILTIN_SYMBOL ("ARITHMETIC-ERROR")
+      || (SYMBOL (cond) == BUILTIN_SYMBOL ("ARITHMETIC-ERROR")
 	  && type == CANT_DIVIDE_BY_ZERO)
-      || (cond == BUILTIN_SYMBOL ("ERROR") && type > EVAL_OK))
+      || (SYMBOL (cond) == BUILTIN_SYMBOL ("ERROR") && type > EVAL_OK))
     {
       return 1;
     }
@@ -30948,7 +30951,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
   while (cons->type == TYPE_CONS_PAIR)
     {
       if (CAR (cons)->type != TYPE_CONS_PAIR || list_length (CAR (cons)) != 2
-	  || !IS_SYMBOL (CAR (CAR (cons))))
+	  || !IS_TYPE_SPECIFIER (CAR (CAR (cons))))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  goto cleanup_and_leave;
@@ -30967,7 +30970,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 	}
 
       b = malloc_and_check (sizeof (*b));
-      b->condition = SYMBOL (CAR (CAR (cons)));
+      b->condition = CAR (CAR (cons));
       b->handler = res;
       b->next = NULL;
 
