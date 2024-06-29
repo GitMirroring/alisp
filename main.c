@@ -149,6 +149,9 @@ typedef long fixnum;
 #define IS_CLASS(obj) ((obj)->type == TYPE_STRUCTURE_CLASS	\
 		       || (obj)->type == TYPE_STANDARD_CLASS)
 
+#define IS_TYPE_SPECIFIER(obj) (IS_SYMBOL (obj) || IS_CLASS (obj)	\
+				|| obj->type == TYPE_CONS_PAIR)
+
 #define SYMBOL(s) ((s)->type == TYPE_SYMBOL ? (s) :			\
 		   (s)->type == TYPE_SYMBOL_NAME ?			\
 		   (s)->value_ptr.symbol_name->sym :			\
@@ -2063,7 +2066,8 @@ int compute_class_precedence_list (struct object *class, struct outcome *outcome
 
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
-int compare_method_specificity (struct object *first, struct object *second);
+int compare_method_specificity (struct object *first, struct object *second,
+				struct environment *env);
 void add_method (struct object *genfun, struct object *meth);
 struct object *find_method (struct object *func, enum method_qualifier qualifier,
 			    struct object *c_specifiers,
@@ -2084,9 +2088,10 @@ int type_starts_with (const struct object *typespec, const struct object *sym);
 int is_subtype_by_char_vector (const struct object *first, char *second,
 			       struct environment *env);
 int is_descendant (const struct object *first, const struct object_list *parents,
-		   const struct object *second, const struct object *prev);
+		   const struct object *second, const struct object *prev,
+		   struct environment *env);
 int is_subtype (const struct object *first, const struct object *second,
-		const struct object *prev);
+		const struct object *prev, struct environment *env);
 
 int evaluate_feature_test (const struct object *feat_test,
 			   struct environment *env, struct outcome *outcome);
@@ -10600,7 +10605,8 @@ handle_condition (struct object *cond, struct environment *env,
 
   while (b)
     {
-      if (is_subtype (cond->value_ptr.condition->class_name, b->condition, NULL))
+      if (is_subtype (cond->value_ptr.condition->class_name, b->condition, NULL,
+		      env))
 	{
 	  f = env->handlers;
 	  env->handlers = env->handlers->next;
@@ -14050,7 +14056,7 @@ call_condition_reader (struct object *class_name, struct object *field,
 
   if (CAR (args)->type != TYPE_CONDITION
       || !is_subtype (CAR (args)->value_ptr.condition->class_name, class_name,
-		      NULL))
+		      NULL, env))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -14104,7 +14110,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
 	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class,
 			      methlist->meth->value_ptr.method->
-			      object_reader_class, NULL))
+			      object_reader_class, NULL, env))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14144,7 +14150,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
 			      class,
 			      methlist->meth->value_ptr.method->
-			      object_writer_class, NULL))
+			      object_writer_class, NULL, env))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14182,7 +14188,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
 	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class,
 			      methlist->meth->value_ptr.method->
-			      object_accessor_class, NULL))
+			      object_accessor_class, NULL, env))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14222,7 +14228,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
 			      class,
 			      methlist->meth->value_ptr.method->
-			      object_accessor_class, NULL))
+			      object_accessor_class, NULL, env))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -14645,7 +14651,8 @@ is_method_applicable (struct object *meth, struct object *args,
 
 
 int
-compare_method_specificity (struct object *first, struct object *second)
+compare_method_specificity (struct object *first, struct object *second,
+			    struct environment *env)
 {
   struct parameter *par = first->value_ptr.method->lambda_list,
     *par2 = second->value_ptr.method->lambda_list;
@@ -14668,8 +14675,8 @@ compare_method_specificity (struct object *first, struct object *second)
       if (par->typespec->type != TYPE_CONS_PAIR
 	  && par2->typespec->type != TYPE_CONS_PAIR)
 	{
-	  ret1 = is_subtype (par->typespec, par2->typespec, NULL);
-	  ret2 = is_subtype (par2->typespec, par->typespec, NULL);
+	  ret1 = is_subtype (par->typespec, par2->typespec, NULL, env);
+	  ret2 = is_subtype (par2->typespec, par->typespec, NULL, env);
 
 	  if (ret1 && !ret2)
 	    {
@@ -14744,14 +14751,14 @@ find_method (struct object *func, enum method_qualifier qualifier,
 	    {
 	      if (c_specifiers)
 		{
-		  if (!is_subtype (par->typespec, CAR (cons), NULL)
-		      || !is_subtype (CAR (cons), par->typespec, NULL))
+		  if (!is_subtype (par->typespec, CAR (cons), NULL, env)
+		      || !is_subtype (CAR (cons), par->typespec, NULL, env))
 		    break;
 		}
 	      else
 		{
-		  if (!is_subtype (par->typespec, sp->typespec, NULL)
-		      || !is_subtype (sp->typespec, par->typespec, NULL))
+		  if (!is_subtype (par->typespec, sp->typespec, NULL, env)
+		      || !is_subtype (sp->typespec, par->typespec, NULL, env))
 		    break;
 		}
 	    }
@@ -14877,11 +14884,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 		  == lapplm->next->meth->value_ptr.method->qualifier
 		  && ((lapplm->meth->value_ptr.method->qualifier == AFTER_METHOD
 		       && compare_method_specificity (lapplm->meth,
-						      lapplm->next->meth) < 0)
+						      lapplm->next->meth, env) < 0)
 		      || (lapplm->meth->value_ptr.method->qualifier
 			  != AFTER_METHOD
 			  && compare_method_specificity (lapplm->meth,
-							 lapplm->next->meth) > 0))))
+							 lapplm->next->meth,
+							 env) > 0))))
 	    {
 	      tmp = lapplm->meth;
 	      lapplm->meth = lapplm->next->meth;
@@ -15099,7 +15107,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 		->name == sym
 		|| is_descendant (NULL, obj->value_ptr.standard_object->
 				  class->value_ptr.standard_class->parents,
-				  sym, NULL));
+				  sym, NULL, env));
 	}
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
@@ -15109,7 +15117,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 		|| is_descendant (NULL, obj->value_ptr.condition->class_name->
 				  value_ptr.symbol->typespec->
 				  value_ptr.condition_class->parents,
-				  sym, NULL));
+				  sym, NULL, env));
 	}
       else if (sym->value_ptr.symbol->is_type)
 	{
@@ -15167,13 +15175,14 @@ is_subtype_by_char_vector (const struct object *first, char *second,
   return is_subtype (first,
 		     intern_symbol_by_char_vector (second, strlen (second), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package), NULL);
+						   env->cl_package), NULL, env);
 }
 
 
 int
 is_descendant (const struct object *first, const struct object_list *parents,
-	       const struct object *second, const struct object *prev)
+	       const struct object *second, const struct object *prev,
+	       struct environment *env)
 {
   const struct object_list *p = parents;
   int ret;
@@ -15196,7 +15205,7 @@ is_descendant (const struct object *first, const struct object_list *parents,
 	  ret = is_subtype (IS_SYMBOL (p->obj) ? p->obj
 			    : p->obj->value_ptr.standard_class->name,
 			    SYMBOL (second), first ? SYMBOL (first)
-			    : NULL);
+			    : NULL, env);
 
 	  if (ret)
 	    return 1;
@@ -15211,7 +15220,7 @@ is_descendant (const struct object *first, const struct object_list *parents,
 
 int
 is_subtype (const struct object *first, const struct object *second,
-	    const struct object *prev)
+	    const struct object *prev, struct environment *env)
 {
   struct object_list *p;
   int ret;
@@ -15252,10 +15261,84 @@ is_subtype (const struct object *first, const struct object *second,
 	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->
 	parents : NULL;
 
-      ret = is_descendant (SYMBOL (first), p, SYMBOL (second), prev);
+      ret = is_descendant (SYMBOL (first), p, SYMBOL (second), prev, env);
 
       if (ret)
 	return 1;
+    }
+
+  if (first->type == TYPE_CONS_PAIR)
+    {
+      if (SYMBOL (CAR (first)) == env->or_sym)
+	{
+	  first = CDR (first);
+
+	  while (SYMBOL (first) != &nil_object)
+	    {
+	      ret = is_subtype (CAR (first), second, NULL, env);
+
+	      if (ret <= 0)
+		return ret;
+
+	      first = CDR (first);
+	    }
+
+	  return 1;
+	}
+
+      if (SYMBOL (CAR (first)) == env->and_sym)
+	{
+	  first = CDR (first);
+
+	  while (SYMBOL (first) != &nil_object)
+	    {
+	      ret = is_subtype (CAR (first), second, NULL, env);
+
+	      if (ret)
+		return ret;
+
+	      first = CDR (first);
+	    }
+
+	  return -1;
+	}
+    }
+
+  if (second->type == TYPE_CONS_PAIR)
+    {
+      if (SYMBOL (CAR (second)) == env->or_sym)
+	{
+	  first = CDR (second);
+
+	  while (SYMBOL (second) != &nil_object)
+	    {
+	      ret = is_subtype (first, CAR (second), NULL, env);
+
+	      if (ret)
+		return ret;
+
+	      second = CDR (second);
+	    }
+
+	  return -1;
+	}
+
+      if (SYMBOL (CAR (second)) == env->and_sym)
+	{
+	  second = CDR (second);
+
+	  while (SYMBOL (second) != &nil_object)
+	    {
+	      ret = is_subtype (first, CAR (second), NULL, env);
+
+	      if (ret <= 0)
+		return ret;
+
+	      second = CDR (second);
+	    }
+
+	  return 1;
+	}
     }
 
   return 0;
@@ -24060,35 +24143,32 @@ struct object *
 builtin_subtypep (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
+  int ret;
+
   if (list_length (list) != 2)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
-  if ((!IS_SYMBOL (CAR (list)) && !IS_CLASS (CAR (list)))
-      || (!IS_SYMBOL (CAR (CDR (list))) && !IS_CLASS (CAR (CDR (list)))))
+  if (!IS_TYPE_SPECIFIER (CAR (list)) || !IS_TYPE_SPECIFIER (CAR (CDR (list))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  if ((IS_SYMBOL (CAR (list)) && !SYMBOL (CAR (list))->value_ptr.symbol->is_type)
-      || (IS_SYMBOL (CAR (CDR (list)))
-	  && !SYMBOL (CAR (CDR (list)))->value_ptr.symbol->is_type))
+  ret = is_subtype (CAR (list), CAR (CDR (list)), NULL, env);
+
+  if (ret >= 0)
     {
-      outcome->type = UNKNOWN_TYPE;
-      return NULL;
+      prepend_object_to_obj_list (&t_object, &outcome->other_values);
+      return ret ? &t_object : &nil_object;
     }
-
-  prepend_object_to_obj_list (&t_object, &outcome->other_values);
-
-  if (is_subtype (CAR (list), CAR (CDR (list)), NULL))
+  else
     {
-      return &t_object;
+      prepend_object_to_obj_list (&nil_object, &outcome->other_values);
+      return &nil_object;
     }
-
-  return &nil_object;
 }
 
 
