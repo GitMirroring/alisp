@@ -13768,8 +13768,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	    printf ("?");
 
 	  printf (" ");
-	  print_bindings_in_reverse (env->vars, argsnum+closnum, env,
-				     env->c_stdout);
+	  print_bindings_in_reverse (env->vars, argsnum, env, env->c_stdout);
 	  printf ("\n");
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
