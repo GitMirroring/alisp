@@ -29396,6 +29396,7 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
   struct object *tmp, *l, *cons, *val, *newv, *func;
+  int len;
 
   if (list_length (list) != 1)
     {
@@ -29431,7 +29432,7 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
 
       return &nil_object;
     }
-  else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
+  else if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list))))
     {
       if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
 	{
@@ -29440,7 +29441,13 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
 				env, outcome);
 	}
 
-      l = alloc_empty_list (list_length (CAR (list))-1);
+      len = list_length (CAR (list));
+
+      if (len == 1)
+	l = &nil_object;
+      else
+	l = alloc_empty_list (list_length (CAR (list))-1);
+
       cons = l;
 
       while (cons != &nil_object)
