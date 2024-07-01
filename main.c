@@ -13760,8 +13760,13 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  || env->stepping_flags & STEP_INSIDE_FORM)
 	{
 	  printf ("calling ");
-	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			value_ptr.stream);
+
+	  if (func->value_ptr.function->name)
+	    print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			  value_ptr.stream);
+	  else
+	    printf ("?");
+
 	  printf (" ");
 	  print_bindings_in_reverse (env->vars, argsnum+closnum, env,
 				     env->c_stdout);
@@ -13829,8 +13834,12 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		  || (env->stepping_flags
 		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
-	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			value_ptr.stream);
+	  if (func->value_ptr.function->name)
+	    print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			  value_ptr.stream);
+	  else
+	    printf ("?");
+
 	  printf (" returned ");
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
