@@ -1827,8 +1827,8 @@ struct object *fill_object_fields (struct object *stdobj, struct object *class,
 
 void create_condition_fields (struct object *stdobj, struct object *class);
 
-struct object *load_file (const char *filename, struct environment *env,
-			  struct outcome *outcome);
+struct object *load_file (const char *filename, int print_each_form,
+			  struct environment *env, struct outcome *outcome);
 
 struct object *compile_function (struct object *fun, struct environment *env,
 				 struct outcome *outcome);
@@ -3136,7 +3136,7 @@ main (int argc, char *argv [])
       if (!opts.load_and_exit)
 	printf ("Loading cl.lisp... ");
 
-      result = load_file ("cl.lisp", &env, &eval_out);
+      result = load_file ("cl.lisp", 0, &env, &eval_out);
 
       if (result && !opts.load_and_exit)
 	print_object (result, &env, c_stdout->value_ptr.stream);
@@ -3157,7 +3157,7 @@ main (int argc, char *argv [])
       if (!opts.load_and_exit)
 	printf ("Loading %s...\n", opts.load_before_repl);
 
-      result = load_file (opts.load_before_repl, &env, &eval_out);
+      result = load_file (opts.load_before_repl, 0, &env, &eval_out);
 
       if (result && !opts.load_and_exit)
 	print_object (result, &env, c_stdout->value_ptr.stream);
@@ -3172,7 +3172,7 @@ main (int argc, char *argv [])
 
   if (opts.load_and_exit)
     {
-      result = load_file (opts.load_and_exit, &env, &eval_out);
+      result = load_file (opts.load_and_exit, 0, &env, &eval_out);
 
       exit (0);
     }
@@ -4159,6 +4159,9 @@ add_standard_definitions (struct environment *env)
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
   env->read_suppress_sym = define_variable ("*READ-SUPPRESS*", &nil_object, env);
+
+  define_variable ("*LOAD-PRINT*", &nil_object, env);
+  define_variable ("*LOAD-VERBOSE*", &nil_object, env);
 
   define_variable ("*FEATURES*", &nil_object, env);
 
@@ -9696,7 +9699,7 @@ create_condition_fields (struct object *stdobj, struct object *class)
 
 
 struct object *
-load_file (const char *filename, struct environment *env,
+load_file (const char *filename, int print_each_form, struct environment *env,
 	   struct outcome *outcome)
 {
   FILE *f;
@@ -9757,6 +9760,12 @@ load_file (const char *filename, struct environment *env,
 	{
 	  if (out == COMPLETE_OBJECT)
 	    {
+	      if (print_each_form)
+		{
+		  print_object (obj, env, env->c_stdout->value_ptr.stream);
+		  printf (" ");
+		}
+
 	      res = evaluate_object (obj, env, outcome);
 	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
@@ -9766,6 +9775,13 @@ load_file (const char *filename, struct environment *env,
 		  fclose (f);
 
 		  return NULL;
+		}
+
+	      if (print_each_form)
+		{
+		  printf ("-> ");
+		  print_object (res, env, env->c_stdout->value_ptr.stream);
+		  printf ("\n\n");
 		}
 
 	      decrement_refcount (res);
@@ -19704,19 +19720,14 @@ struct object *
 builtin_load (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
-  int l = list_length (list);
+  int l = list_length (list), found_unknown_key = 0;
   char *fn;
-  struct object *ret, *pack = inspect_variable (env->package_sym, env);
+  struct object *ret, *pack = inspect_variable (env->package_sym, env),
+    *verbose = NULL, *print = NULL, *allow_other_keys = NULL;
 
   if (!l)
     {
       outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
-    }
-
-  if (l > 1)
-    {
-      outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
@@ -19728,7 +19739,88 @@ builtin_load (struct object *list, struct environment *env,
 
   fn = copy_string_to_c_string (CAR (list)->value_ptr.string);
 
-  ret = load_file (fn, env, outcome);
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":VERBOSE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!verbose)
+	    verbose = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":PRINT", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!print)
+	    print = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
+	}
+
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
+    }
+
+  if (!verbose)
+    verbose = inspect_variable (BUILTIN_SYMBOL ("*LOAD-VERBOSE*"), env);
+
+  if (!print)
+    print = inspect_variable (BUILTIN_SYMBOL ("*LOAD-PRINT*"), env);
+
+  if (SYMBOL (verbose) != &nil_object)
+    printf ("; Loading %s...\n", fn);
+
+  ret = load_file (fn, SYMBOL (print) != &nil_object, env, outcome);
+
+  if (SYMBOL (verbose) != &nil_object && ret)
+    {
+      printf ("; Loading %s returned ", fn);
+      print_object (ret, env, env->c_stdout->value_ptr.stream);
+    }
 
   set_value (env->package_sym, pack, 0, env, outcome);
 
