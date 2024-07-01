@@ -29168,6 +29168,9 @@ evaluate_and (struct object *list, struct environment *env,
 
       val = evaluate_object (CAR (list), env, outcome);
 
+      if (!val)
+	return NULL;
+
       if (SYMBOL (val) == &nil_object)
 	{
 	  decrement_refcount (val);
@@ -29191,6 +29194,9 @@ evaluate_or (struct object *list, struct environment *env,
   while (SYMBOL (list) != &nil_object)
     {
       val = evaluate_object (CAR (list), env, outcome);
+
+      if (!val)
+	return NULL;
 
       if (SYMBOL (val) != &nil_object)
 	{
