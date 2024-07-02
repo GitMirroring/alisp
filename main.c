@@ -2926,6 +2926,8 @@ struct object *builtin_al_dump_function_bindings
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_dump_captured_env
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_dump_methods
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_dump_fields
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -4213,6 +4215,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-DUMP-FUNCTION-BINDINGS", env,
 		    builtin_al_dump_function_bindings, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-DUMP-CAPTURED-ENV", env, builtin_al_dump_captured_env,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-DUMP-METHODS", env, builtin_al_dump_methods,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-DUMP-FIELDS", env, builtin_al_dump_fields, TYPE_FUNCTION,
 		    NULL, 0);
@@ -32074,6 +32078,43 @@ builtin_al_dump_captured_env (struct object *list, struct environment *env,
     }
 
   return dump_bindings (CAR (list)->value_ptr.function->lex_vars, 0, env);
+}
+
+
+struct object *
+builtin_al_dump_methods (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  struct method_list *ml;
+  struct object *ret = &nil_object, *cons;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION
+      || !(CAR (list)->value_ptr.function->flags & GENERIC_FUNCTION))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ml = CAR (list)->value_ptr.function->methods;
+
+  while (ml)
+    {
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = ml->meth;
+      add_reference (cons, CAR (cons), 0);
+      cons->value_ptr.cons_pair->cdr = ret;
+      ret = cons;
+
+      ml = ml->next;
+    }
+
+  return ret;
 }
 
 
