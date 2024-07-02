@@ -1528,6 +1528,7 @@ make_test ("(defmethod genfun3 ((x string) (y real) z) (write 'third))", "#<STAN
 make_test ("(genfun3 \"\" 0 nil)", "SECOND\nSECOND");
 make_test ("(defmethod genfun3 ((x string) (y integer) (z symbol)) (write 'fourth))", "#<STANDARD-METHOD GENFUN3 (STRING INTEGER SYMBOL)>");
 make_test ("(genfun3 \"\" 0 nil)", "FOURTH\nFOURTH");
+make_test ("(al-dump-methods #'genfun3)", "(#<STANDARD-METHOD GENFUN3 (STRING NUMBER T)> #<STANDARD-METHOD GENFUN3 (STRING INTEGER T)> #<STANDARD-METHOD GENFUN3 (STRING REAL T)> #<STANDARD-METHOD GENFUN3 (STRING INTEGER SYMBOL)>)");
 make_test ("(defgeneric genfun4 (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN4>");
 make_test ("(defmethod genfun4 ((x string) (y number) z) (if (next-method-p) (write 'okay)) (list x y z))", "#<STANDARD-METHOD GENFUN4 (STRING NUMBER T)>");
 make_test ("(defmethod genfun4 ((x string) (y real) z) (call-next-method \"hi\" 30 z))", "#<STANDARD-METHOD GENFUN4 (STRING REAL T)>");
