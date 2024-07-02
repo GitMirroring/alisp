@@ -1893,6 +1893,10 @@ struct object *create_pair (struct object *car, struct object *cdr);
 struct object *dump_bindings (struct binding *bin, int lex_boundary,
 			      struct environment *env);
 
+int print_specializers_from_lambda_list (struct parameter *par,
+					 struct environment *env,
+					 struct stream *str);
+
 void print_bindings_in_reverse (struct binding *bins, int num,
 				struct environment *env, struct object *str);
 
@@ -10803,6 +10807,34 @@ dump_bindings (struct binding *bin, int lex_boundary, struct environment *env)
     }
 
   return ret;
+}
+
+
+int
+print_specializers_from_lambda_list (struct parameter *par,
+				     struct environment *env, struct stream *str)
+{
+  if (write_to_stream (str, "(", 1) < 0)
+    return -1;
+
+  while (par && par->type == REQUIRED_PARAM)
+    {
+      if (print_object (par->typespec, env, str) < 0)
+	return -1;
+
+      if (par->next && par->next->type == REQUIRED_PARAM)
+	{
+	  if (write_to_stream (str, " ", 1) < 0)
+	    return -1;
+	}
+
+      par = par->next;
+    }
+
+  if (write_to_stream (str, ")", 1) < 0)
+    return -1;
+
+  return 0;
 }
 
 
@@ -33946,12 +33978,34 @@ print_method (const struct object *obj, struct environment *env,
 
   if (obj->value_ptr.method->generic_func->value_ptr.function->is_setf_func)
     {
-      if (write_to_stream (str, ")>", strlen (")>")) < 0)
+      if (write_to_stream (str, ")", strlen (")")) < 0)
 	return -1;
     }
-  else
-    if (write_to_stream (str, ">", 1) < 0)
-      return -1;
+
+  if (obj->value_ptr.method->qualifier == AROUND_METHOD)
+    {
+      if (write_to_stream (str, " :AROUND ", strlen (" :AROUND ")) < 0)
+	return -1;
+    }
+  else if (obj->value_ptr.method->qualifier == BEFORE_METHOD)
+    {
+      if (write_to_stream (str, " :BEFORE ", strlen (" :BEFORE ")) < 0)
+	return -1;
+    }
+  else if (obj->value_ptr.method->qualifier == AFTER_METHOD)
+    {
+      if (write_to_stream (str, " :AFTER ", strlen (" :AFTER ")) < 0)
+	return -1;
+    }
+  else if (write_to_stream (str, " ", strlen (" ")) < 0)
+    return -1;
+
+  if (print_specializers_from_lambda_list (obj->value_ptr.method->lambda_list,
+					   env, str) < 0)
+    return -1;
+
+  if (write_to_stream (str, ">", 1) < 0)
+    return -1;
 
   return 0;
 }
