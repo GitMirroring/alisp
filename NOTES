@@ -90,6 +90,11 @@ package.
 - the function AL-DUMP-FUNCTION-BINDINGS does the same thing as
   AL-DUMP-BINDINGS, but with local function bindings
 
+- the function AL-DUMP-CAPTURED-ENV takes a function object and returns a list
+  with all the lexical variable bindings that the function closed over.  The
+  format of the list is the same as AL-DUMP-BINDINGS, without the fourth field
+  since it doesn't apply
+
 - the function AL-DUMP-FIELDS takes either a structure object, a standard object
   or a condition object and dumps the slots of that object as a list.  Each slot
   is represented as a symbol with its name, if it is unbound, or as a name-value
