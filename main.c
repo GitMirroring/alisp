@@ -13594,8 +13594,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  || env->stepping_flags & STEP_INSIDE_FORM)
 	{
 	  printf ("calling builtin ");
+
+	  if (func->value_ptr.function->is_setf_func)
+	    printf ("(SETF ");
+
 	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
 			value_ptr.stream);
+
+	  if (func->value_ptr.function->is_setf_func)
+	    printf (")");
+
 	  printf (" ");
 	  print_object (args, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
@@ -13623,8 +13631,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  printf ("builtin ");
+
+	  if (func->value_ptr.function->is_setf_func)
+	    printf ("(SETF ");
+
 	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
 			value_ptr.stream);
+
+	  if (func->value_ptr.function->is_setf_func)
+	    printf (")");
+
 	  printf (" returned ");
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
@@ -13766,8 +13782,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  printf ("calling ");
 
 	  if (func->value_ptr.function->name)
-	    print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			  value_ptr.stream);
+	    {
+	      if (func->value_ptr.function->is_setf_func)
+		printf ("(SETF ");
+
+	      print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			    value_ptr.stream);
+
+	      if (func->value_ptr.function->is_setf_func)
+		printf (")");
+	    }
 	  else
 	    printf ("?");
 
@@ -13838,8 +13862,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  if (func->value_ptr.function->name)
-	    print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			  value_ptr.stream);
+	    {
+	      if (func->value_ptr.function->is_setf_func)
+		printf ("(SETF ");
+
+	      print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+			    value_ptr.stream);
+
+	      if (func->value_ptr.function->is_setf_func)
+		printf (")");
+	    }
 	  else
 	    printf ("?");
 
