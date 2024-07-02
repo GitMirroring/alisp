@@ -1557,6 +1557,7 @@ make_test ("(defmethod genfun8 ((x integer)) (write 'third))", "#<STANDARD-METHO
 make_test ("(genfun8 0)", "SECONDTHIRDFIRST\nTHIRD");
 make_test ("(find-method #'genfun8 nil '(integer))", "#<STANDARD-METHOD GENFUN8>");
 make_test ("(find-method #'genfun8 '(:after) '(integer))", "#<STANDARD-METHOD GENFUN8>");
+make_test ("(function-lambda-expression (find-method #'genfun8 '(:after) '(integer)))", "((WRITE 'FIRST))");
 make_test ("(find-method #'genfun8 '(:before) '(integer))", "#<STANDARD-METHOD GENFUN8>");
 make_test ("(find-method #'genfun8 '(:around) '(integer))", "NIL");
 make_test ("(find-method #'genfun8 '(:before) '(number))", "NIL");
