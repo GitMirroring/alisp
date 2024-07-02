@@ -30742,31 +30742,40 @@ builtin_function_lambda_expression (struct object *list, struct environment *env
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FUNCTION)
+  if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      ret = alloc_empty_cons_pair ();
+
+      ret->value_ptr.cons_pair->car = env->lambda_sym;
+      add_reference (ret, CAR (ret), 0);
+
+      ret->value_ptr.cons_pair->cdr = cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car
+	= list_lambda_list (CAR (list)->value_ptr.function->lambda_list,
+			    CAR (list)->value_ptr.function->allow_other_keys,
+			    env);
+
+      cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->body;
+      add_reference (cons, CDR (cons), 1);
+
+      prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
+				  CAR (list)->value_ptr.function->name :
+				  &nil_object, &outcome->other_values);
+      increment_refcount (outcome->other_values->obj);
+      prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
+				  &t_object : &nil_object, &outcome->other_values);
+    }
+  else if (CAR (list)->type == TYPE_METHOD)
+    {
+      ret = CAR (list)->value_ptr.method->body
+	? CAR (list)->value_ptr.method->body : &nil_object;
+      increment_refcount (ret);
+    }
+  else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
-
-  ret = alloc_empty_cons_pair ();
-
-  ret->value_ptr.cons_pair->car = env->lambda_sym;
-  add_reference (ret, CAR (ret), 0);
-
-  ret->value_ptr.cons_pair->cdr = cons = alloc_empty_cons_pair ();
-  cons->value_ptr.cons_pair->car
-    = list_lambda_list (CAR (list)->value_ptr.function->lambda_list,
-			CAR (list)->value_ptr.function->allow_other_keys, env);
-
-  cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->body;
-  add_reference (cons, CDR (cons), 1);
-
-  prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
-			      CAR (list)->value_ptr.function->name : &nil_object,
-			      &outcome->other_values);
-  increment_refcount (outcome->other_values->obj);
-  prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
-			      &t_object : &nil_object, &outcome->other_values);
 
   return ret;
 }
