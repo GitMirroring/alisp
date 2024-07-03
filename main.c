@@ -2930,6 +2930,8 @@ struct object *builtin_al_dump_methods
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_dump_fields
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_class_precedence_list
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_start_profiling
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4220,6 +4222,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-DUMP-FIELDS", env, builtin_al_dump_fields, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("AL-CLASS-PRECEDENCE-LIST", env,
+		    builtin_al_class_precedence_list, TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
 		    TYPE_FUNCTION, NULL, 0);
@@ -32196,6 +32200,54 @@ builtin_al_dump_fields (struct object *list, struct environment *env,
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+
+  return ret;
+}
+
+
+struct object *
+builtin_al_class_precedence_list (struct object *list, struct environment *env,
+				  struct outcome *outcome)
+{
+  struct object_list *l;
+  struct object *ret, *cons;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_CLASS)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!CAR (list)->value_ptr.standard_class->class_precedence_list)
+    {
+      if (!compute_class_precedence_list (CAR (list), outcome))
+	return NULL;
+    }
+
+  l = CAR (list)->value_ptr.standard_class->class_precedence_list;
+
+  ret = cons = alloc_empty_cons_pair ();
+  ret->value_ptr.cons_pair->car = l->obj;
+  add_reference (ret, CAR (ret), 0);
+
+  l = l->next;
+
+  while (l)
+    {
+      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = l->obj;
+      add_reference (cons, CAR (cons), 0);
+
+      l = l->next;
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
 }
