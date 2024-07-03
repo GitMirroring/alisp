@@ -1897,6 +1897,9 @@ int print_specializers_from_lambda_list (struct parameter *par,
 					 struct environment *env,
 					 struct stream *str);
 
+void print_function_name (struct object *func, struct environment *env);
+void print_method_description (struct object *meth, struct environment *env);
+
 void print_bindings_in_reverse (struct binding *bins, int num,
 				struct environment *env, struct object *str);
 
@@ -10847,6 +10850,48 @@ print_specializers_from_lambda_list (struct parameter *par,
 
 
 void
+print_function_name (struct object *func, struct environment *env)
+{
+  if (func->value_ptr.function->name)
+    {
+      if (func->value_ptr.function->is_setf_func)
+	printf ("(SETF ");
+
+      print_symbol (func->value_ptr.function->name, env, env->c_stdout->
+		    value_ptr.stream);
+
+      if (func->value_ptr.function->is_setf_func)
+	printf (")");
+    }
+  else
+    printf ("?");
+}
+
+
+void
+print_method_description (struct object *meth, struct environment *env)
+{
+  switch (meth->value_ptr.method->qualifier)
+    {
+    case AROUND_METHOD:
+      printf (":AROUND ");
+      break;
+    case BEFORE_METHOD:
+      printf (":BEFORE ");
+      break;
+    case AFTER_METHOD:
+      printf (":AFTER ");
+      break;
+    default:
+      break;
+    }
+
+  print_specializers_from_lambda_list (meth->value_ptr.method->lambda_list,
+				       env, env->c_stdout->value_ptr.stream);
+}
+
+
+void
 print_bindings_in_reverse (struct binding *bins, int num,
 			   struct environment *env, struct object *str)
 {
@@ -13634,16 +13679,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  || env->stepping_flags & STEP_INSIDE_FORM)
 	{
 	  printf ("calling builtin ");
-
-	  if (func->value_ptr.function->is_setf_func)
-	    printf ("(SETF ");
-
-	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			value_ptr.stream);
-
-	  if (func->value_ptr.function->is_setf_func)
-	    printf (")");
-
+	  print_function_name (func, env);
 	  printf (" ");
 	  print_object (args, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
@@ -13671,16 +13707,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  printf ("builtin ");
-
-	  if (func->value_ptr.function->is_setf_func)
-	    printf ("(SETF ");
-
-	  print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			value_ptr.stream);
-
-	  if (func->value_ptr.function->is_setf_func)
-	    printf (")");
-
+	  print_function_name (func, env);
 	  printf (" returned ");
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
@@ -13820,21 +13847,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  || env->stepping_flags & STEP_INSIDE_FORM)
 	{
 	  printf ("calling ");
-
-	  if (func->value_ptr.function->name)
-	    {
-	      if (func->value_ptr.function->is_setf_func)
-		printf ("(SETF ");
-
-	      print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			    value_ptr.stream);
-
-	      if (func->value_ptr.function->is_setf_func)
-		printf (")");
-	    }
-	  else
-	    printf ("?");
-
+	  print_function_name (func, env);
 	  printf (" ");
 	  print_bindings_in_reverse (env->vars, argsnum, env, env->c_stdout);
 	  printf ("\n");
@@ -13901,20 +13914,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 		  || (env->stepping_flags
 		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
-	  if (func->value_ptr.function->name)
-	    {
-	      if (func->value_ptr.function->is_setf_func)
-		printf ("(SETF ");
-
-	      print_symbol (func->value_ptr.function->name, env, env->c_stdout->
-			    value_ptr.stream);
-
-	      if (func->value_ptr.function->is_setf_func)
-		printf (")");
-	    }
-	  else
-	    printf ("?");
-
+	  print_function_name (func, env);
 	  printf (" returned ");
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
@@ -14187,18 +14187,44 @@ call_method (struct method_list *methlist, struct object *arglist,
 	     struct environment *env, struct outcome *outcome)
 {
   struct binding *bins;
-  struct object *ret;
+  struct object *ret, *func = methlist->meth->value_ptr.method->generic_func;
   struct method_list *methl;
   struct class_field *f;
   int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
-
 
   if (!methlist->meth->value_ptr.method->body)
     {
       if (methlist->meth->value_ptr.method->builtin_method)
 	{
+	  if (func->value_ptr.function->flags & TRACED_FUNCTION
+	      || env->stepping_flags & STEP_INSIDE_FORM)
+	    {
+	      printf ("calling builtin method ");
+	      print_method_description (methlist->meth, env);
+	      printf (" of ");
+	      print_function_name (func, env);
+	      printf (" ");
+	      print_object (arglist, env, env->c_stdout->value_ptr.stream);
+	      printf ("\n");
+	      env->c_stdout->value_ptr.stream->dirty_line = 0;
+	    }
+
 	  ret = methlist->meth->value_ptr.method->builtin_method (arglist, env,
 								  outcome);
+
+	  if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+		      || (env->stepping_flags
+			  && !(env->stepping_flags & STEPPING_OVER_FORM))))
+	    {
+	      printf ("builtin method ");
+	      print_method_description (methlist->meth, env);
+	      printf (" of ");
+	      print_function_name (func, env);
+	      printf (" returned ");
+	      print_object (ret, env, env->c_stdout->value_ptr.stream);
+	      printf ("\n");
+	      env->c_stdout->value_ptr.stream->dirty_line = 0;
+	    }
 
 	  return ret;
 	}
@@ -14370,8 +14396,35 @@ call_method (struct method_list *methlist, struct object *arglist,
       env->vars = chain_bindings (bins, env->vars, 1, NULL, NULL);
       env->lex_env_vars_boundary += argsnum;
 
+      if (func->value_ptr.function->flags & TRACED_FUNCTION
+	  || env->stepping_flags & STEP_INSIDE_FORM)
+	{
+	  printf ("calling method ");
+	  print_method_description (methlist->meth, env);
+	  printf (" of ");
+	  print_function_name (func, env);
+	  printf (" ");
+	  print_bindings_in_reverse (env->vars, argsnum, env, env->c_stdout);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	}
+
       ret = evaluate_body (methlist->meth->value_ptr.method->body, 0, NULL, env,
 			   outcome);
+
+      if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+		  || (env->stepping_flags
+		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
+	{
+	  printf ("method ");
+	  print_method_description (methlist->meth, env);
+	  printf (" of ");
+	  print_function_name (func, env);
+	  printf (" returned ");
+	  print_object (ret, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	}
 
       env->vars = remove_bindings (env->vars, argsnum, 1);
       env->lex_env_vars_boundary = prev_lex_bin_num;
@@ -14941,6 +14994,17 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       args = arglist;
     }
 
+  if (func->value_ptr.function->flags & TRACED_FUNCTION
+      || env->stepping_flags & STEP_INSIDE_FORM)
+    {
+      printf ("calling generic function ");
+      print_function_name (func, env);
+      printf (" ");
+      print_object (args, env, env->c_stdout->value_ptr.stream);
+      printf ("\n");
+      env->c_stdout->value_ptr.stream->dirty_line = 0;
+    }
+
   while (ml)
     {
       if (is_method_applicable (ml->meth, args, env, outcome))
@@ -15051,6 +15115,18 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       lapplm = applm->next;
       free (applm);
       applm = lapplm;
+    }
+
+  if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+	      || (env->stepping_flags
+		  && !(env->stepping_flags & STEPPING_OVER_FORM))))
+    {
+      printf ("generic function ");
+      print_function_name (func, env);
+      printf (" returned ");
+      print_object (ret, env, env->c_stdout->value_ptr.stream);
+      printf ("\n");
+      env->c_stdout->value_ptr.stream->dirty_line = 0;
     }
 
   return ret;
