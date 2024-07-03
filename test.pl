@@ -1493,6 +1493,7 @@ make_test ("(defclass cl4 nil ((sl :initarg :sl)))", "#<STANDARD-CLASS CL4>");
 make_test ("(defclass cl5 nil (sl))", "#<STANDARD-CLASS CL5>");
 make_test ("(defclass cl6 (cl4 cl5) nil)", "#<STANDARD-CLASS CL6>");
 make_test ("(slot-value (make-instance 'cl6 :sl 10) 'sl)", "10");
+make_test ("(al-class-precedence-list (find-class 'cl6))", "(#<STANDARD-CLASS CL6> #<STANDARD-CLASS CL4> #<STANDARD-CLASS CL5> #<STANDARD-CLASS STANDARD-OBJECT>)");
 make_test ("(defclass cl7 (cl8) (sl1))", "#<STANDARD-CLASS CL7>");
 make_test ("(defclass cl8 nil (sl2))", "#<STANDARD-CLASS CL8>");
 make_test ("(slot-exists-p (make-instance 'cl7) 'sl1)", "T");
