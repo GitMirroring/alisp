@@ -14387,7 +14387,8 @@ call_method (struct method_list *methlist, struct object *arglist,
 
   if (parse_argument_list (arglist, methlist->meth->value_ptr.method->lambda_list,
 			   0, 0, 0, methlist->meth->value_ptr.method->found_amp_key,
-			   0, env, outcome, &bins, &argsnum))
+			   func->value_ptr.function->allow_other_keys, env,
+			   outcome, &bins, &argsnum))
     {
       env->method_args = arglist;
       methl = env->method_list;
@@ -30622,6 +30623,9 @@ evaluate_defmethod (struct object *list, struct environment *env,
       outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
       return NULL;
     }
+
+  if (m->allow_other_keys)
+    fun->value_ptr.function->allow_other_keys = 1;
 
   m->body = q == PRIMARY_METHOD ? CDR (CDR (list)) : CDR (CDR (CDR (list)));
   add_reference (meth, m->body, 1);
