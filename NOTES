@@ -60,7 +60,7 @@ COMPILE too.
 __alisp extensions__
 
 al has a small number of non-standard builtins; they are interned in the CL-USER
-package.
+package.  There are also some non-standard extensions of standard functions.
 
 - *AL-ARGC* (an integer) and *AL-ARGV* (a vector of strings) let you access argc
   and argv of C, respectively, so they contain the number and value of
@@ -95,10 +95,20 @@ package.
   format of the list is the same as AL-DUMP-BINDINGS, without the fourth field
   since it doesn't apply
 
+- the function AL-DUMP-METHODS takes a generic function and returns a list of
+  its method objects
+
+- the standard function FUNCTION-LAMBDA-EXPRESSION also accepts a method object.
+  In that case, it returns the body of that method as a list
+
 - the function AL-DUMP-FIELDS takes either a structure object, a standard object
   or a condition object and dumps the slots of that object as a list.  Each slot
   is represented as a symbol with its name, if it is unbound, or as a name-value
   pair, if it is bound
+
+- the function AL-CLASS-PRECEDENCE-LIST takes a standard class object (not for a
+  structure class nor a condition class) and returns the class precedence list
+  of that class
 
 - the special operators AL-LOOPY-DESTRUCTURING-BIND and AL-LOOPY-SETQ are
   similar to DESTRUCTURING-BIND and SETQ respectively, but they allow the kind
