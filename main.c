@@ -14187,7 +14187,8 @@ call_method (struct method_list *methlist, struct object *arglist,
 	     struct environment *env, struct outcome *outcome)
 {
   struct binding *bins;
-  struct object *ret, *func = methlist->meth->value_ptr.method->generic_func;
+  struct object *ret, *func = methlist->meth->value_ptr.method->generic_func,
+    *body;
   struct method_list *methl;
   struct class_field *f;
   int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
@@ -14410,22 +14411,31 @@ call_method (struct method_list *methlist, struct object *arglist,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
-      ret = evaluate_body (methlist->meth->value_ptr.method->body, 0, NULL, env,
-			   outcome);
-
-      if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
-		  || (env->stepping_flags
-		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
+      if (!parse_declarations (methlist->meth->value_ptr.method->body, env,
+			       argsnum, 1, outcome, &body))
 	{
-	  printf ("method ");
-	  print_method_description (methlist->meth, env);
-	  printf (" of ");
-	  print_function_name (func, env);
-	  printf (" returned ");
-	  print_object (ret, env, env->c_stdout->value_ptr.stream);
-	  printf ("\n");
-	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	  ret = NULL;
 	}
+      else
+	{
+	  ret = evaluate_body (body, 0, NULL, env, outcome);
+
+	  if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+		      || (env->stepping_flags
+			  && !(env->stepping_flags & STEPPING_OVER_FORM))))
+	    {
+	      printf ("method ");
+	      print_method_description (methlist->meth, env);
+	      printf (" of ");
+	      print_function_name (func, env);
+	      printf (" returned ");
+	      print_object (ret, env, env->c_stdout->value_ptr.stream);
+	      printf ("\n");
+	      env->c_stdout->value_ptr.stream->dirty_line = 0;
+	    }
+	}
+
+      undo_special_declarations (methlist->meth->value_ptr.method->body, env);
 
       env->vars = remove_bindings (env->vars, argsnum, 1);
       env->lex_env_vars_boundary = prev_lex_bin_num;
