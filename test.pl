@@ -1051,6 +1051,8 @@ make_test ("(pathname \"foo\")", "#P\"foo\"");
 make_test ("(pathname (open #p\"README\"))", "#P\"README\"");
 make_test ("(pathname #p\"foo\")", "#P\"foo\"");
 make_test ("(logical-pathname \"foo\")", "#P\"foo\"");
+make_test ("(translate-logical-pathname #p\".\")", "#P\".\"");
+make_test ("(translate-logical-pathname \".\")", "#P\".\"");
 make_test ("(make-pathname :name \"foo\")", "#P\"foo\"");
 make_test ("(make-pathname :device \"foo\" :directory \"bar\")", "#P\"\"");
 make_test ("(make-pathname :name nil)", "#P\"\"");
