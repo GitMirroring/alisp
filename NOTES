@@ -163,6 +163,9 @@ interpretation.  The only meaningful component of a pathname is the name, the
 others are ignored.  The truename of a file is just the name, there's no
 resolution.
 
+USER-HOMEDIR-PATHNAME tries reading the HOME environment variable, and nothing
+else.
+
 
 
 __File operations__
