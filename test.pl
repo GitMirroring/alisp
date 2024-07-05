@@ -1066,6 +1066,7 @@ make_test ("(wild-pathname-p (make-pathname :name :wild) :name)", "T");
 make_test ("(wild-pathname-p (make-pathname :directory :wild) :name)", "NIL");
 make_test ("(merge-pathnames \".\" \"..\")", "#P\".\"");
 make_test ("(truename #p\"README\")", "#P\"README\"");
+make_test ("(pathnamep (user-homedir-pathname))", "T");
 make_test ("(probe-file \"README\")", "#P\"README\"");
 make_test ("(probe-file \"foo\")", "NIL");
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (write (read s)) (write (file-position s)) (file-position s 0) (write (read s)))", "(C)13COPYRIGHT\nCOPYRIGHT");
