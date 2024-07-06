@@ -159,9 +159,17 @@ the constructor or accessors of the previous definition will cause a crash.
 __Pathnames__
 
 The pathname API of Common Lisp is very complex, so I chose the simplest
-interpretation.  The only meaningful component of a pathname is the name, the
-others are ignored.  The truename of a file is just the name, there's no
-resolution.
+interpretation.  The only meaningful components of a pathname are the directory
+and the name, the others are ignored.
+
+When inspecting the directory or name of a path, POSIX conventions (like the
+forward slash as a separator) are followed.  If you specify :WILD as a path
+component, that component becomes a single asterisk.  If you need to support
+another system, you have to change a few things.
+
+The truename of a file is just the file path, there's no resolution.
+
+The value :UNSPECIFIC is never allowed in any component of a pathname.
 
 USER-HOMEDIR-PATHNAME tries reading the HOME environment variable, and nothing
 else.
