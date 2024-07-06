@@ -18813,7 +18813,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
       else if (symbol_equals (directory, ":WILD", env))
 	{
-	  size = 2;
+	  size = 3;
 	  dir_type = WILD_FILENAME;
 	}
       else if (directory->type == TYPE_CONS_PAIR)
@@ -18837,6 +18837,11 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	      else if (symbol_equals (CAR (cons), ":WILD", env))
 		{
 		  size += 2;
+		  dir_type = WILD_FILENAME;
+		}
+	      else if (symbol_equals (CAR (cons), ":WILD-INFERIORS", env))
+		{
+		  size += 3;
 		  dir_type = WILD_FILENAME;
 		}
 	      else
@@ -18905,8 +18910,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (directory))
     {
-      memcpy (value->value_ptr.string->value, "*", 1);
-      i++;
+      memcpy (value->value_ptr.string->value, "**/", 3);
+      i += 3;
     }
   else if (directory->type == TYPE_STRING)
     {
@@ -18938,10 +18943,15 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	      memcpy (value->value_ptr.string->value+i, "/", 1);
 	      i++;
 	    }
-	  else
+	  else if (symbol_equals (CAR (cons), ":WILD", env))
 	    {
 	      memcpy (value->value_ptr.string->value+i, "*/", 2);
 	      i += 2;
+	    }
+	  else
+	    {
+	      memcpy (value->value_ptr.string->value+i, "**/", 3);
+	      i += 3;
 	    }
 
 	  cons = CDR (cons);
