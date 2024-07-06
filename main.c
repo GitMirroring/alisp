@@ -1091,7 +1091,8 @@ struct
 filename
 {
   struct object *value;
-  enum filename_type type;
+  enum filename_type directory_type;
+  enum filename_type name_type;
 };
 
 
@@ -1767,6 +1768,8 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
 
+int get_directory_file_split (struct object *string);
+
 struct object *inspect_pathname_by_designator (struct object *des);
 
 struct object *alloc_vector (fixnum size, int fill_with_nil,
@@ -2313,6 +2316,8 @@ struct object *builtin_last
 struct object *builtin_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_pathname
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_pathname_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3544,6 +3549,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PATHNAME", env, builtin_pathname, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("PATHNAME-DIRECTORY", env, builtin_pathname_directory,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("WILD-PATHNAME-P", env, builtin_wild_pathname_p,
@@ -8534,7 +8541,24 @@ create_filename (struct object *string)
   fn->value = string;
   add_reference (obj, string, 0);
 
+  fn->directory_type = fn->name_type = REGULAR_FILENAME;
+
   return obj;
+}
+
+
+int
+get_directory_file_split (struct object *string)
+{
+  int i;
+
+  for (i = string->value_ptr.string->used_size-1; i >= 0; i--)
+    {
+      if (string->value_ptr.string->value [i] == '/')
+	return i;
+    }
+
+  return i;
 }
 
 
@@ -18693,14 +18717,15 @@ struct object *
 builtin_make_pathname (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *name = NULL, *ret, *allow_other_keys = NULL;
+  struct object *directory = NULL, *name = NULL, *ret, *allow_other_keys = NULL,
+    *value;
   int found_unknown_key = 0;
+  enum filename_type dir_type = REGULAR_FILENAME, name_type = REGULAR_FILENAME;
 
   while (SYMBOL (list) != &nil_object)
     {
       if (symbol_equals (CAR (list), ":HOST", env)
 	  || symbol_equals (CAR (list), ":DEVICE", env)
-	  || symbol_equals (CAR (list), ":DIRECTORY", env)
 	  || symbol_equals (CAR (list), ":TYPE", env)
 	  || symbol_equals (CAR (list), ":VERSION", env)
 	  || symbol_equals (CAR (list), ":DEFAULTS", env)
@@ -18710,6 +18735,21 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	    {
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":DIRECTORY", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!directory)
+	    {
+	      directory = CAR (CDR (list));
 	    }
 
 	  list = CDR (list);
@@ -18765,50 +18805,85 @@ builtin_make_pathname (struct object *list, struct environment *env,
       return NULL;
     }
 
-
-  if (!name || SYMBOL (name) == &nil_object)
+  if (directory)
     {
-      ret = create_filename (alloc_string (0));
-      decrement_refcount (ret->value_ptr.filename->value);
-
-      ret->value_ptr.filename->type = REGULAR_FILENAME;
+      if (SYMBOL (directory) == &nil_object)
+	directory = NULL;
+      else if (symbol_equals (directory, ":WILD", env))
+	{
+	  directory = NULL;
+	  dir_type = WILD_FILENAME;
+	}
+      else if (directory->type != TYPE_STRING)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
     }
-  else if (name->type == TYPE_STRING)
-    {
-      ret = create_filename (name);
 
-      ret->value_ptr.filename->type = REGULAR_FILENAME;
+  if (name)
+    {
+      if (SYMBOL (name) == &nil_object)
+	name = NULL;
+      else if (symbol_equals (name, ":WILD", env))
+	{
+	  name = NULL;
+	  name_type = WILD_FILENAME;
+	}
+      else if (name->type != TYPE_STRING)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
     }
-  else if (symbol_equals (name, ":UNSPECIFIC", env))
-    {
-      ret = create_filename (alloc_string (0));
-      decrement_refcount (ret->value_ptr.filename->value);
 
-      ret->value_ptr.filename->type = UNSPECIFIC_FILENAME;
+  if (directory && name)
+    {
+      value = alloc_string (directory->value_ptr.string->used_size+
+			    name->value_ptr.string->used_size+1);
+      memcpy (value->value_ptr.string->value, directory->value_ptr.string->value,
+	      directory->value_ptr.string->used_size);
+      value->value_ptr.string->value [directory->value_ptr.string->used_size]
+	= '/';
+      memcpy (value->value_ptr.string->value
+	      +directory->value_ptr.string->used_size+1,
+	      name->value_ptr.string->value, name->value_ptr.string->used_size);
+      value->value_ptr.string->used_size = directory->value_ptr.string->used_size+
+	name->value_ptr.string->used_size+1;
     }
-  else if (symbol_equals (name, ":WILD", env))
+  else if (directory)
     {
-      ret = create_filename (alloc_string (0));
-      decrement_refcount (ret->value_ptr.filename->value);
-
-      ret->value_ptr.filename->type = WILD_FILENAME;
+      value = directory;
+      increment_refcount (value);
+    }
+  else if (name)
+    {
+      value = name;
+      increment_refcount (value);
     }
   else
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
+    value = NULL;
+
+  if (!value)
+    ret = create_filename (alloc_string (0));
+  else
+    ret = create_filename (value);
+
+  decrement_refcount (ret->value_ptr.filename->value);
+
+  ret->value_ptr.filename->directory_type = dir_type;
+  ret->value_ptr.filename->name_type = name_type;
 
   return ret;
 }
 
 
 struct object *
-builtin_pathname_name (struct object *list, struct environment *env,
-		       struct outcome *outcome)
+builtin_pathname_directory (struct object *list, struct environment *env,
+			    struct outcome *outcome)
 {
   struct object *fn, *allow_other_keys = NULL;
-  int found_unknown_key = 0;
+  int found_unknown_key = 0, s;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -18874,8 +18949,102 @@ builtin_pathname_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  increment_refcount (fn->value_ptr.filename->value);
-  return fn->value_ptr.filename->value;
+  s = get_directory_file_split (fn->value_ptr.filename->value);
+
+  if (s < 0)
+    return alloc_string (0);
+
+  if (!s)
+    return create_string_copying_c_string ("/");
+
+  return create_string_copying_char_vector (fn->value_ptr.filename->value->
+					    value_ptr.string->value, s);
+}
+
+
+struct object *
+builtin_pathname_name (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *fn, *allow_other_keys = NULL;
+  int found_unknown_key = 0, s;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_FILENAME)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  fn = CAR (list);
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":CASE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
+	}
+
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
+    }
+
+  s = get_directory_file_split (fn->value_ptr.filename->value);
+
+  if (s < 0)
+    {
+      increment_refcount (fn->value_ptr.filename->value);
+      return fn->value_ptr.filename->value;
+    }
+
+  return create_string_copying_char_vector (fn->value_ptr.filename->value->
+					    value_ptr.string->value+s+1,
+					    fn->value_ptr.filename->value->
+					    value_ptr.string->used_size-s-1);
 }
 
 
@@ -18901,14 +19070,18 @@ builtin_wild_pathname_p (struct object *list, struct environment *env,
   if (l == 1 || symbol_equals (CAR (CDR (list)), ":NAME", env))
     {
       if (CAR (list)->type == TYPE_STREAM || CAR (list)->type == TYPE_STRING
-	  || CAR (list)->value_ptr.filename->type != WILD_FILENAME)
+	  || CAR (list)->value_ptr.filename->name_type != WILD_FILENAME)
 	return &nil_object;
 
       return &t_object;
     }
+  else if (symbol_equals (CAR (CDR (list)), ":DIRECTORY", env))
+    {
+      return CAR (list)->value_ptr.filename->directory_type == WILD_FILENAME
+	? &t_object : &nil_object;
+    }
   else if (symbol_equals (CAR (CDR (list)), ":HOST", env)
 	   || symbol_equals (CAR (CDR (list)), ":DEVICE", env)
-	   || symbol_equals (CAR (CDR (list)), ":DIRECTORY", env)
 	   || symbol_equals (CAR (CDR (list)), ":TYPE", env)
 	   || symbol_equals (CAR (CDR (list)), ":VERSION", env))
     {
