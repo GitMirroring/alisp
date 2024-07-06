@@ -18718,8 +18718,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   struct object *directory = NULL, *name = NULL, *ret, *allow_other_keys = NULL,
-    *value;
-  int found_unknown_key = 0;
+    *value, *cons;
+  int found_unknown_key = 0, size = 0, i;
   enum filename_type dir_type = REGULAR_FILENAME, name_type = REGULAR_FILENAME;
 
   while (SYMBOL (list) != &nil_object)
@@ -18808,13 +18808,51 @@ builtin_make_pathname (struct object *list, struct environment *env,
   if (directory)
     {
       if (SYMBOL (directory) == &nil_object)
-	directory = NULL;
-      else if (symbol_equals (directory, ":WILD", env))
 	{
 	  directory = NULL;
+	}
+      else if (symbol_equals (directory, ":WILD", env))
+	{
+	  size = 2;
 	  dir_type = WILD_FILENAME;
 	}
-      else if (directory->type != TYPE_STRING)
+      else if (directory->type == TYPE_CONS_PAIR)
+	{
+	  if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
+	    size = 1;
+	  else if (symbol_equals (CAR (directory), ":RELATIVE", env))
+	    size = 0;
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  cons = CDR (directory);
+
+	  while (SYMBOL (cons) != &nil_object)
+	    {
+	      if (CAR (cons)->type == TYPE_STRING)
+		size += CAR (cons)->value_ptr.string->used_size+1;
+	      else if (symbol_equals (CAR (cons), ":WILD", env))
+		{
+		  size += 2;
+		  dir_type = WILD_FILENAME;
+		}
+	      else
+		{
+		  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+		  return NULL;
+		}
+
+	      cons = CDR (cons);
+	    }
+	}
+      else if (directory->type == TYPE_STRING)
+	{
+	  size += directory->value_ptr.string->used_size+1;
+	}
+      else
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -18828,47 +18866,103 @@ builtin_make_pathname (struct object *list, struct environment *env,
       else if (symbol_equals (name, ":WILD", env))
 	{
 	  name = NULL;
+	  size += 1;
 	  name_type = WILD_FILENAME;
 	}
-      else if (name->type != TYPE_STRING)
+      else if (name->type == TYPE_STRING)
+	{
+	  size += name->value_ptr.string->used_size;
+	}
+      else
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
     }
 
-  if (directory && name)
+  if (!directory)
     {
-      value = alloc_string (directory->value_ptr.string->used_size+
-			    name->value_ptr.string->used_size+1);
-      memcpy (value->value_ptr.string->value, directory->value_ptr.string->value,
-	      directory->value_ptr.string->used_size);
-      value->value_ptr.string->value [directory->value_ptr.string->used_size]
-	= '/';
-      memcpy (value->value_ptr.string->value
-	      +directory->value_ptr.string->used_size+1,
-	      name->value_ptr.string->value, name->value_ptr.string->used_size);
-      value->value_ptr.string->used_size = directory->value_ptr.string->used_size+
-	name->value_ptr.string->used_size+1;
+      if (name)
+	ret = create_filename (name);
+      else if (name_type == WILD_FILENAME)
+	{
+	  ret = create_filename (create_string_copying_c_string ("*"));
+	  decrement_refcount (ret->value_ptr.filename->value);
+	}
+      else
+	{
+	  ret = create_filename (alloc_string (0));
+	  decrement_refcount (ret->value_ptr.filename->value);
+	}
+
+      ret->value_ptr.filename->directory_type = dir_type;
+      ret->value_ptr.filename->name_type = name_type;
+      return ret;
     }
-  else if (directory)
+
+  value = alloc_string (size);
+  i = 0;
+
+  if (IS_SYMBOL (directory))
     {
-      value = directory;
-      increment_refcount (value);
+      memcpy (value->value_ptr.string->value, "*", 1);
+      i++;
+    }
+  else if (directory->type == TYPE_STRING)
+    {
+      memcpy (value->value_ptr.string->value,
+	      directory->value_ptr.string->value,
+	      directory->value_ptr.string->used_size);
+      i += directory->value_ptr.string->used_size;
+      memcpy (value->value_ptr.string->value+i, "/", 1);
+      i++;
+    }
+  else
+    {
+      if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
+	{
+	  memcpy (value->value_ptr.string->value, "/", 1);
+	  i++;
+	}
+
+      cons = CDR (directory);
+
+      while (SYMBOL (cons) != &nil_object)
+	{
+	  if (CAR (cons)->type == TYPE_STRING)
+	    {
+	      memcpy (value->value_ptr.string->value+i,
+		      CAR (cons)->value_ptr.string->value,
+		      CAR (cons)->value_ptr.string->used_size);
+	      i += CAR (cons)->value_ptr.string->used_size;
+	      memcpy (value->value_ptr.string->value+i, "/", 1);
+	      i++;
+	    }
+	  else
+	    {
+	      memcpy (value->value_ptr.string->value+i, "*/", 2);
+	      i += 2;
+	    }
+
+	  cons = CDR (cons);
+	}
+    }
+
+  if (name_type == WILD_FILENAME)
+    {
+      memcpy (value->value_ptr.string->value+i, "*", 1);
+      i++;
     }
   else if (name)
     {
-      value = name;
-      increment_refcount (value);
+      memcpy (value->value_ptr.string->value+i,
+	      name->value_ptr.string->value, name->value_ptr.string->used_size);
+      i += name->value_ptr.string->used_size;
     }
-  else
-    value = NULL;
 
-  if (!value)
-    ret = create_filename (alloc_string (0));
-  else
-    ret = create_filename (value);
+  value->value_ptr.string->used_size = i;
 
+  ret = create_filename (value);
   decrement_refcount (ret->value_ptr.filename->value);
 
   ret->value_ptr.filename->directory_type = dir_type;
