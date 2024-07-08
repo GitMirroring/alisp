@@ -1075,6 +1075,8 @@ make_test ("(pathname-name #p\"foo\")", "\"foo\"");
 make_test ("(pathname-name (make-pathname :name \"foo\"))", "\"foo\"");
 make_test ("(pathname-name #p\"/foo/\")", "NIL");
 make_test ("(pathname-type (make-pathname :name \"foo\"))", "NIL");
+make_test ("(make-pathname :directory \"/foo/\" :name \"bar\")", "#P\"/foo/bar\"");
+make_test ("(make-pathname :directory (pathname-directory #p\"/foo\") :name (pathname-name #p\"/foo\"))", "#P\"/foo\"");
 make_test ("(wild-pathname-p (make-pathname :name :wild))", "T");
 make_test ("(wild-pathname-p (make-pathname :name :wild) :name)", "T");
 make_test ("(wild-pathname-p (make-pathname :directory :wild) :name)", "NIL");
