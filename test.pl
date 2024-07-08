@@ -1066,13 +1066,14 @@ make_test ("(make-pathname :directory '(:absolute \"foo\" :wild \"bar\"))", "#P\
 make_test ("(make-pathname :directory '(:relative \"foo\" :wild \"bar\"))", "#P\"foo/*/bar/\"");
 make_test ("(make-pathname :directory '(:relative \"foo\" :wild \"bar\") :name \"baz\")", "#P\"foo/*/bar/baz\"");
 make_test ("(make-pathname :directory '(:relative \"foo\" :wild-inferiors \"bar\") :name \"blah\")", "#P\"foo/**/bar/blah\"");
-make_test ("(pathname-directory #p\"foo/bar\")", "\"foo\"");
-make_test ("(pathname-directory #p\"/foo/bar\")", "\"/foo\"");
+make_test ("(pathname-directory #p\"foo/bar\")", "\"foo/\"");
+make_test ("(pathname-directory #p\"/foo/bar\")", "\"/foo/\"");
 make_test ("(pathname-directory #p\"/\")", "\"/\"");
-make_test ("(pathname-directory #p\"/foo/\")", "\"/foo\"");
+make_test ("(pathname-directory #p\"/foo/\")", "\"/foo/\"");
+make_test ("(pathname-directory #p\"foo\")", "NIL");
 make_test ("(pathname-name #p\"foo\")", "\"foo\"");
 make_test ("(pathname-name (make-pathname :name \"foo\"))", "\"foo\"");
-make_test ("(pathname-name #p\"/foo/\")", "\"\"");
+make_test ("(pathname-name #p\"/foo/\")", "NIL");
 make_test ("(pathname-type (make-pathname :name \"foo\"))", "NIL");
 make_test ("(wild-pathname-p (make-pathname :name :wild))", "T");
 make_test ("(wild-pathname-p (make-pathname :name :wild) :name)", "T");
