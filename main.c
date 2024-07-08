@@ -18813,7 +18813,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
       else if (symbol_equals (directory, ":WILD", env))
 	{
-	  size = 3;
+	  size = 4;
 	  dir_type = WILD_FILENAME;
 	}
       else if (directory->type == TYPE_CONS_PAIR)
@@ -18855,7 +18855,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
       else if (directory->type == TYPE_STRING)
 	{
-	  size += directory->value_ptr.string->used_size+1;
+	  size += directory->value_ptr.string->used_size+2;
 	}
       else
 	{
@@ -18910,12 +18910,14 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (directory))
     {
-      memcpy (value->value_ptr.string->value, "**/", 3);
-      i += 3;
+      memcpy (value->value_ptr.string->value, "/**/", 4);
+      i += 4;
     }
   else if (directory->type == TYPE_STRING)
     {
-      memcpy (value->value_ptr.string->value,
+      memcpy (value->value_ptr.string->value, "/", 1);
+      i++;
+      memcpy (value->value_ptr.string->value+i,
 	      directory->value_ptr.string->value,
 	      directory->value_ptr.string->used_size);
       i += directory->value_ptr.string->used_size;
