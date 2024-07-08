@@ -18819,7 +18819,15 @@ builtin_make_pathname (struct object *list, struct environment *env,
       else if (directory->type == TYPE_CONS_PAIR)
 	{
 	  if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
-	    size = 1;
+	    {
+	      if (SYMBOL (CDR (directory)) == &nil_object
+		  || CAR (CDR (directory))->type != TYPE_STRING
+		  || !CAR (CDR (directory))->value_ptr.string->used_size
+		  || CAR (CDR (directory))->value_ptr.string->value [0] != '/')
+		{
+		  size = 1;
+		}
+	    }
 	  else if (symbol_equals (CAR (directory), ":RELATIVE", env))
 	    size = 0;
 	  else
@@ -18833,7 +18841,20 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  while (SYMBOL (cons) != &nil_object)
 	    {
 	      if (CAR (cons)->type == TYPE_STRING)
-		size += CAR (cons)->value_ptr.string->used_size+1;
+		{
+		  size += CAR (cons)->value_ptr.string->used_size;
+
+		  if ((!CAR (cons)->value_ptr.string->used_size
+		       || CAR (cons)->value_ptr.string->value
+		       [CAR (cons)->value_ptr.string->used_size-1] != '/')
+		      && (SYMBOL (CDR (cons)) == &nil_object
+			  || CAR (CDR (cons))->type != TYPE_STRING
+			  || !CAR (CDR (cons))->value_ptr.string->used_size
+			  || CAR (CDR (cons))->value_ptr.string->value [0] != '/'))
+		    {
+		      size++;
+		    }
+		}
 	      else if (symbol_equals (CAR (cons), ":WILD", env))
 		{
 		  size += 2;
@@ -18855,7 +18876,12 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
       else if (directory->type == TYPE_STRING)
 	{
-	  size += directory->value_ptr.string->used_size+2;
+	  size += directory->value_ptr.string->used_size
+	    + (!directory->value_ptr.string->used_size
+	       || directory->value_ptr.string->value [0] != '/')
+	    + (!directory->value_ptr.string->used_size
+	       || directory->value_ptr.string->value
+	       [directory->value_ptr.string->used_size-1] != '/');
 	}
       else
 	{
@@ -18915,21 +18941,38 @@ builtin_make_pathname (struct object *list, struct environment *env,
     }
   else if (directory->type == TYPE_STRING)
     {
-      memcpy (value->value_ptr.string->value, "/", 1);
-      i++;
+      if (!directory->value_ptr.string->used_size
+	  || directory->value_ptr.string->value [0] != '/')
+	{
+	  memcpy (value->value_ptr.string->value, "/", 1);
+	  i++;
+	}
+
       memcpy (value->value_ptr.string->value+i,
 	      directory->value_ptr.string->value,
 	      directory->value_ptr.string->used_size);
       i += directory->value_ptr.string->used_size;
-      memcpy (value->value_ptr.string->value+i, "/", 1);
-      i++;
+
+      if (!directory->value_ptr.string->used_size
+	  || directory->value_ptr.string->value
+	  [directory->value_ptr.string->used_size-1] != '/')
+      {
+	memcpy (value->value_ptr.string->value+i, "/", 1);
+	i++;
+      }
     }
   else
     {
       if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
 	{
-	  memcpy (value->value_ptr.string->value, "/", 1);
-	  i++;
+	  if (SYMBOL (CDR (directory)) == &nil_object
+	      || CAR (CDR (directory))->type != TYPE_STRING
+	      || !CAR (CDR (directory))->value_ptr.string->used_size
+	      || CAR (CDR (directory))->value_ptr.string->value [0] != '/')
+	    {
+	      memcpy (value->value_ptr.string->value, "/", 1);
+	      i++;
+	    }
 	}
 
       cons = CDR (directory);
@@ -18942,8 +18985,18 @@ builtin_make_pathname (struct object *list, struct environment *env,
 		      CAR (cons)->value_ptr.string->value,
 		      CAR (cons)->value_ptr.string->used_size);
 	      i += CAR (cons)->value_ptr.string->used_size;
-	      memcpy (value->value_ptr.string->value+i, "/", 1);
-	      i++;
+
+	      if ((!CAR (cons)->value_ptr.string->used_size
+		   || CAR (cons)->value_ptr.string->value
+		   [CAR (cons)->value_ptr.string->used_size-1] != '/')
+		  && (SYMBOL (CDR (cons)) == &nil_object
+		      || CAR (CDR (cons))->type != TYPE_STRING
+		      || !CAR (CDR (cons))->value_ptr.string->used_size
+		      || CAR (CDR (cons))->value_ptr.string->value [0] != '/'))
+		{
+		  memcpy (value->value_ptr.string->value+i, "/", 1);
+		  i++;
+		}
 	    }
 	  else if (symbol_equals (CAR (cons), ":WILD", env))
 	    {
