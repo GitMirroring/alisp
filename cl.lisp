@@ -2061,7 +2061,16 @@
 
 
 (defun merge-pathnames (pn &optional defpn defv)
-  (pathname pn))
+  (let* ((p1 (pathname pn))
+	 (p2 (pathname defpn))
+	 (dir (or (pathname-directory p1) (pathname-directory p2)))
+	 (dirtype (if (and
+		       (> (length dir) 0) (char= (elt dir 0) #\/))
+		      :absolute
+		      :relative))
+	 (name (or (pathname-name p1) (pathname-name p2))))
+    (make-pathname :directory (if dir (list dirtype dir))
+		   :name name)))
 
 
 
