@@ -19058,13 +19058,16 @@ builtin_pathname_directory (struct object *list, struct environment *env,
   s = get_directory_file_split (fn->value_ptr.filename->value);
 
   if (s < 0)
-    return alloc_string (0);
+    return &nil_object;
 
-  if (!s)
-    return create_string_copying_c_string ("/");
+  if (s == fn->value_ptr.filename->value->value_ptr.string->used_size-1)
+    {
+      increment_refcount (fn->value_ptr.filename->value);
+      return fn->value_ptr.filename->value;
+    }
 
   return create_string_copying_char_vector (fn->value_ptr.filename->value->
-					    value_ptr.string->value, s);
+					    value_ptr.string->value, s+1);
 }
 
 
@@ -19146,6 +19149,9 @@ builtin_pathname_name (struct object *list, struct environment *env,
       increment_refcount (fn->value_ptr.filename->value);
       return fn->value_ptr.filename->value;
     }
+
+  if (s == fn->value_ptr.filename->value->value_ptr.string->used_size-1)
+    return &nil_object;
 
   return create_string_copying_char_vector (fn->value_ptr.filename->value->
 					    value_ptr.string->value+s+1,
