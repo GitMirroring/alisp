@@ -18717,9 +18717,9 @@ struct object *
 builtin_make_pathname (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *directory = NULL, *name = NULL, *ret, *allow_other_keys = NULL,
-    *value, *cons;
-  int found_unknown_key = 0, size = 0, i;
+  struct object *directory = NULL, *name = NULL, *defaults = NULL, *ret,
+    *allow_other_keys = NULL, *value, *cons;
+  int found_unknown_key = 0, size = 0, i, s;
   enum filename_type dir_type = REGULAR_FILENAME, name_type = REGULAR_FILENAME;
 
   while (SYMBOL (list) != &nil_object)
@@ -18728,7 +18728,6 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  || symbol_equals (CAR (list), ":DEVICE", env)
 	  || symbol_equals (CAR (list), ":TYPE", env)
 	  || symbol_equals (CAR (list), ":VERSION", env)
-	  || symbol_equals (CAR (list), ":DEFAULTS", env)
 	  || symbol_equals (CAR (list), ":CASE", env))
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
@@ -18782,6 +18781,21 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (symbol_equals (CAR (list), ":DEFAULTS", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!defaults)
+	    {
+	      defaults = CAR (CDR (list));
+	    }
+
+	  list = CDR (list);
+	}
       else
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
@@ -18804,6 +18818,14 @@ builtin_make_pathname (struct object *list, struct environment *env,
       outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
       return NULL;
     }
+
+  if (defaults && !IS_PATHNAME_DESIGNATOR (defaults))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+  else if (defaults)
+    defaults = inspect_pathname_by_designator (defaults);
 
   if (directory)
     {
@@ -18890,6 +18912,14 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
     }
 
+  if (!directory && defaults)
+    {
+      s = get_directory_file_split (defaults);
+
+      if (s >= 0)
+	size += s+1;
+    }
+
   if (name)
     {
       if (SYMBOL (name) == &nil_object)
@@ -18911,7 +18941,14 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	}
     }
 
-  if (!directory)
+  if (!name && defaults)
+    {
+      s = get_directory_file_split (defaults);
+
+      size += defaults->value_ptr.string->used_size-s-1;
+    }
+
+  if (!directory && !defaults)
     {
       if (name)
 	ret = create_filename (name);
@@ -18934,12 +18971,12 @@ builtin_make_pathname (struct object *list, struct environment *env,
   value = alloc_string (size);
   i = 0;
 
-  if (IS_SYMBOL (directory))
+  if (directory && IS_SYMBOL (directory))
     {
       memcpy (value->value_ptr.string->value, "/**/", 4);
       i += 4;
     }
-  else if (directory->type == TYPE_STRING)
+  else if (directory && directory->type == TYPE_STRING)
     {
       if (!directory->value_ptr.string->used_size
 	  || directory->value_ptr.string->value [0] != '/')
@@ -18961,7 +18998,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	i++;
       }
     }
-  else
+  else if (directory)
     {
       if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
 	{
@@ -19012,6 +19049,12 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  cons = CDR (cons);
 	}
     }
+  else if (defaults)
+    {
+      memcpy (value->value_ptr.string->value, defaults->value_ptr.string->value,
+	      s+1);
+      i += s+1;
+    }
 
   if (name_type == WILD_FILENAME)
     {
@@ -19023,6 +19066,13 @@ builtin_make_pathname (struct object *list, struct environment *env,
       memcpy (value->value_ptr.string->value+i,
 	      name->value_ptr.string->value, name->value_ptr.string->used_size);
       i += name->value_ptr.string->used_size;
+    }
+  else if (defaults)
+    {
+      memcpy (value->value_ptr.string->value+i,
+	      defaults->value_ptr.string->value+s+1,
+	      defaults->value_ptr.string->used_size-s-1);
+      i += defaults->value_ptr.string->used_size-s-1;
     }
 
   value->value_ptr.string->used_size = i;
