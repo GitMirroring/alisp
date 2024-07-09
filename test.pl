@@ -1066,6 +1066,8 @@ make_test ("(make-pathname :directory '(:absolute \"foo\" :wild \"bar\"))", "#P\
 make_test ("(make-pathname :directory '(:relative \"foo\" :wild \"bar\"))", "#P\"foo/*/bar/\"");
 make_test ("(make-pathname :directory '(:relative \"foo\" :wild \"bar\") :name \"baz\")", "#P\"foo/*/bar/baz\"");
 make_test ("(make-pathname :directory '(:relative \"foo\" :wild-inferiors \"bar\") :name \"blah\")", "#P\"foo/**/bar/blah\"");
+make_test ("(make-pathname :name \"foo\" :defaults #p\"/home/\")", "#P\"/home/foo\"");
+make_test ("(make-pathname :directory \"home\" :defaults #p\"foo\")", "#P\"/home/foo\"");
 make_test ("(pathname-directory #p\"foo/bar\")", "\"foo/\"");
 make_test ("(pathname-directory #p\"/foo/bar\")", "\"/foo/\"");
 make_test ("(pathname-directory #p\"/\")", "\"/\"");
