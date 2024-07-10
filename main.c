@@ -31901,8 +31901,9 @@ struct object *
 evaluate_unwind_protect (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct object *res, *clres;
+  struct object *res, *clres, *obj, *pack;
   struct object_list *ov;
+  enum outcome_type type;
   int nov;
 
   if (!list_length (list))
@@ -31914,20 +31915,22 @@ evaluate_unwind_protect (struct object *list, struct environment *env,
   res = evaluate_object (CAR (list), env, outcome);
   nov = outcome->no_value;
   ov = outcome->other_values;
+  type = outcome->type;
+  obj = outcome->obj;
+  pack = outcome->pack;
   outcome->other_values = NULL;
 
   clres = evaluate_body (CDR (list), 0, NULL, env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+  decrement_refcount (clres);
 
-  if (clres)
-    {
-      decrement_refcount (clres);
-      outcome->no_value = nov;
-      outcome->other_values = ov;
+  outcome->no_value = nov;
+  outcome->other_values = ov;
+  outcome->type = type;
+  outcome->obj = obj;
+  outcome->pack = pack;
 
-      return res;
-    }
-
-  return NULL;
+  return res;
 }
 
 
