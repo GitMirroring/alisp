@@ -13667,9 +13667,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct block_frame *f;
   struct go_tag_frame *prevf;
   struct object *ret, *ret2, *args = NULL, *body;
-  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
-    stepping_over_this_func = (env->stepping_flags & STEP_OVER_FORM)
-    && !(env->stepping_flags & STEPPING_OVER_FORM);
+  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
   unsigned isprof = 0, time, evaltime = 0;
 
 
@@ -13680,9 +13678,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       outcome->type = MAX_STACK_DEPTH_REACHED;
       return NULL;
     }
-
-  if (stepping_over_this_func)
-    env->stepping_flags = STEP_OVER_FORM | STEPPING_OVER_FORM;
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -13740,14 +13735,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       if (eval_args)
 	decrement_refcount (args);
-
-      if (stepping_over_this_func
-	  && (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM)))
-	{
-	  env->last_result = ret;
-	  env->next_eval = NULL;
-	  env->stepping_flags = STEP_OVER_FORM;
-	}
 
       env->stack_depth--;
 
@@ -13945,7 +13932,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
-
       env->vars = remove_bindings (env->vars, argsnum, 1);
 
       for (; closnum; closnum--)
@@ -13992,14 +13978,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       add_profiling_data (&env->profiling_data,
 			  SYMBOL (func->value_ptr.function->name), time,
 			  evaltime);
-    }
-
-  if (stepping_over_this_func
-      && (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM)))
-    {
-      env->last_result = ret;
-      env->next_eval = NULL;
-      env->stepping_flags = STEP_OVER_FORM;
     }
 
   env->stack_depth--;
@@ -15652,6 +15630,7 @@ evaluate_object (struct object *obj, struct environment *env,
 {
   struct binding *bind;
   struct object *sym, *ret;
+  int stepping_over_this_form;
 
   if (env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM)
       && !IS_SELF_EVALUATING (obj))
@@ -15659,6 +15638,12 @@ evaluate_object (struct object *obj, struct environment *env,
       env->next_eval = obj;
       enter_debugger (NULL, env, outcome);
     }
+
+  stepping_over_this_form = env->stepping_flags & STEP_OVER_FORM
+    && !(env->stepping_flags & STEPPING_OVER_FORM);
+
+  if (stepping_over_this_form && !IS_SELF_EVALUATING (obj) && !IS_SYMBOL (obj))
+    env->stepping_flags |= STEPPING_OVER_FORM;
 
   if (obj->type == TYPE_BACKQUOTE)
     {
@@ -15720,12 +15705,24 @@ evaluate_object (struct object *obj, struct environment *env,
       return obj;
     }
 
-  if (env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
+  if (ret &&
+      (((obj->type == TYPE_BACKQUOTE || IS_SYMBOL (obj))
+	&& env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
+       || (obj->type == TYPE_CONS_PAIR && stepping_over_this_form
+	   && (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM)))))
     {
-      if (ret)
-	increment_refcount (ret);
+      printf (" -> ");
+      print_object (ret, env, env->c_stdout->value_ptr.stream);
+      printf ("\n");
 
-      env->last_result = ret;
+      if (env->last_result)
+	{
+	  decrement_refcount (env->last_result);
+	  env->last_result = NULL;
+	}
+
+      if (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM))
+	env->stepping_flags = STEP_OVER_FORM;
     }
 
   return ret;
