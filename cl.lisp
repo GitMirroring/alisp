@@ -2079,7 +2079,7 @@
 (defun file-write-date (fn))
 
 (defun user-homedir-pathname (&optional h)
-  (pathname (cl-user:al-getenv "HOME")))
+  (make-pathname :directory (cl-user:al-getenv "HOME")))
 
 
 
