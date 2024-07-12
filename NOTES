@@ -158,21 +158,27 @@ the constructor or accessors of the previous definition will cause a crash.
 
 __Pathnames__
 
-The pathname API of Common Lisp is very complex, so I chose the simplest
-interpretation.  The only meaningful components of a pathname are the directory
-and the name, the others are ignored.
+The pathname API of Common Lisp seems too complex and abstract, so I chose the
+simplest interpretation.  The only meaningful components of a pathname are the
+directory and the name, the others are ignored.
 
 When inspecting the directory or name of a path, POSIX conventions (like the
-forward slash as a separator) are followed.  If you specify :WILD as a path
-component, that component becomes a single asterisk.  If you need to support
-another system, you have to change a few things.
+forward slash as a separator) are followed.  When a pathname has only a
+directory part, then it is printed with a trailing slash, to force
+interpretation as a directory according to Posix.
+
+If you specify :WILD as a path component, that component becomes a single
+asterisk.  The value :WILD-INFERIORS becomes two asterisks, but most Posix
+shells don't interpret those in a special way.  The value :UNSPECIFIC is never
+allowed in any component of a pathname.
 
 The truename of a file is just the file path, there's no resolution.
 
-The value :UNSPECIFIC is never allowed in any component of a pathname.
-
 USER-HOMEDIR-PATHNAME tries reading the HOME environment variable, and nothing
 else.
+
+If you need to support another system than Posix, you have to change a few
+things, but it's not hard.
 
 
 
@@ -277,6 +283,9 @@ Stepping is always available in the debugger, no matter if you enter it with
 BREAK or in any other way.  The following commands are available:
 
 - N executes the next form and then breaks again
+
+- X only steps over the macroexpansion of the next form, if it is a
+  (non-builtin) unexpanded macro; otherwise it behaves like N
 
 - S steps inside the next form and breaks; for function forms, it will first
   step in the argument forms; for unexpanded macro forms, it will first step in
