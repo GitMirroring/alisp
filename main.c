@@ -646,8 +646,9 @@ stepping_flags
 
     STEP_INSIDE_FORM,
     STEP_OVER_FORM,
+    STEP_OVER_EXPANSION = 4,
 
-    STEPPING_OVER_FORM = 4
+    STEPPING_OVER_FORM = 8
   };
 
 
@@ -10989,7 +10990,7 @@ struct object *
 enter_debugger (struct object *cond, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *obj, *result;
+  struct object *obj, *result, *fun;
   struct object_list *vals;
   struct restart_binding *r = env->restarts;
   int end_repl = 0, restnum = 1, restind;
@@ -11095,6 +11096,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		       || symbol_equals (obj, "?", env)
 		       || symbol_equals (obj, "C", env)
 		       || symbol_equals (obj, "N", env)
+		       || symbol_equals (obj, "X", env)
 		       || symbol_equals (obj, "S", env)))
 	    {
 	      if (symbol_equals (obj, "H", env) || symbol_equals (obj, "?", env))
@@ -11109,6 +11111,21 @@ enter_debugger (struct object *cond, struct environment *env,
 		    env->stepping_flags = 0;
 		  else if (symbol_equals (obj, "N", env))
 		    env->stepping_flags = STEP_OVER_FORM;
+		  else if (symbol_equals (obj, "X", env))
+		    {
+		      if (env->next_eval
+			  && env->next_eval->type == TYPE_CONS_PAIR
+			  && IS_SYMBOL (CAR (env->next_eval))
+			  && (fun = get_function (SYMBOL (CAR (env->next_eval)),
+						  env, 0, 0, 0, 0))
+			  && fun->type == TYPE_MACRO
+			  && !fun->value_ptr.macro->builtin_form)
+			{
+			  env->stepping_flags = STEP_OVER_EXPANSION;
+			}
+		      else
+			env->stepping_flags = STEP_OVER_FORM;
+		    }
 		  else if (symbol_equals (obj, "S", env))
 		    env->stepping_flags = STEP_INSIDE_FORM;
 
@@ -13662,7 +13679,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct block_frame *f;
   struct go_tag_frame *prevf;
   struct object *ret, *ret2, *args = NULL, *body;
-  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
+    stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
+    && !(env->stepping_flags & STEPPING_OVER_FORM);
   unsigned isprof = 0, time, evaltime = 0;
 
 
@@ -13673,6 +13692,9 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       outcome->type = MAX_STACK_DEPTH_REACHED;
       return NULL;
     }
+
+  if (stepping_over_this_macroexp)
+    env->stepping_flags |= STEPPING_OVER_FORM;
 
   if (func->value_ptr.function->builtin_form)
     {
@@ -13956,6 +13978,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  evaltime = clock ();
 	}
 
+      if (stepping_over_this_macroexp
+	  && (env->stepping_flags == (STEP_OVER_EXPANSION | STEPPING_OVER_FORM)))
+	{
+	  printf (" -> ");
+	  print_object (ret, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	  env->stepping_flags = env->stepping_flags & ~STEPPING_OVER_FORM;
+	}
+
       ret2 = evaluate_object (ret, env, outcome);
 
       if (isprof)
@@ -13974,6 +14006,11 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 			  SYMBOL (func->value_ptr.function->name), time,
 			  evaltime);
     }
+
+  if (stepping_over_this_macroexp
+      && env->stepping_flags == (STEP_OVER_EXPANSION | STEPPING_OVER_FORM))
+    env->stepping_flags = env->stepping_flags & ~STEPPING_OVER_FORM;
+
 
   env->stack_depth--;
   return ret;
@@ -15704,11 +15741,13 @@ evaluate_object (struct object *obj, struct environment *env,
       (((obj->type == TYPE_BACKQUOTE || IS_SYMBOL (obj))
 	&& env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
        || (obj->type == TYPE_CONS_PAIR && stepping_over_this_form
-	   && (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM)))))
+	   && (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION))
+	   && (env->stepping_flags & STEPPING_OVER_FORM))))
     {
       printf (" -> ");
       print_object (ret, env, env->c_stdout->value_ptr.stream);
       printf ("\n");
+      env->c_stdout->value_ptr.stream->dirty_line = 0;
 
       if (env->last_result)
 	{
@@ -15716,8 +15755,9 @@ evaluate_object (struct object *obj, struct environment *env,
 	  env->last_result = NULL;
 	}
 
-      if (env->stepping_flags == (STEP_OVER_FORM | STEPPING_OVER_FORM))
-	env->stepping_flags = STEP_OVER_FORM;
+      if (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION)
+	  && env->stepping_flags & STEPPING_OVER_FORM)
+	env->stepping_flags = env->stepping_flags & ~STEPPING_OVER_FORM;
     }
 
   return ret;
