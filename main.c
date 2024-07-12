@@ -11124,15 +11124,10 @@ enter_debugger (struct object *cond, struct environment *env,
 	      result = evaluate_object (obj, env, outcome);
 	    }
 
-	  if (!result && outcome->tag_to_jump_to)
+	  if (!result && (outcome->tag_to_jump_to || outcome->block_to_leave))
 	    {
-	      outcome->type = TAG_NOT_FOUND;
-	      outcome->tag_to_jump_to = NULL;
-	    }
-	  else if (!result && outcome->block_to_leave)
-	    {
-	      outcome->type = BLOCK_NOT_FOUND;
-	      outcome->block_to_leave = NULL;
+	      env->debugging_depth--;
+	      return NULL;
 	    }
 
 	  if (!result)
