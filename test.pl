@@ -1359,6 +1359,7 @@ make_test ("(the integer 0)", "0");
 make_test ("(the integer (values 0 1))", "0\n1");
 make_test ("(prog1 2 (write \"hello\"))", "\"hello\"\n2");
 make_test ("(prog2 2 3 (write \"hello\"))", "\"hello\"\n3");
+make_test ("(multiple-value-prog1 (values 0 1) 2)", "0\n1");
 make_test ("(destructuring-bind ((x)) '((0)) x)", "0");
 make_test ("(let ((z 0)) (destructuring-bind (i) (list z) (setq z 0)))", "0");
 make_test ("(let ((z 0)) (destructuring-bind (i) (list z) (setq z (+ i 1))))", "1");
