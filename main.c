@@ -6102,7 +6102,18 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == 'a' || macro_call->dispatch_ch == 'A')
     {
-      return create_array_from_sequence (obj, macro_call->arg);
+      if (!IS_SEQUENCE (obj))
+	{
+	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+	  return NULL;
+	}
+
+      ret = create_array_from_sequence (obj, macro_call->arg);
+
+      if (!ret)
+	outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
+
+      return ret;
     }
   else if (macro_call->dispatch_ch == ':')
     {
@@ -8738,10 +8749,19 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	{
 	  el = elt (seq, i);
 
-	  fill_axis_from_sequence (arr,
-				   &axis [i*(rowsize/size->size)],
-				   index+i*(rowsize/size->size), size->next,
-				   rowsize/size->size, el);
+	  if (!IS_SEQUENCE (el))
+	    return NULL;
+
+	  if (SEQUENCE_LENGTH (el) != size->next->size)
+	    return NULL;
+
+	  if (!fill_axis_from_sequence (arr,
+					&axis [i*(rowsize/size->size)],
+					index+i*(rowsize/size->size), size->next,
+					rowsize/size->size, el))
+	    {
+	      return NULL;
+	    }
 
 	  if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
 	    decrement_refcount (el);
@@ -8759,7 +8779,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	}
     }
 
-  return NULL;
+  return &t_object;
 }
 
 
@@ -8780,6 +8800,10 @@ create_array_from_sequence (struct object *seq, fixnum rank)
       sz->next = malloc_and_check (sizeof (*sz));
       sz = sz->next;
       s = elt (s, 0);
+
+      if (!IS_SEQUENCE (s))
+	return NULL;
+
       sz->size = SEQUENCE_LENGTH (s);
       totsize *= sz->size;
     }
@@ -8799,8 +8823,15 @@ create_array_from_sequence (struct object *seq, fixnum rank)
     {
       el = elt (seq, i);
 
-      fill_axis_from_sequence (obj, &arr->value [i*rowsize], i*rowsize,
-			       size->next, rowsize, el);
+      if (size->next && !IS_SEQUENCE (el))
+	return NULL;
+
+      if (size->next && SEQUENCE_LENGTH (el) != size->next->size)
+	return NULL;
+
+      if (!fill_axis_from_sequence (obj, &arr->value [i*rowsize], i*rowsize,
+				    size->next, rowsize, el))
+	return NULL;
 
       if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
 	decrement_refcount (el);
@@ -17937,10 +17968,23 @@ builtin_make_array (struct object *list, struct environment *env,
       for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
 	{
 	  el = elt (initial_contents, i);
-	  fill_axis_from_sequence (ret, &ret->value_ptr.array->value [i*rowsize],
-				   i*rowsize,
-				   ret->value_ptr.array->alloc_size->next,
-				   rowsize, el);
+
+	  if (ret->value_ptr.array->alloc_size->next
+	      && (!IS_SEQUENCE (el)
+		  || SEQUENCE_LENGTH (el)
+		  != ret->value_ptr.array->alloc_size->next->size))
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  if (!fill_axis_from_sequence (ret, &ret->value_ptr.array->value [i*rowsize],
+					i*rowsize,
+					ret->value_ptr.array->alloc_size->next,
+					rowsize, el))
+	    {
+	      return NULL;
+	    }
 
 	  if (initial_contents->type == TYPE_STRING
 	      || initial_contents->type == TYPE_BITARRAY)
