@@ -755,6 +755,13 @@
 	  ,@body))))
 
 
+(defmacro multiple-value-prog1 (form &body otherforms)
+  (let ((formvalsym (gensym)))
+    `(let ((,formvalsym (multiple-value-list ,form)))
+       ,@otherforms
+       (values-list ,formvalsym))))
+
+
 
 (defun every (pred &rest sequences)
   (let ((n (apply 'min (mapcar #'length sequences))))
@@ -2893,17 +2900,17 @@
 	  tree-equal sublis nsublis endp butlast nbutlast acons pairlis defsetf
 	  when unless define-modify-macro incf decf cond otherwise case ccase
 	  ecase typecase ctypecase etypecase return multiple-value-bind prog
-	  prog* every some notany notevery member member-if member-if-not find
-	  find-if find-if-not assoc assoc-if assoc-if-not rassoc rassoc-if
-	  rassoc-if-not position position-if position-if-not count count-if
-	  count-if-not remove remove-if-not delete delete-if delete-if-not
-	  remove-duplicates delete-duplicates substitute substitute-if
-	  substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
-	  subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse
-	  revappend nreconc adjoin fill replace push pushnew pop set-difference
-	  nset-difference union nunion intersection nintersection
-	  set-exclusive-or nset-exclusive-or subsetp mismatch search sort
-	  stable-sort array-rank array-dimension array-total-size
+	  prog* multiple-value-prog1 every some notany notevery member member-if
+	  member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
+	  rassoc rassoc-if rassoc-if-not position position-if position-if-not
+	  count count-if count-if-not remove remove-if-not delete delete-if
+	  delete-if-not remove-duplicates delete-duplicates substitute
+	  substitute-if substitute-if-not nsubstitute nsubstitute-if
+	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
+	  nsubst-if-not nreverse revappend nreconc adjoin fill replace push
+	  pushnew pop set-difference nset-difference union nunion intersection
+	  nintersection set-exclusive-or nset-exclusive-or subsetp mismatch
+	  search sort stable-sort array-rank array-dimension array-total-size
 	  array-in-bounds-p array-element-type upgraded-array-element-type
 	  adjustable-array-p get get-properties remprop getf char schar bit sbit
 	  svref vector-pop vector-push vector-push-extend string= string/=
