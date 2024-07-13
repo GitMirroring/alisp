@@ -15681,6 +15681,15 @@ evaluate_object (struct object *obj, struct environment *env,
     {
       ret = apply_backquote (obj->value_ptr.next, 1, env, outcome, 1, NULL,
 			     NULL);
+
+      if (ret && env->stepping_flags
+	  && !(env->stepping_flags & STEPPING_OVER_FORM))
+	{
+	  printf ("backquote evaluated to ");
+	  print_object (ret, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	}
     }
   else if (obj->type == TYPE_SYMBOL || obj->type == TYPE_SYMBOL_NAME)
     {
@@ -15738,9 +15747,10 @@ evaluate_object (struct object *obj, struct environment *env,
     }
 
   if (ret &&
-      (((obj->type == TYPE_BACKQUOTE || IS_SYMBOL (obj))
+      ((IS_SYMBOL (obj)
 	&& env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
-       || (obj->type == TYPE_CONS_PAIR && stepping_over_this_form
+       || ((obj->type == TYPE_CONS_PAIR || obj->type == TYPE_BACKQUOTE)
+	   && stepping_over_this_form
 	   && (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION))
 	   && (env->stepping_flags & STEPPING_OVER_FORM))))
     {
