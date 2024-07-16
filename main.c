@@ -1741,6 +1741,7 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (fixnum size);
+struct object *create_string_from_sequence (struct object *seq, fixnum size);
 struct object *create_string_copying_char_vector (const char *str, fixnum size);
 struct object *create_string_with_char_vector (char *str, fixnum size);
 struct object *create_string_copying_c_string (char *str);
@@ -8160,6 +8161,89 @@ alloc_string (fixnum size)
   num_strings++;
 
   return obj;
+}
+
+
+struct object *
+create_string_from_sequence (struct object *seq, fixnum size)
+{
+  struct object *ret, *cons;
+  fixnum allocs = 0, chars, i, j;
+
+  if (seq->type == TYPE_BITARRAY)
+    return NULL;
+
+  if (seq->type == TYPE_CONS_PAIR)
+    {
+      cons = seq;
+
+      while (SYMBOL (cons) != &nil_object)
+	{
+	  if (CAR (cons)->type != TYPE_CHARACTER)
+	    return NULL;
+
+	  allocs += strlen (CAR (cons)->value_ptr.character);
+	  cons = CDR (cons);
+	}
+    }
+  else if (seq->type == TYPE_ARRAY)
+    {
+      for (i = 0; i < seq->value_ptr.array->alloc_size->size; i++)
+	{
+	  if (seq->value_ptr.array->value [i]->type != TYPE_CHARACTER)
+	    return NULL;
+
+	  allocs += strlen (seq->value_ptr.array->value [i]->value_ptr.character);
+	}
+    }
+  else
+    allocs = seq->value_ptr.string->used_size;
+
+  ret = alloc_string (allocs);
+
+  if (seq->type == TYPE_CONS_PAIR)
+    {
+      cons = seq;
+      i = 0;
+
+      while (SYMBOL (cons) != &nil_object)
+	{
+	  memcpy (ret->value_ptr.string->value+i, CAR (cons)->value_ptr.character,
+		  strlen (CAR (cons)->value_ptr.character));
+	  i += strlen (CAR (cons)->value_ptr.character);
+	  cons = CDR (cons);
+	}
+    }
+  else if (seq->type == TYPE_ARRAY)
+    {
+      j = 0;
+
+      for (i = 0; i < seq->value_ptr.array->alloc_size->size; i++)
+	{
+	  memcpy (ret->value_ptr.string->value+j, seq->value_ptr.array->value [i]
+		  ->value_ptr.character,
+		  strlen (seq->value_ptr.array->value [i]->value_ptr.character));
+	  j += strlen (seq->value_ptr.array->value [i]->value_ptr.character);
+	}
+    }
+  else
+    {
+      chars = 0;
+
+      for (i = 0; i < seq->value_ptr.string->used_size; i++)
+	{
+	  ret->value_ptr.string->value [i] = seq->value_ptr.string->value [i];
+
+	  if (IS_LOWEST_BYTE_IN_UTF8 (seq->value_ptr.string->value [i]))
+	    chars++;
+	}
+
+      if (chars != size)
+	return NULL;
+    }
+
+  ret->value_ptr.string->used_size = allocs;
+  return ret;
 }
 
 
@@ -17756,8 +17840,9 @@ builtin_make_array (struct object *list, struct environment *env,
 {
   int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize;
   struct object *ret, *cons, *dims, *fp = NULL, *initial_contents = NULL,
-    *allow_other_keys = NULL, *el;
+    *element_type = NULL, *allow_other_keys = NULL, *el;
   struct array_size *size = NULL, *sz;
+  enum object_type objt;
 
   if (!list_length (list))
     {
@@ -17790,6 +17875,19 @@ builtin_make_array (struct object *list, struct environment *env,
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":ELEMENT-TYPE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!element_type)
+	    element_type = CAR (CDR (list));
 
 	  list = CDR (list);
 	}
@@ -17850,6 +17948,9 @@ builtin_make_array (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (!element_type)
+    element_type = &t_object;
+
   if (fp && fp->type == TYPE_INTEGER)
     {
       fillp = mpz_get_si (fp->value_ptr.integer);
@@ -17860,6 +17961,11 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
     }
+
+  if (is_subtype_by_char_vector (element_type, "CHARACTER", env))
+    objt = TYPE_STRING;
+  else
+    objt = TYPE_ARRAY;
 
   if (dims->type == TYPE_INTEGER)
     {
@@ -17877,12 +17983,15 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = alloc_vector (indx, 1, 0);
+      if (objt != TYPE_STRING)
+	{
+	  ret = alloc_vector (indx, 1, 0);
 
-      if (fp && SYMBOL (fp) == &t_object)
-	ret->value_ptr.array->fill_pointer = indx;
-      else
-	ret->value_ptr.array->fill_pointer = fillp;
+	  if (fp && SYMBOL (fp) == &t_object)
+	    ret->value_ptr.array->fill_pointer = indx;
+	  else
+	    ret->value_ptr.array->fill_pointer = fillp;
+	}
     }
   else if (dims->type == TYPE_CONS_PAIR)
     {
@@ -17894,9 +18003,58 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      while (SYMBOL (cons) != &nil_object)
+      if (objt != TYPE_STRING || list_length (dims) != 1)
 	{
-	  if (CAR (cons)->type != TYPE_INTEGER)
+	  while (SYMBOL (cons) != &nil_object)
+	    {
+	      if (CAR (cons)->type != TYPE_INTEGER)
+		{
+		  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+		  return NULL;
+		}
+
+	      indx = mpz_get_si (CAR (cons)->value_ptr.integer);
+
+	      if (indx < 0)
+		{
+		  outcome->type = INVALID_SIZE;
+		  return NULL;
+		}
+
+	      if (size)
+		{
+		  sz->next = malloc_and_check (sizeof (*sz->next));
+		  sz = sz->next;
+		}
+	      else
+		size = sz = malloc_and_check (sizeof (*sz->next));
+
+	      sz->size = indx;
+	      tot *= indx;
+
+	      cons = CDR (cons);
+	    }
+
+	  if (fp && fillp > sz->size)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  sz->next = NULL;
+
+	  ret = alloc_vector (tot, 1, 1);
+
+	  if (fp && SYMBOL (fp) == &t_object)
+	    ret->value_ptr.array->fill_pointer = indx;
+	  else
+	    ret->value_ptr.array->fill_pointer = fillp;
+
+	  ret->value_ptr.array->alloc_size = size;
+	}
+      else
+	{
+	  if (CAR (dims)->type != TYPE_INTEGER)
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -17910,32 +18068,12 @@ builtin_make_array (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (size)
-	    sz = sz->next = malloc_and_check (sizeof (*sz->next));
-	  else
-	    size = sz = malloc_and_check (sizeof (*sz->next));
-
-	  sz->size = indx;
-	  tot *= indx;
-
-	  cons = CDR (cons);
+	  if (fp && fillp > indx)
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
 	}
-
-      if (fp && fillp > sz->size)
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-
-      ret = alloc_vector (tot, 1, 1);
-
-      if (fp && SYMBOL (fp) == &t_object)
-	ret->value_ptr.array->fill_pointer = indx;
-      else
-	ret->value_ptr.array->fill_pointer = fillp;
-
-      sz->next = NULL;
-      ret->value_ptr.array->alloc_size = size;
     }
   else if (SYMBOL (dims) == &nil_object)
     {
@@ -17956,42 +18094,83 @@ builtin_make_array (struct object *list, struct environment *env,
 
   if (initial_contents)
     {
-      rowsize = 1;
-      sz = ret->value_ptr.array->alloc_size->next;
-
-      while (sz)
+      if (objt == TYPE_STRING
+	  && (dims->type == TYPE_INTEGER || list_length (dims) != 1))
 	{
-	  rowsize *= sz->size;
-	  sz = sz->next;
-	}
-
-      for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
-	{
-	  el = elt (initial_contents, i);
-
-	  if (ret->value_ptr.array->alloc_size->next
-	      && (!IS_SEQUENCE (el)
-		  || SEQUENCE_LENGTH (el)
-		  != ret->value_ptr.array->alloc_size->next->size))
+	  if (!IS_SEQUENCE (initial_contents))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
-	  if (!fill_axis_from_sequence (ret, &ret->value_ptr.array->value [i*rowsize],
-					i*rowsize,
-					ret->value_ptr.array->alloc_size->next,
-					rowsize, el))
+	  ret = create_string_from_sequence (initial_contents, indx);
+
+	  if (!ret)
 	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
-	  if (initial_contents->type == TYPE_STRING
-	      || initial_contents->type == TYPE_BITARRAY)
+	  if (fp && SYMBOL (fp) == &t_object)
+	    ret->value_ptr.string->fill_pointer = indx;
+	  else
+	    ret->value_ptr.string->fill_pointer = fillp;
+	}
+      else
+	{
+	  rowsize = 1;
+	  sz = ret->value_ptr.array->alloc_size->next;
+
+	  while (sz)
 	    {
-	      decrement_refcount (el);
+	      rowsize *= sz->size;
+	      sz = sz->next;
+	    }
+
+	  for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
+	    {
+	      el = elt (initial_contents, i);
+
+	      if (ret->value_ptr.array->alloc_size->next
+		  && (!IS_SEQUENCE (el)
+		      || SEQUENCE_LENGTH (el)
+		      != ret->value_ptr.array->alloc_size->next->size))
+		{
+		  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+		  return NULL;
+		}
+
+	      if (!fill_axis_from_sequence (ret, &ret->value_ptr.array->value
+					    [i*rowsize], i*rowsize,
+					    ret->value_ptr.array->alloc_size->next,
+					    rowsize, el))
+		{
+		  return NULL;
+		}
+
+	      if (initial_contents->type == TYPE_STRING
+		  || initial_contents->type == TYPE_BITARRAY)
+		{
+		  decrement_refcount (el);
+		}
 	    }
 	}
+    }
+  else if (objt == TYPE_STRING
+	   && (dims->type == TYPE_INTEGER
+	       || (dims->type == TYPE_CONS_PAIR && list_length (dims) == 1)))
+    {
+      ret = alloc_string (indx);
+
+      for (i = 0; i < indx; i++)
+	ret->value_ptr.string->value [i] = 0;
+
+      ret->value_ptr.string->used_size = indx;
+
+      if (fp && SYMBOL (fp) == &t_object)
+	ret->value_ptr.string->fill_pointer = indx;
+      else
+	ret->value_ptr.string->fill_pointer = fillp;
     }
 
   return ret;
