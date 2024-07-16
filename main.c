@@ -19882,6 +19882,7 @@ builtin_read_line (struct object *list, struct environment *env,
 
       ret = create_string_with_char_vector (in, i);
       ret->value_ptr.string->alloc_size = sz;
+      ret->value_ptr.string->fill_pointer = -1;
     }
   else if (s->type == STRING_STREAM)
     {
