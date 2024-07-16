@@ -3004,6 +3004,8 @@ int print_bytespec (const struct bytespec *bs, struct environment *env,
 		    struct stream *str);
 int print_as_string (const char *value, size_t sz, struct environment *env,
 		     struct stream *str);
+int print_string (const struct string *s, struct environment *env,
+		  struct stream *str);
 int print_character (const char *character, struct environment *env,
 		     struct stream *str);
 int print_filename (const struct filename *fn, struct environment *env,
@@ -34506,6 +34508,39 @@ print_as_string (const char *value, size_t sz, struct environment *env,
 
 
 int
+print_string (const struct string *s, struct environment *env,
+	      struct stream *str)
+{
+  fixnum i, chars = 0;
+  int pesc = is_printer_escaping_enabled (env);
+
+  if (pesc && write_to_stream (str, "\"", 1) < 0)
+    return -1;
+
+  for (i = 0; i < s->used_size; i++)
+    {
+      if (s->fill_pointer >= 0 && i >= s->fill_pointer)
+	break;
+
+      if (pesc && (s->value [i] == '"' || s->value [i] == '\\')
+	  && write_to_stream (str, "\\", 1) < 0)
+	return -1;
+
+      if (write_to_stream (str, &s->value [i], 1) < 0)
+	return -1;
+
+      if (IS_LOWEST_BYTE_IN_UTF8 (s->value [i]))
+	chars++;
+    }
+
+  if (pesc)
+    return write_to_stream (str, "\"", 1);
+
+  return 0;
+}
+
+
+int
 print_character (const char *character, struct environment *env,
 		 struct stream *str)
 {
@@ -34963,8 +34998,7 @@ print_object (const struct object *obj, struct environment *env,
       else if (obj->type == TYPE_BYTESPEC)
 	return print_bytespec (obj->value_ptr.bytespec, env, str);
       else if (obj->type == TYPE_STRING)
-	return print_as_string (obj->value_ptr.string->value,
-				obj->value_ptr.string->used_size, env, str);
+	return print_string (obj->value_ptr.string, env, str);
       else if (obj->type == TYPE_CHARACTER)
 	return print_character (obj->value_ptr.character, env, str);
       else if (obj->type == TYPE_FILENAME)
