@@ -25218,8 +25218,8 @@ struct object *
 builtin_make_string (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
-  int sz, found_unknown_key = 0;
-  struct object *ret, *allow_other_keys = NULL;
+  int sz, found_unknown_key = 0, i;
+  struct object *ret, *initial_element = NULL, *allow_other_keys = NULL;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -25259,6 +25259,19 @@ builtin_make_string (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (symbol_equals (CAR (list), ":INITIAL-ELEMENT", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!initial_element)
+	    initial_element = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
       else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
@@ -25295,12 +25308,35 @@ builtin_make_string (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (initial_element && initial_element->type != TYPE_CHARACTER)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
 
   ret = alloc_object ();
 
   ret->type = TYPE_STRING;
   ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
-  ret->value_ptr.string->value = calloc_and_check (sz, 1);
+
+  if (initial_element)
+    {
+      sz *= strlen (initial_element->value_ptr.character);
+      ret->value_ptr.string->value = malloc_and_check (sz);
+
+      i = 0;
+
+      while (i < sz)
+	{
+	  memcpy (ret->value_ptr.string->value+i,
+		  initial_element->value_ptr.character,
+		  strlen (initial_element->value_ptr.character));
+	  i += strlen (initial_element->value_ptr.character);
+	}
+    }
+  else
+    ret->value_ptr.string->value = calloc_and_check (sz, 1);
+
   ret->value_ptr.string->alloc_size = ret->value_ptr.string->used_size = sz;
   ret->value_ptr.string->fill_pointer = -1;
 
