@@ -1797,6 +1797,7 @@ struct object *create_character_from_char (char ch);
 struct object *create_character_from_designator (struct object *des);
 struct object *get_nth_character (struct object *str, int ind);
 fixnum get_nth_character_offset (struct object *str, int ind);
+fixnum get_nth_character_preceding_offset (struct object *str, int ind);
 int set_nth_character (struct object *str, int ind, char *ch);
 
 struct object *create_file_stream (enum stream_content_type content_type,
@@ -1807,7 +1808,7 @@ struct object *create_stream_from_open_file (enum stream_content_type content_ty
 					     enum stream_direction direction,
 					     FILE *file);
 struct object *create_string_stream (enum stream_direction direction,
-				     struct object *instr);
+				     struct object *instr, int begin, int end);
 struct object *create_synonym_stream (struct object *sym);
 
 struct structure_field_decl *create_structure_field_decl
@@ -9104,6 +9105,27 @@ get_nth_character_offset (struct object *str, int ind)
 }
 
 
+fixnum
+get_nth_character_preceding_offset (struct object *str, int ind)
+{
+  fixnum i;
+
+  if (!ind)
+    return 0;
+
+  for (i = 0; i < str->value_ptr.string->used_size; i++)
+    {
+      if (IS_LOWEST_BYTE_IN_UTF8 (str->value_ptr.string->value [i]))
+	ind--;
+
+      if (!ind)
+	return i;
+    }
+
+  return -1;
+}
+
+
 int
 set_nth_character (struct object *str, int ind, char *ch)
 {
@@ -9233,10 +9255,12 @@ create_stream_from_open_file (enum stream_content_type content_type,
 
 
 struct object *
-create_string_stream (enum stream_direction direction, struct object *instr)
+create_string_stream (enum stream_direction direction, struct object *instr,
+		      int begin, int end)
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
+  fixnum begoff, endoff;
 
   str->type = STRING_STREAM;
   str->direction = direction;
@@ -9248,8 +9272,41 @@ create_string_stream (enum stream_direction direction, struct object *instr)
 
   if (direction == INPUT_STREAM)
     {
-      add_reference (obj, instr, 0);
-      str->string = instr;
+      if (begin < 0 || (end >= 0 && begin > end))
+	return NULL;
+
+      if (!begin && end < 0)
+	{
+	  add_reference (obj, instr, 0);
+	  str->string = instr;
+	}
+      else
+	{
+	  begoff = get_nth_character_offset (instr, begin);
+
+	  if (begoff < 0)
+	    return NULL;
+
+	  if (end >= 0)
+	    {
+	      endoff = get_nth_character_preceding_offset (instr, end);
+
+	      if (endoff < 0)
+		return NULL;
+	    }
+
+	  if (end < 0)
+	    {
+	      str->string = create_string_copying_char_vector
+		(instr->value_ptr.string->value+begoff,
+		 instr->value_ptr.string->used_size-begoff);
+	    }
+	  else
+	    {
+	      str->string = create_string_copying_char_vector
+		(instr->value_ptr.string->value+begoff, endoff-begoff+1);
+	    }
+	}
     }
   else
     str->string = alloc_string (0);
@@ -20922,7 +20979,10 @@ struct object *
 builtin_make_string_input_stream (struct object *list, struct environment *env,
 				  struct outcome *outcome)
 {
-  if (list_length (list) != 1)
+  int l = list_length (list), beg, end;
+  struct object *ret;
+
+  if (!l || l > 3)
     {
       outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
@@ -20934,7 +20994,29 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_string_stream (INPUT_STREAM, CAR (list));
+  if ((l >= 2 && CAR (CDR (list))->type != TYPE_INTEGER)
+      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_INTEGER))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (l >= 2)
+    beg = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+  else
+    beg = 0;
+
+  if (l == 3)
+    end = mpz_get_si (CAR (CDR (CDR (list)))->value_ptr.integer);
+  else
+    end = -1;
+
+  ret = create_string_stream (INPUT_STREAM, CAR (list), beg, end);
+
+  if (!ret)
+    outcome->type = WRONG_TYPE_OF_ARGUMENT;
+
+  return ret;
 }
 
 
@@ -20948,7 +21030,7 @@ builtin_make_string_output_stream (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_string_stream (OUTPUT_STREAM, NULL);
+  return create_string_stream (OUTPUT_STREAM, NULL, -1, -1);
 }
 
 
