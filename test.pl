@@ -1137,6 +1137,7 @@ make_test ("(read-preserving-whitespace inp2)", "AA");
 make_test ("(read-line inp2)", "\"  \"\nT");
 make_test ("(read-preserving-whitespace (make-string-input-stream \"hello\"))", "HELLO");
 make_test ("(read-preserving-whitespace (make-string-input-stream \"123\"))", "123");
+make_test ("(let ((s (make-string-input-stream \"abc def\"))) (read s) (al-string-input-stream-string s))", "\"def\"");
 make_test ("(read-from-string \" abc\")", "ABC\n4");
 make_test ("(read-from-string \" 1  \")", "1\n2");
 make_test ("(parse-integer \"2\")", "2\n1");
