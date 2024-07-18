@@ -1313,6 +1313,7 @@ make_test ("(read-line (make-string-input-stream \"abcdef\" 1 3))", "\"bc\"\nT")
 make_test ("(read-line (make-string-input-stream \"abcdef\" 1))", "\"bcdef\"\nT");
 make_test ("(read-line (make-string-input-stream \"abcdef\" 1 2))", "\"b\"\nT");
 make_test ("(read-line (make-string-input-stream \"abcdef\" 1 6))", "\"bcdef\"\nT");
+make_test ("(read-line (make-string-input-stream \"abcdef\" 1 nil))", "\"bcdef\"\nT");
 make_test ("(make-string-input-stream \"abc\" 1 1)", "#<STREAM ?>");
 make_test ("(defparameter str (make-string-output-stream))", "STR");
 make_test ("(write 'aaa :stream str)", "AAA");
