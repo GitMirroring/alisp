@@ -20995,7 +20995,8 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
     }
 
   if ((l >= 2 && CAR (CDR (list))->type != TYPE_INTEGER)
-      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_INTEGER))
+      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_INTEGER
+	  && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -21006,7 +21007,7 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
   else
     beg = 0;
 
-  if (l == 3)
+  if (l == 3 && CAR (CDR (CDR (list)))->type == TYPE_INTEGER)
     end = mpz_get_si (CAR (CDR (CDR (list)))->value_ptr.integer);
   else
     end = -1;
