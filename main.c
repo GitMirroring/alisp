@@ -2931,6 +2931,9 @@ struct object *evaluate_al_loopy_destructuring_bind
 struct object *evaluate_al_loopy_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_string_input_stream_string
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_dump_bindings
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_dump_function_bindings
@@ -4227,6 +4230,10 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-LOOPY-SETQ", env, evaluate_al_loopy_setq, TYPE_MACRO,
 		    NULL, 0);
 
+  add_builtin_form ("AL-STRING-INPUT-STREAM-STRING", env,
+		    builtin_al_string_input_stream_string, TYPE_FUNCTION, NULL,
+		    0);
+
   add_builtin_form ("AL-DUMP-BINDINGS", env, builtin_al_dump_bindings,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-DUMP-FUNCTION-BINDINGS", env,
@@ -4254,6 +4261,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
+
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
@@ -32902,6 +32910,30 @@ evaluate_al_loopy_setq (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_al_string_input_stream_string (struct object *list,
+				       struct environment *env,
+				       struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STREAM
+      || CAR (list)->value_ptr.stream->type != STRING_STREAM
+      || CAR (list)->value_ptr.stream->direction != INPUT_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list)->value_ptr.stream->string);
+  return CAR (list)->value_ptr.stream->string;
 }
 
 
