@@ -2156,6 +2156,35 @@
 
 
 
+(defmacro with-input-from-string ((var strform &key index (start 0) end) &body forms)
+  (let ((strsym (gensym)))
+    `(let* ((,strsym ,strform)
+	    (,var (make-string-input-stream ,strsym ,start ,end)))
+       (unwind-protect
+	    (progn
+	      ,@(if index
+		    `((setq ,index (length ,strsym))))
+	      ,@forms)
+	 ,@(if index
+	       `((setq ,index (- ,index (length (cl-user:al-string-input-stream-string ,var))))))
+	 (close ,var)))))
+
+
+(defmacro with-output-to-string ((var &optional strform &key element-type) &body forms)
+  (let ((blockname (gensym)))
+    `(block ,blockname
+       (let ((,var (make-string-output-stream ,strform)))
+	 (unwind-protect
+	      (progn
+		,@forms)
+	   ,(if strform
+		`(close ,var)
+		`(let ((out (get-output-stream-string ,var)))
+		   (close ,var)
+		   (return-from ,blockname out))))))))
+
+
+
 (defun pprint (obj &optional (out *standard-output*))
   (terpri out)
   (let ((*print-pretty* t))
@@ -2932,10 +2961,11 @@
 	  file-namestring directory-namestring host-namestring enough-namestring
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
-	  write-to-string prin1-to-string princ-to-string pprint do-all-symbols
-	  find-all-symbols loop format encode-universal-time *readtable*
-	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart break abort continue documentation))
+	  write-to-string prin1-to-string princ-to-string with-input-from-string
+	  with-output-to-string pprint do-all-symbols find-all-symbols loop
+	  format encode-universal-time *readtable* with-standard-io-syntax
+	  handler-case restart-case with-simple-restart find-restart break abort
+	  continue documentation))
 
 
 
