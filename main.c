@@ -1746,6 +1746,8 @@ struct object *create_string_copying_char_vector (const char *str, fixnum size);
 struct object *create_string_with_char_vector (char *str, fixnum size);
 struct object *create_string_copying_c_string (char *str);
 void resize_string_allocation (struct object *string, fixnum size);
+void increment_string_allocation_respecting_fill_pointer (struct object *string,
+							  fixnum incr);
 char *copy_string_to_c_string (struct string *str);
 
 char *concatenate_char_vectors (size_t totsize, ...);
@@ -8318,6 +8320,25 @@ resize_string_allocation (struct object *string, fixnum size)
 }
 
 
+void
+increment_string_allocation_respecting_fill_pointer (struct object *string,
+						     fixnum incr)
+{
+  string->value_ptr.string->used_size = string->value_ptr.string->fill_pointer
+    +incr;
+
+  if (string->value_ptr.string->used_size
+      <= string->value_ptr.string->alloc_size)
+    return;
+
+  string->value_ptr.string->value =
+    realloc_and_check (string->value_ptr.string->value,
+		       string->value_ptr.string->used_size);
+
+  string->value_ptr.string->alloc_size = string->value_ptr.string->used_size;
+}
+
+
 char *
 copy_string_to_c_string (struct string *str)
 {
@@ -9317,7 +9338,15 @@ create_string_stream (enum stream_direction direction, struct object *instr,
 	}
     }
   else
-    str->string = alloc_string (0);
+    {
+      if (instr)
+	{
+	  add_reference (obj, instr, 0);
+	  str->string = instr;
+	}
+      else
+	str->string = alloc_string (0);
+    }
 
   return obj;
 }
@@ -21033,13 +21062,24 @@ struct object *
 builtin_make_string_output_stream (struct object *list, struct environment *env,
 				   struct outcome *outcome)
 {
-  if (SYMBOL (list) != &nil_object)
+  int l = list_length (list);
+  struct object *str;
+
+  if (l > 1)
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
-  return create_string_stream (OUTPUT_STREAM, NULL, -1, -1);
+  if (l && CAR (list)->type != TYPE_STRING && SYMBOL (CAR (list)) != &nil_object)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  str = (l && CAR (list)->type == TYPE_STRING) ? CAR (list) : NULL;
+
+  return create_string_stream (OUTPUT_STREAM, str, -1, -1);
 }
 
 
@@ -34309,12 +34349,26 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
   else
     {
       s = stream->string->value_ptr.string;
-      resize_string_allocation (stream->string, s->used_size + size);
 
-      for (i = 0; i < size; i++)
-	s->value [s->used_size + i] = str [i];
+      if (s->fill_pointer < 0)
+	{
+	  resize_string_allocation (stream->string, s->used_size + size);
 
-      s->used_size = s->alloc_size;
+	  for (i = 0; i < size; i++)
+	    s->value [s->used_size + i] = str [i];
+
+	  s->used_size = s->alloc_size;
+	}
+      else
+	{
+	  increment_string_allocation_respecting_fill_pointer (stream->string,
+							       size);
+
+	  for (i = 0; i < size; i++)
+	    s->value [s->fill_pointer + i] = str [i];
+
+	  s->fill_pointer = s->used_size;
+	}
 
       if (str [size-1] == '\n')
 	stream->dirty_line = 0;
@@ -34355,8 +34409,14 @@ write_long_to_stream (struct stream *stream, long z)
     }
 
   if (stream->type == STRING_STREAM)
-    resize_string_allocation (stream->string,
-			      stream->string->value_ptr.string->used_size + size);
+    {
+      if (stream->string->value_ptr.string->fill_pointer < 0)
+	resize_string_allocation (stream->string,
+				  stream->string->value_ptr.string->used_size+size);
+      else
+	increment_string_allocation_respecting_fill_pointer (stream->string,
+							     size);
+    }
 
   if (is_negative && write_to_stream (stream, "-", 1) < 0)
     return -1;
@@ -34444,8 +34504,13 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
     }
 
   if (str->type == STRING_STREAM)
-    resize_string_allocation (str->string,
-			      str->string->value_ptr.string->used_size + sz);
+    {
+      if (str->string->value_ptr.string->fill_pointer < 0)
+	resize_string_allocation (str->string,
+				  str->string->value_ptr.string->used_size+sz);
+      else
+	increment_string_allocation_respecting_fill_pointer (str->string, sz);
+    }
 
   if (do_need_multiple_escape && write_to_stream (str, "|", 1) < 0)
     return -1;
