@@ -32317,6 +32317,13 @@ evaluate_unwind_protect (struct object *list, struct environment *env,
 
   clres = evaluate_body (CDR (list), 0, NULL, env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!clres)
+    {
+      decrement_refcount (res);
+      return NULL;
+    }
+
   decrement_refcount (clres);
 
   outcome->no_value = nov;
