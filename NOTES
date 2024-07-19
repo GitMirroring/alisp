@@ -80,6 +80,13 @@ package.  There are also some non-standard extensions of standard functions.
 - the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
   legal information
 
+- the function AL-STRING-INPUT-STREAM-STRING takes an input string stream and
+  returns a string with the characters left to read
+
+- the standard function MAKE-STRING-OUTPUT-STREAM takes an optional string
+  argument; if provided, writing operations append to the string, also
+  respecting the fill pointer if present
+
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
   established.  Each binding is a list containing the symbol, the value, the
