@@ -29089,7 +29089,6 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	  if (eval_value)
 	    {
 	      value = evaluate_object (value, env, outcome);
-	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	      if (!value)
 		return NULL;
@@ -29122,6 +29121,24 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	      binsnum++;
 
 	      cons1 = CDR (cons1);
+
+	      if (!l)
+		break;
+	    }
+
+	  while (SYMBOL (cons1) != &nil_object)
+	    {
+	      if (!IS_SYMBOL (CAR (cons1)))
+		{
+		  outcome->type = INVALID_SETF_EXPANSION;
+		  return NULL;
+		}
+
+	      env->vars = bind_variable (SYMBOL (CAR (cons1)), &nil_object, 0,
+					 env->vars);
+
+	      binsnum++;
+	      cons1 = CDR (cons1);
 	    }
 
 	  decrement_refcount (expvals->next->obj);
@@ -29132,7 +29149,6 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	  env->lex_env_vars_boundary += binsnum;
 
 	  val = evaluate_object (expvals->next->next->obj, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  free_object_list (expvals->next->next);
 	  expvals->next->next = NULL;
