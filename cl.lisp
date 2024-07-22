@@ -558,6 +558,20 @@
      `(symbol-value ,var))))
 
 
+(define-setf-expander values (&rest places)
+  (let* ((exps (mapcar (lambda (p) (multiple-value-list (get-setf-expansion p))) places))
+	 (varsyms (apply 'append (mapcar #'car exps)))
+	 (valforms (apply 'append (mapcar #'cadr exps)))
+	 (storesyms (mapcar #'caaddr exps))
+	 (otherstoresyms (apply 'append (mapcar #'cdaddr exps))))
+    (values
+     varsyms
+     valforms
+     storesyms
+     `(let ,otherstoresyms ,@(mapcar (lambda (e) (nth 3 e)) exps) (values ,@storesyms))
+     `(values ,@(mapcar (lambda (e) (nth 4 e)) exps)))))
+
+
 
 (defmacro defsetf (accessfn secondarg &rest args)
   (if (listp secondarg)
