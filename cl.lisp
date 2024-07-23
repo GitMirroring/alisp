@@ -547,6 +547,15 @@
 
 
 
+(defun (setf subseq) (newval seq start &optional end)
+  (let ((len (- (or end (length seq)) start))
+	(newvallen (length newval)))
+    (dotimes (i (min len newvallen))
+      (setf (elt seq (+ i start)) (elt newval i)))
+    newval))
+
+
+
 (define-setf-expander symbol-value (sym)
   (let ((var (gensym))
 	(val (gensym)))
