@@ -937,6 +937,10 @@ make_test ("(subseq #(0 1 2) 1 3)", "#(1 2)");
 make_test ("(subseq #(0 1 2) 1 1)", "#()");
 make_test ("(subseq '(0 1 2) 1 nil)", "(1 2)");
 make_test ("(subseq '(0 1 2) 1 1)", "NIL");
+make_test ("(setf (subseq '(0 1 2 3) (+)) '(4 5 6))", "(4 5 6)");
+make_test ("(let ((x '(0 1 2 3))) (setf (subseq x (+)) '(4 5 6)) x)", "(4 5 6 3)");
+make_test ("(let ((x '(0 1))) (setf (subseq x (+)) '(4 5 6)) x)", "(4 5)");
+make_test ("(let ((x '(0 1 2 3))) (setf (subseq x 1 2) '(4 5 6)) x)", "(0 4 2 3)");
 make_test ("(length ())", "0");
 make_test ("(length \"aaa\")", "3");
 make_test ("(length #(1 2))", "2");
@@ -1912,6 +1916,7 @@ make_test ("(let (x y z) (multiple-value-setq (x y z) (values 0 1)) (list x y z)
 make_test ("(let (x y z) (multiple-value-setq (x y z) (values 0 1 2 3)) (list x y z))", "(0 1 2)");
 make_test ("(let (x y z) (setf (values x y z) (values 0 1)))", "0\n1\nNIL");
 make_test ("(let (x y z) (setf (values x y z) (values 0 1)) (list x y z))", "(0 1 NIL)");
+make_test ("(let ((x '(0 1)) y z) (setf (values (car x) y z) (values 2 3)) (list x y z))", "((2 1) 3 NIL)");
 make_test ("(prog ((x 0) y) a (write 0) (go c) b (write 1) c (return x))", "0\n0");
 make_test ("(prog* ((x 0) (y x)) a (write 0) (go c) b (write 1) c (return y))", "0\n0");
 make_test ("(every #'evenp '(0 2 4))", "T");
