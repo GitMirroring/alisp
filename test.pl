@@ -1917,6 +1917,9 @@ make_test ("(let (x y z) (multiple-value-setq (x y z) (values 0 1 2 3)) (list x 
 make_test ("(let (x y z) (setf (values x y z) (values 0 1)))", "0\n1\nNIL");
 make_test ("(let (x y z) (setf (values x y z) (values 0 1)) (list x y z))", "(0 1 NIL)");
 make_test ("(let ((x '(0 1)) y z) (setf (values (car x) y z) (values 2 3)) (list x y z))", "((2 1) 3 NIL)");
+make_test ("(let ((x 0) (y '(1 2)) (z 3)) (shiftf x (car y) z 4) (list x y z))", "(1 (3 2) 4)");
+make_test ("(let ((x 0) (y '(1 2)) (z 3)) (shiftf x (car y) z 4))", "0");
+make_test ("(let ((x 0) (y '(1 2)) (z 3)) (rotatef x (car y) z) (list x y z))", "(1 (3 2) 0)");
 make_test ("(prog ((x 0) y) a (write 0) (go c) b (write 1) c (return x))", "0\n0");
 make_test ("(prog* ((x 0) (y x)) a (write 0) (go c) b (write 1) c (return y))", "0\n0");
 make_test ("(every #'evenp '(0 2 4))", "T");
