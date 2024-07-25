@@ -13892,7 +13892,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct object *ret, *ret2, *args = NULL, *body;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
-    && !(env->stepping_flags & STEPPING_OVER_FORM);
+    && !(env->stepping_flags & STEPPING_OVER_FORM), onlylex = env->only_lexical;
   unsigned isprof = 0, time, evaltime = 0;
 
 
@@ -14061,8 +14061,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
 
-  if (expand_and_eval)
-    env->only_lexical = 1;
+  env->only_lexical = expand_and_eval;
 
   if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
 			   eval_args, also_pass_name, is_typespec,
@@ -14180,10 +14179,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
 
 
+  env->only_lexical = onlylex;
+
   if (ret && expand_and_eval)
     {
-      env->only_lexical = 0;
-
       if (isprof)
 	{
 	  evaltime = clock ();
