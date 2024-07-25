@@ -522,6 +522,11 @@ make_test ("(let ((i 0)) (foo i) i)", "1");
 make_test ("(defmacro mac (&whole wh) wh)", "MAC");
 make_test ("(funcall (macro-function 'mac) nil nil)", "NIL");
 
+make_test ("(defparameter x 0)", "X");
+make_test ("(defun fun nil (let ((x 1)) x))", "FUN");
+make_test ("(defmacro mac nil (fun))", "MAC");
+make_test ("(mac)", "1");
+
 make_test ("(typep '(1 . 2) 'cons)", "T");
 make_test ("(typep () 'atom)", "T");
 make_test ("(typep (cons 1 2) 'atom)", "NIL");
