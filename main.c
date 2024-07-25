@@ -35316,7 +35316,42 @@ print_object (const struct object *obj, struct environment *env,
 	return write_to_stream (str, "#<ENVIRONMENT ?>",
 				strlen ("#<ENVIRONMENT ?>"));
       else if (obj->type == TYPE_STREAM)
-	return write_to_stream (str, "#<STREAM ?>", strlen ("#<STREAM ?>"));
+	{
+	  if (write_to_stream (str, "#<STREAM", strlen ("#<STREAM")) < 0)
+	    return -1;
+
+	  if (obj->value_ptr.stream->type == FILE_STREAM
+	      || obj->value_ptr.stream->type == STRING_STREAM)
+	    {
+	      if (obj->value_ptr.stream->type == FILE_STREAM
+		  && write_to_stream (str, " FILE", strlen (" FILE")) < 0)
+		return -1;
+
+	      if (obj->value_ptr.stream->type == STRING_STREAM
+		  && write_to_stream (str, " STRING", strlen (" STRING")) < 0)
+		return -1;
+
+	      if (obj->value_ptr.stream->direction == INPUT_STREAM
+		  && write_to_stream (str, " INPUT", strlen (" INPUT")) < 0)
+		return -1;
+
+	      if (obj->value_ptr.stream->direction == OUTPUT_STREAM
+		  && write_to_stream (str, " OUTPUT", strlen (" OUTPUT")) < 0)
+		return -1;
+
+	      if (obj->value_ptr.stream->direction == BIDIRECTIONAL_STREAM
+		  && write_to_stream (str, " BIDIRECTIONAL",
+				      strlen (" BIDIRECTIONAL")) < 0)
+		return -1;
+	    }
+	  else if (write_to_stream (str, " ?", strlen (" ?")) < 0)
+	    return -1;
+
+	  if (write_to_stream (str, ">", strlen (">")) < 0)
+	    return -1;
+
+	  return 0;
+	}
       else if (obj->type == TYPE_STRUCTURE_CLASS)
 	{
 	  if (write_to_stream (str, "#<STRUCTURE CLASS ",
