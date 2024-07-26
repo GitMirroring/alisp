@@ -10166,6 +10166,12 @@ compile_form (struct object *form, struct environment *env,
 	  if (!compile_body (CDR (CDR (form)), env, outcome))
 	    return NULL;
 	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO*"))
+	{
+	  if (!compile_body (CDR (CDR (CDR (form))), env, outcome))
+	    return NULL;
+	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETQ")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETF"))
 	{
