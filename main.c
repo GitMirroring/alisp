@@ -734,6 +734,8 @@ environment
     *print_pprint_dispatch_sym, *read_base_sym, *read_suppress_sym;
 
   struct object *abort_sym;
+
+  struct object *al_compile_when_defining_sym;
 };
 
 
@@ -4267,6 +4269,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
+
+  env->al_compile_when_defining_sym =
+    define_variable ("*AL-COMPILE-WHEN-DEFINING*", &nil_object, env);
 
   define_variable ("*AL-PPRINT-DEPTH*", create_integer_from_long (0), env);
 }
@@ -29746,6 +29751,15 @@ evaluate_defun (struct object *list, struct environment *env,
       return ret;
     }
 
+  if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
+      != &nil_object)
+    {
+      fun = compile_function (fun, env, outcome);
+
+      if (!fun)
+	return NULL;
+    }
+
   increment_refcount (sym);
   return sym;
 }
@@ -29792,6 +29806,15 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   mac->value_ptr.function->name = sym;
   add_reference (mac, sym, 0);
+
+  if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
+      != &nil_object)
+    {
+      mac = compile_function (mac, env, outcome);
+
+      if (!mac)
+	return NULL;
+    }
 
   increment_refcount (sym);
   return sym;
