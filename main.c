@@ -3045,6 +3045,8 @@ void set_reference_strength_factor (struct object *src, int ind,
 				    int increase_refcount,
 				    int decrease_other_refcount);
 void add_strong_reference (struct object *src, struct object *dest, int ind);
+void add_reference_to_object_just_read (struct object *src, struct object *dest,
+					int ind);
 void add_reference (struct object *src, struct object *dest, int ind);
 void delete_reference (struct object *src, struct object *dest, int ind);
 void weakify_loops (struct object *root, int *depth);
@@ -5241,6 +5243,10 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (out == COMPLETE_OBJECT)
 	    {
+	      add_reference_to_object_just_read (ob, FILLING_CAR (ob)
+						 ? ob->value_ptr.cons_pair->car
+						 : ob->value_ptr.cons_pair->cdr,
+						 FILLING_CAR (ob) ? 0 : 1);
 	      CLEAR_FILLING_CAR (ob);
 	      CLEAR_FILLING_CDR (ob);
 	    }
@@ -5268,6 +5274,10 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 	  if (out == COMPLETE_OBJECT)
 	    {
+	      add_reference_to_object_just_read (ob, EMPTY_LIST_IN_CAR (ob)
+						 ? ob->value_ptr.cons_pair->car
+						 : ob->value_ptr.cons_pair->cdr,
+						 EMPTY_LIST_IN_CAR (ob) ? 0 : 1);
 	      CLEAR_EMPTY_LIST_IN_CAR (ob);
 	      CLEAR_EMPTY_LIST_IN_CDR (ob);
 	    }
@@ -5360,6 +5370,8 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 		  return UNCLOSED_NONEMPTY_LIST;
 		}
+
+	      add_reference_to_object_just_read (last_cons, car, 1);
 	    }
 	  else
 	    {
@@ -5377,6 +5389,8 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 
 		  return UNCLOSED_NONEMPTY_LIST;
 		}
+
+	      add_reference_to_object_just_read (cons, car, 0);
 	    }
 	}
 
@@ -36376,6 +36390,22 @@ add_strong_reference (struct object *src, struct object *dest, int ind)
   if (!DONT_REFCOUNT (dest))
     {
       set_reference_strength_factor (src, ind, dest, 0, 1, 0);
+    }
+}
+
+
+void
+add_reference_to_object_just_read (struct object *src, struct object *dest,
+				   int ind)
+{
+  if (!DONT_REFCOUNT (dest))
+    {
+      if (STRONG_REFCOUNT (dest) > 1)
+	add_reference (src, dest, ind);
+      else
+	add_strong_reference (src, dest, ind);
+
+      DEC_STRONG_REFCOUNT (dest);
     }
 }
 
