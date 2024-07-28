@@ -220,17 +220,17 @@ typedef long fixnum;
 
 
 
-#define BUILTIN_SYMBOL(sym) \
+#define BUILTIN_SYMBOL(sym)						\
   (intern_symbol_by_char_vector ((sym), strlen (sym), 0, EXTERNAL_VISIBILITY, \
-				 0, env->cl_package))
+				 0, env->cl_package, 0))
 
-#define CREATE_BUILTIN_SYMBOL(sym) \
+#define CREATE_BUILTIN_SYMBOL(sym)					\
   (intern_symbol_by_char_vector ((sym), strlen (sym), 1, EXTERNAL_VISIBILITY, \
-				 1, env->cl_package))
+				 1, env->cl_package, 0))
 
-#define KEYWORD(name) \
-  (intern_symbol_by_char_vector ((name)+1, strlen (name)-1, 1, \
-				 EXTERNAL_VISIBILITY, 1, env->keyword_package))
+#define KEYWORD(name)					       \
+  (intern_symbol_by_char_vector ((name)+1, strlen (name)-1, 1,		\
+				 EXTERNAL_VISIBILITY, 1, env->keyword_package, 1))
 
 
 #define ANTILOOP_HASH_T_SIZE 64
@@ -1771,6 +1771,7 @@ void copy_symname_with_case_conversion (char *output, const char *input,
 					enum readtable_case read_case,
 					int single_escape, int multiple_escape);
 
+void clear_symbol (struct symbol *sym);
 struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
 
@@ -1851,7 +1852,8 @@ struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     int do_copy,
 					     enum package_record_flags vis,
 					     int always_create_if_missing,
-					     struct object *package);
+					     struct object *package,
+					     int is_keyword_package);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env,
 				   enum outcome_type *out);
@@ -3490,7 +3492,7 @@ add_standard_definitions (struct environment *env)
   env->package_sym = intern_symbol_by_char_vector ("*PACKAGE*",
 						   strlen ("*PACKAGE*"), 1,
 						   EXTERNAL_VISIBILITY, 1,
-						   env->cl_package);
+						   env->cl_package, 0);
   env->package_sym->value_ptr.symbol->is_parameter = 1;
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
 
@@ -3501,7 +3503,7 @@ add_standard_definitions (struct environment *env)
 
   env->random_state_sym =
     intern_symbol_by_char_vector ("*RANDOM-STATE*", strlen ("*RANDOM-STATE*"), 1,
-				  EXTERNAL_VISIBILITY, 1, env->cl_package);
+				  EXTERNAL_VISIBILITY, 1, env->cl_package, 0);
   env->random_state_sym->value_ptr.symbol->is_parameter = 1;
   rs = alloc_object ();
   rs->type = TYPE_RANDOM_STATE;
@@ -4047,32 +4049,32 @@ add_standard_definitions (struct environment *env)
   env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
 							strlen ("&OPTIONAL"),
 							1, EXTERNAL_VISIBILITY,
-							1, env->cl_package);
+							1, env->cl_package, 0);
   env->amp_rest_sym = intern_symbol_by_char_vector ("&REST", strlen ("&REST"),
 						    1, EXTERNAL_VISIBILITY, 1,
-						    env->cl_package);
+						    env->cl_package, 0);
   env->amp_body_sym = intern_symbol_by_char_vector ("&BODY", strlen ("&BODY"),
 						    1, EXTERNAL_VISIBILITY, 1,
-						    env->cl_package);
+						    env->cl_package, 0);
   env->amp_key_sym = intern_symbol_by_char_vector ("&KEY", strlen ("&KEY"), 1,
 						   EXTERNAL_VISIBILITY, 1,
-						   env->cl_package);
+						   env->cl_package, 0);
   env->amp_allow_other_keys_sym =
     intern_symbol_by_char_vector ("&ALLOW-OTHER-KEYS",
 				  strlen ("&ALLOW-OTHER-KEYS"), 1,
-				  EXTERNAL_VISIBILITY, 1, env->cl_package);
+				  EXTERNAL_VISIBILITY, 1, env->cl_package, 0);
   env->amp_aux_sym = intern_symbol_by_char_vector ("&AUX",
 						   strlen ("&AUX"), 1,
 						   EXTERNAL_VISIBILITY, 1,
-						   env->cl_package);
+						   env->cl_package, 0);
   env->amp_whole_sym = intern_symbol_by_char_vector ("&WHOLE",
 						     strlen ("&WHOLE"), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     env->cl_package);
+						     env->cl_package, 0);
   env->key_allow_other_keys_sym =
     intern_symbol_by_char_vector ("ALLOW-OTHER-KEYS",
 				  strlen ("ALLOW-OTHER-KEYS"), 1,
-				  EXTERNAL_VISIBILITY, 1, env->keyword_package);
+				  EXTERNAL_VISIBILITY, 1, env->keyword_package, 1);
 
   env->not_sym = CREATE_BUILTIN_SYMBOL ("NOT");
   env->and_sym = CREATE_BUILTIN_SYMBOL ("AND");
@@ -4212,7 +4214,7 @@ add_standard_definitions (struct environment *env)
   lambdal->next->name = intern_symbol_by_char_vector ("INITARGS",
 						      strlen ("INITARGS"), 1,
 						      INTERNAL_VISIBILITY, 0,
-						      env->cl_package);
+						      env->cl_package, 0);
   lambdal->next->reference_strength_factor
     = !STRENGTH_FACTOR_OF_OBJECT (lambdal->next->name);
   INC_WEAK_REFCOUNT (lambdal->next->name);
@@ -4433,7 +4435,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
   enum outcome_type out;
   int bts, cs, tokensize, tokenlength;
   struct object *last_pref, *ob = skip_prefix (*obj, &bts, &cs, &last_pref),
-    *skip = inspect_variable (env->read_suppress_sym, env);
+    *skip = inspect_variable (env->read_suppress_sym, env), *obs;
   struct object *l, *call;
   char *token;
 
@@ -4524,12 +4526,14 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       if (!input)
 	free (token);
 
-      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
+      if (out == COMPLETE_OBJECT && !(obs = intern_symbol_name (ob, env, &out)))
 	{
 	  increment_refcount (ob);
 	  outcome->obj = ob;
 	  return out;
 	}
+      else if (out == COMPLETE_OBJECT)
+	ob = obs;
     }
   else if (ob->type == TYPE_SHARP_MACRO_CALL)
     {
@@ -4969,7 +4973,7 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	     const char **obj_begin, const char **obj_end)
 {
   int found_prefix = 0, tokensize, tokenlength, numbase;
-  struct object *last_pref, *ob = NULL, *call,
+  struct object *last_pref, *ob = NULL, *call, *obs,
     *skip = inspect_variable (env->read_suppress_sym, env);
   enum object_type numtype;
   enum outcome_type out = NO_OBJECT;
@@ -5190,12 +5194,15 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	      if (!input)
 		free (token);
 
-	      if (out == COMPLETE_OBJECT && !intern_symbol_name (ob, env, &out))
+	      if (out == COMPLETE_OBJECT &&
+		  !(obs = intern_symbol_name (ob, env, &out)))
 		{
 		  increment_refcount (ob);
 		  outcome->obj = ob;
 		  return out;
 		}
+	      else if (out == COMPLETE_OBJECT)
+		ob = obs;
 	    }
 
 	  break;
@@ -5640,7 +5647,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   int arg, tokenlength, tokensize, base;
   const char *obj_b, *num_e;
   char *token;
-  struct object *prevpack;
+  struct object *prevpack, *obs;
   struct sharp_macro_call *call;
   enum outcome_type out;
   enum object_type ot;
@@ -5746,11 +5753,11 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       else
 	call->is_empty_list = 0;
 
-      if (call->dispatch_ch == '\\'
+      /*if (call->dispatch_ch == '\\'
 	  && call->obj->value_ptr.symbol_name->packname_present)
 	{
 	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
-	}
+	  }*/
 
       if (IS_INCOMPLETE_OBJECT (out))
 	return INCOMPLETE_SHARP_MACRO_CALL;
@@ -5823,10 +5830,20 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       if (!input)
 	free (token);
 
-      if (call->obj->value_ptr.symbol_name->packname_present)
+      if (out == COMPLETE_OBJECT && !(obs = intern_symbol_name (call->obj, env,
+								&out)))
+	{
+	  increment_refcount (call->obj);
+	  outcome->obj = call->obj;
+	  return out;
+	}
+      else if (out == COMPLETE_OBJECT)
+	call->obj = obs;
+
+      /*if (call->obj->value_ptr.symbol_name->packname_present)
 	{
 	  return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
-	}
+	  }*/
 
       if (IS_INCOMPLETE_OBJECT (out))
 	return INCOMPLETE_SHARP_MACRO_CALL;
@@ -6051,8 +6068,8 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 		  struct outcome *outcome)
 {
   struct object *obj = macro_call->obj, *ret;
-  struct symbol_name *s;
-  int l;
+  struct symbol *s;
+  int l, ch;
 
   if (macro_call->dispatch_ch == '\'')
     {
@@ -6073,43 +6090,47 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == '\\')
     {
-      if (obj->type != TYPE_SYMBOL_NAME
-	  || obj->value_ptr.symbol_name->packname_present)
+      if (obj->type != TYPE_SYMBOL)
 	{
 	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 
 	  return NULL;
 	}
 
-      s = obj->value_ptr.symbol_name;
+      s = obj->value_ptr.symbol;
 
-      if (char_vector_utf8_length (s->value, s->used_size) == 1)
+      if (char_vector_utf8_length (s->name, s->name_len) == 1)
 	{
-	  return create_character_from_utf8 (s->value, s->used_size);
+	  return create_character_from_utf8 (s->name, s->name_len);
 	}
 
-      s->value [0] = toupper ((unsigned char)s->value [0]);
+      ch = s->name [0];
+      s->name [0] = toupper ((unsigned char)s->name [0]);
 
-      if (eqmem (s->value, s->used_size, "NEWLINE", strlen ("NEWLINE")))
-	return create_character ("\n", 1);
-      else if (eqmem (s->value, s->used_size, "SPACE", strlen ("SPACE")))
-	return create_character (" ", 1);
-      else if (eqmem (s->value, s->used_size, "TAB", strlen ("TAB")))
-	return create_character ("\t", 1);
-      else if (eqmem (s->value, s->used_size, "BACKSPACE", strlen ("BACKSPACE")))
-	return create_character ("\b", 1);
-      else if (eqmem (s->value, s->used_size, "PAGE", strlen ("PAGE")))
-	return create_character ("\f", 1);
-      else if (eqmem (s->value, s->used_size, "RETURN", strlen ("RETURN")))
-	return create_character ("\r", 1);
-      else if (eqmem (s->value, s->used_size, "LINEFEED", strlen ("LINEFEED")))
-	return create_character ("\n", 1);
+      if (eqmem (s->name, s->name_len, "NEWLINE", strlen ("NEWLINE")))
+	ret = create_character ("\n", 1);
+      else if (eqmem (s->name, s->name_len, "SPACE", strlen ("SPACE")))
+	ret = create_character (" ", 1);
+      else if (eqmem (s->name, s->name_len, "TAB", strlen ("TAB")))
+	ret = create_character ("\t", 1);
+      else if (eqmem (s->name, s->name_len, "BACKSPACE", strlen ("BACKSPACE")))
+	ret = create_character ("\b", 1);
+      else if (eqmem (s->name, s->name_len, "PAGE", strlen ("PAGE")))
+	ret = create_character ("\f", 1);
+      else if (eqmem (s->name, s->name_len, "RETURN", strlen ("RETURN")))
+	ret = create_character ("\r", 1);
+      else if (eqmem (s->name, s->name_len, "LINEFEED", strlen ("LINEFEED")))
+	ret = create_character ("\n", 1);
       else
 	{
+	  s->name [0] = ch;
 	  outcome->type = UNKNOWN_CHARACTER_NAME;
 
 	  return NULL;
 	}
+
+      s->name [0] = ch;
+      return ret;
     }
   else if (macro_call->dispatch_ch == '.')
     {
@@ -6157,7 +6178,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 	  return NULL;
 	}
 
-      if (obj->type != TYPE_SYMBOL_NAME)
+      if (!IS_SYMBOL (obj))
 	{
 	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 
@@ -8630,6 +8651,28 @@ copy_symname_with_case_conversion (char *output, const char *input, size_t size,
 }
 
 
+void
+clear_symbol (struct symbol *sym)
+{
+  sym->is_type = 0;
+  sym->builtin_type = NULL;
+  sym->typespec = NULL;
+  sym->parent_types = NULL;
+  sym->is_const = 0;
+  sym->is_parameter = 0;
+  sym->is_special = 0;
+  sym->value_dyn_bins_num = 0;
+  sym->value_cell = NULL;
+  sym->function_dyn_bins_num = 0;
+  sym->function_cell = NULL;
+  sym->plist = &nil_object;
+  sym->setf_expander = NULL;
+  sym->home_package = NULL;
+  sym->setf_func_dyn_bins_num = 0;
+  sym->setf_func_cell = NULL;
+}
+
+
 struct object *
 create_symbol (char *name, size_t size, int do_copy)
 {
@@ -8650,22 +8693,8 @@ create_symbol (char *name, size_t size, int do_copy)
     sym->name = name;
 
   sym->name_len = size;
-  sym->is_type = 0;
-  sym->builtin_type = NULL;
-  sym->typespec = NULL;
-  sym->parent_types = NULL;
-  sym->is_const = 0;
-  sym->is_parameter = 0;
-  sym->is_special = 0;
-  sym->value_dyn_bins_num = 0;
-  sym->value_cell = NULL;
-  sym->function_dyn_bins_num = 0;
-  sym->function_cell = NULL;
-  sym->plist = &nil_object;
-  sym->setf_expander = NULL;
-  sym->home_package = NULL;
-  sym->setf_func_dyn_bins_num = 0;
-  sym->setf_func_cell = NULL;
+
+  clear_symbol (sym);
 
   obj->value_ptr.symbol = sym;
 
@@ -10250,7 +10279,7 @@ struct object *
 intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
 			      enum package_record_flags vis,
 			      int always_create_if_missing,
-			      struct object *package)
+			      struct object *package, int is_keyword_package)
 {
   struct object *sym;
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
@@ -10303,6 +10332,13 @@ intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
   sym = create_symbol (name, len, do_copy);
   sym->value_ptr.symbol->home_package = package;
 
+  if (is_keyword_package)
+    {
+      sym->value_ptr.symbol->is_const = 1;
+      sym->value_ptr.symbol->value_cell = sym;
+      add_reference (sym, sym, 0);
+    }
+
   new_sym = malloc_and_check (sizeof (*new_sym));
   new_sym->flags = vis;
   new_sym->sym = sym;
@@ -10320,35 +10356,34 @@ intern_symbol_name (struct object *symname, struct environment *env,
 {
   struct symbol_name *s = symname->value_ptr.symbol_name;
   struct object *pack = inspect_variable (env->package_sym, env);
+  struct symbol *sym;
+  char *name;
+  struct package_record *cell, *cur, *new_cell;
+  struct object_list *uses;
+  enum package_record_flags vis = s->packname_present ? s->visibility
+    : pack == env->keyword_package ? EXTERNAL_VISIBILITY : INTERNAL_VISIBILITY;
+  int ind, len;
 
   if (!pack)
     {
-      s->sym = create_symbol (s->value, s->used_size, 1);
-      s->sym->value_ptr.symbol->home_package = &nil_object;
-      return s->sym;
+      sym = malloc_and_check (sizeof (*sym));
+      clear_symbol (sym);
+      sym->name = s->value;
+      sym->name_len = s->used_size;
+      sym->home_package = &nil_object;
+
+      if (s->actual_symname_alloc_s)
+	free (s->actual_symname);
+
+      symname->type = TYPE_SYMBOL;
+      symname->value_ptr.symbol = sym;
+      free (s);
+      return symname;
     }
 
 
-  if (s->packname_present || pack == env->keyword_package)
+  if (s->packname_present && s->used_size)
     {
-      if (!s->used_size || pack == env->keyword_package)
-	{
-	  s->sym = intern_symbol_by_char_vector (!s->used_size
-						 ? s->actual_symname
-						 : s->value,
-						 !s->used_size
-						 ? s->actual_symname_used_s
-						 : s->used_size, 1,
-						 EXTERNAL_VISIBILITY, 1,
-						 env->keyword_package);
-
-	  s->sym->value_ptr.symbol->is_const = 1;
-	  s->sym->value_ptr.symbol->value_cell = s->sym;
-	  add_reference (symname, s->sym, 0);
-
-	  return s->sym;
-	}
-
       pack = find_package (s->value, s->used_size, env);
 
       if (!pack)
@@ -10356,28 +10391,100 @@ intern_symbol_name (struct object *symname, struct environment *env,
 	  *out = PACKAGE_NOT_FOUND_IN_READ;
 	  return NULL;
 	}
-      else
+    }
+  else if (s->packname_present)
+    pack = env->keyword_package;
+
+  name = s->packname_present ? s->actual_symname : s->value;
+  len = s->packname_present ? s->actual_symname_used_s : s->used_size;
+
+  ind = hash_char_vector (name, len, SYMTABLE_SIZE);
+  cur = cell = pack->value_ptr.package->symtable [ind];
+
+  while (cur)
+    {
+      if (eqmem (cur->sym->value_ptr.symbol->name,
+		 cur->sym->value_ptr.symbol->name_len, name, len))
 	{
-	  s->sym = intern_symbol_by_char_vector (s->actual_symname,
-						 s->actual_symname_used_s, 1,
-						 s->visibility, 0, pack);
-	  if (!s->sym)
+	  if (vis == EXTERNAL_VISIBILITY
+	      && cur->flags & INTERNAL_VISIBILITY)
 	    {
 	      *out = SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE;
 	      return NULL;
 	    }
 
-	  add_reference (symname, s->sym, 0);
+	  free_symbol_name (symname);
+	  increment_refcount (cur->sym);
+	  return cur->sym;
+	}
 
-	  return s->sym;
+      cur = cur->next;
+    }
+
+  if (vis == INTERNAL_VISIBILITY)
+    {
+      uses = pack->value_ptr.package->uses;
+
+      while (uses)
+	{
+	  cur = uses->obj->value_ptr.package->symtable [ind];
+
+	  while (cur)
+	    {
+	      if (cur->flags & EXTERNAL_VISIBILITY
+		  && eqmem (cur->sym->value_ptr.symbol->name,
+			    cur->sym->value_ptr.symbol->name_len, name, len))
+		{
+		  free_symbol_name (symname);
+		  increment_refcount (cur->sym);
+		  return cur->sym;
+		}
+
+	      cur = cur->next;
+	    }
+
+	  uses = uses->next;
 	}
     }
 
-  s->sym = intern_symbol_by_char_vector (s->value, s->used_size, 1,
-					 INTERNAL_VISIBILITY, 0, pack);
-  add_reference (symname, s->sym, 0);
+  if (vis == EXTERNAL_VISIBILITY && pack != env->keyword_package)
+    {
+      *out = SYMBOL_IS_NOT_EXTERNAL_IN_PACKAGE;
+      return NULL;
+    }
 
-  return s->sym;
+
+  sym = malloc_and_check (sizeof (*sym));
+  clear_symbol (sym);
+  sym->name = name;
+  sym->name_len = len;
+  sym->home_package = pack;
+
+  symname->type = TYPE_SYMBOL;
+  symname->value_ptr.symbol = sym;
+
+  if (s->packname_present)
+    free (s->value);
+
+  free (s);
+
+  if (pack == env->keyword_package)
+    {
+      sym->is_const = 1;
+      sym->value_cell = symname;
+      add_reference (symname, symname, 0);
+    }
+
+  new_cell = malloc_and_check (sizeof (*new_cell));
+  new_cell->flags = vis;
+  new_cell->sym = symname;
+  increment_refcount (symname);
+  new_cell->next = cell;
+
+  pack->value_ptr.package->symtable [ind] = new_cell;
+
+  num_symbols++;
+  return symname;
 }
 
 
@@ -10770,7 +10877,7 @@ create_condition_by_c_string (char *type, struct environment *env, ...)
 {
   struct object *sym = intern_symbol_by_char_vector (type, strlen (type), 1,
 						     EXTERNAL_VISIBILITY, 0,
-						     env->cl_package), *ret;
+						     env->cl_package, 0), *ret;
   va_list valist;
 
   va_start (valist, env);
@@ -10812,7 +10919,8 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   char *s, *rn;
   struct object *condcl, *pack = inspect_variable (env->package_sym, env),
     *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
-					 EXTERNAL_VISIBILITY, 1, pack), *par, *rs;
+					 EXTERNAL_VISIBILITY, 1, pack, 0), *par,
+    *rs;
   struct condition_class *cc;
   struct condition_field_decl *f, *prev;
 
@@ -10835,7 +10943,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1, EXTERNAL_VISIBILITY,
-					  1, pack);
+					  1, pack, 0);
 
       prepend_object_to_obj_list (par, &cc->parents);
     }
@@ -10845,7 +10953,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1, INTERNAL_VISIBILITY,
-					  1, pack);
+					  1, pack, 0);
 
       f = create_condition_field_decl (par, env, NULL);
 
@@ -10864,7 +10972,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
 
       rs = intern_symbol_by_char_vector (rn, sym->value_ptr.symbol->name_len+1+
 					 par->value_ptr.symbol->name_len, 0,
-					 EXTERNAL_VISIBILITY, 1, pack);
+					 EXTERNAL_VISIBILITY, 1, pack, 0);
       increment_refcount (rs);
       rs->value_ptr.symbol->function_cell = alloc_function ();
       rs->value_ptr.symbol->function_cell->value_ptr.function->
@@ -11515,7 +11623,7 @@ add_builtin_type (char *name, struct environment *env,
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack);
+						     pack, 0);
   struct object *par;
 
   va_start (valist, is_standard);
@@ -11527,7 +11635,7 @@ add_builtin_type (char *name, struct environment *env,
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1,
-					  EXTERNAL_VISIBILITY, 1, pack);
+					  EXTERNAL_VISIBILITY, 1, pack, 0);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -11548,7 +11656,7 @@ add_builtin_form (char *name, struct environment *env,
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack);
+						     pack, 0);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
@@ -11588,8 +11696,7 @@ define_generic_function (char *name, struct environment *env,
 {
   struct object *pack = inspect_variable (env->package_sym, env),
     *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
-					 EXTERNAL_VISIBILITY, 1,
-					 pack),
+					 EXTERNAL_VISIBILITY, 1, pack, 0),
     *fun = alloc_function (), *meth;
   struct function *f = fun->value_ptr.function;
   struct method *m;
@@ -11699,7 +11806,7 @@ define_constant_by_name (char *name, struct object *value,
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack);
+						     pack, 0);
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -11715,7 +11822,7 @@ define_variable (char *name, struct object *value, struct environment *env)
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack);
+						     pack, 0);
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -12539,7 +12646,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	  key = intern_symbol_by_char_vector (var->value_ptr.symbol->name,
 					      var->value_ptr.symbol->name_len,
 					      1, EXTERNAL_VISIBILITY, 1,
-					      env->keyword_package);
+					      env->keyword_package, 1);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -12581,7 +12688,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	      key = intern_symbol_by_char_vector
 		(var->value_ptr.symbol->name, var->value_ptr.symbol->name_len,
-		 1, EXTERNAL_VISIBILITY, 1, env->keyword_package);
+		 1, EXTERNAL_VISIBILITY, 1, env->keyword_package, 1);
 	    }
 	  else if (caar->type == TYPE_CONS_PAIR)
 	    {
@@ -12954,13 +13061,13 @@ create_lambda_list (struct environment *env, ...)
 	  = alloc_parameter (REQUIRED_PARAM,
 			     intern_symbol_by_char_vector (n, strlen (n), 1,
 							   INTERNAL_VISIBILITY,
-							   1, pack));
+							   1, pack, 0));
       else
 	ret = par =
 	  alloc_parameter (REQUIRED_PARAM,
 			   intern_symbol_by_char_vector (n, strlen (n), 1,
 							 INTERNAL_VISIBILITY, 1,
-							 pack));
+							 pack, 0));
 
       par->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (par->name);
       INC_WEAK_REFCOUNT (par->name);
@@ -15609,7 +15716,7 @@ check_type_by_char_vector (struct object *obj, char *type,
   return check_type (obj,
 		     intern_symbol_by_char_vector (type, strlen (type), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package),
+						   env->cl_package, 0),
 		     env, outcome);
 }
 
@@ -15634,7 +15741,8 @@ is_subtype_by_char_vector (const struct object *first, char *second,
   return is_subtype (first,
 		     intern_symbol_by_char_vector (second, strlen (second), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package), NULL, env);
+						   env->cl_package, 0), NULL,
+		     env);
 }
 
 
@@ -18827,19 +18935,23 @@ builtin_hash_table_test (struct object *list, struct environment *env,
     {
     case HT_EQ:
       ret = intern_symbol_by_char_vector ("EQ", strlen ("EQ"), 1,
-					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+					  EXTERNAL_VISIBILITY, 1,
+					  env->cl_package, 0);
       break;
     case HT_EQL:
       ret = intern_symbol_by_char_vector ("EQL", strlen ("EQL"), 1,
-					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+					  EXTERNAL_VISIBILITY, 1,
+					  env->cl_package, 0);
       break;
     case HT_EQUAL:
       ret = intern_symbol_by_char_vector ("EQUAL", strlen ("EQUAL"), 1,
-					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+					  EXTERNAL_VISIBILITY, 1,
+					  env->cl_package, 0);
       break;
     case HT_EQUALP:
       ret = intern_symbol_by_char_vector ("EQUALP", strlen ("EQUALP"), 1,
-					  EXTERNAL_VISIBILITY, 1, env->cl_package);
+					  EXTERNAL_VISIBILITY, 1,
+					  env->cl_package, 0);
       break;
     default:
       break;
@@ -25560,7 +25672,8 @@ builtin_intern (struct object *list, struct environment *env,
 					  CAR (list)->value_ptr.string->used_size,
 					  1, pack == env->keyword_package
 					  ? EXTERNAL_VISIBILITY
-					  : INTERNAL_VISIBILITY, 1, pack);
+					  : INTERNAL_VISIBILITY, 1, pack,
+					  pack == env->keyword_package);
       ret2 = &nil_object;
     }
 
@@ -28849,7 +28962,7 @@ inspect_variable_by_c_string (char *var, struct environment *env)
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (var, strlen (var), 0,
 						     INTERNAL_VISIBILITY, 0,
-						     pack);
+						     pack, 0);
 
   if (sym)
     return inspect_variable (sym, env);
@@ -29572,8 +29685,7 @@ evaluate_defconstant (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return define_constant (CAR (list)->value_ptr.symbol_name->sym,
-			  CAR (CDR (list)), env, outcome);
+  return define_constant (SYMBOL (CAR (list)), CAR (CDR (list)), env, outcome);
 }
 
 
@@ -30627,7 +30739,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   funcname = intern_symbol_by_char_vector (constr_name,
 					   5+name->value_ptr.symbol->name_len, 1,
-					   INTERNAL_VISIBILITY, 1, pack);
+					   INTERNAL_VISIBILITY, 1, pack, 0);
   free (constr_name);
   increment_refcount (funcname);
 
@@ -30659,7 +30771,8 @@ evaluate_defstruct (struct object *list, struct environment *env,
 					       name->value_ptr.symbol->name_len +
 					       1 +
 					       f->name->value_ptr.symbol->name_len,
-					       1, INTERNAL_VISIBILITY, 1, pack);
+					       1, INTERNAL_VISIBILITY, 1, pack,
+					       0);
       free (acc_name);
       increment_refcount (funcname);
 
