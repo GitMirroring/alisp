@@ -2677,8 +2677,8 @@
     (setq l (cddr lets))
 
     (dolist (v vars)
-      (setf (car l) `(let ,v nil))
-      (setq l (cddar l)))
+      (setf (car l) `(cl-user:al-loopy-destructuring-bind ,(mapcar 'car v) ,(cons 'list (mapcar 'cadr v)) nil))
+      (setq l (cdddar l)))
 
     (let (vrs)
       (dolist (i iters)
