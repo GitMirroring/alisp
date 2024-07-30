@@ -14057,7 +14057,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	args = arglist;
 
       if (func->value_ptr.function->flags & TRACED_FUNCTION
-	  || env->stepping_flags & STEP_INSIDE_FORM)
+	  || (env->stepping_flags &&
+	      !(env->stepping_flags & STEPPING_OVER_FORM)))
 	{
 	  printf ("calling builtin ");
 	  print_function_name (func, env);
@@ -14216,7 +14217,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
       if (func->value_ptr.function->flags & TRACED_FUNCTION
-	  || env->stepping_flags & STEP_INSIDE_FORM)
+	  || (env->stepping_flags &&
+	      !(env->stepping_flags & STEPPING_OVER_FORM)))
 	{
 	  printf ("calling ");
 	  print_function_name (func, env);
@@ -14576,7 +14578,8 @@ call_method (struct method_list *methlist, struct object *arglist,
       if (methlist->meth->value_ptr.method->builtin_method)
 	{
 	  if (func->value_ptr.function->flags & TRACED_FUNCTION
-	      || env->stepping_flags & STEP_INSIDE_FORM)
+	      || (env->stepping_flags &&
+		  !(env->stepping_flags & STEPPING_OVER_FORM)))
 	    {
 	      printf ("calling builtin method ");
 	      print_method_description (methlist->meth, env);
@@ -14777,7 +14780,8 @@ call_method (struct method_list *methlist, struct object *arglist,
       env->lex_env_vars_boundary += argsnum;
 
       if (func->value_ptr.function->flags & TRACED_FUNCTION
-	  || env->stepping_flags & STEP_INSIDE_FORM)
+	  || (env->stepping_flags &&
+	      !(env->stepping_flags & STEPPING_OVER_FORM)))
 	{
 	  printf ("calling method ");
 	  print_method_description (methlist->meth, env);
@@ -15384,7 +15388,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     }
 
   if (func->value_ptr.function->flags & TRACED_FUNCTION
-      || env->stepping_flags & STEP_INSIDE_FORM)
+      || (env->stepping_flags &&
+	  !(env->stepping_flags & STEPPING_OVER_FORM)))
     {
       printf ("calling generic function ");
       print_function_name (func, env);
