@@ -2305,10 +2305,13 @@
 
 
 (defun find-all-symbols (sym)
-  (let (out)
-    (do-all-symbols (s (remove-duplicates out :test #'eq))
-      (if (string= sym s)
-	  (setq out (cons s out))))))
+  (let ((packs (list-all-packages))
+	(str (string sym))
+	out)
+    (dolist (p packs (remove-duplicates out :test #'eq))
+      (let ((s (find-symbol str p)))
+	(if s
+	    (setq out (cons s out)))))))
 
 
 
