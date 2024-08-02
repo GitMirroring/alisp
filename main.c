@@ -28801,6 +28801,8 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 
       fun->type = type;
       fun->value_ptr.function->is_setf_func = CAR (form)->type == TYPE_CONS_PAIR;
+      fun->value_ptr.function->name = sym;
+      add_reference (fun, sym, 0);
     }
   else
     {
