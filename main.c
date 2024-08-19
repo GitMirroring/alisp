@@ -30414,7 +30414,7 @@ evaluate_the (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) && CAR (list)->type != TYPE_CONS_PAIR)
+  if (!IS_TYPE_SPECIFIER (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
