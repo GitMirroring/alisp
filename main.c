@@ -14279,13 +14279,19 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  f = malloc_and_check (sizeof (*f));
 	  f->next = env->blocks;
 	  env->blocks = f;
-	  f->frame = malloc_and_check (sizeof (*f->frame));
-	  f->frame->name = func->value_ptr.function->name;
-	  f->frame->refcount = 1;
-	  f->frame->next = func->value_ptr.function->encl_blocks;
 
-	  if (f->frame->next)
-	    f->frame->next->refcount++;
+	  if (func->value_ptr.function->name)
+	    {
+	      f->frame = malloc_and_check (sizeof (*f->frame));
+	      f->frame->name = func->value_ptr.function->name;
+	      f->frame->refcount = 1;
+	      f->frame->next = func->value_ptr.function->encl_blocks;
+
+	      if (f->frame->next)
+		f->frame->next->refcount++;
+	    }
+	  else
+	    f->frame = func->value_ptr.function->encl_blocks;
 
 	  prevf = env->go_tag_stack;
 	  env->go_tag_stack = func->value_ptr.function->encl_tags;
@@ -14294,7 +14300,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 	  env->go_tag_stack = prevf;
 
-	  if (!ret && outcome->block_to_leave
+	  if (!ret && outcome->block_to_leave && func->value_ptr.function->name
 	      && outcome->block_to_leave == f->frame)
 	    {
 	      outcome->block_to_leave = NULL;
@@ -14305,7 +14311,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	      outcome->other_values = outcome->return_other_values;
 	    }
 
-	  env->blocks->frame = remove_block (env->blocks->frame);
+	  if (func->value_ptr.function->name)
+	    env->blocks->frame = remove_block (env->blocks->frame);
 
 	  f = env->blocks->next;
 	  free (env->blocks);
