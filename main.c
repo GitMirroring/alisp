@@ -401,6 +401,7 @@ outcome_type
     FUNCTION_NOT_FOUND_IN_READ,
     WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX,
     INVALID_FEATURE_TEST,
+    READ_EVAL_IS_DISABLED,
 
     COMMA_WITHOUT_BACKQUOTE,
     TOO_MANY_COMMAS,
@@ -545,6 +546,7 @@ outcome_type
 				  || (t) == FUNCTION_NOT_FOUND_IN_READ	\
 				  || (t) == WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX \
 				  || (t) == INVALID_FEATURE_TEST	\
+				  || (t) == READ_EVAL_IS_DISABLED	\
 				  || (t) == COMMA_WITHOUT_BACKQUOTE	\
 				  || (t) == TOO_MANY_COMMAS		\
 				  || (t) == SINGLE_DOT			\
@@ -733,7 +735,8 @@ environment
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
     *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_pretty_sym,
-    *print_pprint_dispatch_sym, *read_base_sym, *read_suppress_sym;
+    *print_pprint_dispatch_sym, *read_eval_sym, *read_base_sym,
+    *read_suppress_sym;
 
   struct object *abort_sym;
 
@@ -4203,6 +4206,7 @@ add_standard_definitions (struct environment *env)
   env->print_pprint_dispatch_sym = define_variable ("*PRINT-PPRINT-DISPATCH*",
 						    &nil_object, env);
 
+  env->read_eval_sym = define_variable ("*READ-EVAL*", &t_object, env);
   env->read_base_sym = define_variable ("*READ-BASE*",
 					create_integer_from_long (10), env);
   env->read_suppress_sym = define_variable ("*READ-SUPPRESS*", &nil_object, env);
@@ -6145,6 +6149,12 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == '.')
     {
+      if (SYMBOL (inspect_variable (env->read_eval_sym, env)) == &nil_object)
+	{
+	  outcome->type = READ_EVAL_IS_DISABLED;
+	  return NULL;
+	}
+
       ret = evaluate_object (obj, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
@@ -35807,6 +35817,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INVALID_FEATURE_TEST)
     {
       printf ("read error: invalid feature test\n");
+    }
+  else if (err->type == READ_EVAL_IS_DISABLED)
+    {
+      printf ("read error: cannot use #. macro because *READ-EVAL* is NIL\n");
     }
   else if (err->type == COMMA_WITHOUT_BACKQUOTE)
     {
