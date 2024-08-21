@@ -208,6 +208,8 @@ make_test ("10", "8");
 make_test ("10/12", "4/5");
 make_test ("(typep '9 'symbol)", "T");
 make_test ("(setq *read-base* 12)", "10");
+make_test ("(+ #1=1 #2=2 #2#)", "5");
+make_test ("(nth 5 '(0 . #1=(1 2 . #1#)))", "1");
 
 
 # eval tests
