@@ -396,12 +396,15 @@ outcome_type
 
     INVALID_SHARP_DISPATCH,
     UNKNOWN_SHARP_DISPATCH,
+    SHARP_MACRO_REQUIRES_INTEGER_ARGUMENT,
     WRONG_OBJECT_TYPE_TO_SHARP_MACRO,
     UNKNOWN_CHARACTER_NAME,
     FUNCTION_NOT_FOUND_IN_READ,
     WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX,
     INVALID_FEATURE_TEST,
     READ_EVAL_IS_DISABLED,
+    CANNOT_USE_READ_LABEL_TWICE,
+    READ_LABEL_NOT_DEFINED,
 
     COMMA_WITHOUT_BACKQUOTE,
     TOO_MANY_COMMAS,
@@ -541,12 +544,15 @@ outcome_type
 				  || (t) == CLOSING_PARENTHESIS_AFTER_PREFIX \
 				  || (t) == INVALID_SHARP_DISPATCH	\
 				  || (t) == UNKNOWN_SHARP_DISPATCH	\
+				  || (t) == SHARP_MACRO_REQUIRES_INTEGER_ARGUMENT \
 				  || (t) == WRONG_OBJECT_TYPE_TO_SHARP_MACRO \
 				  || (t) == UNKNOWN_CHARACTER_NAME	\
 				  || (t) == FUNCTION_NOT_FOUND_IN_READ	\
 				  || (t) == WRONG_SYNTAX_IN_SHARP_MACRO_FOR_COMPLEX \
 				  || (t) == INVALID_FEATURE_TEST	\
 				  || (t) == READ_EVAL_IS_DISABLED	\
+				  || (t) == CANNOT_USE_READ_LABEL_TWICE \
+				  || (t) == READ_LABEL_NOT_DEFINED	\
 				  || (t) == COMMA_WITHOUT_BACKQUOTE	\
 				  || (t) == TOO_MANY_COMMAS		\
 				  || (t) == SINGLE_DOT			\
@@ -669,6 +675,15 @@ profiling_record
 
 
 struct
+read_label
+{
+  int label;
+  struct object *value;
+  struct read_label *next;
+};
+
+
+struct
 environment
 {
   struct binding *vars;
@@ -708,6 +723,10 @@ environment
 
   int is_profiling;
   struct profiling_record *profiling_data;
+
+
+  struct read_label *read_labels;
+  int curr_label;
 
 
   struct object *method_args;
@@ -1929,6 +1948,10 @@ struct object *enter_debugger (struct object *cond, struct environment *env,
 
 void add_profiling_data (struct profiling_record **data, struct object *name,
 			 int time, int evaltime);
+
+struct read_label *add_read_label (int label, struct object *value,
+				   struct read_label *labels);
+void clear_read_labels (struct read_label **label);
 
 void add_builtin_type (char *name, struct environment *env,
 		       int (*builtin_type)
@@ -4650,6 +4673,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
     {
       *input_left = end + 1;
       *input_left_size = (input + input_size) - end - 1;
+      clear_read_labels (&env->read_labels);
 
       return obj;
     }
@@ -4665,13 +4689,15 @@ read_object_interactively_continued (const char *input, size_t input_size,
     {
       *input_left = NULL;
       *input_left_size = 0;
-      
+      clear_read_labels (&env->read_labels);
+
       return NULL;
     }
   else if (IS_READ_OR_EVAL_ERROR (read_out))
     {
       outcome->type = read_out;
       print_error (outcome, env);
+      clear_read_labels (&env->read_labels);
 
       return NULL;
     }
@@ -4695,6 +4721,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
 	  goto read_further;
 	}
 
+      clear_read_labels (&env->read_labels);
       return ret;
     }
 }
@@ -5403,7 +5430,17 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 	      if (last_cons)
 		last_cons = last_cons->value_ptr.cons_pair->cdr = cons;
 	      else
-		*obj = last_cons = cons;
+		{
+		  *obj = last_cons = cons;
+
+		  if (env->curr_label >= 0)
+		    {
+		      env->read_labels = add_read_label (env->curr_label,
+							 last_cons,
+							 env->read_labels);
+		      env->curr_label = -1;
+		    }
+		}
 
 	      if (IS_INCOMPLETE_OBJECT (out))
 		{
@@ -5664,6 +5701,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   char *token;
   struct object *prevpack, *obs;
   struct sharp_macro_call *call;
+  struct read_label *lb;
   enum outcome_type out;
   enum object_type ot;
   unsigned char ch;
@@ -5810,7 +5848,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       return INVALID_SHARP_DISPATCH;
     }
 
-  if (!strchr ("'\\.pP(aA:cC+-*sSbBoOxXrR", call->dispatch_ch))
+  if (!strchr ("'\\.pP(aA:cC+-*sSbBoOxXrR=#", call->dispatch_ch))
     {
       return UNKNOWN_SHARP_DISPATCH;
     }
@@ -6004,6 +6042,10 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	  base = 16;
 	  break;
 	default:
+	  if (arg == -1)
+	    {
+	      return SHARP_MACRO_REQUIRES_INTEGER_ARGUMENT;
+	    }
 	  if (arg < 2 || arg > 32)
 	    {
 	      return WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
@@ -6062,6 +6104,54 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 
       return out;
     }
+  else if (call->dispatch_ch == '=')
+    {
+      if (arg == -1)
+	{
+	  return SHARP_MACRO_REQUIRES_INTEGER_ARGUMENT;
+	}
+
+      lb = env->read_labels;
+
+      while (lb)
+	{
+	  if (call->arg == lb->label)
+	    {
+	      return CANNOT_USE_READ_LABEL_TWICE;
+	    }
+
+	  lb = lb->next;
+	}
+
+      env->curr_label = arg;
+
+      call->obj = NULL;
+      out = read_object (&call->obj, backts_commas_balance, input, size, stream,
+			 preserve_whitespace, ends_with_eof, env, outcome, &obj_b,
+			 macro_end);
+
+      if (out == UNCLOSED_EMPTY_LIST)
+	call->is_empty_list = 1;
+
+      if (IS_INCOMPLETE_OBJECT (out))
+	return INCOMPLETE_SHARP_MACRO_CALL;
+
+      return out;
+    }
+  else if (call->dispatch_ch == '#')
+    {
+      if (arg == -1)
+	{
+	  return SHARP_MACRO_REQUIRES_INTEGER_ARGUMENT;
+	}
+
+      if (input)
+	{
+	  *macro_end = input-1;
+	}
+
+      return COMPLETE_OBJECT;
+    }
 
   call->obj = NULL;
   out = read_object (&call->obj, backts_commas_balance, input, size, stream,
@@ -6084,6 +6174,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
 {
   struct object *obj = macro_call->obj, *ret;
   struct symbol *s;
+  struct read_label *lb;
   int l, ch;
 
   if (macro_call->dispatch_ch == '\'')
@@ -6265,6 +6356,36 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     {
       increment_refcount (obj);
       return obj;
+    }
+  else if (macro_call->dispatch_ch == '=')
+    {
+      if (env->curr_label >= 0)
+	{
+	  env->read_labels = add_read_label (macro_call->arg, obj,
+					     env->read_labels);
+	  env->curr_label = -1;
+	}
+
+      increment_refcount (obj);
+      return obj;
+    }
+  else if (macro_call->dispatch_ch == '#')
+    {
+      lb = env->read_labels;
+
+      while (lb)
+	{
+	  if (macro_call->arg == lb->label)
+	    {
+	      increment_refcount (lb->value);
+	      return lb->value;
+	    }
+
+	  lb = lb->next;
+	}
+
+      outcome->type = READ_LABEL_NOT_DEFINED;
+      return NULL;
     }
 
   return NULL;
@@ -10077,6 +10198,7 @@ load_file (const char *filename, int print_each_form, struct environment *env,
   out = read_object (&obj, 0, buf, l, NULL, 0, 1, env, outcome, &obj_b, &obj_e);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
+  clear_read_labels (&env->read_labels);
 
   while (1)
     {
@@ -10117,6 +10239,7 @@ load_file (const char *filename, int print_each_form, struct environment *env,
 			     &obj_e);
 	  sz = sz - (obj_e + 1 - in);
 	  in = obj_e + 1;
+	  clear_read_labels (&env->read_labels);
 	}
       else if (out == NO_OBJECT)
 	{
@@ -11651,6 +11774,30 @@ add_profiling_data (struct profiling_record **data, struct object *name,
 
   r->counter += 1;
   r->time += time + evaltime;
+}
+
+
+struct read_label *
+add_read_label (int label, struct object *value, struct read_label *labels)
+{
+  struct read_label *lb = malloc_and_check (sizeof (*lb));
+  lb->label = label;
+  lb->value = value;
+  lb->next = labels;
+
+  return lb;
+}
+
+
+void
+clear_read_labels (struct read_label **label)
+{
+  if (*label)
+    {
+      clear_read_labels (&(*label)->next);
+      free (*label);
+      *label = NULL;
+    }
 }
 
 
@@ -20255,6 +20402,7 @@ builtin_read (struct object *list, struct environment *env,
 		     ? s->string->value_ptr.string->used_size : 0,
 		     s->type == FILE_STREAM ? s->file : NULL, 0, 1, env,
 		     outcome, &objbeg, &objend);
+  clear_read_labels (&env->read_labels);
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
@@ -20340,6 +20488,7 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 		     ? s->string->value_ptr.string->used_size : 0,
 		     s->type == FILE_STREAM ? s->file : NULL, 1, 1, env,
 		     outcome, &objbeg, &objend);
+  clear_read_labels (&env->read_labels);
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
@@ -20405,6 +20554,7 @@ builtin_read_from_string (struct object *list, struct environment *env,
   out = read_object (&ret, 0, CAR (list)->value_ptr.string->value,
 		     CAR (list)->value_ptr.string->used_size, NULL, 0, 1, env,
 		     outcome, &objbeg, &objend);
+  clear_read_labels (&env->read_labels);
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
@@ -35798,6 +35948,10 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("read error: character not known as a sharp dispatch\n");
     }
+  else if (err->type == SHARP_MACRO_REQUIRES_INTEGER_ARGUMENT)
+    {
+      printf ("read error: sharp macro requires integer argument\n");
+    }
   else if (err->type == WRONG_OBJECT_TYPE_TO_SHARP_MACRO)
     {
       printf ("read error: wrong type of object as content of a sharp macro\n");
@@ -35821,6 +35975,14 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == READ_EVAL_IS_DISABLED)
     {
       printf ("read error: cannot use #. macro because *READ-EVAL* is NIL\n");
+    }
+  else if (err->type == CANNOT_USE_READ_LABEL_TWICE)
+    {
+      printf ("read error: cannot use read label twice\n");
+    }
+  else if (err->type == READ_LABEL_NOT_DEFINED)
+    {
+      printf ("read error: read label is not defined\n");
     }
   else if (err->type == COMMA_WITHOUT_BACKQUOTE)
     {
