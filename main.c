@@ -16320,8 +16320,8 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		 int forbid_splicing, int *do_splice, struct object **last_pref)
 {
   struct object *obj, *ret, *retform, *retcons, *reading_cons, *cons, *lastpr,
-    *tmp, *lp;
-  int do_spl, must_copy;
+    *tmp, *lp, *last_fresh, *first_nonfresh;
+  int do_spl;
 
   if (form->type == TYPE_BACKQUOTE)
     {
@@ -16427,7 +16427,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
   else if (form->type == TYPE_CONS_PAIR)
     {
       reading_cons = form;
-      must_copy = 0;
+      retform = last_fresh = NULL;
 
       while (SYMBOL (reading_cons) != &nil_object)
 	{
@@ -16450,68 +16450,76 @@ apply_backquote (struct object *form, int backts_commas_balance,
 	      return NULL;
 	    }
 
-	  if (ret != obj)
-	    {
-	      must_copy = 1;
-	      break;
-	    }
-
-	  if (reading_cons->type != TYPE_CONS_PAIR)
-	    break;
-	  else
-	    reading_cons = CDR (reading_cons);
-	}
-
-      if (must_copy)
-	{
-	  cons = form;
-	  retform = NULL;
-
-	  while (cons != reading_cons)
+	  if (ret == obj)
 	    {
 	      if (!retform)
-		retform = retcons = alloc_empty_cons_pair ();
-	      else
-		retcons = retcons->value_ptr.cons_pair->cdr =
-		  alloc_empty_cons_pair ();
-
-	      retcons->value_ptr.cons_pair->car = CAR (cons);
-	      add_reference (retcons, CAR (cons), 0);
-	      decrement_refcount (CAR (cons));
-
-	      cons = CDR (cons);
-	    }
-
-	  while (SYMBOL (reading_cons) != &nil_object)
-	    {
-	      if (!ret)
 		{
-		  do_spl = 0;
-		  lastpr = NULL;
-		  obj = reading_cons->type == TYPE_CONS_PAIR ? CAR (reading_cons)
-		    : reading_cons;
+		  retform = reading_cons;
+		  increment_refcount (retform);
+		}
 
-		  ret = apply_backquote (obj, backts_commas_balance, env, outcome,
-					 reading_cons->type == TYPE_CONS_PAIR
-					 ? 0 : 2, &do_spl, &lastpr);
+	      if (last_fresh && !CDR (last_fresh))
+		{
+		  last_fresh->value_ptr.cons_pair->cdr = reading_cons;
+		  add_reference (last_fresh, reading_cons, 1);
+		}
 
-		  if (!ret)
-		    return NULL;
+	      decrement_refcount (ret);
+	    }
+	  else
+	    {
+	      if (retform)
+		{
+		  if (last_fresh)
+		    cons = first_nonfresh;
+		  else
+		    {
+		      cons = form;
+		      decrement_refcount (form);
+		    }
+
+		  while (cons != reading_cons)
+		    {
+		      if (!last_fresh)
+			retform = last_fresh = retcons = alloc_empty_cons_pair ();
+		      else
+			{
+			  retcons = alloc_empty_cons_pair ();
+			  delete_reference (last_fresh, CDR (last_fresh), 1);
+			  last_fresh->value_ptr.cons_pair->cdr = retcons;
+			  add_reference (last_fresh, retcons, 1);
+			  decrement_refcount (retcons);
+			  last_fresh = retcons;
+			}
+
+		      retcons->value_ptr.cons_pair->car = CAR (cons);
+		      add_reference (retcons, CAR (cons), 0);
+
+		      first_nonfresh = cons = CDR (cons);
+		    }
 		}
 
 	      if (!do_spl)
 		{
 		  if (reading_cons->type == TYPE_CONS_PAIR)
 		    {
-		      if (!retform)
-			retform = retcons = alloc_empty_cons_pair ();
+		      if (!last_fresh)
+			retform = last_fresh = retcons = alloc_empty_cons_pair ();
 		      else
-			retcons = retcons->value_ptr.cons_pair->cdr =
-			  alloc_empty_cons_pair ();
+			{
+			  retcons = alloc_empty_cons_pair ();
+			  delete_reference (last_fresh, CDR (last_fresh), 1);
+			  last_fresh->value_ptr.cons_pair->cdr = retcons;
+			  add_reference (last_fresh, retcons, 1);
+			  decrement_refcount (retcons);
+			  last_fresh = retcons;
+			}
 
 		      retcons->value_ptr.cons_pair->car = ret;
 		      add_reference (retcons, ret, 0);
 		      decrement_refcount (ret);
+
+		      first_nonfresh = CDR (reading_cons);
 		    }
 		  else
 		    {
@@ -16526,32 +16534,40 @@ apply_backquote (struct object *form, int backts_commas_balance,
 		    {
 		      tmp = copy_prefix (CAR (reading_cons), lastpr, &lp);
 		      lp->value_ptr.next = ret;
+		      add_reference (lp, ret, 0);
+		      decrement_refcount (ret);
 		    }
 		  else
 		    tmp = ret;
 
-		  if (retform)
+		  if (last_fresh)
 		    retcons->value_ptr.cons_pair->cdr = tmp;
 		  else
 		    retform = tmp;
+		}
+	      else if (SYMBOL (ret) == &nil_object)
+		{
+		  if (retform)
+		    first_nonfresh = CDR (reading_cons);
 		}
 	      else if (SYMBOL (ret) != &nil_object)
 		{
 		  if (do_spl == 2
 		      || (SYMBOL (CDR (reading_cons)) == &nil_object && !lastpr))
 		    {
-		      if (retform)
-			{
-			  retcons->value_ptr.cons_pair->cdr = ret;
-			  add_reference (retcons, ret, 1);
-			  decrement_refcount (ret);
-			  retcons = CDR (retcons);
-			}
+		      if (!retform)
+			retform = ret;
 		      else
-			retform = retcons = ret;
+			{
+			  last_fresh->value_ptr.cons_pair->cdr = ret;
+			  add_reference (last_fresh, ret, 1);
+			  decrement_refcount (ret);
+			}
 
 		      if (lastpr)
 			{
+			  retcons = ret;
+
 			  while (SYMBOL (retcons) != &nil_object)
 			    {
 			      increment_refcount (CAR (retcons));
@@ -16572,9 +16588,16 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			      else
 				retcons = CDR (retcons);
 			    }
+
+			  last_fresh = retcons;
 			}
 		      else
-			retcons = last_cons_pair (ret);
+			last_fresh = last_cons_pair (ret);
+
+		      if (do_spl == 2)
+			last_fresh->value_ptr.cons_pair->cdr = NULL;
+
+		      first_nonfresh = CDR (reading_cons);
 		    }
 		  else
 		    {
@@ -16582,11 +16605,17 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
 		      while (SYMBOL (cons) != &nil_object)
 			{
-			  if (!retform)
-			    retform = retcons = alloc_empty_cons_pair ();
-			  else
-			    retcons = retcons->value_ptr.cons_pair->cdr =
+			  if (!last_fresh)
+			    retform = last_fresh = retcons =
 			      alloc_empty_cons_pair ();
+			  else
+			    {
+			      retcons = alloc_empty_cons_pair ();
+			      last_fresh->value_ptr.cons_pair->cdr = retcons;
+			      add_reference (last_fresh, retcons, 1);
+			      decrement_refcount (retcons);
+			      last_fresh = retcons;
+			    }
 
 			  if (lastpr)
 			    {
@@ -16606,41 +16635,23 @@ apply_backquote (struct object *form, int backts_commas_balance,
 			  cons = CDR (cons);
 			}
 
+		      first_nonfresh = CDR (reading_cons);
 		      decrement_refcount (ret);
 		    }
 		}
-
-	      ret = NULL;
-
-	      if (reading_cons->type != TYPE_CONS_PAIR)
-		break;
-	      else
-		reading_cons = CDR (reading_cons);
 	    }
 
-	  if (!retform)
-	    retform = &nil_object;
-	  else if (retform->type == TYPE_CONS_PAIR
-		   && retcons->type == TYPE_CONS_PAIR
-		   && !retcons->value_ptr.cons_pair->cdr)
-	    retcons->value_ptr.cons_pair->cdr = &nil_object;
+	  if (reading_cons->type != TYPE_CONS_PAIR)
+	    break;
+	  else
+	    reading_cons = CDR (reading_cons);
 	}
-      else
-	{
-	  retform = form;
 
-	  while (form->type == TYPE_CONS_PAIR)
-	    {
-	      decrement_refcount (CAR (form));
+      if (!retform)
+	return &nil_object;
 
-	      form = CDR (form);
-
-	      if (form->type != TYPE_CONS_PAIR)
-		decrement_refcount (form);
-	    }
-
-	  increment_refcount (retform);
-	}
+      if (last_fresh && !last_fresh->value_ptr.cons_pair->cdr)
+	last_fresh->value_ptr.cons_pair->cdr = &nil_object;
 
       return retform;
     }
