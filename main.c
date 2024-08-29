@@ -2339,6 +2339,8 @@ struct object *builtin_array_row_major_index
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_adjust_array
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_sxhash
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_hash_table
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_hash_table_size
@@ -3585,6 +3587,7 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ADJUST-ARRAY", env, builtin_adjust_array, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("SXHASH", env, builtin_sxhash, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-HASH-TABLE", env, builtin_make_hash_table,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("HASH-TABLE-SIZE", env, builtin_hash_table_size,
@@ -18975,6 +18978,21 @@ builtin_adjust_array (struct object *list, struct environment *env,
 
   increment_refcount (CAR (list));
   return CAR (list);
+}
+
+
+struct object *
+builtin_sxhash (struct object *list, struct environment *env,
+		struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  return create_integer_from_long (hash_object_respecting_equal (CAR (list),
+								 1024));
 }
 
 
