@@ -723,6 +723,7 @@ make_test ("(let ((var 0)) (boundp 'var))", "NIL");
 make_test ("(let ((var 0)) (declare (special var)) (boundp 'var))", "T");
 make_test ("(symbol-value 'b)", "9");
 make_test ("(let ((b 10)) (symbol-value 'b))", "10");
+make_test ("(let ((lll 10)) (declare (special lll)) (symbol-value 'lll))", "10");
 make_test ("(setf (symbol-value 'foo) 0)", "0");
 make_test ("foo", "0");
 make_test ("(let ((b 11)) (set 'b 12) b)", "12");
