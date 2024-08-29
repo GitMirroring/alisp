@@ -29200,7 +29200,9 @@ get_dynamic_value (struct object *sym, struct environment *env)
 	}
     }
 
-  increment_refcount (s->value_cell);
+  if (s->value_cell)
+    increment_refcount (s->value_cell);
+
   return s->value_cell;
 }
 
