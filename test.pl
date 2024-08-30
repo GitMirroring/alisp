@@ -1739,6 +1739,7 @@ make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
 make_test ("(signal \"blah\")", "NIL");
 make_test ("(signal 'type-error)", "NIL");
+make_test ("(signal 'error)", "NIL");
 make_test ("(handler-bind ((simple-condition (lambda (e) (write 'oh)))) (signal \"blah\"))", "OH\nNIL");
 make_test ("(handler-bind ((condition (lambda (e) (write 'ah))) (simple-condition (lambda (e) (write 'oh)))) (signal \"blah\"))", "AHOH\nNIL");
 make_test ("(handler-bind ((condition (lambda (e) (write (signal \"w\"))))) (signal \"blah\"))", "NIL\nNIL");
