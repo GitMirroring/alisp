@@ -32886,10 +32886,7 @@ builtin_signal (struct object *list, struct environment *env,
 
       cond =
 	create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
-				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
-				   : CAR (CDR (list)),
-				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
-				   : CDR (CDR (list)), (struct object *)NULL);
+				   (struct object *)NULL);
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
@@ -32943,13 +32940,11 @@ builtin_error (struct object *list, struct environment *env,
 
       cond =
 	create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
-				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
-				   : CAR (CDR (list)),
-				   SYMBOL (CDR (list)) == &nil_object ? &nil_object
-				   : CDR (CDR (list)), (struct object *)NULL);
+				   (struct object *)NULL);
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
+      increment_refcount (CAR (list));
       cond = CAR (list);
     }
   else
@@ -32963,9 +32958,7 @@ builtin_error (struct object *list, struct environment *env,
 
   if (!ret)
     {
-      if (CAR (list)->type != TYPE_CONDITION)
-	decrement_refcount (cond);
-
+      decrement_refcount (cond);
       return NULL;
     }
 
