@@ -11201,7 +11201,7 @@ handle_condition (struct object *cond, struct environment *env,
       b = b->next;
     }
 
-  return &t_object;
+  return &nil_object;
 }
 
 
@@ -32962,8 +32962,11 @@ builtin_error (struct object *list, struct environment *env,
       return NULL;
     }
 
-  outcome->condition = cond;
-  return NULL;
+  ret = enter_debugger (cond, env, outcome);
+
+  decrement_refcount (cond);
+
+  return ret;
 }
 
 
