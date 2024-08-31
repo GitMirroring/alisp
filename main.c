@@ -4074,8 +4074,8 @@ add_standard_definitions (struct environment *env)
 		       "FORMAT-ARGUMENTS", "FORMAT-CONTROL", (char *)NULL);
   add_condition_class ("SIMPLE-WARNING", env, 1, "SIMPLE-CONDITION", "WARNING",
 		       (char *)NULL, (char *)NULL);
-  add_condition_class ("SIMPLE-ERROR", env, 1, "SIMPLE-CONDITION", (char *)NULL,
-		       (char *)NULL);
+  add_condition_class ("SIMPLE-ERROR", env, 1, "SIMPLE-CONDITION", "ERROR",
+		       (char *)NULL, (char *)NULL);
   add_condition_class ("STYLE-WARNING", env, 1, "WARNING", (char *)NULL,
 		       (char *)NULL);
   add_condition_class ("WARNING", env, 1, "CONDITION", (char *)NULL,
