@@ -2972,6 +2972,12 @@
 
 
 
+(defmacro ignore-errors (&rest forms)
+  `(handler-case (progn . ,forms)
+     (error (c) (values nil c))))
+
+
+
 (defun abort (&optional cond)
   (invoke-restart 'abort))
 
@@ -3050,7 +3056,7 @@
 	  with-output-to-string pprint do-all-symbols find-all-symbols loop
 	  format encode-universal-time *readtable* with-standard-io-syntax
 	  handler-case restart-case with-simple-restart find-restart cerror
-	  break abort continue documentation))
+	  break ignore-errors abort continue documentation))
 
 
 
