@@ -2958,6 +2958,13 @@
 
 
 
+(defun cerror (format datum &rest args)
+  (with-simple-restart (continue "")
+    (apply 'error datum args))
+  nil)
+
+
+
 (defun break (&optional form &rest args)
   (with-simple-restart (continue "")
     (invoke-debugger (make-condition 'simple-condition)))
@@ -3042,8 +3049,8 @@
 	  write-to-string prin1-to-string princ-to-string with-input-from-string
 	  with-output-to-string pprint do-all-symbols find-all-symbols loop
 	  format encode-universal-time *readtable* with-standard-io-syntax
-	  handler-case restart-case with-simple-restart find-restart break abort
-	  continue documentation))
+	  handler-case restart-case with-simple-restart find-restart cerror
+	  break abort continue documentation))
 
 
 
