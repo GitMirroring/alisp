@@ -1734,6 +1734,7 @@ make_test ("(restart-case (invoke-restart 'rest1 0 1) (rest1 (x y)) (rest1 (x y)
 make_test ("(restart-bind ((rest1 (lambda (x) 20))) (restart-case (invoke-restart 'rest2 0 1) (rest2 (x y) (invoke-restart 'rest1 40)) (rest1 (x y) 30)))", "20");
 make_test ("(with-simple-restart (continue \"\") (values 1 2))", "1\n2");
 make_test ("(with-simple-restart (continue \"\") 1 2 (invoke-restart 'continue))", "NIL\nT");
+make_test ("(ignore-errors (error \"what\") (write 1))", "NIL\n#<CONDITION OF CLASS SIMPLE-ERROR>");
 make_test ("(block test (unwind-protect 0 (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
