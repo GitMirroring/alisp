@@ -657,6 +657,8 @@ make_test ("(subtypep 'integer '(and number float))", "NIL\nT");
 make_test ("(subtypep '(and string vector) 'array)", "T\nT");
 make_test ("(subtypep '(or rational float) 'number)", "T\nT");
 make_test ("(subtypep '(and symbol list) 'null)", "NIL\nNIL");
+make_test ("(deftype newinteger nil 'integer)", "NEWINTEGER");
+make_test ("(subtypep 'newinteger 'real)", "T\nT");
 make_test ("(coerce 4 'number)", "4");
 make_test ("(coerce \"abc\" 'list)", "(#\\a #\\b #\\c)");
 make_test ("(coerce nil 'vector)", "#()");
