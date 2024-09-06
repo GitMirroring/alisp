@@ -697,6 +697,10 @@ make_test ("(fboundp '(setf foo3))", "NIL");
 make_test ("(let ((x 0) (y 1)) (setf (foo2 x) y))", "(1 0)");
 make_test ("(defsetf 2dlist (l x y) (newval) `(setf (elt (elt ,l ,x) ,y) ,newval))", "2DLIST");
 make_test ("(let ((ls '((1 2) (3 4))) (x_ 1) (y_ 0)) (list (setf (2dlist ls x_ y_) 10) ls))", "(10 ((1 2) (10 4)))");
+make_test ("(define-symbol-macro symmac *read-base*)", "SYMMAC");
+make_test ("symmac", "10");
+make_test ("(macroexpand 'symmac)", "*READ-BASE*\nT");
+make_test ("(symbol-macrolet ((smac1 (1+ *read-base*)) (smac2 (+ 2 *read-base*))) smac1)", "11");
 
 make_test ("(make-string 3)", "\"\0\0\0\"");
 make_test ("(make-string 2 :element-type 'character)", "\"\0\0\"");
