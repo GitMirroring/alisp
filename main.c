@@ -367,6 +367,8 @@ binding
   struct object *sym;
   struct object *obj;
 
+  int is_symbol_macro;
+
   int prev_special;
 
   struct binding *closure_bin;
@@ -830,6 +832,7 @@ symbol
 
   int value_dyn_bins_num;
   struct object *value_cell;
+  int is_symbol_macro;
 
   int function_dyn_bins_num;
   struct object *function_cell;
@@ -2870,6 +2873,10 @@ struct object *evaluate_define_setf_expander
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_get_setf_expansion
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_define_symbol_macro
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_symbol_macrolet
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defclass
@@ -3777,6 +3784,10 @@ add_standard_definitions (struct environment *env)
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("GET-SETF-EXPANSION", env, builtin_get_setf_expansion,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("DEFINE-SYMBOL-MACRO", env, evaluate_define_symbol_macro,
+		    TYPE_MACRO, NULL, 0);
+  add_builtin_form ("SYMBOL-MACROLET", env, evaluate_symbol_macrolet, TYPE_MACRO,
+		    NULL, 1);
   add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
   add_builtin_form ("DEFCLASS", env, evaluate_defclass, TYPE_MACRO, NULL, 0);
   add_builtin_form ("FIND-CLASS", env, builtin_find_class, TYPE_FUNCTION, NULL,
@@ -8809,6 +8820,7 @@ clear_symbol (struct symbol *sym)
   sym->is_special = 0;
   sym->value_dyn_bins_num = 0;
   sym->value_cell = NULL;
+  sym->is_symbol_macro = 0;
   sym->function_dyn_bins_num = 0;
   sym->function_cell = NULL;
   sym->plist = &nil_object;
@@ -10672,6 +10684,7 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type,
   bin->refcount = 1;
   bin->sym = sym;
   bin->obj = obj;
+  bin->is_symbol_macro = 0;
   bin->prev_special = -1;
   bin->next = NULL;
 
@@ -16285,6 +16298,7 @@ evaluate_object (struct object *obj, struct environment *env,
       sym = SYMBOL (obj);
 
       if (sym->value_ptr.symbol->is_const
+	  || sym->value_ptr.symbol->is_symbol_macro
 	  || (sym->value_ptr.symbol->is_special && !env->only_lexical))
 	{
 	  ret = get_dynamic_value (sym, env);
@@ -16296,6 +16310,15 @@ evaluate_object (struct object *obj, struct environment *env,
 	      outcome->obj = sym;
 	      return NULL;
 	    }
+
+	  if (sym->value_ptr.symbol->is_symbol_macro)
+	    {
+	      decrement_refcount (ret);
+	      ret = evaluate_object (ret, env, outcome);
+
+	      if (!ret)
+		return NULL;
+	    }
 	}
       else
 	{
@@ -16305,8 +16328,18 @@ evaluate_object (struct object *obj, struct environment *env,
 
 	  if (bind)
 	    {
-	      increment_refcount (bind->obj);
-	      ret = bind->obj;
+	      if (bind->is_symbol_macro)
+		{
+		  ret = evaluate_object (bind->obj, env, outcome);
+
+		  if (!ret)
+		    return NULL;
+		}
+	      else
+		{
+		  increment_refcount (bind->obj);
+		  ret = bind->obj;
+		}
 	    }
 	  else if (sym->value_ptr.symbol->value_dyn_bins_num
 		   && !env->only_lexical)
@@ -26654,6 +26687,17 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
 
       ret2 = &t_object;
     }
+  else if (IS_SYMBOL (CAR (list))
+	   && SYMBOL (CAR (list))->value_ptr.symbol->is_symbol_macro)
+    {
+      increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->value_cell);
+      ret = SYMBOL (CAR (list))->value_ptr.symbol->value_cell;
+
+      if (!ret)
+	return NULL;
+
+      ret2 = &t_object;
+    }
   else
     {
       increment_refcount (CAR (list));
@@ -31030,6 +31074,86 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+}
+
+
+struct object *
+evaluate_define_symbol_macro (struct object *list, struct environment *env,
+			      struct outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_SYMBOL (CAR (list))
+      || (SYMBOL (CAR (list))->value_ptr.symbol->value_cell
+	  && !SYMBOL (CAR (list))->value_ptr.symbol->is_symbol_macro))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  delete_reference (SYMBOL (CAR (list)),
+		    SYMBOL (CAR (list))->value_ptr.symbol->value_cell, 0);
+  SYMBOL (CAR (list))->value_ptr.symbol->value_cell = CAR (CDR (list));
+  add_reference (SYMBOL (CAR (list)), CAR (CDR (list)), 0);
+  SYMBOL (CAR (list))->value_ptr.symbol->is_symbol_macro = 1;
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
+evaluate_symbol_macrolet (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  int bin_num = 0;
+  struct object *res, *bind_forms;
+  struct binding *bin;
+
+  if (!list_length (list))
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+
+  while (SYMBOL (bind_forms) != &nil_object)
+    {
+      if (CAR (bind_forms)->type != TYPE_CONS_PAIR
+	  || list_length (CAR (bind_forms)) != 2)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      bin = create_binding (CAR (CAR (bind_forms)), CAR (CDR (CAR (bind_forms))),
+			    LEXICAL_BINDING, 1);
+      bin->is_symbol_macro = 1;
+
+      env->vars = add_binding (bin, env->vars);
+      env->lex_env_vars_boundary++, bin_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  res = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+
+  env->vars = remove_bindings (env->vars, bin_num, 1);
+
+  env->lex_env_vars_boundary -= bin_num;
+
+  return res;
 }
 
 
