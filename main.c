@@ -2801,8 +2801,8 @@ struct object *inspect_variable_by_c_string (char *var,
 struct object *inspect_variable (struct object *sym, struct environment *env);
 
 struct object *set_value (struct object *sym, struct object *value,
-			  int eval_value, struct environment *env,
-			  struct outcome *outcome);
+			  int expand_symmacros, int eval_value,
+			  struct environment *env, struct outcome *outcome);
 int set_values_destructuring (struct object *template, struct object *vals,
 			      struct environment *env, struct outcome *outcome);
 struct object *setf_value (struct object *form, struct object *value,
@@ -5730,14 +5730,14 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	  && (call->feat_test_incomplete || call->feat_test_is_empty_list))
 	{
 	  prevpack = inspect_variable (env->package_sym, env);
-	  set_value (env->package_sym, env->keyword_package, 0, env, outcome);
+	  set_value (env->package_sym, env->keyword_package, 0, 0, env, outcome);
 	  out = read_object_continued (&call->feature_test,
 				       backts_commas_balance,
 				       call->feat_test_is_empty_list, input,
 				       size, stream, preserve_whitespace,
 				       ends_with_eof, env, outcome, &obj_b,
 				       macro_end);
-	  set_value (env->package_sym, prevpack, 0, env, outcome);
+	  set_value (env->package_sym, prevpack, 0, 0, env, outcome);
 
 	  if (IS_READ_OR_EVAL_ERROR (out))
 	    return out;
@@ -5789,7 +5789,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 	{
 	  prevpack = inspect_variable (env->package_sym, env);
 
-	  set_value (env->package_sym, NULL, 0, env, outcome);
+	  set_value (env->package_sym, NULL, 0, 0, env, outcome);
 
 	  call->obj = NULL;
 	  out = read_object_continued (&call->obj, 0, call->is_empty_list, input,
@@ -5797,7 +5797,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
 				       ends_with_eof, env, outcome, &obj_b,
 				       macro_end);
 
-	  set_value (env->package_sym, prevpack, 0, env, outcome);
+	  set_value (env->package_sym, prevpack, 0, 0, env, outcome);
 
 	  if (out == UNCLOSED_EMPTY_LIST)
 	    call->is_empty_list = 1;
@@ -5936,14 +5936,14 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     {
       prevpack = inspect_variable (env->package_sym, env);
 
-      set_value (env->package_sym, env->keyword_package, 0, env, outcome);
+      set_value (env->package_sym, env->keyword_package, 0, 0, env, outcome);
 
       call->feature_test = NULL;
       out = read_object (&call->feature_test, 0, input, size, stream,
 			 preserve_whitespace, ends_with_eof, env, outcome,
 			 &obj_b, macro_end);
 
-      set_value (env->package_sym, prevpack, 0, env, outcome);
+      set_value (env->package_sym, prevpack, 0, 0, env, outcome);
 
       if (IS_READ_OR_EVAL_ERROR (out))
 	return out;
@@ -6103,13 +6103,13 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
     {
       prevpack = inspect_variable (env->package_sym, env);
 
-      set_value (env->package_sym, NULL, 0, env, outcome);
+      set_value (env->package_sym, NULL, 0, 0, env, outcome);
 
       call->obj = NULL;
       out = read_object (&call->obj, 0, input, size, stream, preserve_whitespace,
 			 ends_with_eof, env, outcome, &obj_b, macro_end);
 
-      set_value (env->package_sym, prevpack, 0, env, outcome);
+      set_value (env->package_sym, prevpack, 0, 0, env, outcome);
 
       if (out == UNCLOSED_EMPTY_LIST)
 	call->is_empty_list = 1;
@@ -21192,7 +21192,7 @@ builtin_load (struct object *list, struct environment *env,
       print_object (ret, env, env->c_stdout->value_ptr.stream);
     }
 
-  set_value (env->package_sym, pack, 0, env, outcome);
+  set_value (env->package_sym, pack, 0, 0, env, outcome);
 
   free (fn);
 
@@ -22114,7 +22114,7 @@ builtin_do (struct object *list, struct environment *env,
       while (SYMBOL (bind_forms) != &nil_object)
 	{
 	  if (lastincr->obj)
-	    set_value (SYMBOL (CAR (CAR (bind_forms))), lastincr->obj, 0, env,
+	    set_value (SYMBOL (CAR (CAR (bind_forms))), lastincr->obj, 0, 0, env,
 		       outcome);
 
 	  decrement_refcount (lastincr->obj);
@@ -22277,7 +22277,7 @@ builtin_do_star (struct object *list, struct environment *env,
 	  if (list_length (CAR (bind_forms)) == 3)
 	    {
 	      res = set_value (SYMBOL (CAR (CAR (bind_forms))),
-			       CAR (CDR (CDR (CAR (bind_forms)))), 1, env,
+			       CAR (CDR (CDR (CAR (bind_forms)))), 0, 1, env,
 			       outcome);
 
 	      if (!res)
@@ -26626,7 +26626,7 @@ builtin_gensym (struct object *list, struct environment *env,
       mpz_set (newcnt->value_ptr.integer, num->value_ptr.integer);
       mpz_add_ui (newcnt->value_ptr.integer, newcnt->value_ptr.integer, 1);
 
-      set_value (env->gensym_counter_sym, newcnt, 0, env, outcome);
+      set_value (env->gensym_counter_sym, newcnt, 0, 0, env, outcome);
 
       decrement_refcount (newcnt);
     }
@@ -27732,7 +27732,7 @@ builtin_in_package (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return set_value (env->package_sym, pack, 1, env, outcome);
+  return set_value (env->package_sym, pack, 0, 1, env, outcome);
 }
 
 
@@ -29391,8 +29391,8 @@ inspect_variable (struct object *sym, struct environment *env)
 
 
 struct object *
-set_value (struct object *sym, struct object *value, int eval_value,
-	   struct environment *env, struct outcome *outcome)
+set_value (struct object *sym, struct object *value, int expand_symmacros,
+	   int eval_value, struct environment *env, struct outcome *outcome)
 {
   struct symbol *s = sym->value_ptr.symbol;
   struct object *val;
@@ -29438,6 +29438,11 @@ set_value (struct object *sym, struct object *value, int eval_value,
 
       if (b)
 	{
+	  if (expand_symmacros && b->is_symbol_macro)
+	    {
+	      return setf_value (b->obj, val, 0, env, outcome);
+	    }
+
 	  decrement_refcount (b->obj);
 	  b->obj = val;
 	  increment_refcount (val);
@@ -29448,6 +29453,12 @@ set_value (struct object *sym, struct object *value, int eval_value,
 	    {
 	      sym->value_ptr.symbol->is_parameter = 1;
 	      sym->value_ptr.symbol->is_special++;
+	    }
+
+	  if (expand_symmacros && sym->value_ptr.symbol->is_symbol_macro)
+	    {
+	      return setf_value (sym->value_ptr.symbol->value_cell, val, 0, env,
+				 outcome);
 	    }
 
 	  sym->value_ptr.symbol->value_cell = val;
@@ -29494,7 +29505,8 @@ set_values_destructuring (struct object *template, struct object *vals,
 
 	  if (SYMBOL (CAR (template)) != &nil_object)
 	    {
-	      set_value (SYMBOL (CAR (template)), CAR (vals), 0, env, outcome);
+	      set_value (SYMBOL (CAR (template)), CAR (vals), 0, 0, env,
+			 outcome);
 	    }
 	}
       else
@@ -29526,7 +29538,8 @@ set_values_destructuring (struct object *template, struct object *vals,
 
 	  if (SYMBOL (CAR (template)) != &nil_object)
 	    {
-	      set_value (SYMBOL (CAR (template)), &nil_object, 0, env, outcome);
+	      set_value (SYMBOL (CAR (template)), &nil_object, 0, 0, env,
+			 outcome);
 	    }
 	}
       else
@@ -29552,7 +29565,7 @@ set_values_destructuring (struct object *template, struct object *vals,
 	  return 0;
 	}
 
-      set_value (SYMBOL (template), vals, 0, env, outcome);
+      set_value (SYMBOL (template), vals, 0, 0, env, outcome);
     }
 
   return 1;
@@ -29570,7 +29583,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 
   if (IS_SYMBOL (form))
     {
-      return set_value (SYMBOL (form), value, eval_value, env, outcome);
+      return set_value (SYMBOL (form), value, 1, eval_value, env, outcome);
     }
   else if (form->type == TYPE_CONS_PAIR)
     {
@@ -30382,7 +30395,8 @@ evaluate_setq (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = set_value (SYMBOL (CAR (list)), CAR (CDR (list)), 1, env, outcome);
+      ret = set_value (SYMBOL (CAR (list)), CAR (CDR (list)), 1, 1, env,
+		       outcome);
 
       if (!ret)
 	return NULL;
@@ -30433,7 +30447,7 @@ evaluate_psetq (struct object *list, struct environment *env,
 
   while (SYMBOL (cons) != &nil_object)
     {
-      set_value (SYMBOL (CAR (cons)), last->obj, 0, env, outcome);
+      set_value (SYMBOL (CAR (cons)), last->obj, 1, 0, env, outcome);
 
       cons = CDR (CDR (cons));
       last = last->next;
