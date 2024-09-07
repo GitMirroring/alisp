@@ -2315,6 +2315,31 @@
 
 
 
+(defmacro with-slots (slots inst &rest forms)
+  (let ((instsym (gensym)))
+    `(let ((,instsym ,inst))
+       (symbol-macrolet
+	   ,(let (out)
+	      (dolist (s slots)
+		(if (consp s)
+		    (setq out (cons `(,(car s) (slot-value ,instsym ',(cadr s))) out))
+		    (setq out (cons `(,s (slot-value ,instsym ',s)) out))))
+	      out)
+	 ,@forms))))
+
+
+(defmacro with-accessors (slots inst &rest forms)
+  (let ((instsym (gensym)))
+    `(let ((,instsym ,inst))
+       (symbol-macrolet
+	   ,(let (out)
+	      (dolist (s slots)
+		(setq out (cons `(,(car s) (,(cadr s) ,instsym)) out)))
+	      out)
+	 ,@forms))))
+
+
+
 (defun loop-parse-accumulation (forms)
   (let ((sym (string (car forms)))
 	var
@@ -3053,10 +3078,11 @@
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  with-open-file terpri write-line write-sequence prin1 princ print
 	  write-to-string prin1-to-string princ-to-string with-input-from-string
-	  with-output-to-string pprint do-all-symbols find-all-symbols loop
-	  format encode-universal-time *readtable* with-standard-io-syntax
-	  handler-case restart-case with-simple-restart find-restart cerror
-	  break ignore-errors abort continue documentation))
+	  with-output-to-string pprint do-all-symbols find-all-symbols
+	  with-slots with-accessors loop format encode-universal-time
+	  *readtable* with-standard-io-syntax handler-case restart-case
+	  with-simple-restart find-restart cerror break ignore-errors abort
+	  continue documentation))
 
 
 
