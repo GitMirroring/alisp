@@ -1598,6 +1598,12 @@ make_test ("(defclass c20 nil ((x :accessor c20-x) (y :accessor c20-y) z))", "#<
 make_test ("(defparameter inst (make-instance 'c20))", "INST");
 make_test ("(with-accessors ((x1 c20-x) (y1 c20-y)) inst (setf x1 20) (write x1))", "20\n20");
 make_test ("(c20-x inst)", "20");
+make_test ("(defclass c21 nil ((f :reader fr :writer fw :accessor fa :allocation :class)))", "#<STANDARD-CLASS C21>");
+make_test ("(defparameter inst (make-instance 'c21))", "INST");
+make_test ("(setf (fa inst) 10)", "10");
+make_test ("(fr inst)", "10");
+make_test ("(fw 11 inst)", "11");
+make_test ("(fa inst)", "11");
 make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
 make_test ("(typep #'genfun 'generic-function)", "T");
 make_test ("(typep #'genfun 'standard-generic-function)", "T");
