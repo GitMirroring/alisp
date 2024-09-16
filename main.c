@@ -11460,9 +11460,11 @@ print_bindings_in_reverse (struct binding *bins, int num,
       for (i = 1; i < num; i++)
 	b = b->next;
 
-      print_object (b->sym, env, str->value_ptr.stream);
+      print_object (b->sym ? b->sym : b->closure_bin->sym, env,
+		    str->value_ptr.stream);
       printf ("=");
-      print_object (b->obj, env, str->value_ptr.stream);
+      print_object (b->sym ? b->obj : b->closure_bin->obj, env,
+		    str->value_ptr.stream);
 
       if (num > 1)
 	printf (" ");
