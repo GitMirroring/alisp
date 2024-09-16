@@ -14836,17 +14836,25 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  while (f)
 	    {
-	      if (f->name
+	      if (f->decl->name
 		  == methlist->meth->value_ptr.method->object_reader_field)
 		{
-		  if (!f->value)
+		  if ((f->name && !f->value) || (!f->name && !f->decl->value))
 		    {
 		      outcome->type = SLOT_NOT_BOUND;
 		      return NULL;
 		    }
 
-		  increment_refcount (f->value);
-		  return f->value;
+		  if (f->name)
+		    {
+		      increment_refcount (f->value);
+		      return f->value;
+		    }
+		  else
+		    {
+		      increment_refcount (f->decl->value);
+		      return f->decl->value;
+		    }
 		}
 
 	      f = f->next;
@@ -14876,14 +14884,23 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  while (f)
 	    {
-	      if (f->name
+	      if (f->decl->name
 		  == methlist->meth->value_ptr.method->object_writer_field)
 		{
-		  decrement_refcount (f->value);
-		  f->value = CAR (arglist);
-		  increment_refcount (f->value);
-		  increment_refcount (f->value);
-		  return f->value;
+		  if (f->name)
+		    {
+		      decrement_refcount (f->value);
+		      f->value = CAR (arglist);
+		    }
+		  else
+		    {
+		      decrement_refcount (f->decl->value);
+		      f->decl->value = CAR (arglist);
+		    }
+
+		  increment_refcount (CAR (arglist));
+		  increment_refcount (CAR (arglist));
+		  return CAR (arglist);
 		}
 
 	      f = f->next;
@@ -14914,17 +14931,25 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  while (f)
 	    {
-	      if (f->name
+	      if (f->decl->name
 		  == methlist->meth->value_ptr.method->object_accessor_field)
 		{
-		  if (!f->value)
+		  if ((f->name && !f->value) || (!f->name && !f->decl->value))
 		    {
 		      outcome->type = SLOT_NOT_BOUND;
 		      return NULL;
 		    }
 
-		  increment_refcount (f->value);
-		  return f->value;
+		  if (f->name)
+		    {
+		      increment_refcount (f->value);
+		      return f->value;
+		    }
+		  else
+		    {
+		      increment_refcount (f->decl->value);
+		      return f->decl->value;
+		    }
 		}
 
 	      f = f->next;
@@ -14954,14 +14979,23 @@ call_method (struct method_list *methlist, struct object *arglist,
 
 	  while (f)
 	    {
-	      if (f->name
+	      if (f->decl->name
 		  == methlist->meth->value_ptr.method->object_accessor_field)
 		{
-		  decrement_refcount (f->value);
-		  f->value = CAR (arglist);
-		  increment_refcount (f->value);
-		  increment_refcount (f->value);
-		  return f->value;
+		  if (f->name)
+		    {
+		      decrement_refcount (f->value);
+		      f->value = CAR (arglist);
+		    }
+		  else
+		    {
+		      decrement_refcount (f->decl->value);
+		      f->decl->value = CAR (arglist);
+		    }
+
+		  increment_refcount (CAR (arglist));
+		  increment_refcount (CAR (arglist));
+		  return CAR (arglist);
 		}
 
 	      f = f->next;
