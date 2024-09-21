@@ -9977,30 +9977,47 @@ create_condition_field_decl (struct object *fieldform, struct environment *env,
 struct object *
 allocate_object_fields (struct object *stdobj, struct object *class)
 {
-  struct class_field_decl *fd = class->value_ptr.standard_class->fields;
-  struct object_list *p = class->value_ptr.standard_class->parents;
+  struct class_field_decl *fd;
+  struct object_list *p = stdobj->value_ptr.standard_object
+    ->class->value_ptr.standard_class->class_precedence_list;
   struct class_field *f;
-
-  while (fd)
-    {
-      f = malloc_and_check (sizeof (*f));
-
-      if (fd->alloc_type == INSTANCE_ALLOCATION)
-	f->name = fd->name;
-      else
-	f->name = NULL;
-
-      f->value = NULL;
-      f->decl = fd;
-      f->next = stdobj->value_ptr.standard_object->fields;
-      stdobj->value_ptr.standard_object->fields = f;
-
-      fd = fd->next;
-    }
 
   while (p)
     {
-      allocate_object_fields (stdobj, p->obj);
+      fd = p->obj->value_ptr.standard_class->fields;
+
+      while (fd)
+	{
+	  f = stdobj->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (f->decl->name == fd->name)
+		break;
+
+	      f = f->next;
+	    }
+
+	  if (f)
+	    {
+	      fd = fd->next;
+	      continue;
+	    }
+
+	  f = malloc_and_check (sizeof (*f));
+
+	  if (fd->alloc_type == INSTANCE_ALLOCATION)
+	    f->name = fd->name;
+	  else
+	    f->name = NULL;
+
+	  f->value = NULL;
+	  f->decl = fd;
+	  f->next = stdobj->value_ptr.standard_object->fields;
+	  stdobj->value_ptr.standard_object->fields = f;
+
+	  fd = fd->next;
+	}
 
       p = p->next;
     }
