@@ -16361,16 +16361,11 @@ evaluate_object (struct object *obj, struct environment *env,
 	      outcome->type = UNBOUND_SYMBOL;
 	      increment_refcount (sym);
 	      outcome->obj = sym;
-	      return NULL;
 	    }
-
-	  if (sym->value_ptr.symbol->is_symbol_macro)
+	  else if (sym->value_ptr.symbol->is_symbol_macro)
 	    {
 	      decrement_refcount (ret);
 	      ret = evaluate_object (ret, env, outcome);
-
-	      if (!ret)
-		return NULL;
 	    }
 	}
       else
@@ -16384,9 +16379,6 @@ evaluate_object (struct object *obj, struct environment *env,
 	      if (bind->is_symbol_macro)
 		{
 		  ret = evaluate_object (bind->obj, env, outcome);
-
-		  if (!ret)
-		    return NULL;
 		}
 	      else
 		{
@@ -16412,7 +16404,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	      outcome->type = UNBOUND_SYMBOL;
 	      increment_refcount (sym);
 	      outcome->obj = sym;
-	      return NULL;
+	      ret = NULL;
 	    }
 	}
     }
@@ -16426,18 +16418,20 @@ evaluate_object (struct object *obj, struct environment *env,
       return obj;
     }
 
-  if (ret &&
-      ((IS_SYMBOL (obj)
-	&& env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
-       || ((obj->type == TYPE_CONS_PAIR || obj->type == TYPE_BACKQUOTE)
-	   && stepping_over_this_form
-	   && (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION))
-	   && (env->stepping_flags & STEPPING_OVER_FORM))))
+  if ((IS_SYMBOL (obj)
+       && env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
+      || ((obj->type == TYPE_CONS_PAIR || obj->type == TYPE_BACKQUOTE)
+	  && stepping_over_this_form
+	  && (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION))
+	  && (env->stepping_flags & STEPPING_OVER_FORM)))
     {
-      printf (" -> ");
-      print_object (ret, env, env->c_stdout->value_ptr.stream);
-      printf ("\n");
-      env->c_stdout->value_ptr.stream->dirty_line = 0;
+      if (ret)
+	{
+	  printf (" -> ");
+	  print_object (ret, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n");
+	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+	}
 
       if (env->last_result)
 	{
