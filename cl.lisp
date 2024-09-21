@@ -1933,7 +1933,7 @@
 
 
 
-(defmacro assert (test &optional places (conddat "Assertion does not hold") condargs)
+(defmacro assert (test &optional places (conddat "Assertion does not hold") &rest condargs)
   `(unless ,test
      (apply 'error ,conddat ,condargs)))
 
