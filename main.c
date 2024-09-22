@@ -721,7 +721,7 @@ environment
   int debugging_depth;
 
   enum stepping_flags stepping_flags;
-  struct object *last_result, *next_eval;
+  struct object *next_eval;
 
   int is_profiling;
   struct profiling_record *profiling_data;
@@ -3349,12 +3349,6 @@ main (int argc, char *argv [])
 	  decrement_refcount (obj);
 
 	  env.stepping_flags = 0;
-
-	  if (env.last_result)
-	    {
-	      decrement_refcount (env.last_result);
-	      env.last_result = NULL;
-	    }
 
 	  env.stack_depth = 0;
 
@@ -11561,15 +11555,6 @@ enter_debugger (struct object *cond, struct environment *env,
 
   if (env->stepping_flags)
     {
-      if (env->last_result)
-	{
-	  printf (" -> ");
-	  print_object (env->last_result, env, env->c_stdout->value_ptr.stream);
-	  printf ("\n");
-	  decrement_refcount (env->last_result);
-	  env->last_result = NULL;
-	}
-
       printf ("\n");
       print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
       printf ("\n");
@@ -16431,12 +16416,6 @@ evaluate_object (struct object *obj, struct environment *env,
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
-	}
-
-      if (env->last_result)
-	{
-	  decrement_refcount (env->last_result);
-	  env->last_result = NULL;
 	}
 
       if (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION)
