@@ -2902,6 +2902,12 @@
 
 
 
+(defmacro with-compilation-unit (opts &rest forms)
+  `(progn
+     ,@forms))
+
+
+
 (defparameter *readtable* nil)
 
 
@@ -3080,9 +3086,9 @@
 	  write-to-string prin1-to-string princ-to-string with-input-from-string
 	  with-output-to-string pprint do-all-symbols find-all-symbols
 	  with-slots with-accessors loop format encode-universal-time
-	  *readtable* with-standard-io-syntax handler-case restart-case
-	  with-simple-restart find-restart cerror break ignore-errors abort
-	  continue documentation))
+	  with-compilation-unit *readtable* with-standard-io-syntax handler-case
+	  restart-case with-simple-restart find-restart cerror break
+	  ignore-errors abort continue documentation))
 
 
 
