@@ -1207,6 +1207,7 @@ make_test ("(testfun5)", "1");
 make_test ("(defun testfun6 nil (if 0 (cond (nil))))", "TESTFUN6");
 make_test ("(compile 'testfun6)", "TESTFUN6\nNIL\nNIL");
 make_test ("(testfun6)", "NIL");
+make_test ("(with-compilation-unit nil (write 0) (write 1))", "01\n1");
 make_test ("(write \"\")", "\"\"\n\"\"");
 make_test ("(write 'hello :stream *error-output*)", "HELLO\nHELLO");
 make_test ("(defun f nil (write 0) (write 1))", "F");
