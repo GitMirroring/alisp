@@ -1683,6 +1683,12 @@ make_test ("(defgeneric genfun13 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN13>")
 make_test ("(defmethod genfun13 (x) (declare (special x)) (f))", "#<STANDARD-METHOD GENFUN13 (T)>");
 make_test ("(defun f nil x)", "F");
 make_test ("(genfun13 0)", "0");
+make_test ("(defgeneric genfun14 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN14>");
+make_test ("(defmethod genfun14 ((x integer)) (genfun15 x) (call-next-method))", "#<STANDARD-METHOD GENFUN14 (INTEGER)>");
+make_test ("(defmethod genfun14 ((x real)) 0)", "#<STANDARD-METHOD GENFUN14 (REAL)>");
+make_test ("(defgeneric genfun15 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN15>");
+make_test ("(defmethod genfun15 (x) 10)", "#<STANDARD-METHOD GENFUN15 (T)>");
+make_test ("(genfun14 5)", "0");
 make_test ("(defun fle (b &optional c &rest d &key e &allow-other-keys &aux f) 0 1 2)", "FLE");
 make_test ("(function-lambda-expression #'fle)", "(LAMBDA (B &OPTIONAL C &REST D &KEY E &ALLOW-OTHER-KEYS &AUX F) 0 1 2)\nNIL\nFLE");
 make_test ("(function-lambda-expression (let ((i 0)) (lambda (x) 0 1)))", "(LAMBDA (X) 0 1)\nT\nNIL");
