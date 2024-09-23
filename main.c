@@ -15612,8 +15612,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 				int eval_args, struct environment *env,
 				struct outcome *outcome)
 {
-  struct object *args, *ret = NULL, *res, *tmp;
-  struct method_list *applm = NULL, *lapplm,
+  struct object *args, *ret = NULL, *res, *tmp, *margs;
+  struct method_list *applm = NULL, *lapplm, *mlist,
     *ml = func->value_ptr.function->methods;
   int applnum = 0, i, found_primary = 0;
 
@@ -15707,6 +15707,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     }
 
 
+  margs = env->method_args;
+  mlist = env->method_list;
+
   lapplm = applm;
 
   while (lapplm)
@@ -15753,6 +15756,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       free (applm);
       applm = lapplm;
     }
+
+  env->method_args = margs;
+  env->method_list = mlist;
 
   if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 	      || (env->stepping_flags
