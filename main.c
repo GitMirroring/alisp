@@ -761,7 +761,7 @@ environment
 
   struct object *abort_sym;
 
-  struct object *al_compile_when_defining_sym;
+  struct object *al_compile_when_defining_sym, *al_debugging_condition_sym;
 };
 
 
@@ -4323,6 +4323,8 @@ add_standard_definitions (struct environment *env)
 
   env->al_compile_when_defining_sym =
     define_variable ("*AL-COMPILE-WHEN-DEFINING*", &nil_object, env);
+  env->al_debugging_condition_sym =
+    define_variable ("*AL-DEBUGGING-CONDITION*", &nil_object, env);
 
   define_variable ("*AL-PPRINT-DEPTH*", create_integer_from_long (0), env);
 }
@@ -11576,6 +11578,13 @@ enter_debugger (struct object *cond, struct environment *env,
 
   env->c_stdout->value_ptr.stream->dirty_line = 0;
 
+
+  if (cond)
+    increment_refcount (cond);
+
+  env->vars = bind_variable (env->al_debugging_condition_sym,
+			     cond ? cond : &nil_object, 1, env->vars);
+
   while (!end_repl)
     {
       free (wholel);
@@ -11598,6 +11607,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  outcome->type = ABORT_ONE_LEVEL;
 		  free (wholel);
 		  decrement_refcount (obj);
+		  env->vars = remove_bindings (env->vars, 1, 1);
 		  return NULL;
 		}
 	      else if (restind == restnum-1)
@@ -11607,6 +11617,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  outcome->type = ABORT_TO_TOP_LEVEL;
 		  free (wholel);
 		  decrement_refcount (obj);
+		  env->vars = remove_bindings (env->vars, 1, 1);
 		  return NULL;
 		}
 	      else
@@ -11664,6 +11675,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  env->debugging_depth--;
 		  free (wholel);
 		  decrement_refcount (obj);
+		  env->vars = remove_bindings (env->vars, 1, 1);
 		  return &nil_object;
 		}
 	    }
@@ -11676,6 +11688,7 @@ enter_debugger (struct object *cond, struct environment *env,
 	  if (!result && (outcome->tag_to_jump_to || outcome->block_to_leave))
 	    {
 	      env->debugging_depth--;
+	      env->vars = remove_bindings (env->vars, 1, 1);
 	      return NULL;
 	    }
 
@@ -11713,6 +11726,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  free (wholel);
 		  decrement_refcount (result);
 		  decrement_refcount (obj);
+		  env->vars = remove_bindings (env->vars, 1, 1);
 		  return NULL;
 		}
 	      else if (outcome->type != ABORT_ONE_LEVEL)
@@ -11764,6 +11778,7 @@ enter_debugger (struct object *cond, struct environment *env,
 
 
   env->debugging_depth--;
+  env->vars = remove_bindings (env->vars, 1, 1);
 
   return &t_object;
 }
