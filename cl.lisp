@@ -2999,10 +2999,13 @@
 (defparameter cl-user::*al-enable-breakpoints* t)
 (export 'cl-user::*al-enable-breakpoints* 'cl-user)
 
+(define-condition cl-user::al-break nil nil)
+(export 'cl-user::al-break 'cl-user)
+
 (defun break (&optional form &rest args)
   (if cl-user:*al-enable-breakpoints*
       (with-simple-restart (continue "")
-	(invoke-debugger (make-condition 'simple-condition)))
+	(invoke-debugger (make-condition 'cl-user:al-break)))
       nil))
 
 
