@@ -228,7 +228,7 @@ typedef long fixnum;
   (intern_symbol_by_char_vector ((sym), strlen (sym), 1, EXTERNAL_VISIBILITY, \
 				 1, env->cl_package, 0))
 
-#define KEYWORD(name)					       \
+#define KEYWORD(name)							\
   (intern_symbol_by_char_vector ((name)+1, strlen (name)-1, 1,		\
 				 EXTERNAL_VISIBILITY, 1, env->keyword_package, 1))
 
@@ -1265,6 +1265,8 @@ standard_class
 {
   struct object *name;
 
+  int is_condition_class;
+
   struct object_list *parents;
   struct object_list *descendants;
 
@@ -1854,6 +1856,10 @@ struct class_field_decl *create_class_field_decl (struct object *class,
 struct condition_field_decl *create_condition_field_decl
 (struct object *fieldform, struct environment *env, struct outcome *outcome);
 
+struct object *define_class (struct object *name, struct object *form,
+			     int is_condition_class, struct environment *env,
+			     struct outcome *outcome);
+
 struct object *allocate_object_fields (struct object *stdobj,
 				       struct object *class);
 struct class_field *find_object_field_by_initarg (struct object *stdobj,
@@ -1914,10 +1920,13 @@ struct go_tag *find_go_tag (struct object *tagname, struct go_tag_frame *frame);
 struct block_frame *add_block (struct object *name, struct block_frame *blocks);
 struct block *remove_block (struct block *blocks);
 
-struct object *create_condition (struct object *type, va_list valist);
-struct object *create_condition_by_class (struct object *type, ...);
-struct object *create_condition_by_c_string (char *type,
-					     struct environment *env, ...);
+struct object *create_condition (struct object *type, struct object *args,
+				 struct environment *env,
+				 struct outcome *outcome);
+struct object *create_condition_by_c_string (char *type, struct object *args,
+					     struct environment *env,
+					     struct outcome *outcome);
+
 int does_condition_include_outcome_type (struct object *cond,
 					 enum outcome_type type,
 					 struct environment *env);
@@ -4038,6 +4047,7 @@ add_standard_definitions (struct environment *env)
   stdobjcl->type = TYPE_STANDARD_CLASS;
   stdobjcl->value_ptr.standard_class =
     malloc_and_check (sizeof (*stdobjcl->value_ptr.standard_class));
+  stdobjcl->value_ptr.standard_class->is_condition_class = 0;
   stdobjcl->value_ptr.standard_class->parents = NULL;
   stdobjcl->value_ptr.standard_class->descendants = NULL;
   stdobjcl->value_ptr.standard_class->fields = NULL;
@@ -9971,6 +9981,87 @@ create_condition_field_decl (struct object *fieldform, struct environment *env,
 
 
 struct object *
+define_class (struct object *name, struct object *form, int is_condition_class,
+	      struct environment *env, struct outcome *outcome)
+{
+  struct object *class = alloc_object (), *cons;
+  struct standard_class *sc = malloc_and_check (sizeof (*sc));
+  struct class_field_decl *f, *prev;
+  struct object_list *p;
+
+  class->type = TYPE_STANDARD_CLASS;
+  class->value_ptr.standard_class = sc;
+
+  increment_refcount (name);
+  sc->name = name;
+  sc->is_condition_class = is_condition_class;
+
+  name->value_ptr.symbol->is_type = 1;
+
+  delete_reference (name, name->value_ptr.symbol->typespec, 4);
+  name->value_ptr.symbol->typespec = class;
+  add_reference (name, class, 4);
+
+
+  sc->parents = NULL;
+  cons = CAR (form);
+
+  while (SYMBOL (cons) != &nil_object)
+    {
+      if (!IS_SYMBOL (CAR (cons)) || SYMBOL (CAR (cons)) == &nil_object)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      if (sc->parents)
+	p = p->next = malloc_and_check (sizeof (*p));
+      else
+	sc->parents = p = malloc_and_check (sizeof (*p));
+
+      p->obj = SYMBOL (CAR (cons));
+
+      cons = CDR (cons);
+    }
+
+  if (sc->parents)
+    {
+      p->next = NULL;
+    }
+  else
+    {
+      sc->parents = malloc_and_check (sizeof (*sc->parents));
+      sc->parents->obj = CREATE_BUILTIN_SYMBOL (is_condition_class ? "CONDITION"
+						: "STANDARD-OBJECT");
+      sc->parents->next = NULL;
+    }
+
+  sc->descendants = NULL;
+  sc->class_precedence_list = NULL;
+  sc->fields = NULL;
+  form = CAR (CDR (form));
+
+  while (SYMBOL (form) != &nil_object)
+    {
+      f = create_class_field_decl (class, CAR (form), env, outcome);
+
+      if (!f)
+	return NULL;
+
+      if (sc->fields)
+	prev = prev->next = f;
+      else
+	sc->fields = prev = f;
+
+      form = CDR (form);
+    }
+
+  sc->instances = NULL;
+  return class;
+}
+
+
+struct object *
 allocate_object_fields (struct object *stdobj, struct object *class)
 {
   struct class_field_decl *fd;
@@ -11025,65 +11116,36 @@ remove_block (struct block *blocks)
 
 
 struct object *
-create_condition (struct object *type, va_list valist)
+create_condition (struct object *type, struct object *args,
+		  struct environment *env, struct outcome *outcome)
 {
-  struct object *ret = alloc_object (), *n;
-  struct condition *c;
-  struct condition_field *f;
+  struct object *ret = alloc_object ();
+  struct standard_object *so;
 
-  ret->type = TYPE_CONDITION;
+  ret->type = TYPE_STANDARD_OBJECT;
 
-  c = malloc_and_check (sizeof (*c));
-  c->class_name = type->value_ptr.condition_class->name;
-  c->fields = NULL;
-  ret->value_ptr.condition = c;
+  so = malloc_and_check (sizeof (*so));
+  so->class = type;
+  increment_refcount (type);
+  so->fields = NULL;
+  ret->value_ptr.standard_object = so;
+  prepend_object_to_obj_list (ret, &type->value_ptr.standard_class->instances);
 
-  create_condition_fields (ret, type);
+  allocate_object_fields (ret, type);
 
-  f = ret->value_ptr.condition->fields;
-
-  while ((n = va_arg (valist, struct object *)))
-    {
-      f->value = n;
-      increment_refcount (n);
-      f = f->next;
-    }
-
-  return ret;
+  return fill_object_fields (ret, type, args, env, outcome);
 }
 
 
 struct object *
-create_condition_by_class (struct object *type, ...)
-{
-  struct object *ret;
-  va_list valist;
-
-  va_start (valist, type);
-
-  ret = create_condition (type, valist);
-
-  va_end (valist);
-
-  return ret;
-}
-
-
-struct object *
-create_condition_by_c_string (char *type, struct environment *env, ...)
+create_condition_by_c_string (char *type, struct object *args,
+			      struct environment *env, struct outcome *outcome)
 {
   struct object *sym = intern_symbol_by_char_vector (type, strlen (type), 1,
 						     EXTERNAL_VISIBILITY, 0,
-						     env->cl_package, 0), *ret;
-  va_list valist;
+						     env->cl_package, 0);
 
-  va_start (valist, env);
-
-  ret = create_condition (sym->value_ptr.symbol->typespec, valist);
-
-  va_end (valist);
-
-  return ret;
+  return create_condition (sym->value_ptr.symbol->typespec, args, env, outcome);
 }
 
 
@@ -11118,8 +11180,9 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
     *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 					 EXTERNAL_VISIBILITY, 1, pack, 0), *par,
     *rs;
-  struct condition_class *cc;
-  struct condition_field_decl *f, *prev;
+  struct object_list *l;
+  struct standard_class *cc;
+  struct class_field_decl *f, *prev;
 
   va_start (valist, is_standard);
 
@@ -11127,15 +11190,18 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   sym->value_ptr.symbol->is_standard_type = is_standard;
 
   condcl = alloc_object ();
-  condcl->type = TYPE_CONDITION_CLASS;
+  condcl->type = TYPE_STANDARD_CLASS;
 
   cc = malloc_and_check (sizeof (*cc));
-  condcl->value_ptr.condition_class = cc;
+  condcl->value_ptr.standard_class = cc;
 
   increment_refcount (sym);
   cc->name = sym;
-
+  cc->is_condition_class = 1;
   cc->parents = NULL;
+  cc->descendants = NULL;
+  cc->class_precedence_list = NULL;
+  cc->instances = NULL;
 
   while ((s = va_arg (valist, char *)))
     {
@@ -11152,7 +11218,15 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
       par = intern_symbol_by_char_vector (s, strlen (s), 1, INTERNAL_VISIBILITY,
 					  1, pack, 0);
 
-      f = create_condition_field_decl (par, env, NULL);
+      f = create_class_field_decl (condcl, par, env, NULL);
+
+      l = malloc_and_check (sizeof (*l));
+      l->obj = intern_symbol_by_char_vector (s, strlen (s), 1,
+					     EXTERNAL_VISIBILITY, 1,
+					     env->keyword_package, 1);
+      increment_refcount (l->obj);
+      l->next = NULL;
+      f->initargs = l;
 
       if (cc->fields)
 	prev = prev->next = f;
@@ -14753,7 +14827,7 @@ call_condition_reader (struct object *class_name, struct object *field,
 		       struct object *args, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct condition_field *f;
+  struct class_field *f;
 
   if (list_length (args) != 1)
     {
@@ -14761,20 +14835,23 @@ call_condition_reader (struct object *class_name, struct object *field,
       return NULL;
     }
 
-  if (CAR (args)->type != TYPE_CONDITION
-      || !is_subtype (CAR (args)->value_ptr.condition->class_name, class_name,
+  if (CAR (args)->type != TYPE_STANDARD_OBJECT
+      || !is_subtype (CAR (args)->value_ptr.standard_object->class, class_name,
 		      NULL, env, outcome))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  f = CAR (args)->value_ptr.condition->fields;
+  f = CAR (args)->value_ptr.standard_object->fields;
 
   while (f)
     {
-      if (f->name == field)
+      if (f->decl->name == field)
 	{
+	  if (!f->value)
+	    return &nil_object;
+
 	  increment_refcount (f->value);
 	  return f->value;
 	}
@@ -31349,10 +31426,7 @@ struct object *
 evaluate_defclass (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
-  struct object *name, *class, *cons;
-  struct standard_class *sc;
-  struct class_field_decl *f, *prev;
-  struct object_list *p;
+  struct object *name;
 
   if (list_length (list) < 3)
     {
@@ -31376,76 +31450,7 @@ evaluate_defclass (struct object *list, struct environment *env,
       return NULL;
     }
 
-  class = alloc_object ();
-  class->type = TYPE_STANDARD_CLASS;
-
-  sc = malloc_and_check (sizeof (*sc));
-  class->value_ptr.standard_class = sc;
-
-  increment_refcount (name);
-  sc->name = name;
-
-  name->value_ptr.symbol->is_type = 1;
-
-  delete_reference (name, name->value_ptr.symbol->typespec, 4);
-  name->value_ptr.symbol->typespec = class;
-  add_reference (name, class, 4);
-
-
-  sc->parents = NULL;
-  cons = CAR (CDR (list));
-
-  while (SYMBOL (cons) != &nil_object)
-    {
-      if (!IS_SYMBOL (CAR (cons)) || SYMBOL (CAR (cons)) == &nil_object)
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-
-      if (sc->parents)
-	p = p->next = malloc_and_check (sizeof (*p));
-      else
-	sc->parents = p = malloc_and_check (sizeof (*p));
-
-      p->obj = SYMBOL (CAR (cons));
-
-      cons = CDR (cons);
-    }
-
-  if (sc->parents)
-    {
-      p->next = NULL;
-    }
-  else
-    {
-      sc->parents = malloc_and_check (sizeof (*sc->parents));
-      sc->parents->obj = CREATE_BUILTIN_SYMBOL ("STANDARD-OBJECT");
-      sc->parents->next = NULL;
-    }
-
-  sc->descendants = NULL;
-  sc->class_precedence_list = NULL;
-  sc->fields = NULL;
-  list = CAR (CDR (CDR (list)));
-
-  while (SYMBOL (list) != &nil_object)
-    {
-      f = create_class_field_decl (class, CAR (list), env, outcome);
-
-      if (!f)
-	return NULL;
-
-      if (sc->fields)
-	prev = prev->next = f;
-      else
-	sc->fields = prev = f;
-
-      list = CDR (list);
-    }
-
-  sc->instances = NULL;
-  return class;
+  return define_class (name, CDR (list), 0, env, outcome);
 }
 
 
@@ -33108,21 +33113,27 @@ builtin_signal (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      cond = create_condition_by_c_string ("SIMPLE-CONDITION", env, CAR (list),
-					   CDR (list), (struct object *)NULL);
+      cond = create_condition_by_c_string ("SIMPLE-CONDITION", &nil_object, env,
+					   outcome);
+      cond->value_ptr.standard_object->fields->value = CAR (list);
+      increment_refcount (CAR (list));
+      cond->value_ptr.standard_object->fields->next->value = CDR (list);
+      increment_refcount (CDR (list));
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      if (SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
-	  != TYPE_CONDITION_CLASS)
+      if (!SYMBOL (CAR (list))->value_ptr.symbol->typespec
+	  || SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+	  != TYPE_STANDARD_CLASS
+	  || !SYMBOL (CAR (list))->value_ptr.symbol->typespec->
+	  value_ptr.standard_class->is_condition_class)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
-      cond =
-	create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
-				   (struct object *)NULL);
+      cond = create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
+			       CDR (list), env, outcome);
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
@@ -33161,22 +33172,27 @@ builtin_error (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      cond = create_condition_by_c_string ("SIMPLE-ERROR", env, CAR (list),
-					   CDR (list), (struct object *)NULL);
+      cond = create_condition_by_c_string ("SIMPLE-ERROR", &nil_object, env,
+					   outcome);
+      cond->value_ptr.standard_object->fields->value = CAR (list);
+      increment_refcount (CAR (list));
+      cond->value_ptr.standard_object->fields->next->value = CDR (list);
+      increment_refcount (CDR (list));
     }
   else if (IS_SYMBOL (CAR (list)))
     {
       if (!SYMBOL (CAR (list))->value_ptr.symbol->typespec
 	  || SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
-	  != TYPE_CONDITION_CLASS)
+	  != TYPE_STANDARD_CLASS
+	  || !SYMBOL (CAR (list))->value_ptr.symbol->typespec->
+	  value_ptr.standard_class->is_condition_class)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
-      cond =
-	create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
-				   (struct object *)NULL);
+      cond = create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
+			       CDR (list), env, outcome);
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
@@ -33210,10 +33226,7 @@ struct object *
 evaluate_define_condition (struct object *list, struct environment *env,
 			   struct outcome *outcome)
 {
-  struct object *condcl, *cons;
-  struct condition_class *cc;
-  struct condition_field_decl *f, *prev;
-  struct object_list *p;
+  struct object *condcl;
 
   if (list_length (list) < 3)
     {
@@ -33228,78 +33241,11 @@ evaluate_define_condition (struct object *list, struct environment *env,
       return NULL;
     }
 
-  condcl = alloc_object ();
-  condcl->type = TYPE_CONDITION_CLASS;
-
-  cc = malloc_and_check (sizeof (*cc));
-  condcl->value_ptr.condition_class = cc;
-
-  increment_refcount (SYMBOL (CAR (list)));
-  cc->name = SYMBOL (CAR (list));
-
-
-  cc->parents = NULL;
-  cons = CAR (CDR (list));
-
-  while (SYMBOL (cons) != &nil_object)
-    {
-      if (!IS_SYMBOL (CAR (cons))
-	  || !SYMBOL (CAR (cons))->value_ptr.symbol->is_type
-	  || !is_subtype_by_char_vector (SYMBOL (CAR (cons)), "CONDITION", env))
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-
-      if (cc->parents)
-	p = p->next = malloc_and_check (sizeof (*p));
-      else
-	cc->parents = p = malloc_and_check (sizeof (*p));
-
-      p->obj = SYMBOL (CAR (cons));
-
-      cons = CDR (cons);
-    }
-
-  if (cc->parents)
-    {
-      p->next = NULL;
-    }
-  else
-    {
-      cc->parents = malloc_and_check (sizeof (*cc->parents));
-      cc->parents->obj = CREATE_BUILTIN_SYMBOL ("CONDITION");
-      cc->parents->next = NULL;
-    }
-
-  cc->fields = NULL;
-  cons = CAR (CDR (CDR (list)));
-
-  while (SYMBOL (cons) != &nil_object)
-    {
-      f = create_condition_field_decl (CAR (cons), env, outcome);
-
-      if (!f)
-	return NULL;
-
-      if (cc->fields)
-	prev = prev->next = f;
-      else
-	cc->fields = prev = f;
-
-      cons = CDR (cons);
-    }
-
-  SYMBOL (CAR (list))->value_ptr.symbol->is_type = 1;
-
-  delete_reference (SYMBOL (CAR (list)),
-		    SYMBOL (CAR (list))->value_ptr.symbol->typespec, 4);
-  SYMBOL (CAR (list))->value_ptr.symbol->typespec = condcl;
-  add_reference (SYMBOL (CAR (list)), condcl, 4);
+  condcl = define_class (SYMBOL (CAR (list)), CDR (list), 1, env, outcome);
   decrement_refcount (condcl);
 
-  increment_refcount (CAR (list));
-  return CAR (list);
+  increment_refcount (SYMBOL (CAR (list)));
+  return SYMBOL (CAR (list));
 }
 
 
@@ -33307,9 +33253,12 @@ struct object *
 builtin_make_condition (struct object *list, struct environment *env,
 			struct outcome *outcome)
 {
-  if (list_length (list) != 1)
+  struct object *ret, *class;
+  struct standard_object *so;
+
+  if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      outcome->type = TOO_FEW_ARGUMENTS;
       return NULL;
     }
 
@@ -33320,8 +33269,27 @@ builtin_make_condition (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return create_condition_by_class (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
-				    (struct object *)NULL);
+  class = SYMBOL (CAR (list))->value_ptr.symbol->typespec;
+
+  if (!class->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (class, outcome))
+    {
+      return NULL;
+    }
+
+  ret = alloc_object ();
+  ret->type = TYPE_STANDARD_OBJECT;
+
+  so = malloc_and_check (sizeof (*so));
+  so->class = class;
+  increment_refcount (class);
+  so->fields = NULL;
+  ret->value_ptr.standard_object = so;
+  prepend_object_to_obj_list (ret, &class->value_ptr.standard_class->instances);
+
+  allocate_object_fields (ret, class);
+
+  return fill_object_fields (ret, class, CDR (list), env, outcome);
 }
 
 
