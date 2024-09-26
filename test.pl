@@ -1695,8 +1695,8 @@ make_test ("(function-lambda-expression #'fle)", "(LAMBDA (B &OPTIONAL C &REST D
 make_test ("(function-lambda-expression (let ((i 0)) (lambda (x) 0 1)))", "(LAMBDA (X) 0 1)\nT\nNIL");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
-make_test ("(make-condition 'new-math-error)", "#<CONDITION OF CLASS NEW-MATH-ERROR>");
-make_test ("(class-of (make-condition 'new-math-error))", "#<CONDITION-CLASS NEW-MATH-ERROR>");
+make_test ("(make-condition 'new-math-error)", "#<NEW-MATH-ERROR OBJECT ...>");
+make_test ("(class-of (make-condition 'new-math-error))", "#<STANDARD-CLASS NEW-MATH-ERROR>");
 make_test ("(class-name (class-of (make-condition 'new-math-error)))", "NEW-MATH-ERROR");
 make_test ("(type-of (make-condition 'new-math-error))", "NEW-MATH-ERROR");
 make_test ("(typep (make-condition 'new-math-error) 'new-math-error)", "T");
@@ -1707,6 +1707,7 @@ make_test ("(define-condition strange-condition nil nil)", "STRANGE-CONDITION");
 make_test ("(typep (make-condition 'strange-condition) 'condition)", "T");
 make_test ("(simple-condition-format-control (make-condition 'simple-condition))", "NIL");
 make_test ("(simple-condition-format-control (make-condition 'simple-error))", "NIL");
+make_test ("(simple-condition-format-control (make-condition 'simple-condition :format-control \"aaa\"))", "\"aaa\"");
 make_test ("(arithmetic-error-operation (make-condition 'arithmetic-error))", "NIL");
 make_test ("(define-compiler-macro foo (x) x)", "FOO");
 make_test ("(funcall (compiler-macro-function 'foo) '(foo 0) nil)", "0");
@@ -1766,7 +1767,7 @@ make_test ("(restart-case (invoke-restart 'rest1 0 1) (rest1 (x y)) (rest1 (x y)
 make_test ("(restart-bind ((rest1 (lambda (x) 20))) (restart-case (invoke-restart 'rest2 0 1) (rest2 (x y) (invoke-restart 'rest1 40)) (rest1 (x y) 30)))", "20");
 make_test ("(with-simple-restart (continue \"\") (values 1 2))", "1\n2");
 make_test ("(with-simple-restart (continue \"\") 1 2 (invoke-restart 'continue))", "NIL\nT");
-make_test ("(ignore-errors (error \"what\") (write 1))", "NIL\n#<CONDITION OF CLASS SIMPLE-ERROR>");
+make_test ("(ignore-errors (error \"what\") (write 1))", "NIL\n#<SIMPLE-ERROR OBJECT ...>");
 make_test ("(block test (unwind-protect 0 (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test 0) (write 'whatever)))", "WHATEVER\n0");
 make_test ("(block test (unwind-protect (return-from test (values 0 1)) (write 'whatever)))", "WHATEVER\n0\n1");
