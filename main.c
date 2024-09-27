@@ -33813,6 +33813,7 @@ builtin_al_dump_fields (struct object *list, struct environment *env,
   struct object *obj, *ret = &nil_object, *cons;
   struct structure_field *sf;
   struct class_field *of;
+  struct class_field_decl *cfd;
   struct condition_field *cf;
 
   if (list_length (list) != 1)
@@ -33877,6 +33878,23 @@ builtin_al_dump_fields (struct object *list, struct environment *env,
 	  ret = cons;
 
 	  cf = cf->next;
+	}
+    }
+  else if (obj->type == TYPE_STANDARD_CLASS)
+    {
+      cfd = obj->value_ptr.standard_class->fields;
+
+      while (cfd)
+	{
+	  cons = alloc_empty_cons_pair ();
+
+	  cons->value_ptr.cons_pair->car = cfd->name;
+	  add_reference (cons, cfd->name, 0);
+
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+
+	  cfd = cfd->next;
 	}
     }
   else
