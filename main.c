@@ -1953,6 +1953,9 @@ void print_method_description (struct object *meth, struct environment *env);
 void print_bindings_in_reverse (struct binding *bins, int num,
 				struct environment *env, struct object *str);
 
+void print_fields (struct object *stdobj, struct environment *env,
+		   struct object *str);
+
 void print_available_restarts (struct environment *env, struct object *str);
 void print_stepping_help (void);
 struct object *enter_debugger (struct object *cond, struct environment *env,
@@ -11569,6 +11572,41 @@ print_bindings_in_reverse (struct binding *bins, int num,
 
 
 void
+print_fields (struct object *stdobj, struct environment *env,
+	      struct object *str)
+{
+  struct class_field *f = stdobj->value_ptr.standard_object->fields;
+
+  if (!f)
+    {
+      printf ("NIL");
+      return;
+    }
+
+  printf ("(");
+
+  while (f)
+    {
+      print_object (f->decl->name, env, str->value_ptr.stream);
+
+      if (f->value || (!f->name && f->decl->value))
+	{
+	  printf ("=");
+	  print_object (f->name ? f->value : f->decl->value, env,
+			str->value_ptr.stream);
+	}
+
+      if (f->next)
+	printf (" ");
+
+      f = f->next;
+    }
+
+  printf (")");
+}
+
+
+void
 print_available_restarts (struct environment *env, struct object *str)
 {
   struct restart_binding *r = env->restarts;
@@ -11644,9 +11682,11 @@ enter_debugger (struct object *cond, struct environment *env,
     }
   else if (cond)
     {
-      printf ("\nentered debugger (with condition ");
+      printf ("\nentered debugger with condition ");
       print_object (cond, env, env->c_stdout->value_ptr.stream);
-      printf (")\n\n");
+      printf ("\nof fields ");
+      print_fields (cond, env, env->c_stdout);
+      printf ("\n(condition object bound to CL-USER:*AL-DEBUGGING-CONDITION*)\n\n");
     }
   else
     printf ("\nentered debugger\n\n");
