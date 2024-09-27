@@ -87,6 +87,15 @@ package.  There are also some non-standard extensions of standard functions.
   argument; if provided, writing operations append to the string, also
   respecting the fill pointer if present
 
+- AL-BREAK is a condition class that represents encountering a breakpoint
+
+- the *AL-ENABLE-BREAKPOINTS* parameter lets you enable or disable breakpoints
+  globally
+
+- when you enter the debugger due to a condition, *AL-DEBUGGING-CONDITION* is
+  bound dinamically to that condition object; if you entered the debugger due to
+  stepping, this variable is NIL
+
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
   established.  Each binding is a list containing the symbol, the value, the
@@ -109,9 +118,10 @@ package.  There are also some non-standard extensions of standard functions.
   In that case, it returns the body of that method as a list
 
 - the function AL-DUMP-FIELDS takes either a structure object, a standard object
-  or a condition object and dumps the slots of that object as a list.  Each slot
-  is represented as a symbol with its name, if it is unbound, or as a name-value
-  pair, if it is bound
+  or a standard class and dumps the slots of that object or class as a list.
+  Each slot of an object is represented as a symbol with its name, if it is
+  unbound, or as a name-value pair, if it is bound; for classes, only the name
+  is present
 
 - the function AL-CLASS-PRECEDENCE-LIST takes a standard class object (not for a
   structure class nor a condition class) and returns the class precedence list
