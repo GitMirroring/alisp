@@ -11119,9 +11119,16 @@ struct object *
 create_condition (struct object *type, struct object *args,
 		  struct environment *env, struct outcome *outcome)
 {
-  struct object *ret = alloc_object ();
+  struct object *ret;
   struct standard_object *so;
 
+  if (!type->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (type, outcome))
+    {
+      return NULL;
+    }
+
+  ret = alloc_object ();
   ret->type = TYPE_STANDARD_OBJECT;
 
   so = malloc_and_check (sizeof (*so));
@@ -33134,6 +33141,9 @@ builtin_signal (struct object *list, struct environment *env,
 
       cond = create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
 			       CDR (list), env, outcome);
+
+      if (!cond)
+	return NULL;
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
@@ -33193,6 +33203,9 @@ builtin_error (struct object *list, struct environment *env,
 
       cond = create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
 			       CDR (list), env, outcome);
+
+      if (!cond)
+	return NULL;
     }
   else if (CAR (list)->type == TYPE_CONDITION)
     {
@@ -33532,7 +33545,9 @@ builtin_invoke_debugger (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_CONDITION)
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT
+      && !CAR (list)->value_ptr.standard_object->class->
+      value_ptr.standard_class->is_condition_class)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
