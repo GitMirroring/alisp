@@ -87,14 +87,18 @@ package.  There are also some non-standard extensions of standard functions.
   argument; if provided, writing operations append to the string, also
   respecting the fill pointer if present
 
+- the variable *AL-COMPILE-WHEN-DEFINING* is described in "Compilation"
+
 - AL-BREAK is a condition class that represents encountering a breakpoint
 
 - the *AL-ENABLE-BREAKPOINTS* parameter lets you enable or disable breakpoints
-  globally
+  globally.  It defaults to T
 
 - when you enter the debugger due to a condition, *AL-DEBUGGING-CONDITION* is
   bound dinamically to that condition object; if you entered the debugger due to
   stepping, this variable is NIL
+
+- the function AL-PRINT-RESTARTS prints the available restarts and returns T
 
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
@@ -299,7 +303,7 @@ __Compilation__
 If the variable CL-USER:*AL-COMPILE-WHEN-DEFINING* is non-nil, then DEFUN and
 DEFMACRO will compile the body of the function when they are evaluated.  You may
 want to keep it disabled for debugging, since stepping through a macro-expanded
-function is harder.
+function is harder.  The variable defaults to NIL.
 
 Of course, you can inspect the body of a function, whether compiled or not, with
 FUNCTION-LAMBDA-EXPRESSION.
