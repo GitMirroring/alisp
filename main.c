@@ -1956,7 +1956,8 @@ void print_bindings_in_reverse (struct binding *bins, int num,
 void print_fields (struct object *stdobj, struct environment *env,
 		   struct object *str);
 
-void print_available_restarts (struct environment *env, struct object *str);
+void print_available_restarts (struct environment *env, int show_help,
+			       struct object *str);
 void print_stepping_help (void);
 struct object *enter_debugger (struct object *cond, struct environment *env,
 			       struct outcome *outcome);
@@ -2995,6 +2996,9 @@ struct object *evaluate_al_loopy_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_string_input_stream_string
+(struct object *list, struct environment *env, struct outcome *outcome);
+
+struct object *builtin_al_print_restarts
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_dump_bindings
@@ -4301,6 +4305,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-STRING-INPUT-STREAM-STRING", env,
 		    builtin_al_string_input_stream_string, TYPE_FUNCTION, NULL,
 		    0);
+
+  add_builtin_form ("AL-PRINT-RESTARTS", env, builtin_al_print_restarts,
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-DUMP-BINDINGS", env, builtin_al_dump_bindings,
 		    TYPE_FUNCTION, NULL, 0);
@@ -11607,14 +11614,17 @@ print_fields (struct object *stdobj, struct environment *env,
 
 
 void
-print_available_restarts (struct environment *env, struct object *str)
+print_available_restarts (struct environment *env, int show_help,
+			  struct object *str)
 {
   struct restart_binding *r = env->restarts;
   int ind = 0;
 
-  printf ("available restarts (from most recently established):\n"
-	  "(select by number)\n"
-	  "(type h or ? for help about stepping)\n");
+  printf ("available restarts (from most recently established):\n");
+
+  if (show_help)
+    printf ("(select by number)\n"
+	    "(type h or ? for help about stepping)\n");
 
   while (r)
     {
@@ -11693,7 +11703,7 @@ enter_debugger (struct object *cond, struct environment *env,
 
   if (!env->stepping_flags)
     {
-      print_available_restarts (env, env->c_stdout);
+      print_available_restarts (env, 1, env->c_stdout);
       printf ("\n");
     }
 
@@ -33718,6 +33728,23 @@ builtin_al_string_input_stream_string (struct object *list,
 
   increment_refcount (CAR (list)->value_ptr.stream->string);
   return CAR (list)->value_ptr.stream->string;
+}
+
+
+struct object *
+builtin_al_print_restarts (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  print_available_restarts (env, 0, env->c_stdout);
+  printf ("\n");
+
+  return &t_object;
 }
 
 
