@@ -677,6 +677,17 @@ profiling_record
 
 
 struct
+call_frame
+{
+  struct object *funcobj;
+  struct object *arglist;
+  struct binding *args;
+
+  struct call_frame *next;
+};
+
+
+struct
 read_label
 {
   int label;
@@ -725,6 +736,8 @@ environment
 
   int is_profiling;
   struct profiling_record *profiling_data;
+
+  struct call_frame *call_stack;
 
 
   struct read_label *read_labels;
@@ -1965,6 +1978,11 @@ struct object *enter_debugger (struct object *cond, struct environment *env,
 void add_profiling_data (struct profiling_record **data, struct object *name,
 			 int time, int evaltime);
 
+struct call_frame *add_call_frame (struct object *funcobj, struct object *args,
+				   struct environment *env, int argsnum,
+				   struct call_frame *stack);
+struct call_frame *remove_call_frame (struct call_frame *stack);
+
 struct read_label *add_read_label (int label, struct object *value,
 				   struct read_label *labels);
 void clear_read_labels (struct read_label **label);
@@ -2088,7 +2106,7 @@ int parse_argument_list (struct object *arglist, struct parameter *par,
 			 int found_amp_key, int allow_other_keys,
 			 struct binding *lex_vars, int create_new_lex_env,
 			 struct environment *env, struct outcome *outcome,
-			 struct binding **bins, int *binsnum);
+			 struct binding **bins, int *argsnum, int *closnum);
 int destructure_tree (struct object *template, struct object *vals,
 		      struct binding **bins, int *binnum,
 		      struct outcome *outcome);
@@ -3021,6 +3039,9 @@ struct object *builtin_al_stop_profiling
 struct object *builtin_al_clear_profiling
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_report_profiling
+(struct object *list, struct environment *env, struct outcome *outcome);
+
+struct object *builtin_al_print_backtrace
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_print_no_warranty
@@ -4329,6 +4350,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-CLEAR-PROFILING", env, builtin_al_clear_profiling,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-REPORT-PROFILING", env, builtin_al_report_profiling,
+		    TYPE_FUNCTION, NULL, 0);
+
+  add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
 		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
@@ -11944,6 +11968,91 @@ add_profiling_data (struct profiling_record **data, struct object *name,
 }
 
 
+struct call_frame *
+add_call_frame (struct object *funcobj, struct object *args,
+		struct environment *env, int argsnum, struct call_frame *stack)
+{
+  struct call_frame *ret = malloc_and_check (sizeof (*ret));
+  struct binding *b, *bin;
+
+  increment_refcount (funcobj);
+  ret->funcobj = funcobj;
+  ret->next = stack;
+
+  if (args)
+    {
+      increment_refcount (args);
+      ret->arglist = args;
+    }
+  else
+    {
+      b = env->vars;
+      ret->arglist = NULL;
+      ret->args = NULL;
+
+      for (; argsnum; argsnum--)
+	{
+	  while (!b->sym)
+	    {
+	      b = b->closure_bin;
+	    }
+
+	  bin = malloc_and_check (sizeof (*bin));
+	  bin->type = LEXICAL_BINDING;
+	  bin->refcount = 0;
+	  bin->sym = NULL;
+	  bin->obj = NULL;
+	  bin->closure_bin = b;
+	  bin->next = ret->args;
+	  ret->args = bin;
+
+	  b->refcount++;
+
+	  b = b->next;
+	}
+    }
+
+  return ret;
+}
+
+
+struct call_frame *
+remove_call_frame (struct call_frame *stack)
+{
+  struct call_frame *ret = stack->next;
+  struct binding *b, *n;
+
+  decrement_refcount (stack->funcobj);
+
+  if (stack->arglist)
+    decrement_refcount (stack->arglist);
+  else
+    {
+      b = stack->args;
+
+      while (b)
+	{
+	  b->closure_bin->refcount--;
+
+	  if (!b->closure_bin->refcount)
+	    {
+	      decrement_refcount (b->closure_bin->sym);
+	      decrement_refcount (b->closure_bin->obj);
+	      free (b->closure_bin);
+	    }
+
+	  n = b->next;
+	  free (b);
+	  b = n;
+	}
+    }
+
+  free (stack);
+
+  return ret;
+}
+
+
 struct read_label *
 add_read_label (int label, struct object *value, struct read_label *labels)
 {
@@ -13874,15 +13983,15 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 		     int found_amp_key, int allow_other_keys,
 		     struct binding *lex_vars, int create_new_lex_env,
 		     struct environment *env, struct outcome *outcome,
-		     struct binding **bins, int *binsnum)
+		     struct binding **bins, int *argsnum, int *closnum)
 {
   struct parameter *findk, *opts = NULL;
   struct object *val, *args = NULL, *as, *key_allow_other_k = NULL;
   struct binding *subbins, *lastbin = NULL;
-  int rest_found = 0, subargs, found_unknown_key = 0, closnum,
+  int rest_found = 0, subargs, found_unknown_key = 0, binsnum, subclos,
     prev_lex_bin_num = env->lex_env_vars_boundary;
 
-  *bins = NULL, *binsnum = 0;
+  *bins = NULL, *argsnum = 0;
 
 
   if (par && par->type == WHOLE_PARAM)
@@ -13890,7 +13999,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       increment_refcount (arglist);
       *bins = bind_variable (par->name, arglist, 0, *bins);
 
-      (*binsnum)++;
+      (*argsnum)++;
 
       par = par->next;
     }
@@ -13913,13 +14022,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 				    eval_args, 0, is_typespec,
 				    par->sub_found_amp_key,
 				    par->sub_allow_other_keys, NULL, 0, env,
-				    outcome, &subbins, &subargs))
+				    outcome, &subbins, &subargs, &subclos))
 	    {
-	      remove_bindings (*bins, *binsnum, 0);
+	      remove_bindings (*bins, *argsnum, 0);
 	      return 0;
 	    }
 
-	  *binsnum += subargs;
+	  *argsnum += subargs;
 	}
       else
 	{
@@ -13930,7 +14039,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	      if (!val)
 		{
-		  remove_bindings (*bins, *binsnum, 0);
+		  remove_bindings (*bins, *argsnum, 0);
 		  return 0;
 		}
 	    }
@@ -13942,13 +14051,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  *bins = bind_variable (par->name, val, 0, *bins);
 
-	  (*binsnum)++;
+	  (*argsnum)++;
 
 	  if (par->type == OPTIONAL_PARAM && par->supplied_p_param)
 	    {
 	      *bins = bind_variable (par->supplied_p_param, &t_object, 0, *bins);
 
-	      (*binsnum)++;
+	      (*argsnum)++;
 	    }
 	}
 
@@ -13960,7 +14069,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (par && par->type == REQUIRED_PARAM)
     {
       outcome->type = TOO_FEW_ARGUMENTS;
-      remove_bindings (*bins, *binsnum, 0);
+      remove_bindings (*bins, *argsnum, 0);
       return 0;
     }
 
@@ -13968,7 +14077,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       && !found_amp_key && (!par || par->type != REST_PARAM))
     {
       outcome->type = TOO_MANY_ARGUMENTS;
-      remove_bindings (*bins, *binsnum, 0);
+      remove_bindings (*bins, *argsnum, 0);
       return 0;
     }
 
@@ -13987,7 +14096,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!args)
 	    {
-	      remove_bindings (*bins, *binsnum, 0);
+	      remove_bindings (*bins, *argsnum, 0);
 	      return 0;
 	    }
 	}
@@ -14004,7 +14113,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	{
 	  if (!IS_LIST (arglist))
 	    {
-	      remove_bindings (*bins, *binsnum, 0);
+	      remove_bindings (*bins, *argsnum, 0);
 	      outcome->type = MISMATCH_IN_DESTRUCTURING_CALL;
 	      return 0;
 	    }
@@ -14012,19 +14121,19 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	  if (!parse_argument_list (arglist, par->sub_lambda_list, eval_args, 0,
 				    is_typespec, par->sub_found_amp_key,
 				    par->sub_allow_other_keys, NULL, 0, env,
-				    outcome, &subbins, &subargs))
+				    outcome, &subbins, &subargs, &subclos))
 	    {
-	      remove_bindings (*bins, *binsnum, 0);
+	      remove_bindings (*bins, *argsnum, 0);
 	      return 0;
 	    }
 
-	  *binsnum += subargs;
+	  *argsnum += subargs;
 	}
       else
 	{
 	  *bins = bind_variable (par->name, args, 0, *bins);
 
-	  (*binsnum)++;
+	  (*argsnum)++;
 
 	  par = par->next;
 
@@ -14061,7 +14170,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    {
 	      if (SYMBOL (CDR (as)) == &nil_object)
 		{
-		  remove_bindings (*bins, *binsnum, 0);
+		  remove_bindings (*bins, *argsnum, 0);
 		  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 		  return 0;
 		}
@@ -14082,7 +14191,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (SYMBOL (as) == &nil_object)
 	    {
-	      remove_bindings (*bins, *binsnum, 0);
+	      remove_bindings (*bins, *argsnum, 0);
 	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
 	      return 0;
 	    }
@@ -14093,7 +14202,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	      *bins = bind_variable (findk->name, CAR (as), 0, *bins);
 	      findk->key_passed = 1;
-	      (*binsnum)++;
+	      (*argsnum)++;
 
 	      if (findk->key == env->key_allow_other_keys_sym
 		  && !key_allow_other_k)
@@ -14112,21 +14221,21 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   if (found_unknown_key && !allow_other_keys
       && (!key_allow_other_k || SYMBOL (key_allow_other_k) == &nil_object))
     {
-      remove_bindings (*bins, *binsnum, 0);
+      remove_bindings (*bins, *argsnum, 0);
       outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
       return 0;
     }
 
 
-  restore_lexical_environment (env, lex_vars, NULL, &closnum);
-  *binsnum += closnum;
+  restore_lexical_environment (env, lex_vars, NULL, closnum);
+  binsnum = *argsnum + *closnum;
 
   env->vars = chain_bindings (*bins, env->vars, 1, NULL, &lastbin);
 
   if (create_new_lex_env)
-    env->lex_env_vars_boundary = *binsnum;
+    env->lex_env_vars_boundary = binsnum;
   else
-    env->lex_env_vars_boundary += *binsnum;
+    env->lex_env_vars_boundary += binsnum;
 
 
   while (opts && opts->type == OPTIONAL_PARAM)
@@ -14138,13 +14247,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!val)
 	    {
-	      env->vars = remove_bindings (env->vars, *binsnum, 1);
+	      env->vars = remove_bindings (env->vars, *argsnum, 1);
 	      env->lex_env_vars_boundary = prev_lex_bin_num;
 	      return 0;
 	    }
 
 	  env->vars = bind_variable (opts->name, val, 1, env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
       else
 	{
@@ -14153,14 +14262,14 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  env->vars = bind_variable (opts->name, is_typespec ? env->star_sym
 				     : &nil_object, 1, env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
 
       if (opts->supplied_p_param)
 	{
 	  env->vars = bind_variable (opts->supplied_p_param, &nil_object, 1,
 				     env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
 
       opts = opts->next;
@@ -14177,7 +14286,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	      if (!val)
 		{
-		  env->vars = remove_bindings (env->vars, *binsnum, 1);
+		  env->vars = remove_bindings (env->vars, *argsnum, 1);
 		  env->lex_env_vars_boundary = prev_lex_bin_num;
 		  return 0;
 		}
@@ -14186,20 +14295,20 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    val = &nil_object;
 
 	  env->vars = bind_variable (par->name, val, 1, env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 
 	  if (par->supplied_p_param)
 	    {
 	      env->vars = bind_variable (par->supplied_p_param, &nil_object, 1,
 					 env->vars);
-	      env->lex_env_vars_boundary++, (*binsnum)++;
+	      env->lex_env_vars_boundary++, (*argsnum)++;
 	    }
 	}
       else if (par->supplied_p_param)
 	{
 	  env->vars = bind_variable (par->supplied_p_param, &t_object, 1,
 				     env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
 
       par = par->next;
@@ -14214,18 +14323,18 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!val)
 	    {
-	      env->vars = remove_bindings (env->vars, *binsnum, 1);
+	      env->vars = remove_bindings (env->vars, *argsnum, 1);
 	      env->lex_env_vars_boundary = prev_lex_bin_num;
 	      return 0;
 	    }
 
 	  env->vars = bind_variable (par->name, val, 1, env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
       else
 	{
 	  env->vars = bind_variable (par->name, &nil_object, 1, env->vars);
-	  env->lex_env_vars_boundary++, (*binsnum)++;
+	  env->lex_env_vars_boundary++, (*argsnum)++;
 	}
 
       par = par->next;
@@ -14394,7 +14503,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct block_frame *f;
   struct go_tag_frame *prevf;
   struct object *ret, *ret2, *args = NULL, *body;
-  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary,
+  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
     && !(env->stepping_flags & STEPPING_OVER_FORM), onlylex = env->only_lexical;
   unsigned isprof = 0, time, evaltime = 0;
@@ -14438,6 +14547,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
+      env->call_stack = add_call_frame (func, args, env, -1, env->call_stack);
+
       if (env->is_profiling && func->value_ptr.function->name)
 	{
 	  isprof = 1;
@@ -14453,6 +14564,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 			      SYMBOL (func->value_ptr.function->name), time,
 			      evaltime);
 	}
+
+      env->call_stack = remove_call_frame (env->call_stack);
 
       if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 		  || (env->stepping_flags
@@ -14573,7 +14686,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 			   func->value_ptr.function->flags & FOUND_AMP_KEY,
 			   func->value_ptr.function->allow_other_keys,
 			   func->value_ptr.function->lex_vars,
-			   create_new_lex_env, env, outcome, &bins, &argsnum))
+			   create_new_lex_env, env, outcome, &bins, &argsnum,
+			   &closnum))
     {
       if (func->value_ptr.function->flags & TRACED_FUNCTION
 	  || (env->stepping_flags &&
@@ -14587,14 +14701,17 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
+      env->call_stack = add_call_frame (func, NULL, env, argsnum,
+					env->call_stack);
+
       if (env->is_profiling && func->value_ptr.function->name)
 	{
 	  isprof = 1;
 	  time = clock ();
 	}
 
-      if (!parse_declarations (func->value_ptr.function->body, env, argsnum, 1,
-			       outcome, &body))
+      if (!parse_declarations (func->value_ptr.function->body, env,
+			       argsnum+closnum, 1, outcome, &body))
 	{
 	  ret = NULL;
 	}
@@ -14650,6 +14767,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  time = clock () - time;
 	}
 
+      env->call_stack = remove_call_frame (env->call_stack);
+
       if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 		  || (env->stepping_flags
 		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
@@ -14661,7 +14780,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
-      env->vars = remove_bindings (env->vars, argsnum, 1);
+      env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
       env->lex_env_vars_boundary = prev_lex_bin_num;
     }
   else
@@ -14929,7 +15048,7 @@ call_method (struct method_list *methlist, struct object *arglist,
     *body;
   struct method_list *methl;
   struct class_field *f;
-  int argsnum, prev_lex_bin_num = env->lex_env_vars_boundary;
+  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
 
   if (!methlist->meth->value_ptr.method->body)
     {
@@ -15162,7 +15281,7 @@ call_method (struct method_list *methlist, struct object *arglist,
   if (parse_argument_list (arglist, methlist->meth->value_ptr.method->lambda_list,
 			   0, 0, 0, methlist->meth->value_ptr.method->found_amp_key,
 			   func->value_ptr.function->allow_other_keys, NULL, 1,
-			   env, outcome, &bins, &argsnum))
+			   env, outcome, &bins, &argsnum, &closnum))
     {
       env->method_args = arglist;
       methl = env->method_list;
@@ -15183,7 +15302,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	}
 
       if (!parse_declarations (methlist->meth->value_ptr.method->body, env,
-			       argsnum, 1, outcome, &body))
+			       argsnum+closnum, 1, outcome, &body))
 	{
 	  ret = NULL;
 	}
@@ -15208,7 +15327,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 
       undo_special_declarations (methlist->meth->value_ptr.method->body, env);
 
-      env->vars = remove_bindings (env->vars, argsnum, 1);
+      env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
       env->lex_env_vars_boundary = prev_lex_bin_num;
 
       env->method_args = NULL;
@@ -34089,6 +34208,58 @@ builtin_al_report_profiling (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_al_print_backtrace (struct object *list, struct environment *env,
+			    struct outcome *outcome)
+{
+  int i = 0;
+  struct call_frame *f = env->call_stack;
+  struct binding *b;
+
+  while (f)
+    {
+      printf ("%d: ", i);
+      print_function_name (f->funcobj, env);
+      printf (" ");
+
+      if (f->arglist)
+	print_object (f->arglist, env, env->c_stdout->value_ptr.stream);
+      else
+	{
+	  b = f->args;
+
+	  if (!b)
+	    printf ("NIL");
+	  else
+	    printf ("(");
+
+	  while (b)
+	    {
+	      print_object (b->closure_bin->sym, env,
+			    env->c_stdout->value_ptr.stream);
+	      printf ("=");
+	      print_object (b->closure_bin->obj, env,
+			    env->c_stdout->value_ptr.stream);
+
+	      if (b->next)
+		printf (" ");
+	      else
+		printf (")");
+
+	      b = b->next;
+	    }
+	}
+
+      printf ("\n");
+
+      i++;
+      f = f->next;
+    }
+
+  return &t_object;
 }
 
 
