@@ -33501,8 +33501,14 @@ builtin_trace (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if (!IS_SYMBOL (CAR (list))
-	  || !(fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0)))
+      if ((!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
+					&& list_length (CAR (list)) == 2
+					&& SYMBOL (CAR (CAR (list))) == env->setf_sym
+					&& IS_SYMBOL (CAR (CDR (CAR (list))))))
+	  || !(fun = get_function (CAR (list)->type == TYPE_CONS_PAIR
+				   ? SYMBOL (CAR (CDR (CAR (list))))
+				   : SYMBOL (CAR (list)), env, 1,
+				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -33547,8 +33553,14 @@ builtin_untrace (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if (!IS_SYMBOL (CAR (list))
-	  || !(fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0)))
+      if ((!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
+					&& list_length (CAR (list)) == 2
+					&& SYMBOL (CAR (CAR (list))) == env->setf_sym
+					&& IS_SYMBOL (CAR (CDR (CAR (list))))))
+	  || !(fun = get_function (CAR (list)->type == TYPE_CONS_PAIR
+				   ? SYMBOL (CAR (CDR (CAR (list))))
+				   : SYMBOL (CAR (list)), env, 1,
+				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
