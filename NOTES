@@ -100,6 +100,9 @@ package.  There are also some non-standard extensions of standard functions.
 
 - the function AL-PRINT-RESTARTS prints the available restarts and returns T
 
+- the function AL-PRINT-BACKTRACE prints the current backtrace of all called
+  functions (including macros) and their arguments.  It returns T
+
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
   established.  Each binding is a list containing the symbol, the value, the
