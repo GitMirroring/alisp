@@ -15068,8 +15068,13 @@ call_method (struct method_list *methlist, struct object *arglist,
 	      env->c_stdout->value_ptr.stream->dirty_line = 0;
 	    }
 
+	  env->call_stack = add_call_frame (methlist->meth, arglist, env, -1,
+					    env->call_stack);
+
 	  ret = methlist->meth->value_ptr.method->builtin_method (arglist, env,
 								  outcome);
+
+	  env->call_stack = remove_call_frame (env->call_stack);
 
 	  if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 		      || (env->stepping_flags
@@ -15301,6 +15306,9 @@ call_method (struct method_list *methlist, struct object *arglist,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
+      env->call_stack = add_call_frame (methlist->meth, NULL, env, argsnum,
+					env->call_stack);
+
       if (!parse_declarations (methlist->meth->value_ptr.method->body, env,
 			       argsnum+closnum, 1, outcome, &body))
 	{
@@ -15326,6 +15334,8 @@ call_method (struct method_list *methlist, struct object *arglist,
 	}
 
       undo_special_declarations (methlist->meth->value_ptr.method->body, env);
+
+      env->call_stack = remove_call_frame (env->call_stack);
 
       env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
       env->lex_env_vars_boundary = prev_lex_bin_num;
@@ -34222,8 +34232,20 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
   while (f)
     {
       printf ("%d: ", i);
-      print_function_name (f->funcobj, env);
-      printf (" ");
+
+      if (f->funcobj->type == TYPE_FUNCTION || f->funcobj->type == TYPE_MACRO)
+	{
+	  print_function_name (f->funcobj, env);
+	  printf (" ");
+	}
+      else
+	{
+	  printf ("method ");
+	  print_method_description (f->funcobj, env);
+	  printf (" of ");
+	  print_function_name (f->funcobj->value_ptr.method->generic_func, env);
+	  printf (" ");
+	}
 
       if (f->arglist)
 	print_object (f->arglist, env, env->c_stdout->value_ptr.stream);
@@ -34254,6 +34276,9 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
 	}
 
       printf ("\n");
+
+      if (f->next)
+	printf ("\n");
 
       i++;
       f = f->next;
