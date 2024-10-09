@@ -11708,26 +11708,21 @@ enter_debugger (struct object *cond, struct environment *env,
 
   fresh_line (env->c_stdout->value_ptr.stream);
 
-  if (env->stepping_flags)
-    {
-      printf ("\n");
-      print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
-      printf ("\n");
-    }
-  else if (cond)
+  if (cond)
     {
       printf ("\nentered debugger with condition ");
       print_object (cond, env, env->c_stdout->value_ptr.stream);
       printf ("\nof fields ");
       print_fields (cond, env, env->c_stdout);
       printf ("\n(condition object bound to CL-USER:*AL-DEBUGGING-CONDITION*)\n\n");
-    }
-  else
-    printf ("\nentered debugger\n\n");
 
-  if (!env->stepping_flags)
-    {
       print_available_restarts (env, 1, env->c_stdout);
+      printf ("\n");
+    }
+  else if (env->stepping_flags)
+    {
+      printf ("\n");
+      print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
       printf ("\n");
     }
 
