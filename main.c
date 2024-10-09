@@ -11739,6 +11739,7 @@ enter_debugger (struct object *cond, struct environment *env,
 
   env->vars = bind_variable (env->al_debugging_condition_sym,
 			     cond ? cond : &nil_object, 1, env->vars);
+  env->lex_env_vars_boundary++;
 
   while (!end_repl)
     {
@@ -11763,6 +11764,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  free (wholel);
 		  decrement_refcount (obj);
 		  env->vars = remove_bindings (env->vars, 1, 1);
+		  env->lex_env_vars_boundary--;
 		  return NULL;
 		}
 	      else if (restind == restnum-1)
@@ -11773,6 +11775,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  free (wholel);
 		  decrement_refcount (obj);
 		  env->vars = remove_bindings (env->vars, 1, 1);
+		  env->lex_env_vars_boundary--;
 		  return NULL;
 		}
 	      else
@@ -11831,6 +11834,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  free (wholel);
 		  decrement_refcount (obj);
 		  env->vars = remove_bindings (env->vars, 1, 1);
+		  env->lex_env_vars_boundary--;
 		  return &nil_object;
 		}
 	    }
@@ -11844,6 +11848,7 @@ enter_debugger (struct object *cond, struct environment *env,
 	    {
 	      env->debugging_depth--;
 	      env->vars = remove_bindings (env->vars, 1, 1);
+	      env->lex_env_vars_boundary--;
 	      return NULL;
 	    }
 
@@ -11882,6 +11887,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		  decrement_refcount (result);
 		  decrement_refcount (obj);
 		  env->vars = remove_bindings (env->vars, 1, 1);
+		  env->lex_env_vars_boundary--;
 		  return NULL;
 		}
 	      else if (outcome->type != ABORT_ONE_LEVEL)
@@ -11934,6 +11940,7 @@ enter_debugger (struct object *cond, struct environment *env,
 
   env->debugging_depth--;
   env->vars = remove_bindings (env->vars, 1, 1);
+  env->lex_env_vars_boundary--;
 
   return &t_object;
 }
