@@ -2119,8 +2119,6 @@
 
 (defun pathname-device (fn &key case))
 
-(defun pathname-type (fn &key case))
-
 (defun pathname-version (fn &key case))
 
 
@@ -3086,11 +3084,11 @@
 	  pathnamep streamp realp numberp check-type assert macroexpand equal
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
 	  merge logical-pathname translate-logical-pathname pathname-host
-	  pathname-device pathname-type pathname-version namestring
-	  file-namestring directory-namestring host-namestring enough-namestring
-	  merge-pathnames file-author file-write-date user-homedir-pathname
-	  with-open-file terpri write-line write-sequence prin1 princ print
-	  write-to-string prin1-to-string princ-to-string with-input-from-string
+	  pathname-device pathname-version namestring file-namestring
+	  directory-namestring host-namestring enough-namestring merge-pathnames
+	  file-author file-write-date user-homedir-pathname with-open-file
+	  terpri write-line write-sequence prin1 princ print write-to-string
+	  prin1-to-string princ-to-string with-input-from-string
 	  with-output-to-string pprint do-all-symbols find-all-symbols
 	  with-slots with-accessors loop format encode-universal-time
 	  with-compilation-unit *readtable* with-standard-io-syntax handler-case

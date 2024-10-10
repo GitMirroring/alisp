@@ -2402,6 +2402,8 @@ struct object *builtin_pathname_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_pathname_type
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_wild_pathname_p
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_truename
@@ -3647,6 +3649,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PATHNAME-DIRECTORY", env, builtin_pathname_directory,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("PATHNAME-TYPE", env, builtin_pathname_type, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("WILD-PATHNAME-P", env, builtin_wild_pathname_p,
 		    TYPE_FUNCTION, NULL, 0);
@@ -19836,8 +19840,8 @@ struct object *
 builtin_make_pathname (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *directory = NULL, *name = NULL, *defaults = NULL, *ret,
-    *allow_other_keys = NULL, *value, *cons;
+  struct object *directory = NULL, *name = NULL, *type = NULL, *defaults = NULL,
+    *ret, *allow_other_keys = NULL, *value, *cons;
   int found_unknown_key = 0, size = 0, i, s;
   enum filename_type dir_type = REGULAR_FILENAME, name_type = REGULAR_FILENAME;
 
@@ -19845,7 +19849,6 @@ builtin_make_pathname (struct object *list, struct environment *env,
     {
       if (symbol_equals (CAR (list), ":HOST", env)
 	  || symbol_equals (CAR (list), ":DEVICE", env)
-	  || symbol_equals (CAR (list), ":TYPE", env)
 	  || symbol_equals (CAR (list), ":VERSION", env)
 	  || symbol_equals (CAR (list), ":CASE", env))
 	{
@@ -19883,6 +19886,21 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  if (!name)
 	    {
 	      name = CAR (CDR (list));
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":TYPE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!type)
+	    {
+	      type = CAR (CDR (list));
 	    }
 
 	  list = CDR (list);
@@ -20067,24 +20085,9 @@ builtin_make_pathname (struct object *list, struct environment *env,
       size += defaults->value_ptr.string->used_size-s-1;
     }
 
-  if (!directory && !defaults)
+  if (type)
     {
-      if (name)
-	ret = create_filename (name);
-      else if (name_type == WILD_FILENAME)
-	{
-	  ret = create_filename (create_string_copying_c_string ("*"));
-	  decrement_refcount (ret->value_ptr.filename->value);
-	}
-      else
-	{
-	  ret = create_filename (alloc_string (0));
-	  decrement_refcount (ret->value_ptr.filename->value);
-	}
-
-      ret->value_ptr.filename->directory_type = dir_type;
-      ret->value_ptr.filename->name_type = name_type;
-      return ret;
+      size += type->value_ptr.string->used_size+1;
     }
 
   value = alloc_string (size);
@@ -20194,6 +20197,15 @@ builtin_make_pathname (struct object *list, struct environment *env,
       i += defaults->value_ptr.string->used_size-s-1;
     }
 
+  if (type)
+    {
+      memcpy (value->value_ptr.string->value+i, ".", 1);
+      i++;
+      memcpy (value->value_ptr.string->value+i,
+	      type->value_ptr.string->value, type->value_ptr.string->used_size);
+      i += type->value_ptr.string->used_size;
+    }
+
   value->value_ptr.string->used_size = i;
 
   ret = create_filename (value);
@@ -20210,7 +20222,7 @@ struct object *
 builtin_pathname_directory (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
-  struct object *fn, *allow_other_keys = NULL;
+  struct object *ns, *allow_other_keys = NULL;
   int found_unknown_key = 0, s;
 
   if (SYMBOL (list) == &nil_object)
@@ -20219,13 +20231,13 @@ builtin_pathname_directory (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FILENAME)
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  fn = CAR (list);
+  ns = inspect_pathname_by_designator (CAR (list));
 
   list = CDR (list);
 
@@ -20277,19 +20289,18 @@ builtin_pathname_directory (struct object *list, struct environment *env,
       return NULL;
     }
 
-  s = get_directory_file_split (fn->value_ptr.filename->value);
+  s = get_directory_file_split (ns);
 
   if (s < 0)
     return &nil_object;
 
-  if (s == fn->value_ptr.filename->value->value_ptr.string->used_size-1)
+  if (s == ns->value_ptr.string->used_size-1)
     {
-      increment_refcount (fn->value_ptr.filename->value);
-      return fn->value_ptr.filename->value;
+      increment_refcount (ns);
+      return ns;
     }
 
-  return create_string_copying_char_vector (fn->value_ptr.filename->value->
-					    value_ptr.string->value, s+1);
+  return create_string_copying_char_vector (ns->value_ptr.string->value, s+1);
 }
 
 
@@ -20297,7 +20308,7 @@ struct object *
 builtin_pathname_name (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *fn, *allow_other_keys = NULL;
+  struct object *ns, *allow_other_keys = NULL;
   int found_unknown_key = 0, s;
 
   if (SYMBOL (list) == &nil_object)
@@ -20306,13 +20317,13 @@ builtin_pathname_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_FILENAME)
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  fn = CAR (list);
+  ns = inspect_pathname_by_designator (CAR (list));
 
   list = CDR (list);
 
@@ -20364,21 +20375,108 @@ builtin_pathname_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  s = get_directory_file_split (fn->value_ptr.filename->value);
+  s = get_directory_file_split (ns);
 
   if (s < 0)
     {
-      increment_refcount (fn->value_ptr.filename->value);
-      return fn->value_ptr.filename->value;
+      increment_refcount (ns);
+      return ns;
     }
 
-  if (s == fn->value_ptr.filename->value->value_ptr.string->used_size-1)
+  if (s == ns->value_ptr.string->used_size-1)
     return &nil_object;
 
-  return create_string_copying_char_vector (fn->value_ptr.filename->value->
-					    value_ptr.string->value+s+1,
-					    fn->value_ptr.filename->value->
-					    value_ptr.string->used_size-s-1);
+  return create_string_copying_char_vector (ns->value_ptr.string->value+s+1,
+					    ns->value_ptr.string->used_size-s-1);
+}
+
+
+struct object *
+builtin_pathname_type (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *ns, *allow_other_keys = NULL;
+  int found_unknown_key = 0, i;
+
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ns = inspect_pathname_by_designator (CAR (list));
+
+  list = CDR (list);
+
+  while (SYMBOL (list) != &nil_object)
+    {
+      if (symbol_equals (CAR (list), ":CASE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
+	}
+
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
+      return NULL;
+    }
+
+  if (ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '/'
+      || ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '.')
+    return &nil_object;
+
+  for (i = ns->value_ptr.string->used_size-2; i >= 0; i--)
+    {
+      if (ns->value_ptr.string->value [i] == '/')
+	return &nil_object;
+
+      if (ns->value_ptr.string->value [i] == '.')
+	return create_string_copying_char_vector
+	  (ns->value_ptr.string->value+i+1, ns->value_ptr.string->used_size-i-1);
+    }
+
+  return &nil_object;
 }
 
 
