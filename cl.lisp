@@ -120,6 +120,9 @@
 (defun oddp (num)
   (= 1 (mod num 2)))
 
+(defun rationalize (num)
+  (rational num))
+
 (defun gcd (&rest nums)
   (let ((l (length nums)))
     (cond
@@ -3042,8 +3045,8 @@
 	  call-arguments-limit multiple-values-limit array-rank-limit
 	  array-dimension-limit array-total-size-limit char-code-limit
 	  lambda-list-keywords identity constantly *read-default-float-format*
-	  pi 1+ 1- minusp plusp abs zerop signum mod rem evenp oddp gcd lcm
-	  isqrt conjugate cis upgraded-complex-part-type logand logandc1
+	  pi 1+ 1- minusp plusp abs zerop signum mod rem evenp oddp rationalize
+	  gcd lcm isqrt conjugate cis upgraded-complex-part-type logand logandc1
 	  logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
 	  boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
 	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2

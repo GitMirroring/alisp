@@ -2584,6 +2584,10 @@ struct object *builtin_numerator (struct object *list, struct environment *env,
 				  struct outcome *outcome);
 struct object *builtin_denominator (struct object *list, struct environment *env,
 				    struct outcome *outcome);
+struct object *builtin_rational (struct object *list, struct environment *env,
+				 struct outcome *outcome);
+struct object *builtin_float (struct object *list, struct environment *env,
+			      struct outcome *outcome);
 struct object *builtin_sqrt (struct object *list, struct environment *env,
 			      struct outcome *outcome);
 struct object *builtin_complex (struct object *list, struct environment *env,
@@ -3745,6 +3749,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("NUMERATOR", env, builtin_numerator, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DENOMINATOR", env, builtin_denominator, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("RATIONAL", env, builtin_rational, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FLOAT", env, builtin_float, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SQRT", env, builtin_sqrt, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("COMPLEX", env, builtin_complex, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("REALPART", env, builtin_realpart, TYPE_FUNCTION, NULL, 0);
@@ -25172,6 +25178,69 @@ builtin_denominator (struct object *list, struct environment *env,
 
   ret = alloc_number (TYPE_INTEGER);
   mpq_get_den (ret->value_ptr.integer, CAR (list)->value_ptr.ratio);
+
+  return ret;
+}
+
+
+struct object *
+builtin_rational (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_RATIONAL (CAR (list)))
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+  else if (CAR (list)->type == TYPE_FLOAT)
+    {
+      ret = alloc_number (TYPE_RATIO);
+      mpq_set_d (ret->value_ptr.ratio, *CAR (list)->value_ptr.floating);
+      return ret;
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+}
+
+
+struct object *
+builtin_float (struct object *list, struct environment *env,
+	       struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *ret;
+
+  if (!l || l > 2)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (list)->type == TYPE_FLOAT)
+    {
+      increment_refcount (CAR (list));
+      return CAR (list);
+    }
+
+  ret = alloc_number (TYPE_FLOAT);
+  *ret->value_ptr.floating = convert_number_to_double (CAR (list));
 
   return ret;
 }
