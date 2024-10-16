@@ -2225,6 +2225,11 @@
 
 
 
+(defun force-output (&optional (str *standard-output*))
+  (finish-output str))
+
+
+
 (defmacro with-input-from-string ((var strform &key index (start 0) end) &body forms)
   (let ((strsym (gensym)))
     `(let* ((,strsym ,strform)
@@ -3091,7 +3096,7 @@
 	  directory-namestring host-namestring enough-namestring merge-pathnames
 	  file-author file-write-date user-homedir-pathname with-open-file
 	  terpri write-line write-sequence prin1 princ print write-to-string
-	  prin1-to-string princ-to-string with-input-from-string
+	  prin1-to-string princ-to-string force-output with-input-from-string
 	  with-output-to-string pprint do-all-symbols find-all-symbols
 	  with-slots with-accessors loop format encode-universal-time
 	  with-compilation-unit *readtable* with-standard-io-syntax handler-case

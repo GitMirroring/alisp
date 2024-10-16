@@ -2470,6 +2470,8 @@ struct object *builtin_make_broadcast_stream
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_broadcast_stream_streams
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_finish_output
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_upper_case_p
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_lower_case_p
@@ -3713,6 +3715,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("BROADCAST-STREAM-STREAMS", env,
 		    builtin_broadcast_stream_streams, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FINISH-OUTPUT", env, builtin_finish_output, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, TYPE_FUNCTION,
@@ -22095,6 +22099,37 @@ builtin_broadcast_stream_streams (struct object *list, struct environment *env,
     }
 
   return ret;
+}
+
+
+struct object *
+builtin_finish_output (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *str;
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  if (l && CAR (list)->type != TYPE_STREAM
+      && CAR (list)->value_ptr.stream->direction != OUTPUT_STREAM)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  str = l ? CAR (list) : inspect_variable (env->std_out_sym, env);
+
+  if (str->value_ptr.stream->type == FILE_STREAM)
+    {
+      fflush (str->value_ptr.stream->file);
+    }
+
+  return &nil_object;
 }
 
 
