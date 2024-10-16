@@ -36816,7 +36816,7 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: symbol ");
       print_object (err->obj, env, std_out->value_ptr.stream);
-      printf (" not bound to any object\n");
+      printf (" not bound to any value\n");
     }
   else if (err->type == UNKNOWN_FUNCTION)
     {
