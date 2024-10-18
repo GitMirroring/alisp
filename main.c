@@ -21521,13 +21521,14 @@ builtin_load (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  fn = copy_string_to_c_string (CAR (list)->value_ptr.string);
+  fn = copy_string_to_c_string
+    (inspect_pathname_by_designator (CAR (list))->value_ptr.string);
 
   list = CDR (list);
 
@@ -21556,6 +21557,16 @@ builtin_load (struct object *list, struct environment *env,
 
 	  if (!print)
 	    print = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      if (symbol_equals (CAR (list), ":EXTERNAL-FORMAT", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
 
 	  list = CDR (list);
 	}
