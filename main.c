@@ -33551,7 +33551,9 @@ builtin_signal (struct object *list, struct environment *env,
       if (!cond)
 	return NULL;
     }
-  else if (CAR (list)->type == TYPE_CONDITION)
+  else if (CAR (list)->type == TYPE_STANDARD_OBJECT &&
+	   is_subtype_by_char_vector (CAR (list)->value_ptr.standard_object->class,
+				      "CONDITION", env))
     {
       cond = CAR (list);
     }
@@ -33564,7 +33566,7 @@ builtin_signal (struct object *list, struct environment *env,
 
   ret = handle_condition (cond, env, outcome);
 
-  if (CAR (list)->type != TYPE_CONDITION)
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
     decrement_refcount (cond);
 
   if (!ret)
@@ -33613,7 +33615,9 @@ builtin_error (struct object *list, struct environment *env,
       if (!cond)
 	return NULL;
     }
-  else if (CAR (list)->type == TYPE_CONDITION)
+  else if (CAR (list)->type == TYPE_STANDARD_OBJECT &&
+	   is_subtype_by_char_vector (CAR (list)->value_ptr.standard_object->class,
+				      "CONDITION", env))
     {
       increment_refcount (CAR (list));
       cond = CAR (list);
