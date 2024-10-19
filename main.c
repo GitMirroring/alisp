@@ -770,7 +770,7 @@ environment
     *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
     *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_pretty_sym,
     *print_pprint_dispatch_sym, *read_eval_sym, *read_base_sym,
-    *read_suppress_sym;
+    *read_suppress_sym, *load_pathname_sym, *load_truename_sym;
 
   struct object *abort_sym;
 
@@ -4297,6 +4297,9 @@ add_standard_definitions (struct environment *env)
 
   define_variable ("*LOAD-PRINT*", &nil_object, env);
   define_variable ("*LOAD-VERBOSE*", &nil_object, env);
+
+  env->load_pathname_sym = define_variable ("*LOAD-PATHNAME*", &nil_object, env);
+  env->load_truename_sym = define_variable ("*LOAD-TRUENAME*", &nil_object, env);
 
   define_variable ("*FEATURES*", &nil_object, env);
 
@@ -21513,7 +21516,7 @@ builtin_load (struct object *list, struct environment *env,
   int l = list_length (list), found_unknown_key = 0;
   char *fn;
   struct object *ret, *pack = inspect_variable (env->package_sym, env),
-    *verbose = NULL, *print = NULL, *allow_other_keys = NULL;
+    *verbose = NULL, *print = NULL, *allow_other_keys = NULL, *ns, *loadpn;
 
   if (!l)
     {
@@ -21527,8 +21530,9 @@ builtin_load (struct object *list, struct environment *env,
       return NULL;
     }
 
+  ns = CAR (list);
   fn = copy_string_to_c_string
-    (inspect_pathname_by_designator (CAR (list))->value_ptr.string);
+    (inspect_pathname_by_designator (ns)->value_ptr.string);
 
   list = CDR (list);
 
@@ -21606,6 +21610,12 @@ builtin_load (struct object *list, struct environment *env,
       return NULL;
     }
 
+  loadpn = create_filename (inspect_pathname_by_designator (ns));
+  env->vars = bind_variable (env->load_pathname_sym, loadpn, 1, env->vars);
+  increment_refcount (loadpn);
+  env->vars = bind_variable (env->load_truename_sym, loadpn, 1, env->vars);
+  env->lex_env_vars_boundary += 2;
+
   if (!verbose)
     verbose = inspect_variable (BUILTIN_SYMBOL ("*LOAD-VERBOSE*"), env);
 
@@ -21624,6 +21634,8 @@ builtin_load (struct object *list, struct environment *env,
     }
 
   set_value (env->package_sym, pack, 0, 0, env, outcome);
+
+  env->vars = remove_bindings (env->vars, 2, 1);
 
   free (fn);
 
