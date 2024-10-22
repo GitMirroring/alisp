@@ -1300,6 +1300,8 @@ class_field
 
   struct class_field_decl *decl;
 
+  int found_key;
+
   struct class_field *next;
 };
 
@@ -2928,6 +2930,8 @@ struct object *builtin_method_allocate_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_initialize_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_method_change_class
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_name
@@ -4331,6 +4335,18 @@ add_standard_definitions (struct environment *env)
   define_generic_function ("INITIALIZE-INSTANCE", env,
 			   copy_lambda_list (lambdal, 0),
 			   builtin_method_initialize_instance);
+
+  lambdal = create_lambda_list (env, "INSTANCE", "NEW-CLASS", (char *)NULL);
+  lambdal->next->next = alloc_parameter (REST_PARAM, NULL);
+  lambdal->next->next->name =
+    intern_symbol_by_char_vector ("INITARGS", strlen ("INITARGS"), 1,
+				  INTERNAL_VISIBILITY, 0, env->cl_package, 0);
+  lambdal->next->next->reference_strength_factor
+    = !STRENGTH_FACTOR_OF_OBJECT (lambdal->next->next->name);
+  INC_WEAK_REFCOUNT (lambdal->next->next->name);
+
+  define_generic_function ("CHANGE-CLASS", env, lambdal,
+			   builtin_method_change_class);
 
 
   env->package_sym->value_ptr.symbol->value_cell = cluser_package;
@@ -10214,7 +10230,13 @@ fill_object_fields (struct object *stdobj, struct object *class,
 		    struct object *initargs, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct class_field *f;
+  struct class_field *f = stdobj->value_ptr.standard_object->fields;
+
+  while (f)
+    {
+      f->found_key = 0;
+      f = f->next;
+    }
 
   while (SYMBOL (initargs) != &nil_object)
     {
@@ -10230,25 +10252,23 @@ fill_object_fields (struct object *stdobj, struct object *class,
 	  return NULL;
 	}
 
-      if (!f->name)
+      if (!f->found_key)
 	{
-	  if (!f->value)
+	  if (!f->name)
 	    {
 	      decrement_refcount (f->decl->value);
 	      f->decl->value = CAR (CDR (initargs));
 	      increment_refcount (f->decl->value);
-	      f->value = &t_object;
 	    }
-	}
-      else
-	{
-	  if (!f->value)
+	  else
 	    {
+	      decrement_refcount (f->value);
 	      f->value = CAR (CDR (initargs));
 	      increment_refcount (f->value);
 	    }
 	}
 
+      f->found_key = 1;
       initargs = CDR (CDR (initargs));
     }
 
@@ -32024,6 +32044,147 @@ builtin_method_initialize_instance (struct object *list, struct environment *env
   increment_refcount (CAR (list));
   return fill_object_fields (CAR (list), CAR (list)->value_ptr.standard_object->
 			     class, CDR (list), env, outcome);
+}
+
+
+struct object *
+builtin_method_change_class (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *obj, *newcl = NULL;
+  struct class_field_decl *fd;
+  struct object_list *p;
+  struct class_field *f, *prev = NULL, *tmp;
+
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type == TYPE_STANDARD_CLASS)
+    {
+      newcl = CAR (CDR (list));
+    }
+  else if (IS_SYMBOL (CAR (CDR (list))))
+    {
+      newcl = SYMBOL (CAR (CDR (list)))->value_ptr.symbol->typespec;
+
+      if (newcl && newcl->type != TYPE_STANDARD_CLASS)
+	newcl = NULL;
+    }
+
+  if (!newcl)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  obj = CAR (list);
+
+  if (!newcl->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (newcl, outcome))
+    {
+      return NULL;
+    }
+
+  f = obj->value_ptr.standard_object->fields;
+
+  while (f)
+    {
+      p = newcl->value_ptr.standard_class->class_precedence_list;
+
+      while (p)
+	{
+	  fd = p->obj->value_ptr.standard_class->fields;
+
+	  while (fd)
+	    {
+	      if (fd->name == f->decl->name)
+		{
+		  f->decl = fd;
+		  break;
+		}
+
+	      fd = fd->next;
+	    }
+
+	  if (fd)
+	    break;
+
+	  p = p->next;
+	}
+
+      if (!p)
+	{
+	  if (prev)
+	    prev->next = f->next;
+	  else
+	    obj->value_ptr.standard_object->fields = f;
+
+	  tmp = f->next;
+
+	  decrement_refcount (f->value);
+	  free (f);
+
+	  f = tmp;
+	}
+      else
+	{
+	  prev = f;
+	  f = f->next;
+	}
+    }
+
+  p = newcl->value_ptr.standard_class->class_precedence_list;
+
+  while (p)
+    {
+      fd = p->obj->value_ptr.standard_class->fields;
+
+      while (fd)
+	{
+	  f = obj->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (f->decl->name == fd->name)
+		break;
+
+	      f = f->next;
+	    }
+
+	  if (f)
+	    {
+	      fd = fd->next;
+	      continue;
+	    }
+
+	  f = malloc_and_check (sizeof (*f));
+
+	  if (fd->alloc_type == INSTANCE_ALLOCATION)
+	    f->name = fd->name;
+	  else
+	    f->name = NULL;
+
+	  f->value = NULL;
+	  f->decl = fd;
+	  f->next = obj->value_ptr.standard_object->fields;
+	  obj->value_ptr.standard_object->fields = f;
+
+	  fd = fd->next;
+	}
+
+      p = p->next;
+    }
+
+  increment_refcount (newcl);
+  obj->value_ptr.standard_object->class = newcl;
+
+  increment_refcount (obj);
+
+  return fill_object_fields (obj, newcl, CDR (CDR (list)), env, outcome);
 }
 
 
