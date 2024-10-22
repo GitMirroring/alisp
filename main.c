@@ -186,9 +186,16 @@ typedef long fixnum;
 					   | TYPE_BYTESPEC | TYPE_STRING \
 					   | TYPE_CHARACTER | TYPE_BITARRAY)*/
 
-#define IS_SELF_EVALUATING(obj) ((obj)->type != TYPE_BACKQUOTE	\
+#define IS_SELF_EVALUATING(obj) ((obj)->type != TYPE_BACKQUOTE		\
 				 && !IS_SYMBOL (obj)			\
 				 && (obj)->type != TYPE_CONS_PAIR)
+
+#define DONT_STEP(obj) (IS_SELF_EVALUATING (obj)			\
+			|| ((obj)->type == TYPE_CONS_PAIR		\
+			    && CAR (obj) == env->quote_sym)		\
+			|| (IS_SYMBOL (obj)				\
+			    && SYMBOL (obj)->value_ptr.symbol->home_package \
+			    == env->keyword_package))
 
 
 #define CLEAR_READER_STATUS(out)		\
@@ -14574,9 +14581,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       else
 	args = arglist;
 
-      if (func->value_ptr.function->flags & TRACED_FUNCTION
-	  || (env->stepping_flags &&
-	      !(env->stepping_flags & STEPPING_OVER_FORM)))
+      if (func->value_ptr.function->name != env->quote_sym
+	  && (func->value_ptr.function->flags & TRACED_FUNCTION
+	      || (env->stepping_flags &&
+		  !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  printf ("calling builtin ");
 	  print_function_name (func, env);
@@ -14606,9 +14614,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       env->call_stack = remove_call_frame (env->call_stack);
 
-      if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
-		  || (env->stepping_flags
-		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
+      if (func->value_ptr.function->name != env->quote_sym && ret
+	  && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+	      || (env->stepping_flags
+		  && !(env->stepping_flags & STEPPING_OVER_FORM))))
 	{
 	  printf ("builtin ");
 	  print_function_name (func, env);
@@ -16628,7 +16637,7 @@ evaluate_object (struct object *obj, struct environment *env,
   int stepping_over_this_form;
 
   if (env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM)
-      && !IS_SELF_EVALUATING (obj))
+      && !DONT_STEP (obj))
     {
       env->next_eval = obj;
       enter_debugger (NULL, env, outcome);
@@ -16637,7 +16646,7 @@ evaluate_object (struct object *obj, struct environment *env,
   stepping_over_this_form = env->stepping_flags & STEP_OVER_FORM
     && !(env->stepping_flags & STEPPING_OVER_FORM);
 
-  if (stepping_over_this_form && !IS_SELF_EVALUATING (obj) && !IS_SYMBOL (obj))
+  if (stepping_over_this_form && !DONT_STEP (obj) && !IS_SYMBOL (obj))
     env->stepping_flags |= STEPPING_OVER_FORM;
 
   if (obj->type == TYPE_BACKQUOTE)
@@ -16726,12 +16735,13 @@ evaluate_object (struct object *obj, struct environment *env,
       return obj;
     }
 
-  if ((IS_SYMBOL (obj)
-       && env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
-      || ((obj->type == TYPE_CONS_PAIR || obj->type == TYPE_BACKQUOTE)
-	  && stepping_over_this_form
-	  && (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION))
-	  && (env->stepping_flags & STEPPING_OVER_FORM)))
+  if (!DONT_STEP (obj) &&
+      ((IS_SYMBOL (obj)
+	&& env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM))
+       || ((obj->type == TYPE_CONS_PAIR || obj->type == TYPE_BACKQUOTE)
+	   && stepping_over_this_form
+	   && (env->stepping_flags & (STEP_OVER_FORM | STEP_OVER_EXPANSION))
+	   && (env->stepping_flags & STEPPING_OVER_FORM))))
     {
       if (ret)
 	{
