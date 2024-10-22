@@ -739,7 +739,7 @@ environment
   int debugging_depth;
 
   enum stepping_flags stepping_flags;
-  struct object *next_eval;
+  struct object *next_eval, *last_command;
 
   int is_profiling;
   struct profiling_record *profiling_data;
@@ -11787,8 +11787,18 @@ enter_debugger (struct object *cond, struct environment *env,
       obj = read_object_interactively (env, outcome, &input_left, &input_left_s,
 				       &wholel);
 
+      if (!obj)
+	{
+	  obj = env->last_command;
+	  increment_refcount (obj);
+	}
+
       while (obj)
 	{
+	  decrement_refcount (env->last_command);
+	  env->last_command = obj;
+	  increment_refcount (obj);
+
 	  if (obj->type == TYPE_INTEGER
 	      && mpz_cmp_si (obj->value_ptr.integer, 0) >= 0
 	      && mpz_cmp_si (obj->value_ptr.integer, restnum) < 0)
