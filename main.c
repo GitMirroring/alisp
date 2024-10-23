@@ -1886,6 +1886,11 @@ struct object *allocate_object_fields (struct object *stdobj,
 				       struct object *class);
 struct class_field *find_object_field_by_initarg (struct object *stdobj,
 						  struct object *initarg);
+struct object *fill_object_fields_by_initargs (struct object *stdobj,
+					       struct object *class,
+					       struct object *initargs,
+					       struct environment *env,
+					       struct outcome *outcome);
 struct object *fill_object_fields (struct object *stdobj, struct object *class,
 				   struct object *initargs,
 				   struct environment *env,
@@ -2936,6 +2941,8 @@ struct object *builtin_method_make_instance
 struct object *builtin_method_allocate_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_initialize_instance
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_method_reinitialize_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_change_class
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4342,6 +4349,10 @@ add_standard_definitions (struct environment *env)
   define_generic_function ("INITIALIZE-INSTANCE", env,
 			   copy_lambda_list (lambdal, 0),
 			   builtin_method_initialize_instance);
+
+  define_generic_function ("REINITIALIZE-INSTANCE", env,
+			   copy_lambda_list (lambdal, 0),
+			   builtin_method_reinitialize_instance);
 
   lambdal = create_lambda_list (env, "INSTANCE", "NEW-CLASS", (char *)NULL);
   lambdal->next->next = alloc_parameter (REST_PARAM, NULL);
@@ -10233,9 +10244,9 @@ find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
 
 
 struct object *
-fill_object_fields (struct object *stdobj, struct object *class,
-		    struct object *initargs, struct environment *env,
-		    struct outcome *outcome)
+fill_object_fields_by_initargs (struct object *stdobj, struct object *class,
+				struct object *initargs, struct environment *env,
+				struct outcome *outcome)
 {
   struct class_field *f = stdobj->value_ptr.standard_object->fields;
 
@@ -10278,6 +10289,20 @@ fill_object_fields (struct object *stdobj, struct object *class,
       f->found_key = 1;
       initargs = CDR (CDR (initargs));
     }
+
+  return stdobj;
+}
+
+
+struct object *
+fill_object_fields (struct object *stdobj, struct object *class,
+		    struct object *initargs, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct class_field *f;
+
+  if (!fill_object_fields_by_initargs (stdobj, class, initargs, env, outcome))
+    return NULL;
 
   f = stdobj->value_ptr.standard_object->fields;
 
@@ -32064,6 +32089,30 @@ builtin_method_initialize_instance (struct object *list, struct environment *env
   increment_refcount (CAR (list));
   return fill_object_fields (CAR (list), CAR (list)->value_ptr.standard_object->
 			     class, CDR (list), env, outcome);
+}
+
+
+struct object *
+builtin_method_reinitialize_instance (struct object *list,
+				      struct environment *env,
+				      struct outcome *outcome)
+{
+  if (SYMBOL (list) == &nil_object)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (CAR (list));
+  return fill_object_fields_by_initargs (CAR (list),
+					 CAR (list)->value_ptr.standard_object->
+					 class, CDR (list), env, outcome);
 }
 
 
