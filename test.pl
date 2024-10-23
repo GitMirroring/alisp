@@ -1630,6 +1630,12 @@ make_test ("(defclass c27 nil ((x :initarg :x) (y :initarg :y)))", "#<STANDARD-C
 make_test ("(change-class inst 'c27 :x 20 :y 21)", "#<C27 OBJECT ...>");
 make_test ("(slot-value inst 'x)", "20");
 make_test ("(slot-value inst 'y)", "21");
+make_test ("(defclass c28 nil ((x :initarg :x :initform 0) (y :initform 1)))", "#<STANDARD-CLASS C28>");
+make_test ("(defparameter inst (make-instance 'c28))", "INST");
+make_test ("(setf (slot-value inst 'y) 10)", "10");
+make_test ("(reinitialize-instance inst :x 1)", "#<C28 OBJECT ...>");
+make_test ("(slot-value inst 'x)", "1");
+make_test ("(slot-value inst 'y)", "10");
 make_test ("(defgeneric genfun (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN>");
 make_test ("(typep #'genfun 'generic-function)", "T");
 make_test ("(typep #'genfun 'standard-generic-function)", "T");
