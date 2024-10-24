@@ -32190,7 +32190,7 @@ builtin_method_change_class (struct object *list, struct environment *env,
 	  if (prev)
 	    prev->next = f->next;
 	  else
-	    obj->value_ptr.standard_object->fields = f;
+	    obj->value_ptr.standard_object->fields = f->next;
 
 	  tmp = f->next;
 
