@@ -2346,9 +2346,13 @@
 
 
 
-(defun loop-parse-accumulation (forms)
+(defun loop-parse-accumulation (forms ifclvar)
   (let ((sym (string (car forms)))
 	var
+	(val (if (and (symbolp (cadr forms))
+		      (string= (cadr forms) "IT"))
+		 ifclvar
+		 (cadr forms)))
 	out
 	init)
     (if (string= (string (caddr forms)) "INTO")
@@ -2357,17 +2361,17 @@
     (cond
       ((or (string= sym "COLLECT")
 	   (string= sym "COLLECTING"))
-       (setq out `(setq ,var (append ,var `(,,(cadr forms))))))
+       (setq out `(setq ,var (append ,var (list ,val)))))
       ((or (string= sym "APPEND")
 	   (string= sym "APPENDING"))
-       (setq out `(setq ,var (append ,var ,(cadr forms)))))
+       (setq out `(setq ,var (append ,var ,val))))
       ((or (string= sym "NCONC")
 	   (string= sym "NCONCING"))
-       (setq out `(setq ,var (nconc ,var ,(cadr forms)))))
+       (setq out `(setq ,var (nconc ,var ,val))))
       ((or (string= sym "SUM")
 	   (string= sym "SUMMING"))
        (setq init 0)
-       (setq out `(setq ,var (+ ,var ,(cadr forms))))))
+       (setq out `(setq ,var (+ ,var ,val)))))
     (if (string= (string (caddr forms)) "INTO")
 	(values out var nil init (cddddr forms))
 	(values out nil var init (cddr forms)))))
@@ -2500,14 +2504,15 @@
 	retst
 	vars
 	returnvar
+	(ifclvar (gensym))
 	(sym (string (car forms))))
     (cond
       ((or (string= sym "IF")
 	   (string= sym "WHEN"))
-       (setq out `(if ,(cadr forms) ,nil))
+       (setq out `(let ((,ifclvar ,(cadr forms))) (if ,ifclvar ,nil)))
        (setq forms (cddr forms)))
       ((string= sym "UNLESS")
-       (setq out `(if (not ,(cadr forms)) ,nil))
+       (setq out `(let ((,ifclvar ,(cadr forms))) (if (not ,ifclvar) ,nil)))
        (setq forms (cddr forms))))
     (do ((f forms))
 	((not f) (setq forms f))
@@ -2517,25 +2522,29 @@
 	      ((or (string= sym "IF")
 		   (string= sym "WHEN")
 		   (string= sym "UNLESS"))
-	       (multiple-value-bind (res frm vs rv)
+	       (multiple-value-bind (res frm vs rv ifcv)
 		   (loop-parse-conditional f loopname)
-		 (if (= (length out) 3)
+		 (if (= (length (caddr out)) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
 		 (setq vars (append vs vars))
 		 (if rv
 		     (setq returnvar rv))
+		 (setq ifclvar ifcv)
 		 (setq f frm)))
 	      ((string= sym "ELSE")
-	       (setq out (append out (list nil)))
+	       (setf (caddr out) (append (caddr out) (list nil)))
 	       (setq f (cdr f)))
 	      ((or (string= sym "DO")
 		   (string= sym "DOING")
 		   (string= sym "AND"))
 	       (setq f (cdr f)))
 	      ((string= sym "RETURN")
-	       (setq retst `(return-from ,loopname ,(cadr f)))
-	       (if (= (length out) 3)
+	       (setq retst `(return-from ,loopname ,(if (and (symbolp (cadr f))
+							     (string= (cadr f) "IT"))
+							ifclvar
+							(cadr f))))
+	       (if (= (length (caddr out)) 3)
 		   (setq docl (cons retst docl))
 		   (setq elsecl (cons retst elsecl)))
 	       (setq f (cddr f)))
@@ -2547,8 +2556,8 @@
 		   (string= sym "NCONCING")
 		   (string= sym "SUM")
 		   (string= sym "SUMMING"))
-	       (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation f)
-		 (if (= (length out) 3)
+	       (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation f ifclvar)
+		 (if (= (length (caddr out)) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
 		 (setq vars (cons (list (list (or var1 var2) init)) vars))
@@ -2562,18 +2571,18 @@
 	       (setq forms f)
 	       (return nil))))
 	  (progn
-	    (if (= (length out) 3)
+	    (if (= (length (caddr out)) 3)
 		(setq docl (cons (car f) docl))
 		(setq elsecl (cons (car f) elsecl)))
 	    (setq f (cdr f)))))
     (setq docl (reverse docl))
     (setq docl (cons 'progn docl))
-    (setf (elt out 2) docl)
-    (when (= (length out) 4)
+    (setf (elt (caddr out) 2) docl)
+    (when (= (length (caddr out)) 4)
       (setq elsecl (reverse elsecl))
       (setq elsecl (cons 'progn elsecl))
-      (setf (elt out 3) elsecl))
-    (values out forms vars returnvar)))
+      (setf (elt (caddr out) 3) elsecl))
+    (values out forms vars returnvar ifclvar)))
 
 
 (defun flatten-tree-skipping-nils (tree)
@@ -2609,6 +2618,7 @@
 	initial-setup iteration-setup
 	out o
 	returnvar
+	ifclvar
 	defaultret)
     (do ()
 	((not forms))
@@ -2648,12 +2658,13 @@
 		((or (string= sym "IF")
 		     (string= sym "WHEN")
 		     (string= sym "UNLESS"))
-		 (multiple-value-bind (res frm vs rv)
+		 (multiple-value-bind (res frm vs rv ifcv)
 		     (loop-parse-conditional forms block-name)
 		   (setq do-forms (append do-forms `(,res)))
 		   (setq vars (append vs vars))
 		   (if rv
 		       (setq returnvar rv))
+		   (setq ifclvar ifcv)
 		   (setq forms frm)))
 		((or (string= sym "DO")
 		     (string= sym "DOING"))
@@ -2694,7 +2705,7 @@
 		     (string= sym "NCONCING")
 		     (string= sym "SUM")
 		     (string= sym "SUMMING"))
-		 (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation forms)
+		 (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation forms ifclvar)
 		   (setq do-forms (append do-forms `(,res)))
 		   (setq vars (cons (list (list (or var1 var2) init)) vars))
 		   (if var2
