@@ -23869,7 +23869,8 @@ builtin_setf_elt (struct object *list, struct environment *env,
   newval = CAR (list);
   list = CDR (list);
 
-  if (!IS_SEQUENCE (CAR (list)) || CAR (CDR (list))->type != TYPE_INTEGER)
+  if (!IS_SEQUENCE (CAR (list)) || SYMBOL (CAR (list)) == &nil_object
+      || CAR (CDR (list))->type != TYPE_INTEGER)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
