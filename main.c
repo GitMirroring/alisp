@@ -29928,24 +29928,18 @@ get_function (struct object *sym, struct environment *env, int only_functions,
 	b = NULL;
     }
 
-  if ((only_globals || !b)
-      && ((!setf_func && !SYMBOL (sym)->value_ptr.symbol->function_cell)
-	  || (setf_func && !SYMBOL (sym)->value_ptr.symbol->setf_func_cell)))
+  if (only_globals || !b)
     {
-      return NULL;
+      f = !setf_func ? SYMBOL (sym)->value_ptr.symbol->function_cell
+	: SYMBOL (sym)->value_ptr.symbol->setf_func_cell;
     }
-
-  if (b)
-    f = b->obj;
-  else if (setf_func)
-    f = SYMBOL (sym)->value_ptr.symbol->setf_func_cell;
   else
-    f = SYMBOL (sym)->value_ptr.symbol->function_cell;
+    f = b->obj;
 
-  if (f->type != TYPE_FUNCTION && only_functions)
+  if (f && f->type != TYPE_FUNCTION && only_functions)
     return NULL;
 
-  if (increment_refc)
+  if (increment_refc && f)
     increment_refcount (f);
 
   return f;
