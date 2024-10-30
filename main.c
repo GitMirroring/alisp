@@ -10201,42 +10201,41 @@ allocate_object_fields (struct object *stdobj, struct object *class)
 struct class_field *
 find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
 {
-  struct class_field *fd = stdobj->value_ptr.standard_object->fields;
-  struct object_list *l;
-  struct object *sym = NULL;
+  struct class_field_decl *fd;
+  struct class_field *f;
+  struct object_list *l, *p = stdobj->value_ptr.standard_object->class->
+    value_ptr.standard_class->class_precedence_list;
 
-  while (fd)
+  while (p)
     {
-      l = fd->decl->initargs;
+      fd = p->obj->value_ptr.standard_class->fields;
 
-      while (l)
+      while (fd)
 	{
-	  if (eq_objects (l->obj, initarg) == &t_object)
+	  l = fd->initargs;
+
+	  while (l)
 	    {
-	      sym = fd->decl->name;
-	      break;
+	      if (eq_objects (l->obj, initarg) == &t_object)
+		{
+		  f = stdobj->value_ptr.standard_object->fields;
+
+		  while (f)
+		    {
+		      if (f->decl->name == fd->name)
+			return f;
+
+		      f = f->next;
+		    }
+		}
+
+	      l = l->next;
 	    }
 
-	  l = l->next;
+	  fd = fd->next;
 	}
 
-      if (l)
-	break;
-
-      fd = fd->next;
-    }
-
-  if (!sym)
-    return NULL;
-
-  fd = stdobj->value_ptr.standard_object->fields;
-
-  while (fd)
-    {
-      if (fd->decl->name == sym)
-	return fd;
-
-      fd = fd->next;
+      p = p->next;
     }
 
   return NULL;
