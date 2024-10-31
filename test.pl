@@ -1916,6 +1916,7 @@ make_test ("(reduce #'* '(2 3 5 7) :from-end t :initial-value 0)", "0");
 make_test ("(reduce #'+ '(\"\"))", "\"\"");
 make_test ("(reduce #'+ nil)", "0");
 make_test ("(reduce #'+ nil :initial-value 1)", "1");
+make_test ("(reduce 'list (list 'x) :initial-value 'z :from-end t)", "(X Z)");
 make_test ("(merge 'list '(0 1 3 7 8 5) #(0 4 2 10) #'<)", "(0 0 1 3 4 2 7 8 5 10)");
 make_test ("(merge 'vector '((0 . 1) (3 . 1)) #((0 . 2) (1 . 2)) #'< :key #'car)", "#((0 . 1) (0 . 2) (1 . 2) (3 . 1))");
 make_test ("(remove 3 '(1 2 3 4 3 2 1))", "(1 2 4 2 1)");
