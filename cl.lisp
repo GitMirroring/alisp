@@ -2064,9 +2064,10 @@
 		      (+ start i))))
 	   (if (= i 0)
 	       (if initvalprov
-		   (setq out (funcall fun initial-value (funcall key (elt seq j))))
-		   (progn
-		     (setq out (funcall key (elt seq j)))))
+		   (setq out (if from-end
+				 (funcall fun (funcall key (elt seq j)) initial-value)
+				 (funcall fun initial-value (funcall key (elt seq j)))))
+		   (setq out (funcall key (elt seq j))))
 	       (if from-end
 		   (setq out (funcall fun (funcall key (elt seq j)) out))
 		   (setq out (funcall fun out (funcall key (elt seq j))))))))
