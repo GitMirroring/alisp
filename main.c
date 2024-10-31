@@ -11814,7 +11814,9 @@ enter_debugger (struct object *cond, struct environment *env,
       if (!obj)
 	{
 	  obj = env->last_command;
-	  increment_refcount (obj);
+
+	  if (obj)
+	    increment_refcount (obj);
 	}
 
       while (obj)
