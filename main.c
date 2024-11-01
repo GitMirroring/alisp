@@ -11820,7 +11820,9 @@ print_stepping_help (void)
 	  " h or ?  Print this help\n"
 	  " c       Resume execution\n"
 	  " n       Step over next form\n"
-	  " s       Step inside next form\n\n");
+	  " s       Step inside next form\n"
+	  " x       Expand macro\n"
+	  " bt      Print backtrace\n\n");
 }
 
 
@@ -11955,11 +11957,18 @@ enter_debugger (struct object *cond, struct environment *env,
 		       || symbol_equals (obj, "C", env)
 		       || symbol_equals (obj, "N", env)
 		       || symbol_equals (obj, "X", env)
-		       || symbol_equals (obj, "S", env)))
+		       || symbol_equals (obj, "S", env)
+		       || symbol_equals (obj, "BT", env)))
 	    {
 	      if (symbol_equals (obj, "H", env) || symbol_equals (obj, "?", env))
 		{
 		  print_stepping_help ();
+		  result = &nil_object;
+		  outcome->no_value = 1;
+		}
+	      else if (symbol_equals (obj, "BT", env))
+		{
+		  print_backtrace (env, 0);
 		  result = &nil_object;
 		  outcome->no_value = 1;
 		}
