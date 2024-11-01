@@ -2848,6 +2848,7 @@ struct object *get_dynamic_value (struct object *sym, struct environment *env);
 struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions, int setf_func, int only_globals,
 			     int increment_refc);
+int is_macro (struct object *sym, struct environment *env);
 
 struct object *inspect_variable_by_c_string (char *var,
 					     struct environment *env);
@@ -11791,7 +11792,15 @@ enter_debugger (struct object *cond, struct environment *env,
     {
       printf ("\n");
       print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
-      printf ("\n");
+
+      if (env->next_eval->type == TYPE_CONS_PAIR
+	  && IS_SYMBOL (CAR (env->next_eval))
+	  && is_macro (SYMBOL (CAR (env->next_eval)), env))
+	{
+	  printf (" (macro)\n");
+	}
+      else
+	printf ("\n");
     }
 
   env->c_stdout->value_ptr.stream->dirty_line = 0;
@@ -29945,6 +29954,15 @@ get_function (struct object *sym, struct environment *env, int only_functions,
     increment_refcount (f);
 
   return f;
+}
+
+
+int
+is_macro (struct object *sym, struct environment *env)
+{
+  struct object *fun = get_function (sym, env, 0, 0, 0, 0);
+
+  return fun && fun->type == TYPE_MACRO && !fun->value_ptr.macro->builtin_form;
 }
 
 
