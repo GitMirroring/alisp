@@ -100,8 +100,11 @@ package.  There are also some non-standard extensions of standard functions.
 
 - the function AL-PRINT-RESTARTS prints the available restarts and returns T
 
-- the function AL-PRINT-BACKTRACE prints the current backtrace of all called
-  functions (including macros) and their arguments.  It returns T
+- the function AL-PRINT-BACKTRACE takes an optional argument and prints the
+  current backtrace of all called functions (including macros) and their
+  arguments.  If the argument is non-nil, the function is verbose, meaning it
+  also prints special forms and builtin macros as frames.  The function always
+  returns T
 
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
@@ -336,11 +339,14 @@ BREAK or in any other way.  The following commands are available:
 
 - C continues execution at normal speed
 
+- BT is equivalent to (CL-USER:AL-PRINT-BACKTRACE)
+
 - H or ? display help.
 
 When the debugger is entered due to stepping, the result of evaluating the last
 form is displayed preceded by " -> ", then a blank line, then the next form is
-showed.
+showed.  If the next form is a non-builtin macro, then it is followed by
+"(macro)".
 
 
 
