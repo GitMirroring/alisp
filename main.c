@@ -1983,6 +1983,8 @@ void print_bindings_in_reverse (struct binding *bins, int num,
 void print_fields (struct object *stdobj, struct environment *env,
 		   struct object *str);
 
+void print_backtrace (struct environment *env, int be_verbose);
+
 void print_available_restarts (struct environment *env, int show_help,
 			       struct object *str);
 void print_stepping_help (void);
@@ -11703,6 +11705,77 @@ print_fields (struct object *stdobj, struct environment *env,
     }
 
   printf (")");
+}
+
+
+void
+print_backtrace (struct environment *env, int be_verbose)
+{
+  int i = 0;
+  struct call_frame *f = env->call_stack;
+  struct binding *b;
+
+  while (f)
+    {
+      if (!be_verbose && f->funcobj->type == TYPE_MACRO
+	  && f->funcobj->value_ptr.macro->builtin_form)
+	{
+	  f = f->next;
+	  continue;
+	}
+
+      printf ("%d: ", i);
+
+      if (f->funcobj->type == TYPE_FUNCTION || f->funcobj->type == TYPE_MACRO)
+	{
+	  print_function_name (f->funcobj, env);
+	  printf (" ");
+	}
+      else
+	{
+	  printf ("method ");
+	  print_method_description (f->funcobj, env);
+	  printf (" of ");
+	  print_function_name (f->funcobj->value_ptr.method->generic_func, env);
+	  printf (" ");
+	}
+
+      if (f->arglist)
+	print_object (f->arglist, env, env->c_stdout->value_ptr.stream);
+      else
+	{
+	  b = f->args;
+
+	  if (!b)
+	    printf ("NIL");
+	  else
+	    printf ("(");
+
+	  while (b)
+	    {
+	      print_object (b->closure_bin->sym, env,
+			    env->c_stdout->value_ptr.stream);
+	      printf ("=");
+	      print_object (b->closure_bin->obj, env,
+			    env->c_stdout->value_ptr.stream);
+
+	      if (b->next)
+		printf (" ");
+	      else
+		printf (")");
+
+	      b = b->next;
+	    }
+	}
+
+      printf ("\n");
+
+      if (f->next)
+	printf ("\n");
+
+      i++;
+      f = f->next;
+    }
 }
 
 
@@ -34700,64 +34773,15 @@ struct object *
 builtin_al_print_backtrace (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
-  int i = 0;
-  struct call_frame *f = env->call_stack;
-  struct binding *b;
+  int l = list_length (list);
 
-  while (f)
+  if (l > 1)
     {
-      printf ("%d: ", i);
-
-      if (f->funcobj->type == TYPE_FUNCTION || f->funcobj->type == TYPE_MACRO)
-	{
-	  print_function_name (f->funcobj, env);
-	  printf (" ");
-	}
-      else
-	{
-	  printf ("method ");
-	  print_method_description (f->funcobj, env);
-	  printf (" of ");
-	  print_function_name (f->funcobj->value_ptr.method->generic_func, env);
-	  printf (" ");
-	}
-
-      if (f->arglist)
-	print_object (f->arglist, env, env->c_stdout->value_ptr.stream);
-      else
-	{
-	  b = f->args;
-
-	  if (!b)
-	    printf ("NIL");
-	  else
-	    printf ("(");
-
-	  while (b)
-	    {
-	      print_object (b->closure_bin->sym, env,
-			    env->c_stdout->value_ptr.stream);
-	      printf ("=");
-	      print_object (b->closure_bin->obj, env,
-			    env->c_stdout->value_ptr.stream);
-
-	      if (b->next)
-		printf (" ");
-	      else
-		printf (")");
-
-	      b = b->next;
-	    }
-	}
-
-      printf ("\n");
-
-      if (f->next)
-	printf ("\n");
-
-      i++;
-      f = f->next;
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
     }
+
+  print_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
 
   return &t_object;
 }
