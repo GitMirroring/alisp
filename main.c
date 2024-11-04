@@ -11895,13 +11895,15 @@ enter_debugger (struct object *cond, struct environment *env,
       obj = read_object_interactively (env, outcome, &input_left, &input_left_s,
 				       &wholel);
 
-      if (!obj)
+      if (!obj && !IS_READ_OR_EVAL_ERROR (outcome->type))
 	{
 	  obj = env->last_command;
 
 	  if (obj)
 	    increment_refcount (obj);
 	}
+      else if (!obj)
+	outcome->type = NO_OBJECT;
 
       while (obj)
 	{
