@@ -1347,8 +1347,11 @@ make_test ("(let ((s (make-string-output-stream \"abc\"))) (write 'def :stream s
 make_test ("(let ((s (make-string-output-stream (make-array 6 :element-type 'character :initial-contents \"abcdef\" :fill-pointer 3)))) (write 'def :stream s) (write 'ghi :stream s) (get-output-stream-string s))", "\"abcDEFGHI\"");
 make_test ("(open \"README\" :foo 'what :allow-other-keys t :allow-other-keys nil)", "#<STREAM FILE INPUT>");
 make_test ("(with-open-file (s \"writetest2\" :direction :io) (write 'hello :stream s) (file-position s 0) (read s))", "HELLO");
-make_test ("(with-open-file (s \"writetest2\" :direction :io) (list (input-stream-p s) (output-stream-p s)))", "(T T)");
+make_test ("(with-open-file (s \"writetest3\" :direction :io) (list (input-stream-p s) (output-stream-p s)))", "(T T)");
 make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
+make_test ("(delete-file \"writetest\")", "T");
+make_test ("(delete-file \"writetest2\")", "T");
+make_test ("(delete-file #p\"writetest3\")", "T");
 make_test ("(write \"hello\" :stream str)", "\"hello\"");
 make_test ("(write-char #\\newline str)", "#\\Newline");
 make_test ("(file-length str)", "8");
