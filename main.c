@@ -1827,6 +1827,7 @@ struct object *create_symbol (char *name, size_t size, int do_copy);
 struct object *create_filename (struct object *string);
 
 int get_directory_file_split (struct object *string);
+int get_filename (struct object *string, int *end);
 
 struct object *inspect_pathname_by_designator (struct object *des);
 
@@ -8985,6 +8986,35 @@ get_directory_file_split (struct object *string)
       if (string->value_ptr.string->value [i] == '/')
 	return i;
     }
+
+  return i;
+}
+
+
+int
+get_filename (struct object *string, int *end)
+{
+  int i;
+
+  *end = -1;
+
+  for (i = string->value_ptr.string->used_size-1; i >= 0; i--)
+    {
+      if (string->value_ptr.string->value [i] == '.'
+	  && i != string->value_ptr.string->used_size-1)
+	*end = i;
+
+      if (string->value_ptr.string->value [i] == '/')
+	{
+	  if (*end == i+1)
+	    *end = -1;
+
+	  return i;
+	}
+    }
+
+  if (!*end)
+    *end = -1;
 
   return i;
 }
@@ -20014,7 +20044,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 {
   struct object *directory = NULL, *name = NULL, *type = NULL, *defaults = NULL,
     *ret, *allow_other_keys = NULL, *value, *cons;
-  int found_unknown_key = 0, size = 0, i, s;
+  int found_unknown_key = 0, size = 0, i, s, s2;
   enum filename_type dir_type = REGULAR_FILENAME, name_type = REGULAR_FILENAME;
 
   while (SYMBOL (list) != &nil_object)
@@ -20138,11 +20168,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (directory)
     {
-      if (SYMBOL (directory) == &nil_object)
-	{
-	  directory = NULL;
-	}
-      else if (symbol_equals (directory, ":WILD", env))
+      if (symbol_equals (directory, ":WILD", env))
 	{
 	  size = 4;
 	  dir_type = WILD_FILENAME;
@@ -20214,7 +20240,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	       || directory->value_ptr.string->value
 	       [directory->value_ptr.string->used_size-1] != '/');
 	}
-      else
+      else if (SYMBOL (directory) != &nil_object)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -20231,9 +20257,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (name)
     {
-      if (SYMBOL (name) == &nil_object)
-	name = NULL;
-      else if (symbol_equals (name, ":WILD", env))
+      if (symbol_equals (name, ":WILD", env))
 	{
 	  name = NULL;
 	  size += 1;
@@ -20243,7 +20267,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  size += name->value_ptr.string->used_size;
 	}
-      else
+      else if (SYMBOL (name) != &nil_object)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -20252,20 +20276,38 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (!name && defaults)
     {
-      s = get_directory_file_split (defaults);
+      s = get_filename (defaults, &s2);
 
-      size += defaults->value_ptr.string->used_size-s-1;
+      size += (s2 >= 0 ? s2 : defaults->value_ptr.string->used_size)-s-1;
     }
 
   if (type)
     {
-      size += type->value_ptr.string->used_size+1;
+      if (type->type == TYPE_STRING)
+	{
+	  size += type->value_ptr.string->used_size+1;
+	}
+      else if (SYMBOL (type) != &nil_object
+	       && !symbol_equals (type, ":WILD", env))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
     }
+
+  if (!type && defaults)
+    {
+      s = get_filename (defaults, &s2);
+
+      if (s2 >= 0)
+	size += defaults->value_ptr.string->used_size-s2;
+    }
+
 
   value = alloc_string (size);
   i = 0;
 
-  if (directory && IS_SYMBOL (directory))
+  if (directory && symbol_equals (directory, ":WILD", env))
     {
       memcpy (value->value_ptr.string->value, "/**/", 4);
       i += 4;
@@ -20292,7 +20334,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	i++;
       }
     }
-  else if (directory)
+  else if (directory && directory->type == TYPE_CONS_PAIR)
     {
       if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
 	{
@@ -20343,7 +20385,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  cons = CDR (cons);
 	}
     }
-  else if (defaults)
+  else if ((!directory || SYMBOL (directory) != &nil_object) && defaults)
     {
       memcpy (value->value_ptr.string->value, defaults->value_ptr.string->value,
 	      s+1);
@@ -20355,27 +20397,39 @@ builtin_make_pathname (struct object *list, struct environment *env,
       memcpy (value->value_ptr.string->value+i, "*", 1);
       i++;
     }
-  else if (name)
+  else if (name && name->type == TYPE_STRING)
     {
       memcpy (value->value_ptr.string->value+i,
 	      name->value_ptr.string->value, name->value_ptr.string->used_size);
       i += name->value_ptr.string->used_size;
     }
-  else if (defaults)
+  else if ((!name || SYMBOL (name) != &nil_object) && defaults)
     {
       memcpy (value->value_ptr.string->value+i,
 	      defaults->value_ptr.string->value+s+1,
-	      defaults->value_ptr.string->used_size-s-1);
-      i += defaults->value_ptr.string->used_size-s-1;
+	      (s2 >= 0 ? s2 : defaults->value_ptr.string->used_size)-s-1);
+      i += (s2 >= 0 ? s2 : defaults->value_ptr.string->used_size)-s-1;
     }
 
-  if (type)
+  if (type && type->type == TYPE_STRING)
     {
       memcpy (value->value_ptr.string->value+i, ".", 1);
       i++;
       memcpy (value->value_ptr.string->value+i,
 	      type->value_ptr.string->value, type->value_ptr.string->used_size);
       i += type->value_ptr.string->used_size;
+    }
+  else if ((!type || !IS_SYMBOL (type)) && defaults)
+    {
+      if (s2 >= 0)
+	{
+	  memcpy (value->value_ptr.string->value+i, ".", 1);
+	  i++;
+	  memcpy (value->value_ptr.string->value+i,
+		  defaults->value_ptr.string->value+s2+1,
+		  defaults->value_ptr.string->used_size-s2-1);
+	  size += defaults->value_ptr.string->used_size-s2;
+	}
     }
 
   value->value_ptr.string->used_size = i;
@@ -20481,7 +20535,7 @@ builtin_pathname_name (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   struct object *ns, *allow_other_keys = NULL;
-  int found_unknown_key = 0, s;
+  int found_unknown_key = 0, s, dot;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -20547,18 +20601,22 @@ builtin_pathname_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  s = get_directory_file_split (ns);
+  s = get_filename (ns, &dot);
 
-  if (s < 0)
+  if (s < 0 && dot < 0)
     {
       increment_refcount (ns);
       return ns;
     }
 
+  if (s < 0)
+    return create_string_copying_char_vector (ns->value_ptr.string->value, dot);
+
   if (s == ns->value_ptr.string->used_size-1)
     return &nil_object;
 
   return create_string_copying_char_vector (ns->value_ptr.string->value+s+1,
+					    dot >= 0 ? dot-s-1 :
 					    ns->value_ptr.string->used_size-s-1);
 }
 
