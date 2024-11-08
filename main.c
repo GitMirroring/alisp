@@ -14869,6 +14869,18 @@ call_function (struct object *func, struct object *arglist, int eval_args,
     }
   else if (func->value_ptr.function->function_macro)
     {
+      if (list_length (arglist) != 2)
+	{
+	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+	  return NULL;
+	}
+
+      if (!IS_LIST (CAR (arglist)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
       ret = call_function (func->value_ptr.function->function_macro,
 			   CAR (arglist), 0, 1, 1, 0, 0, env, outcome);
 
