@@ -185,14 +185,30 @@ the constructor or accessors of the previous definition will cause a crash.
 
 __Pathnames__
 
-The pathname API of Common Lisp seems too complex and abstract, so I chose the
-simplest interpretation.  The only meaningful components of a pathname are the
-directory and the name, the others are ignored.
+I don't like the filename API of Common Lisp very much.  I think it tries to be
+so abstract as to accomodate every conceivable filesystem, while at the same
+time giving so much leeway to the implementers that you can assume very little
+about each implementation.
 
-When inspecting the directory or name of a path, POSIX conventions (like the
-forward slash as a separator) are followed.  When a pathname has only a
-directory part, then it is printed with a trailing slash, to force
-interpretation as a directory according to Posix.
+The syntax is also puzzling: if you want to represent the file "/home/foo/",
+then why representing it as (:ABSOLUTE "home" "foo")?  The former is a simple
+and recognizable string, while the second means allocating three conses, a
+symbol and two strings, which is quite inefficient.
+The standard seemingly implies that the second syntax is better because it is
+independent of path separator characters, but is that so?  If you port your
+program to different or exotic systems, important files will likely be in
+totally different places, so separator characters will be the least of your
+concerns.
+
+I'd go as far as recommend to represent filenames as plain strings, avoiding
+pathname objects entirely.  (I think that all pathname functions also accepts
+plain strings.)
+
+That said, alisp represents a pathname object as a string internally.
+
+If you really need to access the "components" of a path, those are extracted
+according to the following syntax: in "/home/foo/bar.baz", the directory is
+"/home/foo/", the name is "bar" and the type is "baz".
 
 If you specify :WILD as a path component, that component becomes a single
 asterisk.  The value :WILD-INFERIORS becomes two asterisks, but most Posix
@@ -213,8 +229,8 @@ __File operations__
 
 PROBE-FILE does not work very well.  It tries to open the file for reading and
 returns NIL if it can't, so it may return NIL even just for lack of permissions.
-In the future I will probably add an optional use of POSIX api for better file
-operations.
+OPEN uses the same approach to determine if the file exists.  In the future I
+will probably add an optional use of POSIX api for better file operations.
 
 
 
