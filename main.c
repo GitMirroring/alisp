@@ -21723,7 +21723,7 @@ builtin_load (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
-      if (symbol_equals (CAR (list), ":EXTERNAL-FORMAT", env))
+      else if (symbol_equals (CAR (list), ":EXTERNAL-FORMAT", env))
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
