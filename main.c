@@ -492,6 +492,7 @@ outcome_type
     COULD_NOT_OPEN_FILE_FOR_READING,
     COULD_NOT_SEEK_FILE,
     COULD_NOT_TELL_FILE,
+    FILE_ALREADY_EXISTS,
     ERROR_READING_FILE,
     ERROR_DURING_OUTPUT,
     INVALID_TYPE_SPECIFIER,
@@ -9556,15 +9557,28 @@ create_file_stream (enum stream_content_type content_type,
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
   char *fn = copy_string_to_c_string (namestring->value_ptr.string);
+  FILE *f;
 
   str->type = FILE_STREAM;
 
   if (direction == INPUT_STREAM)
     str->file = fopen (fn, "rb");
-  else if (direction == OUTPUT_STREAM)
-    str->file = fopen (fn, "wb");
-  else if (direction == BIDIRECTIONAL_STREAM)
-    str->file = fopen (fn, "wb+");
+  else if (direction == OUTPUT_STREAM || direction == BIDIRECTIONAL_STREAM)
+    {
+      f = fopen (fn, "r");
+
+      if (f)
+	{
+	  fclose (f);
+	  outcome->type = FILE_ALREADY_EXISTS;
+	  return NULL;
+	}
+
+      if (direction == OUTPUT_STREAM)
+	str->file = fopen (fn, "wb");
+      else
+	str->file = fopen (fn, "wb+");
+    }
 
   free (fn);
 
@@ -37378,6 +37392,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == COULD_NOT_TELL_FILE)
     {
       printf ("file error: could not tell file\n");
+    }
+  else if (err->type == FILE_ALREADY_EXISTS)
+    {
+      printf ("file error: file already exists\n");
     }
   else if (err->type == ERROR_READING_FILE)
     {
