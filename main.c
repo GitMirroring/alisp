@@ -10608,7 +10608,8 @@ compile_form (struct object *form, struct environment *env,
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("PROGN")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("BLOCK")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("TAGBODY"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("TAGBODY")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MULTIPLE-VALUE-CALL"))
 	{
 	  if (!compile_body (CDR (form), env, outcome))
 	    return NULL;
