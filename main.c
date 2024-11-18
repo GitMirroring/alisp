@@ -1905,10 +1905,10 @@ struct object *load_file (const char *filename, int print_each_form,
 
 struct object *compile_function (struct object *fun, struct environment *env,
 				 struct outcome *outcome);
-struct object *compile_form (struct object *form, struct environment *env,
-			     struct outcome *outcome);
-int compile_body (struct object *body, struct environment *env,
-		  struct outcome *outcome);
+struct object *compile_form (struct object *form, int backt_comma_bal,
+			     struct environment *env, struct outcome *outcome);
+int compile_body (struct object *body, int backt_comma_bal,
+		  struct environment *env, struct outcome *outcome);
 
 struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     int do_copy,
@@ -10546,7 +10546,7 @@ compile_function (struct object *fun, struct environment *env,
       return fun;
     }
 
-  if (!compile_body (fun->value_ptr.function->body, env, outcome))
+  if (!compile_body (fun->value_ptr.function->body, 0, env, outcome))
     return NULL;
 
   fun->value_ptr.function->flags |= COMPILED_FUNCTION;
@@ -10556,13 +10556,13 @@ compile_function (struct object *fun, struct environment *env,
 
 
 struct object *
-compile_form (struct object *form, struct environment *env,
+compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	      struct outcome *outcome)
 {
   struct object *prevform = NULL, *mac, *args, *fun, *cons, *val;
   int expanded = 0;
 
-  while (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
+  while (!backt_comma_bal && form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
 	 && (mac = get_function (CAR (form), env, 0, 0, 0, 0))
 	 && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
@@ -10597,12 +10597,17 @@ compile_form (struct object *form, struct environment *env,
       increment_refcount (form);
     }
 
-  if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form)))
+  if (backt_comma_bal && form->type == TYPE_CONS_PAIR)
+    {
+      if (!compile_body (form, backt_comma_bal, env, outcome))
+	return NULL;
+    }
+  else if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form)))
     {
       if ((fun = get_function (CAR (form), env, 0, 0, 0, 0))
 	  && fun->type == TYPE_FUNCTION)
 	{
-	  if (!compile_body (CDR (form), env, outcome))
+	  if (!compile_body (CDR (form), backt_comma_bal, env, outcome))
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF")
@@ -10611,7 +10616,7 @@ compile_form (struct object *form, struct environment *env,
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("TAGBODY")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MULTIPLE-VALUE-CALL"))
 	{
-	  if (!compile_body (CDR (form), env, outcome))
+	  if (!compile_body (CDR (form), backt_comma_bal, env, outcome))
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET")
@@ -10620,13 +10625,14 @@ compile_form (struct object *form, struct environment *env,
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOLIST")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOTIMES"))
 	{
-	  if (!compile_body (CDR (CDR (form)), env, outcome))
+	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO*"))
 	{
-	  if (!compile_body (CDR (CDR (CDR (form))), env, outcome))
+	  if (!compile_body (CDR (CDR (CDR (form))), backt_comma_bal, env,
+			     outcome))
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETQ")
@@ -10641,10 +10647,10 @@ compile_form (struct object *form, struct environment *env,
 	      if (SYMBOL (cons) == &nil_object)
 		break;
 
-	      val = compile_form (CAR (cons), env, outcome);
+	      val = compile_form (CAR (cons), backt_comma_bal, env, outcome);
 
 	      if (!val)
-		return 0;
+		return NULL;
 
 	      delete_reference (cons, CAR (cons), 0);
 	      cons->value_ptr.cons_pair->car = val;
@@ -10654,15 +10660,41 @@ compile_form (struct object *form, struct environment *env,
 	      cons = CDR (cons);
 	    }
 	}
-
     }
+
+  if (form->type == TYPE_BACKQUOTE)
+    {
+      if (!compile_form (form->value_ptr.next, backt_comma_bal+1, env, outcome))
+	return NULL;
+    }
+  else if (form->type == TYPE_COMMA)
+    {
+      val = compile_form (form->value_ptr.next, backt_comma_bal-1, env, outcome);
+
+      if (!val)
+	return NULL;
+
+      if (backt_comma_bal == 1)
+	{
+	  delete_reference (form, form->value_ptr.next, 0);
+	  form->value_ptr.next = val;
+	  add_reference (form, val, 0);
+	  decrement_refcount (val);
+	}
+    }
+  else if (form->type == TYPE_AT || form->type == TYPE_DOT)
+    {
+      if (!compile_form (form->value_ptr.next, backt_comma_bal, env, outcome))
+	return NULL;
+    }
+
 
   return form;
 }
 
 
 int
-compile_body (struct object *body, struct environment *env,
+compile_body (struct object *body, int backt_comma_bal, struct environment *env,
 	      struct outcome *outcome)
 {
   struct object *car;
@@ -10670,9 +10702,9 @@ compile_body (struct object *body, struct environment *env,
   if (SYMBOL (body) == &nil_object)
     return 1;
 
-  while (SYMBOL (body) != &nil_object)
+  while (body->type == TYPE_CONS_PAIR)
     {
-      car = compile_form (CAR (body), env, outcome);
+      car = compile_form (CAR (body), backt_comma_bal, env, outcome);
 
       if (!car)
 	return 0;
