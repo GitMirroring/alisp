@@ -10628,6 +10628,24 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
 	    return NULL;
 	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("FLET")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LABELS")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MACROLET"))
+	{
+	  cons = CAR (CDR (form));
+
+	  while (cons->type == TYPE_CONS_PAIR)
+	    {
+	      if (!compile_body (CDR (CDR (CAR (cons))), backt_comma_bal, env,
+				 outcome))
+		return NULL;
+
+	      cons = CDR (cons);
+	    }
+
+	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
+	    return NULL;
+	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO*"))
 	{
