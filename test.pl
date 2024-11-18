@@ -230,6 +230,7 @@ make_test ("(multiple-value-list (values 1 2 3))", "(1 2 3)");
 make_test ("(multiple-value-call (lambda ()))", "NIL");
 make_test ("(multiple-value-call #'+ (floor 5 2) (values) 1)", "4");
 make_test ("(multiple-value-call (lambda (x) x) 'i)", "I");
+make_test ("(multiple-value-call 'list 1 2 3)", "(1 2 3)");
 make_test ("(if nil 1)", "NIL");
 make_test ("(common-lisp:if '(1) 2)", "2");
 make_test ("(cl:eq 1 1)", "NIL");
