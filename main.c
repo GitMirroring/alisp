@@ -30743,7 +30743,21 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
   if (!fun)
     return NULL;
 
-  if (fun->type != TYPE_FUNCTION)
+  if (IS_SYMBOL (fun))
+    {
+      fun = get_function (SYMBOL (fun), env, 1, 0, 0, 0);
+
+      if (!fun)
+	{
+	  outcome->type = UNKNOWN_FUNCTION;
+	  increment_refcount (fun);
+	  outcome->obj = fun;
+	  return NULL;
+	}
+
+      increment_refcount (fun);
+    }
+  else if (fun->type != TYPE_FUNCTION)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
