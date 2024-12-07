@@ -1885,6 +1885,7 @@ make_test ("(do (x (y 0) (z 0 (1+ z))) ((>= z 10) (values x y z)) (write z))", "
 make_test ("(do ((x 0 (1+ x)) (y 0 (1+ x))) ((>= y 10)) (write y))", "0123456789\nNIL");
 make_test ("(do ((dd 0 (1+ dd))) (nil) (if (> dd 5) (return 10) (write dd)))", "012345\n10");
 make_test ("(do ((i 0 (1+ i))) ((= i 3)) 1 (write i) (go 2) (write 3) 2 (write 4))", "041424\nNIL");
+make_test ("(do nil ((return t)))", "T");
 make_test ("(do* (x (y 0) (z 0 (1+ z))) ((>= z 10) (values x y z)) (write z))", "0123456789\nNIL\n0\n10");
 make_test ("(do* ((x 0 (1+ x)) (y x (1+ x))) ((>= y 10)) (write y))", "023456789\nNIL");
 make_test ("(do* ((dd 0 (1+ dd))) (nil) (if (> dd 5) (return 10) (write dd)))", "012345\n10");
