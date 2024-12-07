@@ -22742,7 +22742,7 @@ struct object *
 builtin_do (struct object *list, struct environment *env,
 	    struct outcome *outcome)
 {
-  int l = list_length (list), bin_num = 0, found_tags;
+  int l = list_length (list), bin_num = 0, found_tags = 0;
   struct object *bind_forms, *test_form, *testres, *body, *bodyres, *ret, *res;
   struct object_list *incr = NULL, *lastincr;
   struct binding *bins = NULL, *bin;
@@ -22947,7 +22947,7 @@ struct object *
 builtin_do_star (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  int l = list_length (list), bin_num = 0, found_tags;
+  int l = list_length (list), bin_num = 0, found_tags = 0;
   struct object *bind_forms, *test_form, *testres, *body, *bodyres, *ret, *res;
   struct binding *bin;
 
