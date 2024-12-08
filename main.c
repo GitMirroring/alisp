@@ -11522,6 +11522,24 @@ list_lambda_list (struct parameter *par, int allow_other_keys,
 
   while (par)
     {
+      if (!par->name)
+	{
+	  if (!ret)
+	    ret = cons = alloc_empty_cons_pair ();
+	  else
+	    {
+	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      cons = CDR (cons);
+	    }
+
+	  cons->value_ptr.cons_pair->car =
+	    list_lambda_list (par->sub_lambda_list, par->sub_allow_other_keys,
+			      env);
+
+	  par = par->next;
+	  continue;
+	}
+
       if (par->type == AUXILIARY_VAR && t < par->type && allow_other_keys)
 	{
 	  if (!ret)
@@ -33336,7 +33354,7 @@ struct object *
 builtin_function_lambda_expression (struct object *list, struct environment *env,
 				    struct outcome *outcome)
 {
-  struct object *ret, *cons;
+  struct object *ret, *cons, *mac;
 
   if (list_length (list) != 1)
     {
@@ -33357,13 +33375,37 @@ builtin_function_lambda_expression (struct object *list, struct environment *env
 			    CAR (list)->value_ptr.function->allow_other_keys,
 			    env);
 
-      cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->body;
+      cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->body
+	? CAR (list)->value_ptr.function->body : &nil_object;
       add_reference (cons, CDR (cons), 1);
 
-      prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
-				  CAR (list)->value_ptr.function->name :
-				  &nil_object, &outcome->other_values);
-      increment_refcount (outcome->other_values->obj);
+      if (CAR (list)->value_ptr.function->function_macro)
+	{
+	  mac = alloc_empty_cons_pair ();
+
+	  mac->value_ptr.cons_pair->car = env->lambda_sym;
+	  add_reference (mac, CAR (mac), 0);
+
+	  mac->value_ptr.cons_pair->cdr = cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car
+	    = list_lambda_list (CAR (list)->value_ptr.function->function_macro
+				->value_ptr.macro->lambda_list,
+				CAR (list)->value_ptr.function->function_macro
+				->value_ptr.macro->allow_other_keys, env);
+
+	  cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->
+	    function_macro->value_ptr.function->body;
+	  add_reference (cons, CDR (cons), 1);
+	  prepend_object_to_obj_list (mac, &outcome->other_values);
+	}
+      else
+	{
+	  prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
+				      CAR (list)->value_ptr.function->name :
+				      &nil_object, &outcome->other_values);
+	  increment_refcount (outcome->other_values->obj);
+	}
+
       prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
 				  &t_object : &nil_object, &outcome->other_values);
     }
