@@ -10614,16 +10614,40 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("PROGN")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("BLOCK")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("TAGBODY")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MULTIPLE-VALUE-CALL"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MULTIPLE-VALUE-CALL")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AND")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("OR"))
 	{
 	  if (!compile_body (CDR (form), backt_comma_bal, env, outcome))
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LAMBDA")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*"))
+	{
+	  cons = CAR (CDR (form));
+
+	  while (cons->type == TYPE_CONS_PAIR)
+	    {
+	      if (CAR (cons)->type == TYPE_CONS_PAIR
+		  && !compile_body (CDR (CAR (cons)), backt_comma_bal, env,
+				    outcome))
+		{
+		  return NULL;
+		}
+
+	      cons = CDR (cons);
+	    }
+
+	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
+	    return NULL;
+	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LAMBDA")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOLIST")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOTIMES"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOTIMES")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO-SYMBOLS")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO-EXTERNAL-SYMBOLS")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DESTRUCTURING-BIND")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AL-LOOPY-DESTRUCTURING-BIND"))
 	{
 	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
 	    return NULL;
@@ -10654,7 +10678,8 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETQ")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETF"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETF")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AL-LOOPY-SETQ"))
 	{
 	  cons = CDR (form);
 
@@ -10692,7 +10717,8 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
       if (!val)
 	return NULL;
 
-      if (backt_comma_bal == 1)
+      if (backt_comma_bal == 1 && form->value_ptr.next->type != TYPE_AT
+	  && form->value_ptr.next->type != TYPE_DOT)
 	{
 	  delete_reference (form, form->value_ptr.next, 0);
 	  form->value_ptr.next = val;
@@ -10702,8 +10728,18 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
     }
   else if (form->type == TYPE_AT || form->type == TYPE_DOT)
     {
-      if (!compile_form (form->value_ptr.next, backt_comma_bal, env, outcome))
+      val = compile_form (form->value_ptr.next, backt_comma_bal, env, outcome);
+
+      if (!val)
 	return NULL;
+
+      if (!backt_comma_bal)
+	{
+	  delete_reference (form, form->value_ptr.next, 0);
+	  form->value_ptr.next = val;
+	  add_reference (form, val, 0);
+	  decrement_refcount (val);
+	}
     }
 
 
