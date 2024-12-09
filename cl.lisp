@@ -551,11 +551,36 @@
 
 
 (defun (setf subseq) (newval seq start &optional end)
-  (let ((len (- (or end (length seq)) start))
-	(newvallen (length newval)))
-    (dotimes (i (min len newvallen))
-      (setf (elt seq (+ i start)) (elt newval i)))
-    newval))
+  (if (consp seq)
+      (let ((i 0)
+	    (cons newval))
+	(setq seq (nthcdr start seq))
+	(do nil
+	    (nil)
+	  (if (or (not seq)
+		  (not cons)
+		  (and (not (consp newval)) (>= i (length newval)))
+		  (and end (>= i (- end start))))
+	      (return-from nil newval))
+	  (rplaca seq (if (consp newval)
+			  (car cons)
+			  (elt newval i)))
+	  (setq seq (cdr seq))
+	  (if (consp newval)
+	      (setq cons (cdr cons)))
+	  (incf i)))
+      (let ((len (- (or end (length seq)) start))
+	    (cons newval))
+	(dotimes (i len)
+	  (if (or (not cons)
+		  (and (not (consp newval)) (>= i (length newval))))
+	      (return-from nil newval))
+	  (setf (elt seq (+ i start)) (if (consp newval)
+					  (car cons)
+					  (elt newval i)))
+	  (if (consp newval)
+	      (setq cons (cdr cons))))
+	newval)))
 
 
 
@@ -835,12 +860,21 @@
 
 
 (defun every (pred &rest sequences)
-  (let ((n (apply 'min (mapcar #'length sequences))))
-    (dotimes (i n)
-      (let ((args (mapcar (lambda (s) (elt s i)) sequences)))
+  (let ((seqs (copy-seq sequences)))
+    (do ((i 0 (+ 1 i)))
+	(nil)
+      (let ((args (maplist (lambda (s) (if (consp (car s))
+					   (prog1
+					       (caar s)
+					     (rplaca s (cdar s)))
+					   (if (null (car s))
+					       (return-from every t)
+					       (if (>= i (length (car s)))
+						   (return-from every t)
+						   (elt (car s) i)))))
+			   seqs)))
 	(if (not (apply pred args))
-	    (return-from every nil)))))
-  t)
+	    (return-from every nil))))))
 
 
 (defun some (pred &rest sequences)
@@ -857,23 +891,24 @@
 
 (defun member (obj list &key key test test-not)
   (let ((tst (or test
-	      (if test-not (complement test-not))
-	       #'eql)))
+		 (if test-not (complement test-not))
+		 #'eql)))
     (unless key
       (setq key #'identity))
-    (dotimes (i (length list))
-      (if (funcall tst obj (funcall key (car list)))
-	  (return-from member list))
-      (setq list (cdr list)))))
+    (do ((l list (cdr l)))
+	((not l) nil)
+      (if (funcall tst obj (funcall key (car l)))
+	  (return-from member l)))))
 
 
 (defun member-if (pred list &key key)
   (unless key
     (setq key #'identity))
-  (dotimes (i (length list))
-    (if (funcall pred (funcall key (car list)))
-	(return-from member-if list))
-    (setq list (cdr list))))
+  (do ((l list (cdr l)))
+      ((not l) nil)
+    (if (funcall pred (funcall key (car l)))
+	(return-from member-if l)))
+  nil)
 
 
 (defun member-if-not (pred list &key key)
@@ -888,16 +923,33 @@
 
 
 (defun find-if (pred seq &key from-end (start 0) end key)
-  (unless end
-    (setq end (length seq)))
   (unless key
     (setq key #'identity))
-  (dotimes (i (- end start))
-    (let ((j (if from-end
-		 (- end i 1)
-		 (+ start i))))
-      (if (funcall pred (funcall key (elt seq j)))
-	  (return-from find-if (elt seq j))))))
+  (if (consp seq)
+      (progn
+	(when from-end
+	  (setq seq (reverse seq))
+	  (let (tmp)
+	    (setq tmp start)
+	    (setq start (- (length seq) end))
+	    (setq end (- (length seq) tmp))))
+	(setq seq (nthcdr start seq))
+	(do ((cons seq (cdr cons))
+	     (i start (+ i 1)))
+	    ((or (not cons) (and end (>= i end))) nil)
+	  (if (funcall pred (funcall key (car cons)))
+	      (return-from find-if (car cons)))))
+      (if (not seq)
+	  nil
+	  (progn
+	    (unless end
+	      (setq end (length seq)))
+	    (dotimes (i (- end start))
+	      (let ((j (if from-end
+			   (- end i 1)
+			   (+ start i))))
+		(if (funcall pred (funcall key (elt seq j)))
+		    (return-from find-if (elt seq j)))))))))
 
 
 (defun find-if-not (pred seq &key from-end (start 0) end key)
@@ -2017,8 +2069,9 @@
   (let (out)
     (do nil
 	(nil)
-      (if (member nil lists)
-	  (return nil))
+      (dolist (l lists)
+	(if (not l)
+	    (return-from maplist (reverse out))))
       (setq out (cons (apply fun lists) out))
       (setq lists (mapcar #'cdr lists)))
     (reverse out)))
