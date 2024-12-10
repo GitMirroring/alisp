@@ -16231,7 +16231,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
   struct object *args, *ret = NULL, *res, *tmp, *margs;
   struct method_list *applm = NULL, *lapplm, *mlist,
     *ml = func->value_ptr.function->methods;
-  int applnum = 0, i, found_primary = 0;
+  int applnum = 0, i, found_primary = 0, isprof = 0, time;
 
   if (eval_args)
     {
@@ -16256,6 +16256,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       print_object (args, env, env->c_stdout->value_ptr.stream);
       printf ("\n");
       env->c_stdout->value_ptr.stream->dirty_line = 0;
+    }
+
+  if (env->is_profiling)
+    {
+      isprof = 1;
+      time = clock ();
     }
 
   while (ml)
@@ -16375,6 +16381,13 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
   env->method_args = margs;
   env->method_list = mlist;
+
+  if (isprof && env->is_profiling)
+    {
+      add_profiling_data (&env->profiling_data,
+			  SYMBOL (func->value_ptr.function->name),
+			  clock () - time, 0);
+    }
 
   if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 	      || (env->stepping_flags
