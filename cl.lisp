@@ -73,6 +73,81 @@
 
 
 
+(defun first (list) (nth 0 list))
+(defun second (list) (nth 1 list))
+(defun third (list) (nth 2 list))
+(defun fourth (list) (nth 3 list))
+(defun fifth (list) (nth 4 list))
+(defun sixth (list) (nth 5 list))
+(defun seventh (list) (nth 6 list))
+(defun eighth (list) (nth 7 list))
+(defun ninth (list) (nth 8 list))
+(defun tenth (list) (nth 9 list))
+
+
+(defun rest (list) (cdr list))
+
+
+(defun caar (list) (car (car list)))
+(defun cadr (list) (nth 1 list))
+(defun cdar (list) (cdr (car list)))
+(defun cddr (list) (nthcdr 2 list))
+(defun caaar (list) (car (car (car list))))
+(defun caadr (list) (car (nth 1 list)))
+(defun cadar (list) (nth 1 (car list)))
+(defun caddr (list) (car (nthcdr 2 list)))
+(defun cdaar (list) (cdr (car (car list))))
+(defun cdadr (list) (cdr (car (cdr list))))
+(defun cddar (list) (nthcdr 2 (car list)))
+(defun cdddr (list) (nthcdr 3 list))
+(defun caaaar (list) (car (car (car (car list)))))
+(defun caaadr (list) (car (car (nth 1 list))))
+(defun caadar (list) (car (nth 1 (car list))))
+(defun caaddr (list) (car (nth 1 (cdr list))))
+(defun cadaar (list) (nth 1 (car (car list))))
+(defun cadadr (list) (nth 1 (nth 1 list)))
+(defun caddar (list) (nth 1 (cdr (car list))))
+(defun cadddr (list) (car (nthcdr 3 list)))
+(defun cdaaar (list) (cdr (car (car (car list)))))
+(defun cdaadr (list) (cdr (car (car (cdr list)))))
+(defun cdadar (list) (cdr (car (cdr (car list)))))
+(defun cdaddr (list) (cdr (car (nthcdr 2 list))))
+(defun cddaar (list) (nthcdr 2 (car (car list))))
+(defun cddadr (list) (nthcdr 2 (nth 1 list)))
+(defun cdddar (list) (nthcdr 3 (car list)))
+(defun cddddr (list) (nthcdr 4 list))
+
+
+
+(defmacro cond (&body body)
+  (let (ret l)
+    (dolist (f body)
+      (if (cdr f)
+	  (progn
+	    (let ((cl
+		   `(if ,(car f)
+			,(if (cddr f)
+			     `(progn ,@(cdr f))
+			     (if (cdr f)
+				 (cadr f)))
+			,nil)))
+	      (if ret
+		  (setf (car l) cl l (cdddr cl))
+		  (setf ret cl l (cdddr cl)))))
+	  (progn
+	    (let* ((s (gensym))
+		   (cl
+		    `(let ((,s ,(car f)))
+		       (if ,s
+			   ,s
+			   ,nil))))
+	      (if ret
+		  (setf (car l) cl l (cddr (cdaddr cl)))
+		  (setf ret cl l (cddr (cdaddr cl))))))))
+    ret))
+
+
+
 (defun identity (x) x)
 
 (defun constantly (x) (lambda (&rest r) x))
@@ -272,59 +347,15 @@
 
 (defun gentemp (&optional (pr "T") (pack *package*))
   (let ((str (make-string-output-stream)))
-    (loop
-     (write-string pr str)
-     (write gentemp-counter :stream str)
-     (incf gentemp-counter)
-     (let ((s (get-output-stream-string str)))
-       (if (not (find-symbol s pack))
-	   (return-from gentemp (values (intern s pack))))))))
+    (do nil
+	(nil)
+      (write-string pr str)
+      (write gentemp-counter :stream str)
+      (incf gentemp-counter)
+      (let ((s (get-output-stream-string str)))
+	(if (not (find-symbol s pack))
+	    (return-from gentemp (values (intern s pack))))))))
 
-
-
-(defun first (list) (nth 0 list))
-(defun second (list) (nth 1 list))
-(defun third (list) (nth 2 list))
-(defun fourth (list) (nth 3 list))
-(defun fifth (list) (nth 4 list))
-(defun sixth (list) (nth 5 list))
-(defun seventh (list) (nth 6 list))
-(defun eighth (list) (nth 7 list))
-(defun ninth (list) (nth 8 list))
-(defun tenth (list) (nth 9 list))
-
-
-(defun rest (list) (cdr list))
-
-
-(defun caar (list) (car (car list)))
-(defun cadr (list) (nth 1 list))
-(defun cdar (list) (cdr (car list)))
-(defun cddr (list) (nthcdr 2 list))
-(defun caaar (list) (car (car (car list))))
-(defun caadr (list) (car (nth 1 list)))
-(defun cadar (list) (nth 1 (car list)))
-(defun caddr (list) (car (nthcdr 2 list)))
-(defun cdaar (list) (cdr (car (car list))))
-(defun cdadr (list) (cdr (car (cdr list))))
-(defun cddar (list) (nthcdr 2 (car list)))
-(defun cdddr (list) (nthcdr 3 list))
-(defun caaaar (list) (car (car (car (car list)))))
-(defun caaadr (list) (car (car (nth 1 list))))
-(defun caadar (list) (car (nth 1 (car list))))
-(defun caaddr (list) (car (nth 1 (cdr list))))
-(defun cadaar (list) (nth 1 (car (car list))))
-(defun cadadr (list) (nth 1 (nth 1 list)))
-(defun caddar (list) (nth 1 (cdr (car list))))
-(defun cadddr (list) (car (nthcdr 3 list)))
-(defun cdaaar (list) (cdr (car (car (car list)))))
-(defun cdaadr (list) (cdr (car (car (cdr list)))))
-(defun cdadar (list) (cdr (car (cdr (car list)))))
-(defun cdaddr (list) (cdr (car (nthcdr 2 list))))
-(defun cddaar (list) (nthcdr 2 (car (car list))))
-(defun cddadr (list) (nthcdr 2 (nth 1 list)))
-(defun cdddar (list) (nthcdr 3 (car list)))
-(defun cddddr (list) (nthcdr 4 list))
 
 
 (defun (setf caar) (newval list)
@@ -704,35 +735,6 @@
 (define-modify-macro incf (&optional (delta 1)) +)
 
 (define-modify-macro decf (&optional (delta 1)) -)
-
-
-
-(defmacro cond (&body body)
-  (let (ret l)
-    (dolist (f body)
-      (if (cdr f)
-	  (progn
-	    (let ((cl
-		   `(if ,(car f)
-			,(if (cddr f)
-			     `(progn ,@(cdr f))
-			     (if (cdr f)
-				 (cadr f)))
-			,nil)))
-	      (if ret
-		  (setf (car l) cl l (cdddr cl))
-		  (setf ret cl l (cdddr cl)))))
-	  (progn
-	    (let* ((s (gensym))
-		   (cl
-		    `(let ((,s ,(car f)))
-		       (if ,s
-			   ,s
-			   ,nil))))
-	      (if ret
-		  (setf (car l) cl l (cddr (cdaddr cl)))
-		  (setf ret cl l (cddr (cdaddr cl))))))))
-    ret))
 
 
 
