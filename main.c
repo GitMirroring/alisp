@@ -10604,8 +10604,8 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
     }
   else if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form)))
     {
-      if ((fun = get_function (CAR (form), env, 0, 0, 0, 0))
-	  && fun->type == TYPE_FUNCTION)
+      if (!(fun = get_function (CAR (form), env, 0, 0, 0, 0))
+	  || fun->type == TYPE_FUNCTION)
 	{
 	  if (!compile_body (CDR (form), backt_comma_bal, env, outcome))
 	    return NULL;
