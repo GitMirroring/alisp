@@ -314,9 +314,9 @@ spent in all descendants in the call graph).  For functions, the time doesn't
 include evaluation of arguments.  For macros, the time includes both expansion
 and evaluation of result.
 
-The profiler has a few limitations: generic functions, structure constructor and
-accessors, condition readers, functions obtained as macro functions and macros
-defined with macro functions are not tracked.
+The profiler has a few limitations: structure constructor and accessors,
+condition readers, functions obtained as macro functions and macros defined with
+macro functions are not tracked.
 
 
 
