@@ -676,6 +676,7 @@ struct
 profiling_record
 {
   struct object *name;
+  int is_setf;
 
   unsigned counter;
   unsigned time;
@@ -1994,7 +1995,7 @@ struct object *enter_debugger (struct object *cond, struct environment *env,
 			       struct outcome *outcome);
 
 void add_profiling_data (struct profiling_record **data, struct object *name,
-			 int time, int evaltime);
+			 int is_setf, int time, int evaltime);
 
 struct call_frame *add_call_frame (struct object *funcobj, struct object *args,
 				   struct environment *env, int argsnum,
@@ -12265,13 +12266,13 @@ enter_debugger (struct object *cond, struct environment *env,
 
 void
 add_profiling_data (struct profiling_record **data, struct object *name,
-		    int time, int evaltime)
+		    int is_setf, int time, int evaltime)
 {
   struct profiling_record *r = *data;
 
   while (r)
     {
-      if (r->name == name)
+      if (r->name == name && !is_setf == !r->is_setf)
 	break;
 
       r = r->next;
@@ -12281,6 +12282,7 @@ add_profiling_data (struct profiling_record **data, struct object *name,
     {
       r = malloc_and_check (sizeof (*r));
       r->name = name;
+      r->is_setf = is_setf;
       r->counter = 0;
       r->time = 0;
       r->next = *data;
@@ -14886,7 +14888,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	{
 	  time = clock () - time;
 	  add_profiling_data (&env->profiling_data,
-			      SYMBOL (func->value_ptr.function->name), time,
+			      SYMBOL (func->value_ptr.function->name),
+			      func->value_ptr.function->is_setf_func, time,
 			      evaltime);
 	}
 
@@ -15161,7 +15164,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   if (isprof && env->is_profiling)
     {
       add_profiling_data (&env->profiling_data,
-			  SYMBOL (func->value_ptr.function->name), time,
+			  SYMBOL (func->value_ptr.function->name),
+			  func->value_ptr.function->is_setf_func, time,
 			  evaltime);
     }
 
@@ -16386,6 +16390,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
     {
       add_profiling_data (&env->profiling_data,
 			  SYMBOL (func->value_ptr.function->name),
+			  func->value_ptr.function->is_setf_func,
 			  clock () - time, 0);
     }
 
@@ -35001,8 +35006,21 @@ builtin_al_report_profiling (struct object *list, struct environment *env,
       car = alloc_empty_cons_pair ();
       cons->value_ptr.cons_pair->car = car;
 
-      car->value_ptr.cons_pair->car = r->name;
-      add_reference (car, r->name, 0);
+      if (r->is_setf)
+	{
+	  car->value_ptr.cons_pair->car = alloc_empty_list (2);
+	  car->value_ptr.cons_pair->car->value_ptr.cons_pair->car = env->setf_sym;
+	  add_reference (CAR (car), CAR (CAR (car)), 0);
+	  car->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->car = r->name;
+	  add_reference (CDR (CAR (car)), r->name, 0);
+	}
+      else
+	{
+	  car->value_ptr.cons_pair->car = r->name;
+	  add_reference (car, r->name, 0);
+	}
+
       car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
       car = CDR (car);
       car->value_ptr.cons_pair->car =
