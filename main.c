@@ -192,10 +192,13 @@ typedef long fixnum;
 
 #define DONT_STEP(obj) (IS_SELF_EVALUATING (obj)			\
 			|| ((obj)->type == TYPE_CONS_PAIR		\
-			    && CAR (obj) == env->quote_sym)		\
+			    && (CAR (obj) == env->quote_sym		\
+				|| CAR (obj) == env->function_sym))	\
 			|| (IS_SYMBOL (obj)				\
-			    && SYMBOL (obj)->value_ptr.symbol->home_package \
-			    == env->keyword_package))
+			    && ((SYMBOL (obj)->value_ptr.symbol->home_package \
+				 == env->keyword_package)		\
+				|| (SYMBOL (obj) == &t_object)		\
+				|| (SYMBOL (obj) == &nil_object))))
 
 
 #define CLEAR_READER_STATUS(out)		\
@@ -14862,6 +14865,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	args = arglist;
 
       if (func->value_ptr.function->name != env->quote_sym
+	  && func->value_ptr.function->name != env->function_sym
 	  && (func->value_ptr.function->flags & TRACED_FUNCTION
 	      || (env->stepping_flags &&
 		  !(env->stepping_flags & STEPPING_OVER_FORM))))
@@ -14895,7 +14899,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       env->call_stack = remove_call_frame (env->call_stack);
 
-      if (func->value_ptr.function->name != env->quote_sym && ret
+      if (func->value_ptr.function->name != env->quote_sym
+	  && func->value_ptr.function->name != env->function_sym && ret
 	  && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 	      || (env->stepping_flags
 		  && !(env->stepping_flags & STEPPING_OVER_FORM))))
