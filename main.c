@@ -10543,14 +10543,24 @@ struct object *
 compile_function (struct object *fun, struct environment *env,
 		  struct outcome *outcome)
 {
-  if ((fun->value_ptr.function->flags & COMPILED_FUNCTION)
-      || (fun->value_ptr.function->flags & GENERIC_FUNCTION))
-    {
-      fun->value_ptr.function->flags |= COMPILED_FUNCTION;
-      return fun;
-    }
+  struct method_list *ml;
 
-  if (!compile_body (fun->value_ptr.function->body, 0, env, outcome))
+  if (fun->value_ptr.function->flags & COMPILED_FUNCTION)
+    return fun;
+
+  if (fun->value_ptr.function->flags & GENERIC_FUNCTION)
+    {
+      ml = fun->value_ptr.function->methods;
+
+      while (ml)
+	{
+	  if (!compile_body (ml->meth->value_ptr.method->body, 0, env, outcome))
+	    return NULL;
+
+	  ml = ml->next;
+	}
+    }
+  else if (!compile_body (fun->value_ptr.function->body, 0, env, outcome))
     return NULL;
 
   fun->value_ptr.function->flags |= COMPILED_FUNCTION;
@@ -32862,6 +32872,12 @@ evaluate_defgeneric (struct object *list, struct environment *env,
 
   fun->value_ptr.function->flags |= GENERIC_FUNCTION;
 
+  if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
+      != &nil_object)
+    {
+      fun->value_ptr.function->flags |= COMPILED_FUNCTION;
+    }
+
   if (IS_SYMBOL (CAR (list)))
     {
       if (sym->value_ptr.symbol->function_cell)
@@ -32995,6 +33011,12 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 	return NULL;
 
       fun->value_ptr.function->flags |= GENERIC_FUNCTION;
+
+      if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
+	  != &nil_object)
+	{
+	  fun->value_ptr.function->flags |= COMPILED_FUNCTION;
+	}
     }
   else
     {
@@ -33120,6 +33142,12 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
       fun->value_ptr.function->flags |= GENERIC_FUNCTION;
 
+      if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
+	  != &nil_object)
+	{
+	  fun->value_ptr.function->flags |= COMPILED_FUNCTION;
+	}
+
       if (CAR (list)->type == TYPE_CONS_PAIR)
 	{
 	  sym->value_ptr.symbol->setf_func_cell = fun;
@@ -33155,6 +33183,12 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
   m->generic_func = fun;
   add_reference (meth, fun, 0);
+
+  if (fun->value_ptr.function->flags & COMPILED_FUNCTION)
+    {
+      if (!compile_body (m->body, 0, env, outcome))
+	return NULL;
+    }
 
   ml = malloc_and_check (sizeof (*ml));
   ml->reference_strength_factor = 1;
@@ -33210,6 +33244,12 @@ builtin_add_method (struct object *list, struct environment *env,
       delete_reference (CAR (list), ml->meth, 6+ind*8);
       ml->meth = CAR (CDR (list));
       add_reference (CAR (list), ml->meth, 6+ind*8);
+    }
+
+  if (CAR (list)->value_ptr.function->flags & COMPILED_FUNCTION)
+    {
+      if (!compile_body (ml->meth->value_ptr.method->body, 0, env, outcome))
+	return NULL;
     }
 
   increment_refcount (CAR (list));
