@@ -323,9 +323,12 @@ macro functions are not tracked.
 __Compilation__
 
 If the variable CL-USER:*AL-COMPILE-WHEN-DEFINING* is non-nil, then DEFUN and
-DEFMACRO will compile the body of the function when they are evaluated.  You may
-want to keep it disabled for debugging, since stepping through a macro-expanded
-function is harder.  The variable defaults to NIL.
+DEFMACRO will compile the body of the function when they are evaluated.  Also,
+each newly defined generic function will be marked as compiled, meaning that
+each new method added to that function will get compiled.
+
+You may want to keep the variable disabled for debugging, since stepping through
+a macro-expanded function is harder.  The variable defaults to NIL.
 
 Of course, you can inspect the body of a function, whether compiled or not, with
 FUNCTION-LAMBDA-EXPRESSION.
