@@ -22,7 +22,7 @@
 
 
 
-(defparameter *features* '(:common-lisp))
+(defparameter *features* '(:alisp :common-lisp :unix))
 
 
 
