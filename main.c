@@ -486,6 +486,7 @@ outcome_type
     OUT_OF_BOUND_INDEX,
     DECREASING_INTERVAL_NOT_MEANINGFUL,
     INVALID_SIZE,
+    WRONG_TYPE_OF_STANDARD_VARIABLE,
     NO_APPLICABLE_METHOD,
     NO_PRIMARY_APPLICABLE_METHOD,
     NO_NEXT_METHOD,
@@ -782,7 +783,8 @@ environment
     *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
     *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_pretty_sym,
     *print_pprint_dispatch_sym, *read_eval_sym, *read_base_sym,
-    *read_suppress_sym, *load_pathname_sym, *load_truename_sym;
+    *read_suppress_sym, *load_pathname_sym, *load_truename_sym,
+    *break_on_signals_sym;
 
   struct object *abort_sym;
 
@@ -4328,6 +4330,9 @@ add_standard_definitions (struct environment *env)
 
   env->load_pathname_sym = define_variable ("*LOAD-PATHNAME*", &nil_object, env);
   env->load_truename_sym = define_variable ("*LOAD-TRUENAME*", &nil_object, env);
+
+  env->break_on_signals_sym = define_variable ("*BREAK-ON-SIGNALS*", &nil_object,
+					       env);
 
   define_variable ("*FEATURES*", &nil_object, env);
 
@@ -34135,7 +34140,8 @@ struct object *
 builtin_signal (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *cond, *ret;
+  struct object *cond, *ret, *bos;
+  int res;
 
   if (!list_length (list))
     {
@@ -34183,6 +34189,21 @@ builtin_signal (struct object *list, struct environment *env,
     }
 
 
+  if (!IS_SYMBOL (bos = inspect_variable (env->break_on_signals_sym, env)))
+    {
+      outcome->type = WRONG_TYPE_OF_STANDARD_VARIABLE;
+      return NULL;
+    }
+
+  res = check_type (cond, bos, env, outcome);
+
+  if (res < 0)
+    return NULL;
+
+  if (res)
+    enter_debugger (NULL, env, outcome);
+
+
   ret = handle_condition (cond, env, outcome);
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT)
@@ -34199,7 +34220,8 @@ struct object *
 builtin_error (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *cond, *ret;
+  struct object *cond, *ret, *bos;
+  int res;
 
   if (!list_length (list))
     {
@@ -34246,6 +34268,21 @@ builtin_error (struct object *list, struct environment *env,
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+
+
+  if (!IS_SYMBOL (bos = inspect_variable (env->break_on_signals_sym, env)))
+    {
+      outcome->type = WRONG_TYPE_OF_STANDARD_VARIABLE;
+      return NULL;
+    }
+
+  res = check_type (cond, bos, env, outcome);
+
+  if (res < 0)
+    return NULL;
+
+  if (res)
+    enter_debugger (NULL, env, outcome);
 
 
   ret = handle_condition (cond, env, outcome);
@@ -37588,6 +37625,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == INVALID_SIZE)
     {
       printf ("eval error: not a valid size\n");
+    }
+  else if (err->type == WRONG_TYPE_OF_STANDARD_VARIABLE)
+    {
+      printf ("eval error: wrong type of a standard variable\n");
     }
   else if (err->type == NO_APPLICABLE_METHOD)
     {
