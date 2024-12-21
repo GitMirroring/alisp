@@ -4110,6 +4110,7 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("STANDARD-CLASS", env, type_standard_class, 1,
 		    (char *)NULL);
+  add_builtin_type ("BUILT-IN-CLASS", env, type_nil, 1, "CLASS", (char *)NULL);
 
 
   stdobjcl = alloc_object ();
