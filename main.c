@@ -21334,17 +21334,20 @@ builtin_read (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (IS_INCOMPLETE_OBJECT (out))
+  if (IS_INCOMPLETE_OBJECT (out) || out == NO_OBJECT)
     {
       CLEAR_READER_STATUS (*outcome);
-      outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
-      return NULL;
-    }
 
-  if (out == NO_OBJECT)
-    {
-      CLEAR_READER_STATUS (*outcome);
-      outcome->type = GOT_EOF;
+      if (s->type == FILE_STREAM && ferror (s->file))
+	outcome->type = ERROR_READING_FILE;
+      else if (out == NO_OBJECT)
+	outcome->type = GOT_EOF;
+      else
+	outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+
+      if (s->type == FILE_STREAM)
+	clearerr (s->file);
+
       return NULL;
     }
 
@@ -21420,17 +21423,20 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
       return NULL;
     }
 
-  if (IS_INCOMPLETE_OBJECT (out))
+  if (IS_INCOMPLETE_OBJECT (out) || out == NO_OBJECT)
     {
       CLEAR_READER_STATUS (*outcome);
-      outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
-      return NULL;
-    }
 
-  if (out == NO_OBJECT)
-    {
-      CLEAR_READER_STATUS (*outcome);
-      outcome->type = GOT_EOF;
+      if (s->type == FILE_STREAM && ferror (s->file))
+	outcome->type = ERROR_READING_FILE;
+      else if (out == NO_OBJECT)
+	outcome->type = GOT_EOF;
+      else
+	outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+
+      if (s->type == FILE_STREAM)
+	clearerr (s->file);
+
       return NULL;
     }
 
