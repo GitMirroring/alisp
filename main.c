@@ -3081,6 +3081,9 @@ struct object *builtin_al_report_profiling
 struct object *builtin_al_print_backtrace
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_compile_form
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_print_no_warranty
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_print_terms_and_conditions
@@ -4419,6 +4422,9 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
+		    TYPE_FUNCTION, NULL, 0);
+
+  add_builtin_form ("AL-COMPILE-FORM", env, builtin_al_compile_form,
 		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
@@ -35142,6 +35148,20 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
   print_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
 
   return &t_object;
+}
+
+
+struct object *
+builtin_al_compile_form (struct object *list, struct environment *env,
+			 struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  return compile_form (CAR (list), 0, env, outcome);
 }
 
 
