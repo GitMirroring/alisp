@@ -21294,23 +21294,23 @@ builtin_read (struct object *list, struct environment *env,
 {
   int l = list_length (list);
   struct stream *s;
-  struct object *str, *ret = NULL, *newstr;
+  struct object *str, *ret = NULL, *newstr, *eofval = NULL;
   enum outcome_type out;
   const char *objbeg, *objend;
 
-  if (l > 1)
+  if (l > 3)
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
-  if (l == 1 && CAR (list)->type != TYPE_STREAM)
+  if (l && CAR (list)->type != TYPE_STREAM)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  if (l == 1)
+  if (l)
     str = CAR (list);
   else
     str = inspect_variable (env->std_in_sym, env);
@@ -21324,6 +21324,12 @@ builtin_read (struct object *list, struct environment *env,
     }
 
   s = str->value_ptr.stream;
+
+  if (l >= 2 && SYMBOL (CAR (CDR (list))) == &nil_object)
+    eofval = &nil_object;
+
+  if (l >= 3 && eofval)
+    eofval = CAR (CDR (CDR (list)));
 
   out = read_object (&ret, 0, s->type == STRING_STREAM
 		     ? s->string->value_ptr.string->value : NULL,
@@ -21347,7 +21353,15 @@ builtin_read (struct object *list, struct environment *env,
       if (s->type == FILE_STREAM && ferror (s->file))
 	outcome->type = ERROR_READING_FILE;
       else if (out == NO_OBJECT)
-	outcome->type = GOT_EOF;
+	{
+	  if (eofval)
+	    {
+	      increment_refcount (eofval);
+	      return eofval;
+	    }
+
+	  outcome->type = GOT_EOF;
+	}
       else
 	outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
 
@@ -21383,23 +21397,23 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 {
   int l = list_length (list);
   struct stream *s;
-  struct object *str, *ret = NULL, *newstr;
+  struct object *str, *ret = NULL, *newstr, *eofval = NULL;
   enum outcome_type out;
   const char *objbeg, *objend;
 
-  if (l > 1)
+  if (l > 3)
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
     }
 
-  if (l == 1 && CAR (list)->type != TYPE_STREAM)
+  if (l && CAR (list)->type != TYPE_STREAM)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  if (l == 1)
+  if (l)
     str = CAR (list);
   else
     str = inspect_variable (env->std_in_sym, env);
@@ -21413,6 +21427,12 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
     }
 
   s = str->value_ptr.stream;
+
+  if (l >= 2 && SYMBOL (CAR (CDR (list))) == &nil_object)
+    eofval = &nil_object;
+
+  if (l >= 3 && eofval)
+    eofval = CAR (CDR (CDR (list)));
 
   out = read_object (&ret, 0, s->type == STRING_STREAM
 		     ? s->string->value_ptr.string->value : NULL,
@@ -21436,7 +21456,15 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
       if (s->type == FILE_STREAM && ferror (s->file))
 	outcome->type = ERROR_READING_FILE;
       else if (out == NO_OBJECT)
-	outcome->type = GOT_EOF;
+	{
+	  if (eofval)
+	    {
+	      increment_refcount (eofval);
+	      return eofval;
+	    }
+
+	  outcome->type = GOT_EOF;
+	}
       else
 	outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
 
