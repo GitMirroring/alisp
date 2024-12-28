@@ -89,6 +89,9 @@ package.  There are also some non-standard extensions of standard functions.
 
 - the variable *AL-COMPILE-WHEN-DEFINING* is described in "Compilation"
 
+- the function AL-COMPILE-FORM takes a single form and returns that form
+  compiled.  The function can operate destructively on its argument
+
 - AL-BREAK is a condition class that represents encountering a breakpoint
 
 - the *AL-ENABLE-BREAKPOINTS* parameter lets you enable or disable breakpoints
