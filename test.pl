@@ -261,6 +261,8 @@ make_test ("(nconc 0)", "0");
 make_test ("(nconc (list 'a 'b 'c) (list 'd 'e))", "(A B C D E)");
 make_test ("(nconc (list 'a 'b 'c) 'd)", "(A B C . D)");
 make_test ("(nconc (list 'a 'b 'c) NIL (list 'd 'e) NIL 'f)", "(A B C D E . F)");
+make_test ("(nconc nil '(0))", "(0)");
+make_test ("(nconc '(0 1 . 2) '(3))", "(0 1 3)");
 make_test ("(let ((a 2)) a)", "2");
 make_test ("(let ((x 0)) x x x)", "0");
 make_test ("(let ((a)) a)", "NIL");
