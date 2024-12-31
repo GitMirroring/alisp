@@ -18310,42 +18310,36 @@ struct object *
 builtin_nconc (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  int i, l = list_length (list);
-  struct object *argcons = list, *lastcons = NULL;
+  struct object *ret = &nil_object, *lastlist, *lastcons;
 
-  if (!l)
-    return &nil_object;
-
-  for (i = 0; i < l-1; i++)
+  while (SYMBOL (list) != &nil_object)
     {
-      if (!IS_LIST (CAR (argcons)))
+      if (SYMBOL (CDR (list)) != &nil_object && !IS_LIST (CAR (list)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
-      argcons = CDR (argcons);
-    }
-
-  increment_refcount (CAR (list));
-
-  argcons = list;
-
-  for (i = 0; i < l; i++)
-    {
-      if (lastcons)
+      if (ret == &nil_object)
 	{
-	  lastcons->value_ptr.cons_pair->cdr = CAR (argcons);
-	  add_reference (lastcons, CAR (argcons), 1);
+	  increment_refcount (CAR (list));
+	  ret = CAR (list);
+	}
+      else
+	{
+	  lastcons = last_cons_pair (lastlist);
+	  delete_reference (lastcons, CDR (lastcons), 1);
+	  lastcons->value_ptr.cons_pair->cdr = CAR (list);
+	  add_reference (lastcons, CAR (list), 1);
 	}
 
-      if (CAR (argcons)->type == TYPE_CONS_PAIR)
-	lastcons = last_cons_pair (CAR (argcons));
+      if (CAR (list)->type == TYPE_CONS_PAIR)
+	lastlist = CAR (list);
 
-      argcons = CDR (argcons);
+      list = CDR (list);
     }
 
-  return CAR (list);
+  return ret;
 }
 
 
