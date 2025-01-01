@@ -1,0 +1,56 @@
+WHY I DISLIKE THE PATHNAME API OF COMMON LISP
+
+
+I don't like the filename API of Common Lisp very much.  Here I will try to
+explain why.
+
+First thing, the syntax is puzzling: if you want to represent the file
+"/home/foo/", then why representing it as (:ABSOLUTE "home" "foo")?  The former
+is a simple and recognizable string, while the second means allocating three
+conses, a symbol and two strings, which is quite inefficient.
+The standard seemingly implies that the second syntax is better because it is
+independent of path separator characters, but is that so?  If you port your
+program to different or exotic systems, important files will likely be in
+totally different places, so separator characters will be the least of your
+concerns.
+
+Another matter is the distinction between proper files and directories.  I think
+that POSIX does it well: in POSIX, if you say "/home/foo", then foo can be
+either a file or a directory, while if you say "/home/foo/" with a trailing
+slash, foo is necessarily a directory.
+This matches well the needs of system programming and administration: sometimes
+you need to refer to an object that can be either thing, while other times you
+need to stress that something is a directory.
+In Common Lisp instead, files and directories are sintactically distinct: proper
+file foo is "/home/foo" and directory foo is "/home/foo/"; you need to refer to
+a filesystem object that can be either?  You can't.
+
+Still another issue is the enormous ambiguity of the concepts provided in the
+pathnames API: a pathname can consist of host, device, directory, name, type and
+version; it can be merged in some way with a system "default"; can be "logical"
+or "physical"; can be a "truename"; can have wild components either for a single
+directory level or for multiple ones; can even have "unspecific" components,
+which are different from wild ones.
+Each and every of these concepts needs to match to some features of the
+underlying operating system and filesystem, and such matching is at the
+discretion of the Common Lisp implementation, so you must determine if the
+semantics of these concepts are good for you, for each implementation you intend
+to support, assuming of course that you can figure out these choices from the
+documentation of each implementation.
+
+I think the standard tries to be so abstract as to accomodate every conceivable
+filesystem, while at the same time giving so much leeway to the implementers
+that you can assume very little about each implementation.
+
+But the truth is that filesystems in modern OSes are quite different from one
+another, and become wildly different if you include old or niche OSes.
+
+Pathname objects of CL seem poorly designed to me: I'd go as far as recommend to
+represent filenames as plain strings, avoiding pathname objects entirely.  (I
+think that all pathname functions also accept plain strings.)  Then you can do
+filename manipulation yourself: after all it's just string manipulation, so it
+won't be too difficult.
+
+
+
+If you have comments on this writing, write to monacoandrea94@gmail.com.
