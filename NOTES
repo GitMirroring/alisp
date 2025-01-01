@@ -204,8 +204,9 @@ totally different places, so separator characters will be the least of your
 concerns.
 
 I'd go as far as recommend to represent filenames as plain strings, avoiding
-pathname objects entirely.  (I think that all pathname functions also accepts
+pathname objects entirely.  (I think that all pathname functions also accept
 plain strings.)
+(See also the file WHY-NO-PATHNAMES).
 
 That said, alisp represents a pathname object as a string internally.
 
