@@ -1866,7 +1866,7 @@ int set_nth_character (struct object *str, int ind, char *ch);
 
 struct object *create_file_stream (enum stream_content_type content_type,
 				   enum stream_direction direction,
-				   struct object *namestring,
+				   struct object *namestring, int overwrite,
 				   struct outcome *outcome);
 struct object *create_stream_from_open_file (enum stream_content_type content_type,
 					     enum stream_direction direction,
@@ -9568,7 +9568,7 @@ set_nth_character (struct object *str, int ind, char *ch)
 struct object *
 create_file_stream (enum stream_content_type content_type,
 		    enum stream_direction direction, struct object *namestring,
-		    struct outcome *outcome)
+		    int overwrite, struct outcome *outcome)
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
@@ -9583,12 +9583,15 @@ create_file_stream (enum stream_content_type content_type,
     {
       f = fopen (fn, "r");
 
-      if (f)
+      if (f && !overwrite)
 	{
 	  fclose (f);
 	  outcome->type = FILE_ALREADY_EXISTS;
 	  return NULL;
 	}
+
+      if (f)
+	fclose (f);
 
       if (direction == OUTPUT_STREAM)
 	str->file = fopen (fn, "wb");
@@ -22070,7 +22073,7 @@ builtin_open (struct object *list, struct environment *env,
 {
   enum stream_direction dir = -1;
   struct object *ns, *allow_other_keys = NULL;
-  int found_unknown_key = 0;
+  int found_unknown_key = 0, overwrite = -1;
 
   if (!list_length (list))
     {
@@ -22125,6 +22128,32 @@ builtin_open (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (symbol_equals (CAR (list), ":IF-EXISTS", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (symbol_equals (CAR (CDR (list)), ":OVERWRITE", env))
+	    {
+	      if (overwrite == -1)
+		overwrite = 1;
+	    }
+	  else if (symbol_equals (CAR (CDR (list)), ":ERROR", env))
+	    {
+	      if (overwrite == -1)
+		overwrite = 0;
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
       else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
@@ -22164,7 +22193,10 @@ builtin_open (struct object *list, struct environment *env,
   if (dir == -1)
     dir = INPUT_STREAM;
 
-  return create_file_stream (BINARY_STREAM, dir, ns, outcome);
+  if (overwrite == -1)
+    overwrite = 0;
+
+  return create_file_stream (BINARY_STREAM, dir, ns, overwrite, outcome);
 }
 
 
