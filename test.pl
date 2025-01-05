@@ -1195,6 +1195,7 @@ make_test ("(read-preserving-whitespace (make-string-input-stream \"123\"))", "1
 make_test ("(let ((s (make-string-input-stream \"abc def\"))) (read s) (al-string-input-stream-string s))", "\"def\"");
 make_test ("(read-from-string \" abc\")", "ABC\n4");
 make_test ("(read-from-string \" 1  \")", "1\n2");
+make_test ("(read-from-string \":hi\")", ":HI\n3");
 make_test ("(parse-integer \"2\")", "2\n1");
 make_test ("(parse-integer \"  25 \")", "25\n5");
 make_test ("(parse-integer \"  -4\")", "-4\n4");
