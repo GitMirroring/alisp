@@ -5742,7 +5742,9 @@ read_symbol_name (struct object **obj, const char *input, size_t size,
 					 + sym->actual_symname_used_s,
 					 visib == EXTERNAL_VISIBILITY ?
 					 start_of_pack_sep + 1
-					 : start_of_pack_sep + 2, size,
+					 : start_of_pack_sep + 2, size -
+					 (start_of_pack_sep-input) -
+					 (visib == EXTERNAL_VISIBILITY ? 1 : 2),
 					 read_case, 0, 0);
     }
   else
