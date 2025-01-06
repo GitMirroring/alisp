@@ -2986,13 +2986,72 @@
 
 
 
+(defparameter *readtable* nil)
+
+
+
 (defmacro with-compilation-unit (opts &rest forms)
   `(progn
      ,@forms))
 
 
 
-(defparameter *readtable* nil)
+(defparameter *compile-file-truename* nil)
+
+(defparameter *compile-file-pathname* nil)
+
+
+(defun compile-file-pathname (infile &key output-file &allow-other-keys)
+  (make-pathname :directory (pathname-directory infile)
+		 :name (pathname-name infile)
+		 :type "alc"))
+
+
+(defun write-preserving-gensyms (obj str gensyms)
+  (typecase obj
+    (cons
+     (write-string "(" str)
+     (let ((firstobjp t))
+       (dolist (c obj)
+	 (unless firstobjp
+	   (write-string " " str))
+	 (setq firstobjp nil)
+	 (setq gensyms (write-preserving-gensyms c str gensyms))))
+     (write-string ")" str))
+    (symbol
+     (if (symbol-package obj)
+	 (write obj :stream str)
+	 (let ((ind (position obj gensyms :test 'eq)))
+	   (if ind
+	       (format str "#~s#" ind)
+	       (progn
+		 (setq gensyms (nconc gensyms (list obj)))
+		 (format str "#~s=~s" (1- (length gensyms)) obj))))))
+    (otherwise (write obj :stream str)))
+  gensyms)
+
+
+(defun compile-file (infile &key (output-file infile) verbose print external-format)
+  (let* ((*compile-file-truename* infile)
+	 (*compile-file-pathname* infile)
+	 (outname (compile-file-pathname output-file))
+	 (*readtable* *readtable*)
+	 (*package* *package*)
+	 (eofsym (gensym))
+	 (firstobjp t))
+    (with-open-file (instr infile :direction :input)
+      (with-open-file (outstr outname :direction :output :if-exists :overwrite)
+	(do nil
+	    (nil)
+	  (let ((obj (read instr nil eofsym)))
+	    (if (eq obj eofsym)
+		(return-from compile-file (values outname nil nil)))
+	    (setq obj (cl-user:al-compile-form obj))
+	    (unless firstobjp
+	      (terpri outstr))
+	    (setq firstobjp nil)
+	    (write-preserving-gensyms obj outstr nil)
+	    (terpri outstr)))))))
 
 
 
@@ -3177,9 +3236,10 @@
 	  prin1-to-string princ-to-string force-output with-input-from-string
 	  with-output-to-string pprint do-all-symbols find-all-symbols
 	  with-slots with-accessors loop format encode-universal-time
-	  with-compilation-unit *readtable* with-standard-io-syntax handler-case
-	  restart-case with-simple-restart find-restart cerror break
-	  ignore-errors abort continue documentation))
+	  *readtable* with-compilation-unit *compile-file-truename*
+	  *compile-file-pathname* compile-file-pathname compile-file
+	  with-standard-io-syntax handler-case restart-case with-simple-restart
+	  find-restart cerror break ignore-errors abort continue documentation))
 
 
 
