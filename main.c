@@ -10702,7 +10702,9 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO*"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO*")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DEFUN")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DEFMACRO"))
 	{
 	  if (!compile_body (CDR (CDR (CDR (form))), backt_comma_bal, env,
 			     outcome))
