@@ -683,7 +683,7 @@ profiling_record
   int is_setf;
 
   unsigned counter;
-  unsigned time;
+  clock_t time;
 
   struct profiling_record *next;
 };
@@ -2000,7 +2000,7 @@ struct object *enter_debugger (struct object *cond, struct environment *env,
 			       struct outcome *outcome);
 
 void add_profiling_data (struct profiling_record **data, struct object *name,
-			 int is_setf, int time, int evaltime);
+			 int is_setf, clock_t time, clock_t evaltime);
 
 struct call_frame *add_call_frame (struct object *funcobj, struct object *args,
 				   struct environment *env, int argsnum,
@@ -12298,7 +12298,7 @@ enter_debugger (struct object *cond, struct environment *env,
 
 void
 add_profiling_data (struct profiling_record **data, struct object *name,
-		    int is_setf, int time, int evaltime)
+		    int is_setf, clock_t time, clock_t evaltime)
 {
   struct profiling_record *r = *data;
 
@@ -14864,7 +14864,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
     && !(env->stepping_flags & STEPPING_OVER_FORM), onlylex = env->only_lexical;
-  unsigned isprof = 0, time, evaltime = 0;
+  unsigned isprof = 0;
+  clock_t time, evaltime = 0;
 
 
   env->stack_depth++;
@@ -16269,7 +16270,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
   struct object *args, *ret = NULL, *res, *tmp, *margs;
   struct method_list *applm = NULL, *lapplm, *mlist,
     *ml = func->value_ptr.function->methods;
-  int applnum = 0, i, found_primary = 0, isprof = 0, time;
+  int applnum = 0, i, found_primary = 0, isprof = 0;
+  clock_t time;
 
   if (eval_args)
     {
@@ -35182,6 +35184,10 @@ builtin_al_report_profiling (struct object *list, struct environment *env,
       car = CDR (car);
       car->value_ptr.cons_pair->car =
 	create_integer_from_unsigned_long (r->time);
+      car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      car = CDR (car);
+      car->value_ptr.cons_pair->car =
+	create_floating_from_double ((double)r->time / r->counter);
       car->value_ptr.cons_pair->cdr = &nil_object;
 
       r = r->next;
