@@ -292,7 +292,7 @@ other implementations using this, so this is somewhat experimental.
 Constants defined with DEFCONSTANT are skipped when doing traversals of the
 reference graph, so defining constants has true performance benefits.
 
-Packages are also skipped in reference counting.
+Package objects are also skipped in reference counting.
 
 
 
@@ -313,10 +313,13 @@ calling AL-CLEAR-PROFILING clears all data.
 
 AL-REPORT-PROFILING returns a list in which each element is a list which
 contains a name, a counter of all the times that function or macro has been
-called, and all the time spent in that function or macro (including the time
-spent in all descendants in the call graph).  For functions, the time doesn't
-include evaluation of arguments.  For macros, the time includes both expansion
-and evaluation of result.
+called, all the time spent in that function or macro (including the time spent
+in all descendants in the call graph), and the average time spent per call, that
+is the ratio between the second and first number.  For functions, the total time
+doesn't include evaluation of arguments.  For macros, the time includes both
+expansion and evaluation of result.  Keep in mind that, when a function calls
+itself directly or indirectly, the time spent in the inner invocation is counted
+twice, so the last number is often more useful.
 
 The profiler has a few limitations: structure constructor and accessors,
 condition readers, functions obtained as macro functions and macros defined with
