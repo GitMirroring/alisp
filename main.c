@@ -676,6 +676,8 @@ stepping_flags
   };
 
 
+#define PROFILING_HASHTABLE_SIZE 1024
+
 struct
 profiling_record
 {
@@ -748,7 +750,7 @@ environment
   struct object *next_eval, *last_command;
 
   int is_profiling;
-  struct profiling_record *profiling_data;
+  struct profiling_record **profiling_data;
 
   struct call_frame *call_stack;
 
@@ -12300,7 +12302,8 @@ void
 add_profiling_data (struct profiling_record **data, struct object *name,
 		    int is_setf, clock_t time, clock_t evaltime)
 {
-  struct profiling_record *r = *data;
+  int ind = hash_object (name, PROFILING_HASHTABLE_SIZE);
+  struct profiling_record *r = data [ind];
 
   while (r)
     {
@@ -12317,8 +12320,8 @@ add_profiling_data (struct profiling_record **data, struct object *name,
       r->is_setf = is_setf;
       r->counter = 0;
       r->time = 0;
-      r->next = *data;
-      *data = r;
+      r->next = data [ind];
+      data [ind] = r;
     }
 
   r->counter += 1;
@@ -14921,7 +14924,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       if (isprof && env->is_profiling)
 	{
 	  time = clock () - time;
-	  add_profiling_data (&env->profiling_data,
+	  add_profiling_data (env->profiling_data,
 			      SYMBOL (func->value_ptr.function->name),
 			      func->value_ptr.function->is_setf_func, time,
 			      evaltime);
@@ -15198,7 +15201,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (isprof && env->is_profiling)
     {
-      add_profiling_data (&env->profiling_data,
+      add_profiling_data (env->profiling_data,
 			  SYMBOL (func->value_ptr.function->name),
 			  func->value_ptr.function->is_setf_func, time,
 			  evaltime);
@@ -16424,7 +16427,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
   if (isprof && env->is_profiling)
     {
-      add_profiling_data (&env->profiling_data,
+      add_profiling_data (env->profiling_data,
 			  SYMBOL (func->value_ptr.function->name),
 			  func->value_ptr.function->is_setf_func,
 			  clock () - time, 0);
@@ -35086,10 +35089,21 @@ struct object *
 builtin_al_start_profiling (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
+  int i;
+
   if (SYMBOL (list) != &nil_object)
     {
       outcome->type = TOO_MANY_ARGUMENTS;
       return NULL;
+    }
+
+  if (!env->profiling_data)
+    {
+      env->profiling_data = malloc_and_check (PROFILING_HASHTABLE_SIZE
+					      * sizeof (*env->profiling_data));
+
+      for (i = 0; i < PROFILING_HASHTABLE_SIZE; i++)
+	env->profiling_data [i] = NULL;
     }
 
   env->is_profiling = 1;
@@ -35118,7 +35132,8 @@ struct object *
 builtin_al_clear_profiling (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
-  struct profiling_record *r = env->profiling_data, *n;
+  struct profiling_record *r, *n;
+  int i;
 
   if (SYMBOL (list) != &nil_object)
     {
@@ -35126,14 +35141,23 @@ builtin_al_clear_profiling (struct object *list, struct environment *env,
       return NULL;
     }
 
-  while (r)
+  if (env->profiling_data)
     {
-      n = r->next;
-      free (r);
-      r = n;
-    }
+      for (i = 0; i < PROFILING_HASHTABLE_SIZE; i++)
+	{
+	  r = env->profiling_data [i];
 
-  env->profiling_data = NULL;
+	  while (r)
+	    {
+	      n = r->next;
+	      free (r);
+	      r = n;
+	    }
+	}
+
+      free (env->profiling_data);
+      env->profiling_data = NULL;
+    }
 
   return &t_object;
 }
@@ -35144,7 +35168,8 @@ builtin_al_report_profiling (struct object *list, struct environment *env,
 			     struct outcome *outcome)
 {
   struct object *ret = &nil_object, *cons, *car;
-  struct profiling_record *r = env->profiling_data;
+  struct profiling_record *r;
+  int i;
 
   if (SYMBOL (list) != &nil_object)
     {
@@ -35152,45 +35177,54 @@ builtin_al_report_profiling (struct object *list, struct environment *env,
       return NULL;
     }
 
-  while (r)
+  if (!env->profiling_data)
+    return ret;
+
+  for (i = 0; i < PROFILING_HASHTABLE_SIZE; i++)
     {
-      cons = alloc_empty_cons_pair ();
-      cons->value_ptr.cons_pair->cdr = ret;
-      ret = cons;
+      r = env->profiling_data [i];
 
-      car = alloc_empty_cons_pair ();
-      cons->value_ptr.cons_pair->car = car;
-
-      if (r->is_setf)
+      while (r)
 	{
-	  car->value_ptr.cons_pair->car = alloc_empty_list (2);
-	  car->value_ptr.cons_pair->car->value_ptr.cons_pair->car = env->setf_sym;
-	  add_reference (CAR (car), CAR (CAR (car)), 0);
-	  car->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
-	    value_ptr.cons_pair->car = r->name;
-	  add_reference (CDR (CAR (car)), r->name, 0);
-	}
-      else
-	{
-	  car->value_ptr.cons_pair->car = r->name;
-	  add_reference (car, r->name, 0);
-	}
+	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
 
-      car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-      car = CDR (car);
-      car->value_ptr.cons_pair->car =
-	create_integer_from_unsigned_long (r->counter);
-      car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-      car = CDR (car);
-      car->value_ptr.cons_pair->car =
-	create_integer_from_unsigned_long (r->time);
-      car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-      car = CDR (car);
-      car->value_ptr.cons_pair->car =
-	create_floating_from_double ((double)r->time / r->counter);
-      car->value_ptr.cons_pair->cdr = &nil_object;
+	  car = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car = car;
 
-      r = r->next;
+	  if (r->is_setf)
+	    {
+	      car->value_ptr.cons_pair->car = alloc_empty_list (2);
+	      car->value_ptr.cons_pair->car->value_ptr.cons_pair->car =
+		env->setf_sym;
+	      add_reference (CAR (car), CAR (CAR (car)), 0);
+	      car->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+		value_ptr.cons_pair->car = r->name;
+	      add_reference (CDR (CAR (car)), r->name, 0);
+	    }
+	  else
+	    {
+	      car->value_ptr.cons_pair->car = r->name;
+	      add_reference (car, r->name, 0);
+	    }
+
+	  car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  car = CDR (car);
+	  car->value_ptr.cons_pair->car =
+	    create_integer_from_unsigned_long (r->counter);
+	  car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  car = CDR (car);
+	  car->value_ptr.cons_pair->car =
+	    create_integer_from_unsigned_long (r->time);
+	  car->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  car = CDR (car);
+	  car->value_ptr.cons_pair->car =
+	    create_floating_from_double ((double)r->time / r->counter);
+	  car->value_ptr.cons_pair->cdr = &nil_object;
+
+	  r = r->next;
+	}
     }
 
   return ret;
