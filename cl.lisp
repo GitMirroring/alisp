@@ -3031,6 +3031,16 @@
   gensyms)
 
 
+(defun parse-toplevel-form-at-compile-time (form)
+  (if (consp form)
+      (cond
+	((eq (car form) 'progn)
+	 (dolist (f (cdr form))
+	   (parse-toplevel-form-at-compile-time f)))
+	((eq (car form) 'in-package)
+	 (setq *package* (find-package (cadr form)))))))
+
+
 (defun compile-file (infile &key (output-file infile) verbose print external-format)
   (let* ((*compile-file-truename* infile)
 	 (*compile-file-pathname* infile)
@@ -3051,6 +3061,7 @@
 	      (terpri outstr))
 	    (setq firstobjp nil)
 	    (write-preserving-gensyms obj outstr nil)
+	    (parse-toplevel-form-at-compile-time obj)
 	    (terpri outstr)))))))
 
 
