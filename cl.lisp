@@ -3000,6 +3000,10 @@
 
 (defparameter *compile-file-pathname* nil)
 
+(defparameter *compile-print* nil)
+
+(defparameter *compile-verbose* nil)
+
 
 (defun compile-file-pathname (infile &key output-file &allow-other-keys)
   (make-pathname :directory (pathname-directory infile)
@@ -3041,7 +3045,7 @@
 	 (setq *package* (find-package (cadr form)))))))
 
 
-(defun compile-file (infile &key (output-file infile) verbose print external-format)
+(defun compile-file (infile &key (output-file infile) (verbose *compile-verbose*) (print *compile-print*) external-format)
   (let* ((*compile-file-truename* infile)
 	 (*compile-file-pathname* infile)
 	 (outname (compile-file-pathname output-file))
@@ -3049,6 +3053,8 @@
 	 (*package* *package*)
 	 (eofsym (gensym))
 	 (firstobjp t))
+    (if verbose
+	(format t ";;; Compiling file ~a...~%" infile))
     (with-open-file (instr infile :direction :input)
       (with-open-file (outstr outname :direction :output :if-exists :overwrite)
 	(do nil
@@ -3056,8 +3062,14 @@
 	  (let ((obj (read instr nil eofsym)))
 	    (if (eq obj eofsym)
 		(return-from compile-file (values outname nil nil)))
+	    (when print
+	      (format t "Compiling ")
+	      (write obj)
+	      (terpri))
 	    (setq obj (cl-user:al-compile-form obj))
 	    (unless firstobjp
+	      (if print
+		  (terpri))
 	      (terpri outstr))
 	    (setq firstobjp nil)
 	    (write-preserving-gensyms obj outstr nil)
@@ -3248,9 +3260,10 @@
 	  with-output-to-string pprint do-all-symbols find-all-symbols
 	  with-slots with-accessors loop format encode-universal-time
 	  *readtable* with-compilation-unit *compile-file-truename*
-	  *compile-file-pathname* compile-file-pathname compile-file
-	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart cerror break ignore-errors abort continue documentation))
+	  *compile-file-pathname* *compile-print* *compile-verbose*
+	  compile-file-pathname compile-file with-standard-io-syntax
+	  handler-case restart-case with-simple-restart find-restart cerror
+	  break ignore-errors abort continue documentation))
 
 
 
