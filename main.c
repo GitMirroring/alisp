@@ -22056,13 +22056,13 @@ builtin_load (struct object *list, struct environment *env,
     print = inspect_variable (BUILTIN_SYMBOL ("*LOAD-PRINT*"), env);
 
   if (SYMBOL (verbose) != &nil_object)
-    printf ("; Loading %s...\n", fn);
+    printf (";;; Loading file %s...\n", fn);
 
   ret = load_file (fn, SYMBOL (print) != &nil_object, env, outcome);
 
   if (SYMBOL (verbose) != &nil_object && ret)
     {
-      printf ("; Loading %s returned ", fn);
+      printf (";;; Loading file %s returned ", fn);
       print_object (ret, env, env->c_stdout->value_ptr.stream);
     }
 
