@@ -6650,8 +6650,11 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 
 	      if (out == COMPLETE_OBJECT)
 		{
-		  input = *obj_end+1;
-		  size = (input + size) - *obj_end - 1;
+		  if (input)
+		    {
+		      input = *obj_end+1;
+		      size = (input + size) - *obj_end - 1;
+		    }
 		}
 	    }
 	  else
@@ -6667,8 +6670,11 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 
 	      if (out == COMPLETE_OBJECT)
 		{
-		  input = *obj_end+1;
-		  size = (input + size) - *obj_end - 1;
+		  if (input)
+		    {
+		      input = *obj_end+1;
+		      size = (input + size) - *obj_end - 1;
+		    }
 		}
 	    }
 	} while (out == NO_OBJECT ||
@@ -6715,6 +6721,8 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 	    {
 	      if (input)
 		*obj_end = input - 2;
+	      else
+		unget_char (ch, &input, &size, stream);
 
 	      return COMPLETE_OBJECT;
 	    }
@@ -21337,13 +21345,22 @@ builtin_read (struct object *list, struct environment *env,
   if (l >= 3 && eofval)
     eofval = CAR (CDR (CDR (list)));
 
-  out = read_object (&ret, 0, s->type == STRING_STREAM
-		     ? s->string->value_ptr.string->value : NULL,
-		     s->type == STRING_STREAM
-		     ? s->string->value_ptr.string->used_size : 0,
-		     s->type == FILE_STREAM ? s->file : NULL, 0, 1, env,
-		     outcome, &objbeg, &objend);
-  clear_read_labels (&env->read_labels);
+  if (s->type == STRING_STREAM)
+    objend = s->string->value_ptr.string->value;
+
+  do
+    {
+      out = read_object (&ret, 0, s->type == STRING_STREAM ? objend : NULL,
+			 s->type == STRING_STREAM ?
+			 s->string->value_ptr.string->used_size
+			 -(objend-s->string->value_ptr.string->value) : 0,
+			 s->type == FILE_STREAM ? s->file : NULL,
+			 0, 1, env, outcome, &objbeg, &objend);
+      clear_read_labels (&env->read_labels);
+
+      if (out == SKIPPED_OBJECT)
+	objend++;
+    } while (out == SKIPPED_OBJECT);
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
@@ -21440,13 +21457,22 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
   if (l >= 3 && eofval)
     eofval = CAR (CDR (CDR (list)));
 
-  out = read_object (&ret, 0, s->type == STRING_STREAM
-		     ? s->string->value_ptr.string->value : NULL,
-		     s->type == STRING_STREAM
-		     ? s->string->value_ptr.string->used_size : 0,
-		     s->type == FILE_STREAM ? s->file : NULL, 1, 1, env,
-		     outcome, &objbeg, &objend);
-  clear_read_labels (&env->read_labels);
+  if (s->type == STRING_STREAM)
+    objend = s->string->value_ptr.string->value;
+
+  do
+    {
+      out = read_object (&ret, 0, s->type == STRING_STREAM ? objend : NULL,
+			 s->type == STRING_STREAM ?
+			 s->string->value_ptr.string->used_size
+			 -(objend-s->string->value_ptr.string->value) : 0,
+			 s->type == FILE_STREAM ? s->file : NULL,
+			 1, 1, env, outcome, &objbeg, &objend);
+      clear_read_labels (&env->read_labels);
+
+      if (out == SKIPPED_OBJECT)
+	objend++;
+    } while (out == SKIPPED_OBJECT);
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
@@ -21520,10 +21546,18 @@ builtin_read_from_string (struct object *list, struct environment *env,
       return NULL;
     }
 
-  out = read_object (&ret, 0, CAR (list)->value_ptr.string->value,
-		     CAR (list)->value_ptr.string->used_size, NULL, 0, 1, env,
-		     outcome, &objbeg, &objend);
-  clear_read_labels (&env->read_labels);
+  objend = CAR (list)->value_ptr.string->value;
+
+  do
+    {
+      out = read_object (&ret, 0, objend, CAR (list)->value_ptr.string->used_size
+			 -(objend-CAR (list)->value_ptr.string->value), NULL, 0,
+			 1, env, outcome, &objbeg, &objend);
+      clear_read_labels (&env->read_labels);
+
+      if (out == SKIPPED_OBJECT)
+	objend++;
+    } while (out == SKIPPED_OBJECT);
 
   if (IS_READ_OR_EVAL_ERROR (out))
     {
