@@ -1197,6 +1197,7 @@ make_test ("(read-from-string \" abc\")", "ABC\n4");
 make_test ("(read-from-string \" 1  \")", "1\n2");
 make_test ("(read-from-string \":hi\")", ":HI\n3");
 make_test ("(read-from-string \"#+foo nil #+foo nil 0\")", "0\n21");
+make_test ("(let ((*package* *package*)) (read-from-string \"#:foo\"))", "#:FOO\n5");
 make_test ("(parse-integer \"2\")", "2\n1");
 make_test ("(parse-integer \"  25 \")", "25\n5");
 make_test ("(parse-integer \"  -4\")", "-4\n4");
