@@ -30465,7 +30465,9 @@ set_value (struct object *sym, struct object *value, int expand_symmacros,
 	  b = find_binding (s, env->vars, DYNAMIC_BINDING, -1, env->only_lexical);
 	  decrement_refcount (b->obj);
 	  b->obj = val;
-	  increment_refcount (val);
+
+	  if (val)
+	    increment_refcount (val);
 	}
     }
   else
