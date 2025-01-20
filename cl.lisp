@@ -3042,7 +3042,9 @@
 	 (dolist (f (cdr form))
 	   (parse-toplevel-form-at-compile-time f)))
 	((eq (car form) 'in-package)
-	 (setq *package* (find-package (cadr form)))))))
+	 (eval form))
+	((eq (car form) 'defpackage)
+	 (eval form)))))
 
 
 (defun compile-file (infile &key (output-file infile) (verbose *compile-verbose*) (print *compile-print*) external-format)
@@ -3051,8 +3053,7 @@
 	 (outname (compile-file-pathname output-file))
 	 (*readtable* *readtable*)
 	 (*package* *package*)
-	 (eofsym (gensym))
-	 (firstobjp t))
+	 (eofsym (gensym)))
     (if verbose
 	(format t ";;; Compiling file ~a...~%" infile))
     (with-open-file (instr infile :direction :input)
@@ -3066,14 +3067,12 @@
 	      (format t "Compiling ")
 	      (write obj)
 	      (terpri))
-	    (setq obj (cl-user:al-compile-form obj))
-	    (unless firstobjp
-	      (if print
-		  (terpri))
-	      (terpri outstr))
-	    (setq firstobjp nil)
-	    (write-preserving-gensyms obj outstr nil)
 	    (parse-toplevel-form-at-compile-time obj)
+	    (setq obj (cl-user:al-compile-form obj))
+	    (if print
+		(terpri))
+	    (write-preserving-gensyms obj outstr nil)
+	    (terpri outstr)
 	    (terpri outstr)))))))
 
 
