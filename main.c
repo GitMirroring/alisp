@@ -4674,6 +4674,12 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 	  token = accumulate_token (stream, preserve_whitespace, &tokensize,
 				    &tokenlength, outcome);
 
+	  if (IS_READ_OR_EVAL_ERROR (outcome->type))
+	    {
+	      free (token);
+	      return outcome->type;
+	    }
+
 	  if (outcome->single_escape || outcome->multiple_escape)
 	    {
 	      free (token);
@@ -5329,6 +5335,12 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    {
 	      token = accumulate_token (stream, preserve_whitespace, &tokensize,
 					&tokenlength, outcome);
+
+	      if (IS_READ_OR_EVAL_ERROR (outcome->type))
+		{
+		  free (token);
+		  return outcome->type;
+		}
 
 	      if (outcome->single_escape || outcome->multiple_escape)
 		{
@@ -6756,22 +6768,26 @@ char *
 accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 		  int *token_length, struct outcome *out)
 {
-  int ch;
+  int ch, onlydots = 1;
   char *outbuf;
 
   *token_size = 16;
   outbuf = malloc_and_check (*token_size);
   *token_length = 0;
 
+  out->type = NO_OBJECT;
+
   while ((ch = fgetc (stream)) != EOF)
     {
       if (ch == '\\')
 	{
 	  out->single_escape = !out->single_escape;
+	  onlydots = 0;
 	}
       else if (ch == '|' && !out->single_escape)
 	{
 	  out->multiple_escape = !out->multiple_escape;
+	  onlydots = 0;
 	}
       else
 	{
@@ -6782,8 +6798,16 @@ accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 	      if (preserve_whitespace || strchr (TERMINATING_MACRO_CHARS, ch))
 		ungetc (ch, stream);
 
+	      if (onlydots && *token_length == 1)
+		out->type = SINGLE_DOT;
+	      else if (onlydots)
+		out->type = MULTIPLE_DOTS;
+
 	      return outbuf;
 	    }
+
+	  if (ch != '.' || out->single_escape || out->multiple_escape)
+	    onlydots = 0;
 
 	  out->single_escape = 0;
 	}
@@ -6796,6 +6820,11 @@ accumulate_token (FILE *stream, int preserve_whitespace, int *token_size,
 
       outbuf [(*token_length)++] = ch;
     }
+
+  if (onlydots && *token_length == 1)
+    out->type = SINGLE_DOT;
+  else if (onlydots)
+    out->type = MULTIPLE_DOTS;
 
   return outbuf;
 }
