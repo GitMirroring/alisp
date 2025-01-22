@@ -3041,10 +3041,13 @@
 	((eq (car form) 'progn)
 	 (dolist (f (cdr form))
 	   (parse-toplevel-form-at-compile-time f)))
-	((eq (car form) 'in-package)
+	((member (car form) '(in-package defpackage defmacro) :test #'eq)
 	 (eval form))
-	((eq (car form) 'defpackage)
-	 (eval form)))))
+	((and
+	  (eq (car form) 'eval-when)
+	  (member :compile-toplevel (cadr form) :test #'eq))
+	 (eval `(progn
+		  ,@(cddr form)))))))
 
 
 (defun compile-file (infile &key (output-file infile) (verbose *compile-verbose*) (print *compile-print*) external-format)
@@ -3069,6 +3072,7 @@
 	      (terpri))
 	    (parse-toplevel-form-at-compile-time obj)
 	    (setq obj (cl-user:al-compile-form obj))
+	    (parse-toplevel-form-at-compile-time obj)
 	    (if print
 		(terpri))
 	    (write-preserving-gensyms obj outstr nil)
