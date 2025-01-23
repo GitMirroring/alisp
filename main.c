@@ -23536,7 +23536,7 @@ builtin_dolist (struct object *list, struct environment *env,
   env->go_tag_stack = collect_go_tags (CDR (list), env->go_tag_stack,
 				       &found_tags);
 
-  while (SYMBOL (cons) != &nil_object)
+  while (cons->type == TYPE_CONS_PAIR)
     {
       increment_refcount (CAR (cons));
       env->vars = bind_variable (var, CAR (cons), 1, env->vars);
@@ -23579,6 +23579,13 @@ builtin_dolist (struct object *list, struct environment *env,
   if (found_tags)
     {
       env->go_tag_stack = remove_go_tag_frame (env->go_tag_stack);
+    }
+
+  if (SYMBOL (cons) != &nil_object)
+    {
+      env->blocks->frame = remove_block (env->blocks->frame);
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
     }
 
   if (l == 3)
