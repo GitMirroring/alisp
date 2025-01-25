@@ -1174,6 +1174,7 @@ make_test ("(read (make-string-input-stream \"123\"))", "123");
 make_test ("(read (make-string-input-stream \"\") nil)", "NIL");
 make_test ("(read (make-string-input-stream \"\") nil 10)", "10");
 make_test ("(read *standard-input*)\n(1 2 . 3)", "(1 2 . 3)", 1);
+make_test ("(read)\n#+foo #\\space 0", "0", 1);
 make_test ("(read-preserving-whitespace)\n\"hello\"\"world\" 12 `(1 2 3) #\\c aa  ", "\"hello\"", 1);
 make_test ("(read-preserving-whitespace)", "\"world\"");
 make_test ("(read-preserving-whitespace)", "12");
