@@ -3016,12 +3016,19 @@
     (cons
      (write-string "(" str)
      (let ((firstobjp t))
-       (dolist (c obj)
+       (do ((c obj (cdr c)))
+	   (nil)
 	 (unless firstobjp
 	   (write-string " " str))
 	 (setq firstobjp nil)
-	 (setq gensyms (write-preserving-gensyms c str gensyms))))
-     (write-string ")" str))
+	 (setq gensyms (write-preserving-gensyms (car c) str gensyms))
+	 (if (not (cdr c))
+	     (return nil))
+	 (when (atom (cdr c))
+	   (write-string " . " str)
+	   (setq gensyms (write-preserving-gensyms (cdr c) str gensyms))
+	   (return nil)))
+       (write-string ")" str)))
     (symbol
      (if (symbol-package obj)
 	 (write obj :stream str)
