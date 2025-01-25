@@ -6738,6 +6738,8 @@ skip_without_reading (enum outcome_type type, int backts_commas_balance,
 
 	      return COMPLETE_OBJECT;
 	    }
+	  else
+	    outc->single_escape = 0;
 	}
 
       return INCOMPLETE_SYMBOL_NAME;
