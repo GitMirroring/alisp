@@ -1872,7 +1872,7 @@
 	(:import-from (setq imports (append imports (list (list (find-package (cadr opt)) (mapcar #'string (cddr opt)))))))
 	(:export (setq exports (append exports (mapcar #'string (cdr opt)))))
 	(:intern (setq intern (append intern (mapcar #'string (cdr opt)))))))
-    `(progn
+    `(eval-when (:compile-toplevel :load-toplevel :execute)
        (unless (find-package ,name)
 	 (make-package ,name))
        (rename-package ,name ,name ',nicks)
@@ -3048,7 +3048,7 @@
 	((eq (car form) 'progn)
 	 (dolist (f (cdr form))
 	   (parse-toplevel-form-at-compile-time f)))
-	((member (car form) '(in-package defpackage defmacro) :test #'eq)
+	((member (car form) '(in-package defmacro) :test #'eq)
 	 (eval form))
 	((and
 	  (eq (car form) 'eval-when)
@@ -3079,7 +3079,6 @@
 		     (format t "Compiling ")
 		     (write obj)
 		     (terpri))
-		   (parse-toplevel-form-at-compile-time obj)
 		   (setq obj (cl-user:al-compile-form obj))
 		   (parse-toplevel-form-at-compile-time obj)
 		   (if print
