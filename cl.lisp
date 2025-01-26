@@ -3061,30 +3061,34 @@
   (let* ((*compile-file-truename* infile)
 	 (*compile-file-pathname* infile)
 	 (outname (compile-file-pathname output-file))
-	 (*readtable* *readtable*)
-	 (*package* *package*)
+	 (old-readtable *readtable*)
+	 (old-package *package*)
 	 (eofsym (gensym)))
-    (if verbose
-	(format t ";;; Compiling file ~a...~%" infile))
-    (with-open-file (instr infile :direction :input)
-      (with-open-file (outstr outname :direction :output :if-exists :overwrite)
-	(do nil
-	    (nil)
-	  (let ((obj (read instr nil eofsym)))
-	    (if (eq obj eofsym)
-		(return-from compile-file (values outname nil nil)))
-	    (when print
-	      (format t "Compiling ")
-	      (write obj)
-	      (terpri))
-	    (parse-toplevel-form-at-compile-time obj)
-	    (setq obj (cl-user:al-compile-form obj))
-	    (parse-toplevel-form-at-compile-time obj)
-	    (if print
-		(terpri))
-	    (write-preserving-gensyms obj outstr nil)
-	    (terpri outstr)
-	    (terpri outstr)))))))
+    (unwind-protect
+	 (progn
+	   (if verbose
+	       (format t ";;; Compiling file ~a...~%" infile))
+	   (with-open-file (instr infile :direction :input)
+	     (with-open-file (outstr outname :direction :output :if-exists :overwrite)
+	       (do nil
+		   (nil)
+		 (let ((obj (read instr nil eofsym)))
+		   (if (eq obj eofsym)
+		       (return-from compile-file (values outname nil nil)))
+		   (when print
+		     (format t "Compiling ")
+		     (write obj)
+		     (terpri))
+		   (parse-toplevel-form-at-compile-time obj)
+		   (setq obj (cl-user:al-compile-form obj))
+		   (parse-toplevel-form-at-compile-time obj)
+		   (if print
+		       (terpri))
+		   (write-preserving-gensyms obj outstr nil)
+		   (terpri outstr)
+		   (terpri outstr))))))
+      (setq *readtable* old-readtable)
+      (setq *package* old-package))))
 
 
 
