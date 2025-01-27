@@ -101,6 +101,13 @@ package.  There are also some non-standard extensions of standard functions.
   bound dinamically to that condition object; if you entered the debugger due to
   stepping, this variable is NIL
 
+- the variable *AL-PPRINT-DEPTH* is used by the pretty printer and contains the
+  current level of indentation
+
+- when the variable *AL-PRINT-ALWAYS-TWO-COLONS* is non-nil, the printer always
+  prefixes symbols with two colons when it prints the package name.  This is
+  used by the compiler
+
 - the function AL-PRINT-RESTARTS prints the available restarts and returns T
 
 - the function AL-PRINT-BACKTRACE takes an optional argument and prints the
@@ -313,13 +320,17 @@ calling AL-CLEAR-PROFILING clears all data.
 
 AL-REPORT-PROFILING returns a list in which each element is a list which
 contains a name, a counter of all the times that function or macro has been
-called, all the time spent in that function or macro (including the time spent
-in all descendants in the call graph), and the average time spent per call, that
-is the ratio between the second and first number.  For functions, the total time
-doesn't include evaluation of arguments.  For macros, the time includes both
-expansion and evaluation of result.  Keep in mind that, when a function calls
-itself directly or indirectly, the time spent in the inner invocation is counted
-twice, so the last number is often more useful.
+called, all the time (in the same unit used by clock () of your C library, often
+microseconds) spent in that function or macro, including the time spent in all
+descendants in the call graph, and the average time spent per call, that is the
+ratio between the second and first number.
+
+For functions, the total time doesn't include evaluation of arguments.  For
+macros, the time includes both expansion and evaluation of result.
+
+Keep in mind that, when a function calls itself directly or indirectly, the time
+spent in the inner invocation is counted twice, so the last number is often more
+useful than the second one.
 
 The profiler has a few limitations: structure constructor and accessors,
 condition readers, functions obtained as macro functions and macros defined with
