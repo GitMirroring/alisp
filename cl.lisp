@@ -3039,6 +3039,18 @@
 		 (progn
 		   (setq gensyms (nconc gensyms (list obj)))
 		   (format str "#~s=~s" (1- (length gensyms)) obj)))))))
+    (cl-user:al-backquote
+     (write-string "`" str)
+     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+    (cl-user:al-comma
+     (write-string "," str)
+     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+    (cl-user:al-at
+     (write-string "@" str)
+     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+    (cl-user:al-dot
+     (write-string "." str)
+     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
     (otherwise (write obj :stream str)))
   gensyms)
 
