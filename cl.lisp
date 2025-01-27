@@ -3030,14 +3030,15 @@
 	   (return nil)))
        (write-string ")" str)))
     (symbol
-     (if (symbol-package obj)
-	 (write obj :stream str)
-	 (let ((ind (position obj gensyms :test 'eq)))
-	   (if ind
-	       (format str "#~s#" ind)
-	       (progn
-		 (setq gensyms (nconc gensyms (list obj)))
-		 (format str "#~s=~s" (1- (length gensyms)) obj))))))
+     (let ((cl-user:*al-print-always-two-colons* t))
+       (if (symbol-package obj)
+	   (write obj :stream str)
+	   (let ((ind (position obj gensyms :test 'eq)))
+	     (if ind
+		 (format str "#~s#" ind)
+		 (progn
+		   (setq gensyms (nconc gensyms (list obj)))
+		   (format str "#~s=~s" (1- (length gensyms)) obj)))))))
     (otherwise (write obj :stream str)))
   gensyms)
 
