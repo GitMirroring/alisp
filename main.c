@@ -724,7 +724,7 @@ environment
 
 
   struct object_list *packages;
-  struct object *cl_package, *keyword_package;
+  struct object *cl_package, *cluser_package, *keyword_package;
 
   struct go_tag_frame *go_tag_stack;
 
@@ -2348,6 +2348,15 @@ int type_condition (const struct object *obj, const struct object *typespec,
 int type_restart (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome);
 
+int type_al_backquote (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome);
+int type_al_comma (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct outcome *outcome);
+int type_al_at (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct outcome *outcome);
+int type_al_dot (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct outcome *outcome);
+
 struct object *builtin_car
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_cdr
@@ -3566,7 +3575,7 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 void
 add_standard_definitions (struct environment *env)
 {
-  struct object *cluser_package, *rs, *stdobjsym, *stdobjcl;
+  struct object *rs, *stdobjsym, *stdobjcl;
   struct package_record *rec;
   struct parameter *lambdal;
 
@@ -3577,11 +3586,12 @@ add_standard_definitions (struct environment *env)
 						   (char *)NULL);
   prepend_object_to_obj_list (env->cl_package, &env->packages);
 
-  cluser_package = create_package_from_c_strings ("COMMON-LISP-USER", "CL-USER",
-						  (char *)NULL);
-  prepend_object_to_obj_list (cluser_package, &env->packages);
+  env->cluser_package = create_package_from_c_strings ("COMMON-LISP-USER",
+						       "CL-USER",
+						       (char *)NULL);
+  prepend_object_to_obj_list (env->cluser_package, &env->packages);
 
-  use_package (env->cl_package, cluser_package, NULL);
+  use_package (env->cl_package, env->cluser_package, NULL);
 
 
   t_symbol.value_cell = &t_object;
@@ -4389,7 +4399,7 @@ add_standard_definitions (struct environment *env)
 			   builtin_method_change_class);
 
 
-  env->package_sym->value_ptr.symbol->value_cell = cluser_package;
+  env->package_sym->value_ptr.symbol->value_cell = env->cluser_package;
 
   add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
 		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
@@ -4450,6 +4460,12 @@ add_standard_definitions (struct environment *env)
 
   env->al_print_always_two_colons =
     define_variable ("*AL-PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
+
+
+  add_builtin_type ("AL-BACKQUOTE", env, type_al_backquote, 1, (char *)NULL);
+  add_builtin_type ("AL-COMMA", env, type_al_comma, 1, (char *)NULL);
+  add_builtin_type ("AL-AT", env, type_al_at, 1, (char *)NULL);
+  add_builtin_type ("AL-DOT", env, type_al_dot, 1, (char *)NULL);
 }
 
 
@@ -18093,6 +18109,38 @@ type_restart (const struct object *obj, const struct object *typespec,
 }
 
 
+int
+type_al_backquote (const struct object *obj, const struct object *typespec,
+		   struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_BACKQUOTE;
+}
+
+
+int
+type_al_comma (const struct object *obj, const struct object *typespec,
+	       struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_COMMA;
+}
+
+
+int
+type_al_at (const struct object *obj, const struct object *typespec,
+	    struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_AT;
+}
+
+
+int
+type_al_dot (const struct object *obj, const struct object *typespec,
+	     struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_DOT;
+}
+
+
 struct object *
 builtin_car (struct object *list, struct environment *env,
 	     struct outcome *outcome)
@@ -26755,6 +26803,34 @@ builtin_type_of (struct object *list, struct environment *env,
   else if (CAR (list)->type == TYPE_CONDITION)
     {
       ret = CAR (list)->value_ptr.condition->class_name;
+    }
+  else if (CAR (list)->type == TYPE_BACKQUOTE)
+    {
+      ret =
+	intern_symbol_by_char_vector ("AL-BACKQUOTE", strlen ("AL-BACKQUOTE"), 0,
+				      EXTERNAL_VISIBILITY, 0,
+				      env->cluser_package, 0);
+    }
+  else if (CAR (list)->type == TYPE_COMMA)
+    {
+      ret =
+	intern_symbol_by_char_vector ("AL-COMMA", strlen ("AL-COMMA"), 0,
+				      EXTERNAL_VISIBILITY, 0,
+				      env->cluser_package, 0);
+    }
+  else if (CAR (list)->type == TYPE_AT)
+    {
+      ret =
+	intern_symbol_by_char_vector ("AL-AT", strlen ("AL-AT"), 0,
+				      EXTERNAL_VISIBILITY, 0,
+				      env->cluser_package, 0);
+    }
+  else if (CAR (list)->type == TYPE_DOT)
+    {
+      ret =
+	intern_symbol_by_char_vector ("AL-DOT", strlen ("AL-DOT"), 0,
+				      EXTERNAL_VISIBILITY, 0,
+				      env->cluser_package, 0);
     }
 
   increment_refcount (ret);
