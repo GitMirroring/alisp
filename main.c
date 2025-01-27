@@ -3094,6 +3094,9 @@ struct object *builtin_al_report_profiling
 struct object *builtin_al_print_backtrace
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_next
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_compile_form
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -4437,6 +4440,8 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
 		    TYPE_FUNCTION, NULL, 0);
+
+  add_builtin_form ("AL-NEXT", env, builtin_al_next, TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-COMPILE-FORM", env, builtin_al_compile_form,
 		    TYPE_FUNCTION, NULL, 0);
@@ -35401,6 +35406,27 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
   print_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
 
   return &t_object;
+}
+
+
+struct object *
+builtin_al_next (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (IS_PREFIX (CAR (list)->type))
+    {
+      increment_refcount (CAR (list)->value_ptr.next);
+      return CAR (list)->value_ptr.next;
+    }
+
+  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+  return NULL;
 }
 
 
