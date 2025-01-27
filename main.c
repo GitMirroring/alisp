@@ -791,6 +791,8 @@ environment
   struct object *abort_sym;
 
   struct object *al_compile_when_defining_sym, *al_debugging_condition_sym;
+
+  struct object *al_print_always_two_colons;
 };
 
 
@@ -4445,6 +4447,9 @@ add_standard_definitions (struct environment *env)
     define_variable ("*AL-DEBUGGING-CONDITION*", &nil_object, env);
 
   define_variable ("*AL-PPRINT-DEPTH*", create_integer_from_long (0), env);
+
+  env->al_print_always_two_colons =
+    define_variable ("*AL-PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
 }
 
 
@@ -36595,7 +36600,8 @@ print_symbol (const struct object *sym, struct environment *env,
 {
   int pesc = is_printer_escaping_enabled (env), ispres;
   struct object *pack = inspect_variable (env->package_sym, env),
-    *home = sym->value_ptr.symbol->home_package;
+    *home = sym->value_ptr.symbol->home_package,
+    *patc = inspect_variable (env->al_print_always_two_colons, env);
 
   if (pesc)
     {
@@ -36613,7 +36619,7 @@ print_symbol (const struct object *sym, struct environment *env,
 	  print_as_symbol (home->value_ptr.package->name,
 			   home->value_ptr.package->name_len, pesc, str);
 
-	  if (is_external_in_home_package (sym))
+	  if (is_external_in_home_package (sym) && SYMBOL (patc) == &nil_object)
 	    {
 	      if (write_to_stream (str, ":", 1) < 0)
 		return -1;
