@@ -642,6 +642,7 @@ make_test ("(type-of (make-hash-table))", "HASH-TABLE");
 make_test ("(type-of #p\"aaa\")", "PATHNAME");
 make_test ("(type-of *standard-output*)", "STREAM");
 make_test ("(type-of '`0)", "AL-BACKQUOTE");
+make_test ("(al-next (al-next (al-next '`,\@0)))", "0");
 make_test ("(subtypep 'integer nil)", "NIL\nT");
 make_test ("(subtypep 'integer t)", "T\nT");
 make_test ("(subtypep nil 'integer)", "T\nT");
