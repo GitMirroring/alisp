@@ -1977,6 +1977,12 @@ struct object *handle_condition (struct object *cond, struct environment *env,
 struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
 				 struct environment *env);
 
+struct object *create_empty_condition_by_c_string (char *classname,
+						   struct environment *env);
+struct object *raise_unbound_variable (struct object *sym,
+				       struct environment *env,
+				       struct outcome *outcome);
+
 struct object *create_room_pair (char *sym, int val, struct environment *env);
 struct object *create_pair (struct object *car, struct object *cdr);
 struct object *dump_bindings (struct binding *bin, int lex_boundary,
@@ -11750,6 +11756,56 @@ list_lambda_list (struct parameter *par, int allow_other_keys,
 
 
 struct object *
+create_empty_condition_by_c_string (char *classname, struct environment *env)
+{
+  struct object *ret, *class;
+  struct standard_object *so;
+
+  class = BUILTIN_SYMBOL (classname)->value_ptr.symbol->typespec;
+
+  if (!class->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (class, NULL))
+    {
+      return NULL;
+    }
+
+  ret = alloc_object ();
+  ret->type = TYPE_STANDARD_OBJECT;
+
+  so = malloc_and_check (sizeof (*so));
+  so->class = class;
+  increment_refcount (class);
+  so->fields = NULL;
+  ret->value_ptr.standard_object = so;
+  prepend_object_to_obj_list (ret, &class->value_ptr.standard_class->instances);
+
+  return allocate_object_fields (ret, class);
+}
+
+
+struct object *
+raise_unbound_variable (struct object *sym, struct environment *env,
+			struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("UNBOUND-VARIABLE",
+							    env), *ret;
+
+  cond->value_ptr.standard_object->fields->value = sym;
+  increment_refcount (sym);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
 create_room_pair (char *sym, int val, struct environment *env)
 {
   struct object *ret = alloc_empty_list (2);
@@ -17090,9 +17146,7 @@ evaluate_object (struct object *obj, struct environment *env,
 
 	  if (!ret)
 	    {
-	      outcome->type = UNBOUND_SYMBOL;
-	      increment_refcount (sym);
-	      outcome->obj = sym;
+	      return raise_unbound_variable (sym, env, outcome);
 	    }
 	  else if (sym->value_ptr.symbol->is_symbol_macro)
 	    {
@@ -17133,10 +17187,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	    }
 	  else
 	    {
-	      outcome->type = UNBOUND_SYMBOL;
-	      increment_refcount (sym);
-	      outcome->obj = sym;
-	      ret = NULL;
+	      return raise_unbound_variable (sym, env, outcome);
 	    }
 	}
     }
@@ -27444,10 +27495,7 @@ builtin_symbol_value (struct object *list, struct environment *env,
 
   if (!ret)
     {
-      outcome->type = UNBOUND_SYMBOL;
-      increment_refcount (s);
-      outcome->obj = s;
-      return NULL;
+      return raise_unbound_variable (s, env, outcome);
     }
 
   return ret;
