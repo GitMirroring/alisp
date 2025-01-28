@@ -4774,6 +4774,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   const char *begin, *end;
   size_t len;
 
+  fresh_line (env->c_stdout->value_ptr.stream);
   line = read_line_interactively ("> ");
   len = strlen (line);
 
@@ -4791,6 +4792,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 	}
 
       free (line);
+      fresh_line (env->c_stdout->value_ptr.stream);
       line = read_line_interactively ("> ");
       len = strlen (line);
 
@@ -4896,6 +4898,7 @@ read_object_interactively (struct environment *env, struct outcome *outcome,
   char *pr = generate_prompt (env), *line;
   struct object *ret;
 
+  fresh_line (env->c_stdout->value_ptr.stream);
   line = read_line_interactively (pr);
   *wholeline = line;
 
