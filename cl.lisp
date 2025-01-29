@@ -3011,9 +3011,10 @@
 
 
 (defun compile-file-pathname (infile &key output-file &allow-other-keys)
-  (make-pathname :directory (pathname-directory infile)
-		 :name (pathname-name infile)
-		 :type "alc"))
+  (let ((dir (pathname-directory infile)))
+    (make-pathname :directory (and dir (if (char= (elt dir 0) #\/) dir (list :relative dir)))
+		   :name (pathname-name infile)
+		   :type "alc")))
 
 
 (defun write-preserving-gensyms (obj str gensyms)
