@@ -1808,7 +1808,7 @@ struct object *alloc_string (fixnum size);
 struct object *create_string_from_sequence (struct object *seq, fixnum size);
 struct object *create_string_copying_char_vector (const char *str, fixnum size);
 struct object *create_string_with_char_vector (char *str, fixnum size);
-struct object *create_string_copying_c_string (char *str);
+struct object *create_string_copying_c_string (const char *str);
 void resize_string_allocation (struct object *string, fixnum size);
 void increment_string_allocation_respecting_fill_pointer (struct object *string,
 							  fixnum incr);
@@ -1982,6 +1982,9 @@ struct object *create_empty_condition_by_c_string (char *classname,
 struct object *raise_unbound_variable (struct object *sym,
 				       struct environment *env,
 				       struct outcome *outcome);
+struct object *raise_file_error (struct object *fn, const char *fs,
+				 struct environment *env,
+				 struct outcome *outcome);
 
 struct object *create_room_pair (char *sym, int val, struct environment *env);
 struct object *create_pair (struct object *car, struct object *cdr);
@@ -8685,7 +8688,7 @@ create_string_with_char_vector (char *str, fixnum size)
 
 
 struct object *
-create_string_copying_c_string (char *str)
+create_string_copying_c_string (const char *str)
 {
   return create_string_copying_char_vector (str, strlen (str));
 }
@@ -10526,8 +10529,7 @@ load_file (const char *filename, int print_each_form, struct environment *env,
 
   if (!f)
     {
-      outcome->type = COULD_NOT_OPEN_FILE_FOR_READING;
-      return NULL;
+      return raise_file_error (NULL, filename, env, outcome);
     }
 
   if (fseek (f, 0l, SEEK_END))
@@ -11792,6 +11794,35 @@ raise_unbound_variable (struct object *sym, struct environment *env,
 
   cond->value_ptr.standard_object->fields->value = sym;
   increment_refcount (sym);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_file_error (struct object *fn, const char *fs, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("FILE-ERROR", env),
+    *ret;
+
+  if (!fn)
+    {
+      fn = create_filename (create_string_copying_c_string (fs));
+      decrement_refcount (fn->value_ptr.filename->value);
+    }
+  else
+    increment_refcount (fn);
+
+  cond->value_ptr.standard_object->fields->value = fn;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -21120,8 +21151,7 @@ builtin_truename (struct object *list, struct environment *env,
 
   if (!f)
     {
-      outcome->type = COULD_NOT_OPEN_FILE_FOR_READING;
-      return NULL;
+      return raise_file_error (CAR (list), NULL, env, outcome);
     }
 
   fclose (f);
