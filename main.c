@@ -2444,6 +2444,8 @@ struct object *builtin_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_namestring
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
@@ -3710,6 +3712,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PATHNAME", env, builtin_pathname, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("NAMESTRING", env, builtin_namestring, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("PATHNAME-DIRECTORY", env, builtin_pathname_directory,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
@@ -20805,6 +20809,31 @@ builtin_make_pathname (struct object *list, struct environment *env,
   ret->value_ptr.filename->name_type = name_type;
 
   return ret;
+}
+
+
+struct object *
+builtin_namestring (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct object *ns;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ns = inspect_pathname_by_designator (CAR (list));
+
+  increment_refcount (ns);
+  return ns;
 }
 
 
