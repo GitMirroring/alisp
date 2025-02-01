@@ -1122,6 +1122,8 @@ make_test ("(make-pathname :name \"foo\" :type \"bar\")", "#P\"foo.bar\"");
 make_test ("(make-pathname :name :wild :type :wild)", "#P\"*\"");
 make_test ("(make-pathname :directory \"foo\" :name \"bar\" :type \"baz\")", "#P\"/foo/bar.baz\"");
 make_test ("(make-pathname :directory (pathname-directory \"/home/foo.bar\") :name (pathname-name \"/home/foo.bar\") :type (pathname-type \"/home/foo.bar\"))", "#P\"/home/foo.bar\"");
+make_test ("(namestring \"foo/bar\")", "\"foo/bar\"");
+make_test ("(namestring \"/foo/bar\")", "\"/foo/bar\"");
 make_test ("(pathname-directory #p\"foo/bar\")", "\"foo/\"");
 make_test ("(pathname-directory #p\"/foo/bar\")", "\"/foo/\"");
 make_test ("(pathname-directory #p\"/\")", "\"/\"");
