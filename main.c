@@ -45,6 +45,11 @@
 #endif
 
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <dirent.h>
+
+
 #ifndef HAVE_MEMMEM
 #define memmem al_memmem
 #endif
@@ -499,6 +504,9 @@ outcome_type
     FILE_ALREADY_EXISTS,
     ERROR_READING_FILE,
     ERROR_DURING_OUTPUT,
+    COULD_NOT_OPEN_DIR,
+    COULD_NOT_CREATE_DIR,
+    ERROR_READING_DIR,
     INVALID_TYPE_SPECIFIER,
     UNKNOWN_TYPE,
     CLASS_NOT_FOUND,
@@ -2458,6 +2466,8 @@ struct object *builtin_truename
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_probe_file
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_ensure_directories_exist
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_file_position
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_file_length
@@ -3116,6 +3126,9 @@ struct object *builtin_al_print_no_warranty
 struct object *builtin_al_print_terms_and_conditions
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_list_directory
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_getenv
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_system
@@ -3725,6 +3738,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TRUENAME", env, builtin_truename, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PROBE-FILE", env, builtin_probe_file, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("ENSURE-DIRECTORIES-EXIST", env,
+		    builtin_ensure_directories_exist, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FILE-POSITION", env, builtin_file_position, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("FILE-LENGTH", env, builtin_file_length, TYPE_FUNCTION, NULL,
@@ -4464,6 +4479,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
+
+  add_builtin_form ("AL-LIST-DIRECTORY", env, builtin_al_list_directory,
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
@@ -21229,6 +21247,70 @@ builtin_probe_file (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_ensure_directories_exist (struct object *list, struct environment *env,
+				  struct outcome *outcome)
+{
+  struct object *ns;
+  char *fn;
+  int i, finished = 0, created = 0, ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ns = inspect_pathname_by_designator (CAR (list));
+
+  fn = copy_string_to_c_string (ns->value_ptr.string);
+  i = 1;
+
+  while (1)
+    {
+      for (; fn [i] && fn [i] != '/'; i++);
+
+      if (!fn [i] && fn [i-1] != '/')
+	break;
+      else if (!fn [i])
+	finished = 1;
+
+      fn [i] = 0;
+
+      ret = mkdir (fn, 0755);
+
+      if (ret && errno != EEXIST)
+	{
+	  free (fn);
+	  outcome->type = COULD_NOT_CREATE_DIR;
+	  return NULL;
+	}
+      else if (!ret)
+	created = 1;
+
+      if (finished)
+	break;
+
+      fn [i] = '/';
+      i++;
+    }
+
+  free (fn);
+
+  prepend_object_to_obj_list (created ? &t_object : &nil_object,
+			      &outcome->other_values);
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
 builtin_file_position (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
@@ -36130,6 +36212,64 @@ builtin_al_print_terms_and_conditions (struct object *list,
 
 
 struct object *
+builtin_al_list_directory (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  struct object *ns, *ret = &nil_object, *cons;
+  DIR *d;
+  struct dirent *ent;
+  char *fn;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ns = inspect_pathname_by_designator (CAR (list));
+
+  fn = copy_string_to_c_string (ns->value_ptr.string);
+
+  d = opendir (fn);
+
+  free (fn);
+
+  if (!d)
+    {
+      outcome->type = COULD_NOT_OPEN_DIR;
+      return NULL;
+    }
+
+  errno = 0;
+
+  while ((ent = readdir (d)))
+    {
+      cons = alloc_empty_cons_pair ();
+      cons->value_ptr.cons_pair->car = create_string_copying_c_string
+	(ent->d_name);
+      cons->value_ptr.cons_pair->cdr = ret;
+      ret = cons;
+    }
+
+  if (errno)
+    {
+      outcome->type = ERROR_READING_DIR;
+      return NULL;
+    }
+
+  closedir (d);
+
+  return ret;
+}
+
+
+struct object *
 builtin_al_getenv (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
@@ -38093,6 +38233,18 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == ERROR_DURING_OUTPUT)
     {
       printf ("eval error: there was an error during output\n");
+    }
+  else if (err->type == COULD_NOT_OPEN_DIR)
+    {
+      printf ("file error: could not open directory\n");
+    }
+  else if (err->type == COULD_NOT_CREATE_DIR)
+    {
+      printf ("file error: could not create directory\n");
+    }
+  else if (err->type == ERROR_READING_DIR)
+    {
+      printf ("file error: could not read directory\n");
     }
   else if (err->type == INVALID_TYPE_SPECIFIER)
     {
