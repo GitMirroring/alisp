@@ -87,6 +87,10 @@ package.  There are also some non-standard extensions of standard functions.
   argument; if provided, writing operations append to the string, also
   respecting the fill pointer if present
 
+- the types AL-BACKQUOTE, AL-COMMA, AL-AT and AL-DOT represent the respective
+  elements in backquote notation.  You can call the AL-NEXT function to reach
+  the next element when traversing them
+
 - the variable *AL-COMPILE-WHEN-DEFINING* is described in "Compilation"
 
 - the function AL-COMPILE-FORM takes a single form and returns that form
@@ -215,7 +219,8 @@ pathname objects entirely.  (I think that all pathname functions also accept
 plain strings.)
 (See also the file WHY-NO-PATHNAMES).
 
-That said, alisp represents a pathname object as a string internally.
+That said, alisp represents a pathname object as a string internally; you can
+access the underlying string with NAMESTRING.
 
 If you really need to access the "components" of a path, those are extracted
 according to the following syntax: in "/home/foo/bar.baz", the directory is
