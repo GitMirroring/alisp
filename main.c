@@ -1159,6 +1159,7 @@ filename_type
 struct
 filename
 {
+  int is_logical;
   struct object *value;
   enum filename_type directory_type;
   enum filename_type name_type;
@@ -1813,6 +1814,7 @@ const char *find_end_of_string
 void normalize_string (char *output, const char *input, size_t size);
 
 struct object *alloc_string (fixnum size);
+struct object *copy_string (struct object *string);
 struct object *create_string_from_sequence (struct object *seq, fixnum size);
 struct object *create_string_copying_char_vector (const char *str, fixnum size);
 struct object *create_string_with_char_vector (char *str, fixnum size);
@@ -2323,6 +2325,8 @@ int type_hash_table (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome);
 int type_pathname (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct outcome *outcome);
+int type_logical_pathname (const struct object *obj, const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
 int type_stream (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
 int type_file_stream (const struct object *obj, const struct object *typespec,
@@ -2461,6 +2465,10 @@ struct object *builtin_pathname_name
 struct object *builtin_pathname_type
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_wild_pathname_p
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_logical_pathname
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_translate_logical_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_truename
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3735,6 +3743,10 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("WILD-PATHNAME-P", env, builtin_wild_pathname_p,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("LOGICAL-PATHNAME", env, builtin_logical_pathname,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("TRANSLATE-LOGICAL-PATHNAME", env,
+		    builtin_translate_logical_pathname, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("TRUENAME", env, builtin_truename, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PROBE-FILE", env, builtin_probe_file, TYPE_FUNCTION, NULL,
 		    0);
@@ -4144,6 +4156,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("NULL", env, type_null, 1, "SYMBOL", "LIST", "SEQUENCE",
 		    (char *)NULL);
   add_builtin_type ("PATHNAME", env, type_pathname, 1, (char *)NULL);
+  add_builtin_type ("LOGICAL-PATHNAME", env, type_logical_pathname, 1, "PATHNAME",
+		    (char *)NULL);
   add_builtin_type ("STREAM", env, type_stream, 1, (char *)NULL);
   add_builtin_type ("FILE-STREAM", env, type_file_stream, 1, "STREAM",
 		    (char *)NULL);
@@ -8590,6 +8604,23 @@ alloc_string (fixnum size)
 
 
 struct object *
+copy_string (struct object *string)
+{
+  struct object *ret = alloc_string (string->value_ptr.string->used_size);
+  int i;
+
+  ret->value_ptr.string->used_size = string->value_ptr.string->used_size;
+
+  for (i = 0; i < ret->value_ptr.string->used_size; i++)
+    {
+      ret->value_ptr.string->value [i] = string->value_ptr.string->value [i];
+    }
+
+  return ret;
+}
+
+
+struct object *
 create_string_from_sequence (struct object *seq, fixnum size)
 {
   struct object *ret, *cons;
@@ -9090,6 +9121,7 @@ create_filename (struct object *string)
   fn->value = string;
   add_reference (obj, string, 0);
 
+  fn->is_logical = 0;
   fn->directory_type = fn->name_type = REGULAR_FILENAME;
 
   return obj;
@@ -18074,6 +18106,14 @@ type_pathname (const struct object *obj, const struct object *typespec,
 
 
 int
+type_logical_pathname (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_FILENAME && obj->value_ptr.filename->is_logical;
+}
+
+
+int
 type_stream (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
@@ -18968,14 +19008,7 @@ builtin_copy_seq (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_STRING)
     {
-      ret = alloc_string (CAR (list)->value_ptr.string->used_size);
-      ret->value_ptr.string->used_size = CAR (list)->value_ptr.string->used_size;
-
-      for (i = 0; i < ret->value_ptr.string->used_size; i++)
-	{
-	  ret->value_ptr.string->value [i] =
-	    CAR (list)->value_ptr.string->value [i];
-	}
+      ret = copy_string (CAR (list));
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
@@ -21167,6 +21200,55 @@ builtin_wild_pathname_p (struct object *list, struct environment *env,
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
+}
+
+
+struct object *
+builtin_logical_pathname (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = create_filename (copy_string (inspect_pathname_by_designator (CAR (list))));
+  ret->value_ptr.filename->is_logical = 1;
+  decrement_refcount (ret->value_ptr.filename->value);
+  return ret;
+}
+
+
+struct object *
+builtin_translate_logical_pathname (struct object *list, struct environment *env,
+				    struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (!list_length (list))
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = create_filename (copy_string (inspect_pathname_by_designator (CAR (list))));
+  decrement_refcount (ret->value_ptr.filename->value);
+  return ret;
 }
 
 

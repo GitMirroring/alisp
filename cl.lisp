@@ -2169,17 +2169,6 @@
 
 
 
-(deftype logical-pathname ()
-  'pathname)
-
-(defun logical-pathname (fn)
-  (pathname fn))
-
-
-(defun translate-logical-pathname (pn &key)
-  (pathname pn))
-
-
 (defun pathname-host (fn &key case))
 
 (defun pathname-device (fn &key case))
@@ -3281,12 +3270,11 @@
 	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
 	  pathnamep streamp realp numberp check-type assert macroexpand equal
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
-	  merge logical-pathname translate-logical-pathname pathname-host
-	  pathname-device pathname-version file-namestring directory-namestring
-	  host-namestring enough-namestring merge-pathnames file-author
-	  file-write-date user-homedir-pathname with-open-file terpri write-line
-	  write-sequence prin1 princ print write-to-string prin1-to-string
-	  princ-to-string force-output with-input-from-string
+	  merge pathname-host pathname-device pathname-version file-namestring
+	  directory-namestring host-namestring enough-namestring merge-pathnames
+	  file-author file-write-date user-homedir-pathname with-open-file
+	  terpri write-line write-sequence prin1 princ print write-to-string
+	  prin1-to-string princ-to-string force-output with-input-from-string
 	  with-output-to-string pprint do-all-symbols find-all-symbols
 	  with-slots with-accessors loop format encode-universal-time
 	  *readtable* with-compilation-unit *compile-file-truename*
