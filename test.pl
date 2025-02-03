@@ -620,7 +620,7 @@ make_test ("(typep 'aaa 'keyword)", "NIL");
 make_test ("(typep nil 'boolean)", "T");
 make_test ("(typep #p\"\" 'pathname)", "T");
 make_test ("(typep 0 'logical-pathname)", "NIL");
-make_test ("(typep #p\"\" 'logical-pathname)", "T");
+make_test ("(typep #p\"\" 'logical-pathname)", "NIL");
 make_test ("(typep (open #p\"README\") 'stream)", "T");
 make_test ("(typep (open #p\"README\") 'file-stream)", "T");
 make_test ("(typep (make-string-input-stream \"hello\") 'string-stream)", "T");
