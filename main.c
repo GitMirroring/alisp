@@ -13206,6 +13206,8 @@ copy_list_structure (struct object *list, const struct object *prefix,
       cons->value_ptr.cons_pair->cdr = list;
       add_reference (cons, list, 1);
     }
+  else
+    cons->value_ptr.cons_pair->cdr = &nil_object;
 
   if (last_cell)
     *last_cell = cons;
