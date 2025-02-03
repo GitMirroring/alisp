@@ -959,6 +959,7 @@ make_test ("(let ((v (make-array 5 :fill-pointer 4 :initial-contents '(5 6 7 8 9
 make_test ("(let ((v (make-array 5 :fill-pointer 5 :initial-contents '(5 6 7 8 9)))) (list (vector-push-extend 10 v 2) v))", "(5 #(5 6 7 8 9 10))");
 make_test ("(let ((v (make-array 5 :fill-pointer 4 :initial-contents '(5 6 7 8 9)))) (list (vector-push-extend 10 v) v))", "(4 #(5 6 7 8 10))");
 make_test ("(copy-list '(0 1 2))", "(0 1 2)");
+make_test ("(elt (copy-list '(0 1)) 1)", "1");
 make_test ("(copy-list '(0 1 . 2))", "(0 1 . 2)");
 make_test ("(copy-list nil)", "NIL");
 make_test ("(copy-seq nil)", "NIL");
