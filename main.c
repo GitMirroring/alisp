@@ -17164,7 +17164,9 @@ evaluate_object (struct object *obj, struct environment *env,
       && !DONT_STEP (obj))
     {
       env->next_eval = obj;
-      enter_debugger (NULL, env, outcome);
+
+      if (!enter_debugger (NULL, env, outcome))
+	return NULL;
     }
 
   stepping_over_this_form = env->stepping_flags & STEP_OVER_FORM
@@ -34628,7 +34630,10 @@ builtin_signal (struct object *list, struct environment *env,
     return NULL;
 
   if (res)
-    enter_debugger (NULL, env, outcome);
+    {
+      if (!enter_debugger (NULL, env, outcome))
+	return NULL;
+    }
 
 
   ret = handle_condition (cond, env, outcome);
@@ -34709,7 +34714,10 @@ builtin_error (struct object *list, struct environment *env,
     return NULL;
 
   if (res)
-    enter_debugger (NULL, env, outcome);
+    {
+      if (!enter_debugger (NULL, env, outcome))
+	return NULL;
+    }
 
 
   ret = handle_condition (cond, env, outcome);
