@@ -1867,6 +1867,8 @@ make_test ("(handler-case (/ 1 1) (file-error nil (write 'first)) (arithmetic-er
 make_test ("(handler-bind ((error (lambda (e) (write 0) (throw 'bl 1)))) (catch 'bl (error \"hi\")))", "0\n1");
 make_test ("(handler-bind ((error (lambda (e) (write 0) (throw 'bl 1)))) (catch 'bl (cerror \"hi\" \"hi\")))", "0\n1");
 make_test ("(handler-bind ((unbound-variable (lambda (e) (write 'undefined) (abort)))) undef)", "UNDEFINED");
+make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) (foooo))", "UNDEFINED");
+make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) (function foooo))", "UNDEFINED");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
