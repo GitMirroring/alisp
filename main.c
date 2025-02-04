@@ -1992,6 +1992,9 @@ struct object *create_empty_condition_by_c_string (char *classname,
 struct object *raise_unbound_variable (struct object *sym,
 				       struct environment *env,
 				       struct outcome *outcome);
+struct object *raise_undefined_function (struct object *sym,
+					 struct environment *env,
+					 struct outcome *outcome);
 struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct environment *env,
 				 struct outcome *outcome);
@@ -11862,6 +11865,28 @@ raise_unbound_variable (struct object *sym, struct environment *env,
 
 
 struct object *
+raise_undefined_function (struct object *sym, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("UNDEFINED-FUNCTION",
+							    env), *ret;
+
+  cond->value_ptr.standard_object->fields->value = sym;
+  increment_refcount (sym);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
 raise_file_error (struct object *fn, const char *fs, struct environment *env,
 		  struct outcome *outcome)
 {
@@ -17695,11 +17720,7 @@ evaluate_list (struct object *list, struct environment *env,
   else if (fun)
     return call_function (fun, list, 0, 1, 0, 1, 0, env, outcome);
 
-  outcome->type = UNKNOWN_FUNCTION;
-  increment_refcount (CAR (list));
-  outcome->obj = CAR (list);
-
-  return NULL;
+  return raise_undefined_function (sym, env, outcome);
 }
 
 
@@ -20333,10 +20354,7 @@ builtin_maphash (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (SYMBOL (CAR (list)));
-	  outcome->obj = SYMBOL (CAR (list));
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
 	}
     }
   else if (CAR (list)->type == TYPE_FUNCTION)
@@ -23991,10 +24009,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (SYMBOL (CAR (list)));
-	  outcome->obj = SYMBOL (CAR (list));
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
 	}
     }
   else if (CAR (list)->type == TYPE_FUNCTION)
@@ -24112,10 +24127,7 @@ builtin_map (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (SYMBOL (CAR (CDR (list))));
-	  outcome->obj = SYMBOL (CAR (CDR (list)));
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (CAR (CDR (list))), env, outcome);
 	}
     }
   else if (CAR (CDR (list))->type == TYPE_FUNCTION)
@@ -24239,10 +24251,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (SYMBOL (CAR (list)));
-	  outcome->obj = SYMBOL (CAR (list));
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
 	}
     }
   else if (CAR (list)->type == TYPE_FUNCTION)
@@ -27839,10 +27848,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
 
   if (!ret)
     {
-      outcome->type = UNKNOWN_FUNCTION;
-      increment_refcount (s);
-      outcome->obj = s;
-      return NULL;
+      return raise_undefined_function (SYMBOL (s), env, outcome);
     }
 
   return ret;
@@ -31406,10 +31412,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (fun);
-	  outcome->obj = fun;
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (fun), env, outcome);
 	}
 
       increment_refcount (fun);
@@ -32020,9 +32023,7 @@ evaluate_function (struct object *list, struct environment *env,
 
       if (!f)
 	{
-	  outcome->type = FUNCTION_NOT_FOUND_IN_EVAL;
-
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
 	}
     }
   else
@@ -32086,10 +32087,7 @@ evaluate_apply (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (s);
-	  outcome->obj = s;
-	  return NULL;
+	  return raise_undefined_function (s, env, outcome);
 	}
     }
   else
@@ -32140,10 +32138,7 @@ evaluate_funcall (struct object *list, struct environment *env,
 
       if (!fun)
 	{
-	  outcome->type = UNKNOWN_FUNCTION;
-	  increment_refcount (SYMBOL (CAR (list)));
-	  outcome->obj = SYMBOL (CAR (list));
-	  return NULL;
+	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
 	}
     }
   else
