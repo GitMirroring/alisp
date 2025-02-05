@@ -1875,6 +1875,7 @@ make_test ("(handler-bind ((error (lambda (e) (write 0) (throw 'bl 1)))) (catch 
 make_test ("(handler-bind ((unbound-variable (lambda (e) (write 'undefined) (abort)))) undef)", "UNDEFINED");
 make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) (foooo))", "UNDEFINED");
 make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) (function foooo))", "UNDEFINED");
+make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (car 0))", "WRONGTYPE");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
