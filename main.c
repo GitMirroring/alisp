@@ -1995,6 +1995,9 @@ struct object *raise_unbound_variable (struct object *sym,
 struct object *raise_undefined_function (struct object *sym,
 					 struct environment *env,
 					 struct outcome *outcome);
+struct object *raise_type_error (struct object *datum, char *type,
+				 struct environment *env,
+				 struct outcome *outcome);
 struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct environment *env,
 				 struct outcome *outcome);
@@ -11887,6 +11890,32 @@ raise_undefined_function (struct object *sym, struct environment *env,
 
 
 struct object *
+raise_type_error (struct object *datum, char *type, struct environment *env,
+		  struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("TYPE-ERROR", env),
+    *ret;
+  const char *b, *e;
+
+  cond->value_ptr.standard_object->fields->value = datum;
+  increment_refcount (datum);
+
+  read_object (&cond->value_ptr.standard_object->fields->next->value, 0, type,
+	       strlen (type), NULL, 0, 1, env, outcome, &b, &e);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
 raise_file_error (struct object *fn, const char *fs, struct environment *env,
 		  struct outcome *outcome)
 {
@@ -15259,8 +15288,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       if (!IS_LIST (CAR (arglist)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (arglist), "CL:LIST", env, outcome);
 	}
 
       ret = call_function (func->value_ptr.function->function_macro,
@@ -18322,25 +18350,17 @@ struct object *
 builtin_car (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  if (!list_length (list))
+  if (list_length (list) != 1)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
-  if (list_length (list) > 1)
-    {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
-    }
+
+  if (!IS_LIST (CAR (list)))
+    return raise_type_error (CAR (list), "CL:LIST", env, outcome);
 
   if (SYMBOL (CAR (list)) == &nil_object)
     return &nil_object;
-
-  if (CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
 
   increment_refcount (CAR (CAR (list)));
 
@@ -18352,25 +18372,17 @@ struct object *
 builtin_cdr (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  if (!list_length (list))
+  if (list_length (list) != 1)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
-  if (list_length (list) > 1)
-    {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
-    }
+
+  if (!IS_LIST (CAR (list)))
+    return raise_type_error (CAR (list), "CL:LIST", env, outcome);
 
   if (SYMBOL (CAR (list)) == &nil_object)
     return &nil_object;
-
-  if (CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
 
   increment_refcount (CDR (CAR (list)));
 
@@ -18389,10 +18401,7 @@ builtin_rplaca (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
+    return raise_type_error (CAR (list), "CL:CONS", env, outcome);
 
   delete_reference (CAR (list), CAR (CAR (list)), 0);
   CAR (list)->value_ptr.cons_pair->car = CAR (CDR (list));
@@ -18414,10 +18423,7 @@ builtin_rplacd (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
+    return raise_type_error (CAR (list), "CL:CONS", env, outcome);
 
   delete_reference (CAR (list), CDR (CAR (list)), 1);
   CAR (list)->value_ptr.cons_pair->cdr = CAR (CDR (list));
@@ -18434,14 +18440,9 @@ builtin_cons (struct object *list, struct environment *env,
 {
   struct object *cons;
 
-  if (list_length (list) < 2)
+  if (list_length (list) != 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
-    }
-  if (list_length (list) > 2)
-    {
-      outcome->type = TOO_MANY_ARGUMENTS;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
@@ -18546,11 +18547,8 @@ builtin_append (struct object *list, struct environment *env,
     {
       obj = nth (i, list);
 
-      if (obj->type != TYPE_CONS_PAIR && SYMBOL (obj) != &nil_object)
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
+      if (!IS_LIST (obj))
+	return raise_type_error (obj, "CL:LIST", env, outcome);
     }
 
   for (i = 0; i < length - 1; i++)
@@ -18597,8 +18595,7 @@ builtin_nconc (struct object *list, struct environment *env,
     {
       if (SYMBOL (CDR (list)) != &nil_object && !IS_LIST (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:LIST", env, outcome);
 	}
 
       if (ret == &nil_object)
@@ -18704,8 +18701,7 @@ builtin_nth_value (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
     }
 
   ind = mpz_get_si (CAR (list)->value_ptr.integer);
@@ -18760,8 +18756,7 @@ builtin_elt (struct object *list, struct environment *env,
 
   if (CAR (CDR (list))->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
     }
 
   if (mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0)
@@ -18879,8 +18874,7 @@ builtin_aref (struct object *list, struct environment *env,
 
       if (CAR (list)->type != TYPE_INTEGER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
 	}
 
       ind = mpz_get_si (CAR (list)->value_ptr.integer);
@@ -18999,8 +18993,7 @@ builtin_copy_list (struct object *list, struct environment *env,
 
   if (!IS_LIST (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
     }
 
   if (SYMBOL (CAR (list)) == &nil_object)
@@ -19025,8 +19018,7 @@ builtin_copy_seq (struct object *list, struct environment *env,
 
   if (!IS_SEQUENCE (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -19233,8 +19225,7 @@ builtin_list_length (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
     }
 
   if (is_dotted_list (CAR (list)))
@@ -19290,8 +19281,7 @@ builtin_length (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
     }
 }
 
@@ -19391,8 +19381,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	    }
 	  else
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (CAR (CDR (list)), "CL:SEQUENCE", env,
+				       outcome);
 	    }
 
 	  list = CDR (list);
@@ -19494,8 +19484,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	    {
 	      if (CAR (cons)->type != TYPE_INTEGER)
 		{
-		  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-		  return NULL;
+		  return raise_type_error (CAR (cons), "CL:INTEGER", env,
+					   outcome);
 		}
 
 	      indx = mpz_get_si (CAR (cons)->value_ptr.integer);
@@ -19541,8 +19531,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (CAR (dims)->type != TYPE_INTEGER)
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (CAR (dims), "CL:INTEGER", env,
+				       outcome);
 	    }
 
 	  indx = mpz_get_si (CAR (cons)->value_ptr.integer);
@@ -19584,8 +19574,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (!IS_SEQUENCE (initial_contents))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (initial_contents, "CL:SEQUENCE", env,
+				       outcome);
 	    }
 
 	  ret = create_string_from_sequence (initial_contents, indx);
@@ -19682,8 +19672,7 @@ builtin_array_has_fill_pointer_p (struct object *list, struct environment *env,
 
   if (!IS_ARRAY (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
     }
 
   if (HAS_FILL_POINTER (CAR (list)))
@@ -19745,8 +19734,7 @@ builtin_array_dimensions (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
     }
 
   return ret;
@@ -19770,8 +19758,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
 
   if (!IS_ARRAY (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
     }
 
   arr = CAR (list);
@@ -19787,8 +19774,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
 
       if (CAR (list)->type != TYPE_INTEGER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
 	}
 
       tot = mpz_get_si (CAR (list)->value_ptr.integer);
@@ -19820,8 +19806,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
 
       if (CAR (list)->type != TYPE_INTEGER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
 	}
 
       ind = mpz_get_si (CAR (list)->value_ptr.integer);
@@ -20153,8 +20138,7 @@ builtin_hash_table_size (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:HASH-TABLE", env, outcome);
     }
 
   return create_integer_from_long (LISP_HASHTABLE_SIZE);
@@ -20173,8 +20157,7 @@ builtin_hash_table_count (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:HASH-TABLE", env, outcome);
     }
 
   return create_integer_from_long
@@ -20197,8 +20180,7 @@ builtin_hash_table_test (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:HASH-TABLE", env, outcome);
     }
 
   t = CAR (list)->value_ptr.hashtable->type;
@@ -20251,8 +20233,7 @@ builtin_gethash (struct object *list, struct environment *env,
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:HASH-TABLE", env, outcome);
     }
 
   r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, NULL, NULL);
@@ -20286,8 +20267,7 @@ builtin_remhash (struct object *list, struct environment *env,
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:HASH-TABLE", env, outcome);
     }
 
   r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, &j, &prev);
@@ -20323,8 +20303,7 @@ builtin_clrhash (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:HASH-TABLE", env, outcome);
     }
 
   clear_hash_table (CAR (list));
@@ -20369,8 +20348,7 @@ builtin_maphash (struct object *list, struct environment *env,
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:HASH-TABLE", env, outcome);
     }
 
   args = alloc_empty_list (2);
@@ -21596,8 +21574,7 @@ builtin_read_line (struct object *list, struct environment *env,
 
   if (l && CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   str = l ? CAR (list) : inspect_variable (env->std_in_sym, env);
@@ -21708,8 +21685,7 @@ builtin_read (struct object *list, struct environment *env,
 
   if (l && CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   if (l)
@@ -21820,8 +21796,7 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 
   if (l && CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   if (l)
@@ -21930,8 +21905,7 @@ builtin_read_from_string (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   objend = CAR (list)->value_ptr.string->value;
@@ -21994,8 +21968,7 @@ builtin_parse_integer (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   in = CAR (list)->value_ptr.string->value;
@@ -22057,8 +22030,7 @@ builtin_compile (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   if (SYMBOL (CAR (list)) == &nil_object && l == 1)
@@ -22081,8 +22053,7 @@ builtin_compile (struct object *list, struct environment *env,
 
       if (fun->type != TYPE_FUNCTION)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "CL:FUNCTION", env, outcome);
 	}
     }
 
@@ -22645,8 +22616,7 @@ builtin_close (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   str = CAR (list);
@@ -22683,8 +22653,7 @@ builtin_open_stream_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   str = CAR (list);
@@ -22716,8 +22685,7 @@ builtin_input_stream_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   str = CAR (list);
@@ -22749,8 +22717,7 @@ builtin_output_stream_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   str = CAR (list);
@@ -22780,8 +22747,7 @@ builtin_interactive_stream_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
     }
 
   return &nil_object;
@@ -22803,8 +22769,7 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   if ((l >= 2 && CAR (CDR (list))->type != TYPE_INTEGER)
@@ -22902,8 +22867,7 @@ builtin_make_synonym_stream (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   return create_synonym_stream (SYMBOL (CAR (list)));
@@ -23054,8 +23018,7 @@ builtin_upper_case_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -23083,8 +23046,7 @@ builtin_lower_case_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -23112,8 +23074,7 @@ builtin_both_case_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -23202,8 +23163,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   if (!SYMBOL (CAR (list))->value_ptr.symbol->is_type
@@ -23229,8 +23189,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 	{
 	  if (nth (i, list)->type != TYPE_STRING)
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (nth (i, list), "CL:STRING", env, outcome);
 	    }
 
 	  len += nth (i, list)->value_ptr.string->used_size;
@@ -23289,8 +23248,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 	{
 	  if (!IS_LIST (nth (i, list)))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (nth (i, list), "CL:LIST", env, outcome);
 	    }
 	}
 
@@ -23943,8 +23901,7 @@ builtin_dolist (struct object *list, struct environment *env,
   if (SYMBOL (cons) != &nil_object)
     {
       env->blocks->frame = remove_block (env->blocks->frame);
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (cons, "CL:CONS", env, outcome);
     }
 
   if (l == 3)
@@ -24145,8 +24102,7 @@ builtin_map (struct object *list, struct environment *env,
     {
       if (!IS_SEQUENCE (nth (i, list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (nth (i, list), "CL:SEQUENCE", env, outcome);
 	}
 
       if (min == -1 || (ACTUAL_SEQUENCE_LENGTH (nth (i, list)) < min))
@@ -24266,8 +24222,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
   if (!IS_SEQUENCE (CAR (CDR (list))))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:SEQUENCE", env, outcome);
     }
 
   seq = CAR (CDR (list));
@@ -24405,8 +24360,7 @@ builtin_reverse (struct object *list, struct environment *env,
 
   if (!IS_SEQUENCE (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
     }
 
   seq = CAR (list);
@@ -24485,8 +24439,7 @@ builtin_setf_car (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CONS", env, outcome);
     }
 
   delete_reference (CAR (list), CAR (CAR (list)), 0);
@@ -24522,8 +24475,7 @@ builtin_setf_cdr (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CONS", env, outcome);
     }
 
   delete_reference (CAR (list), CDR (CAR (list)), 1);
@@ -24594,8 +24546,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
 
   if (!IS_ARRAY (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -24608,8 +24559,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
 
       if (CAR (CDR (list))->type != TYPE_INTEGER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
 	}
 
       ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
@@ -24622,8 +24572,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
 
       if (newval->type != TYPE_CHARACTER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (newval, "CL:CHARACTER", env, outcome);
 	}
 
       if (!set_nth_character (CAR (list), ind, newval->value_ptr.character))
@@ -24705,8 +24654,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
     {
       if (newval->type != TYPE_CHARACTER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (newval, "CL:CHARACTER", env, outcome);
 	}
 
       if (!set_nth_character (CAR (list), ind, newval->value_ptr.character))
@@ -24847,8 +24795,7 @@ builtin_setf_gethash (struct object *list, struct environment *env,
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:HASH-TABLE", env, outcome);
     }
 
   r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, &j, NULL);
@@ -24898,8 +24845,7 @@ builtin_setf_symbol_plist (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   delete_reference (SYMBOL (CAR (list)),
@@ -24983,14 +24929,12 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   if (newval->type != TYPE_FUNCTION)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (newval, "CL:FUNCTION", env, outcome);
     }
 
   sym = SYMBOL (CAR (list));
@@ -25815,8 +25759,7 @@ builtin_plus (struct object *list, struct environment *env,
 
   if (!IS_NUMBER (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
     }
 
   if (l == 1)
@@ -25832,8 +25775,7 @@ builtin_plus (struct object *list, struct environment *env,
     {
       if (!IS_NUMBER (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
 	}
 
       ret2 = add_two_numbers (ret, CAR (list));
@@ -25867,8 +25809,7 @@ builtin_minus (struct object *list, struct environment *env,
     {
       if (!IS_NUMBER (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
 	}
 
       ret = copy_number (CAR (list));
@@ -25880,8 +25821,7 @@ builtin_minus (struct object *list, struct environment *env,
     {
       if (!IS_NUMBER (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
 	}
 
       ret2 = subtract_two_numbers (ret, CAR (list));
@@ -25909,8 +25849,7 @@ builtin_multiply (struct object *list, struct environment *env,
 
   if (!IS_NUMBER (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
     }
 
   if (l == 1)
@@ -25926,8 +25865,7 @@ builtin_multiply (struct object *list, struct environment *env,
     {
       if (!IS_NUMBER (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
 	}
 
       ret2 = multiply_two_numbers (ret, CAR (list));
@@ -25961,8 +25899,7 @@ builtin_divide (struct object *list, struct environment *env,
     {
       if (!IS_NUMBER (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
 	}
 
       ret = copy_number (CAR (list));
@@ -25974,8 +25911,7 @@ builtin_divide (struct object *list, struct environment *env,
     {
       if (!IS_NUMBER (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
 	}
 
       ret2 = divide_two_numbers (ret, CAR (list), env, outcome);
@@ -26073,8 +26009,7 @@ builtin_numerator (struct object *list, struct environment *env,
 
   if (!IS_RATIONAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:RATIONAL", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_INTEGER)
@@ -26106,8 +26041,7 @@ builtin_denominator (struct object *list, struct environment *env,
 
   if (!IS_RATIONAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:RATIONAL", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_INTEGER)
@@ -26164,14 +26098,13 @@ builtin_float (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
       return NULL;
     }
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_FLOAT)
@@ -26201,7 +26134,7 @@ builtin_sqrt (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   num = promote_number (CAR (list), TYPE_FLOAT);
@@ -26318,9 +26251,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
     return &t_object;
   else if (l == 1)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      return raise_type_error (CAR (list), "CL:NUMBER", env, outcome);
     }
 
   for (i = 0; i + 1 < l; i++)
@@ -26329,9 +26260,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
 
       if (!IS_NUMBER (first))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-	  return NULL;
+	  return raise_type_error (first, "CL:NUMBER", env, outcome);
 	}
 
       cons = CDR (list);
@@ -26342,9 +26271,7 @@ builtin_numbers_different (struct object *list, struct environment *env,
 
 	  if (!IS_NUMBER (second))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-	      return NULL;
+	      return raise_type_error (second, "CL:NUMBER", env, outcome);
 	    }
 
 	  if (!compare_two_numbers (first, second))
@@ -26409,8 +26336,7 @@ builtin_min (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (cur)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (cur), "CL:REAL", env, outcome);
     }
 
   for (i = 1; i < l; i++)
@@ -26419,8 +26345,7 @@ builtin_min (struct object *list, struct environment *env,
 
       if (!IS_REAL (CAR (cur)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (cur), "CL:REAL", env, outcome);
 	}
 
       if (compare_two_numbers (CAR (cur), ret) < 0)
@@ -26449,8 +26374,7 @@ builtin_max (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (cur)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (cur), "CL:REAL", env, outcome);
     }
 
   for (i = 1; i < l; i++)
@@ -26459,8 +26383,7 @@ builtin_max (struct object *list, struct environment *env,
 
       if (!IS_REAL (CAR (cur)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (cur), "CL:REAL", env, outcome);
 	}
 
       if (compare_two_numbers (CAR (cur), ret) > 0)
@@ -26484,8 +26407,7 @@ builtin_sin (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   return create_floating_from_double (sin (convert_number_to_double (CAR (list))));
@@ -26504,8 +26426,7 @@ builtin_cos (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   return create_floating_from_double (cos (convert_number_to_double (CAR (list))));
@@ -26524,8 +26445,7 @@ builtin_tan (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   return create_floating_from_double (tan (convert_number_to_double (CAR (list))));
@@ -26544,8 +26464,7 @@ builtin_sinh (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   return create_floating_from_double (sinh (convert_number_to_double (CAR (list))));
@@ -26564,8 +26483,7 @@ builtin_cosh (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   return create_floating_from_double (cosh (convert_number_to_double (CAR (list))));
@@ -26584,8 +26502,7 @@ builtin_tanh (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   return create_floating_from_double (tanh (convert_number_to_double (CAR (list))));
@@ -26606,8 +26523,7 @@ builtin_exp (struct object *list, struct environment *env,
 
   if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_INTEGER)
@@ -26751,8 +26667,7 @@ builtin_lognot (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
     }
 
   ret = alloc_number (TYPE_INTEGER);
@@ -26776,8 +26691,7 @@ builtin_logior (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
     }
 
   ret = alloc_number (TYPE_INTEGER);
@@ -26789,8 +26703,7 @@ builtin_logior (struct object *list, struct environment *env,
     {
       if (CAR (list)->type != TYPE_INTEGER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
 	}
 
       mpz_ior (ret->value_ptr.integer, ret->value_ptr.integer,
@@ -27194,8 +27107,7 @@ builtin_coerce (struct object *list, struct environment *env,
     {
       if (!IS_SEQUENCE (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
 	}
 
       l = ACTUAL_SEQUENCE_LENGTH (CAR (list));
@@ -27243,8 +27155,7 @@ builtin_coerce (struct object *list, struct environment *env,
     {
       if (!IS_REAL (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:REAL", env, outcome);
 	}
 
       return create_complex (CAR (list), NULL, 0, env, outcome);
@@ -27302,9 +27213,7 @@ builtin_make_string (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
     }
 
   sz = mpz_get_si (CAR (list)->value_ptr.integer);
@@ -27382,8 +27291,7 @@ builtin_make_string (struct object *list, struct environment *env,
 
   if (initial_element && initial_element->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (initial_element, "CL:CHARACTER", env, outcome);
     }
 
   ret = alloc_object ();
@@ -27434,8 +27342,7 @@ builtin_intern (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   if (l == 2)
@@ -27504,8 +27411,7 @@ builtin_find_symbol (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   if (l == 2)
@@ -27567,8 +27473,7 @@ builtin_unintern (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   if (l == 2)
@@ -27615,8 +27520,7 @@ builtin_make_symbol (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   s = CAR (list)->value_ptr.string;
@@ -27644,8 +27548,7 @@ builtin_copy_symbol (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   sym = SYMBOL (CAR (list));
@@ -27692,8 +27595,7 @@ builtin_boundp (struct object *list, struct environment *env,
 
   if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (s, "CL:SYMBOL", env, outcome);
     }
 
   sym = SYMBOL (s);
@@ -27723,8 +27625,7 @@ builtin_symbol_value (struct object *list, struct environment *env,
 
   if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (s, "CL:SYMBOL", env, outcome);
     }
 
   ret = get_dynamic_value (SYMBOL (s), env);
@@ -27752,8 +27653,7 @@ builtin_set (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   b = find_binding (SYMBOL (CAR (list))->value_ptr.symbol, env->vars,
@@ -27840,8 +27740,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
 
   if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (s, "CL:SYMBOL", env, outcome);
     }
 
   ret = get_function (SYMBOL (s), env, 0, 0, 1, 1);
@@ -27870,8 +27769,7 @@ builtin_symbol_name (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   s = SYMBOL (CAR (list))->value_ptr.symbol;
@@ -27893,8 +27791,7 @@ builtin_symbol_package (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   return SYMBOL (CAR (list))->value_ptr.symbol->home_package;
@@ -27914,8 +27811,7 @@ builtin_symbol_plist (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->plist);
@@ -27938,8 +27834,7 @@ builtin_special_operator_p (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   s = SYMBOL (CAR (list))->value_ptr.symbol;
@@ -27966,8 +27861,7 @@ builtin_makunbound (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   delete_reference (SYMBOL (CAR (list)),
@@ -28008,8 +27902,7 @@ builtin_fmakunbound (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   delete_reference (SYMBOL (CAR (list)),
@@ -28166,8 +28059,7 @@ builtin_macro_function (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   sym = SYMBOL (CAR (list));
@@ -28371,8 +28263,7 @@ builtin_char_eq (struct object *list, struct environment *env,
 
   if (ch->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (ch, "CL:CHARACTER", env, outcome);
     }
 
   list = CDR (list);
@@ -28381,8 +28272,7 @@ builtin_char_eq (struct object *list, struct environment *env,
     {
       if (CAR (list)->type != TYPE_CHARACTER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
 	}
 
       if (strcmp (ch->value_ptr.character, CAR (list)->value_ptr.character))
@@ -28409,8 +28299,7 @@ builtin_char_upcase (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -28439,8 +28328,7 @@ builtin_char_downcase (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -28469,8 +28357,7 @@ builtin_alpha_char_p (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -28499,8 +28386,7 @@ builtin_alphanumericp (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = CAR (list)->value_ptr.character;
@@ -28530,8 +28416,7 @@ builtin_char_code (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
     }
 
   ch = (unsigned char *)CAR (list)->value_ptr.character;
@@ -28564,8 +28449,7 @@ builtin_code_char (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
     }
 
   if (mpz_cmp_ui (CAR (list)->value_ptr.integer, 0) < 0
@@ -28758,8 +28642,8 @@ builtin_rename_package (struct object *list, struct environment *env,
     {
       if (!IS_LIST (CAR (CDR (CDR (list)))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (CDR (list))), "CL:LIST", env,
+				   outcome);
 	}
 
       cons = CAR (CDR (CDR (list)));
@@ -31327,8 +31211,7 @@ evaluate_values_list (struct object *list, struct environment *env,
 
   if (!IS_LIST (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
     }
 
   return evaluate_values (CAR (list), env, outcome);
@@ -31497,8 +31380,7 @@ evaluate_eval_when (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CONS", env, outcome);
     }
 
   cons = CAR (list);
@@ -31507,8 +31389,7 @@ evaluate_eval_when (struct object *list, struct environment *env,
     {
       if (!IS_SYMBOL (CAR (cons)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (cons), "CL:SYMBOL", env, outcome);
 	}
 
       if (symbol_equals (CAR (cons), ":EXECUTE", env)
@@ -31849,8 +31730,7 @@ evaluate_setq (struct object *list, struct environment *env,
 
       if (!IS_SYMBOL (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
 	}
 
       ret = set_value (SYMBOL (CAR (list)), CAR (CDR (list)), 1, 1, env,
@@ -31887,8 +31767,7 @@ evaluate_psetq (struct object *list, struct environment *env,
     {
       if (!IS_SYMBOL (CAR (cons)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (cons), "CL:SYMBOL", env, outcome);
 	}
 
       last->obj = evaluate_object (CAR (CDR (cons)), env, outcome);
@@ -32099,9 +31978,7 @@ evaluate_apply (struct object *list, struct environment *env,
 
   if (last->type != TYPE_CONS_PAIR && SYMBOL (last) != &nil_object)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      return raise_type_error (last, "CL:LIST", env, outcome);
     }
 
   if (length == 1)
@@ -32335,8 +32212,7 @@ evaluate_destructuring_bind (struct object *list, struct environment *env,
     {
       decrement_refcount (fun);
       decrement_refcount (args);
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (args, "CL:LIST", env, outcome);
     }
 
   ret = call_function (fun, args, 0, 0, 0, 0, 0, env, outcome);
@@ -32586,8 +32462,7 @@ evaluate_symbol_macrolet (struct object *list, struct environment *env,
 
   if (!IS_LIST (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
     }
 
   bind_forms = CAR (list);
@@ -32795,8 +32670,7 @@ builtin_find_class (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   if (l > 1)
@@ -33438,8 +33312,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   sym = SYMBOL (CAR (list));
@@ -33468,8 +33341,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 
 	  if (!IS_LIST (CAR (CDR (list))))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
 	    }
 
 	  if (!lambdal)
@@ -34132,8 +34004,7 @@ evaluate_block (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   return evaluate_body (CDR (list), 0, 0, SYMBOL (CAR (list)), env, outcome);
@@ -34156,8 +34027,7 @@ evaluate_return_from (struct object *list, struct environment *env,
 
   if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
   if (l == 2)
@@ -35330,8 +35200,7 @@ builtin_al_dump_captured_env (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_FUNCTION)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:FUNCTION", env, outcome);
     }
 
   return dump_bindings (CAR (list)->value_ptr.function->lex_vars, 0, env);
@@ -36371,8 +36240,7 @@ builtin_al_getenv (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
   envvar = copy_string_to_c_string (CAR (list)->value_ptr.string);
@@ -36440,8 +36308,7 @@ builtin_al_exit (struct object *list, struct environment *env,
 
   if (l && CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
     }
 
   if (l)
