@@ -2628,7 +2628,7 @@ struct object *copy_number (const struct object *num);
 struct object *promote_number (struct object *num, enum object_type type);
 struct object *perform_division_with_remainder
 (struct object *args, enum rounding_behavior round_behavior,
- enum object_type quotient_type, struct outcome *outcome);
+ enum object_type quotient_type, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_plus (struct object *list, struct environment *env,
 			     struct outcome *outcome);
@@ -7146,10 +7146,14 @@ create_complex (struct object *real, struct object *imag, int decrement_refc,
   struct object *ret, *r, *i;
   enum object_type t;
 
-  if (!IS_REAL (real) || (imag && !IS_REAL (imag)))
+  if (!IS_REAL (real))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (real, "CL:REAL", env, outcome);
+    }
+
+  if (imag && !IS_REAL (imag))
+    {
+      return raise_type_error (imag, "CL:REAL", env, outcome);
     }
 
   if (IS_RATIONAL (real) && (!imag || ((imag->type == TYPE_INTEGER
@@ -18841,8 +18845,7 @@ builtin_elt (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
     }
 }
 
@@ -18916,8 +18919,7 @@ builtin_aref (struct object *list, struct environment *env,
 	  (mpz_tstbit (arr->value_ptr.bitarray->value, ind));
     }
 
-  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-  return NULL;
+  return raise_type_error (arr, "CL:ARRAY", env, outcome);
 }
 
 
@@ -18934,10 +18936,14 @@ builtin_row_major_aref (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_ARRAY (CAR (list)) || CAR (CDR (list))->type != TYPE_INTEGER)
+  if (!IS_ARRAY (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
     }
 
   ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
@@ -20003,8 +20009,7 @@ builtin_adjust_array (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
     }
 
   increment_refcount (CAR (list));
@@ -20342,8 +20347,8 @@ builtin_maphash (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
+			       outcome);
     }
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
@@ -22118,8 +22123,8 @@ builtin_write (struct object *list, struct environment *env,
 	    }
 	  else
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (CAR (CDR (list)), "CL:STREAM", env,
+				       outcome);
 	    }
 
 	  list = CDR (list);
@@ -22201,11 +22206,14 @@ builtin_write_string (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_STRING
-      || (l == 2 && CAR (CDR (list))->type != TYPE_STREAM))
+  if (CAR (list)->type != TYPE_STRING)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
+    }
+
+  if (l == 2 && CAR (CDR (list))->type != TYPE_STREAM)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:STREAM", env, outcome);
     }
 
   s = CAR (list)->value_ptr.string;
@@ -22244,11 +22252,14 @@ builtin_write_char (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_CHARACTER
-      || (l == 2 && CAR (CDR (list))->type != TYPE_STREAM))
+  if (CAR (list)->type != TYPE_CHARACTER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CHARACTER", env, outcome);
+    }
+
+  if (l == 2 && CAR (CDR (list))->type != TYPE_STREAM)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:STREAM", env, outcome);
     }
 
   if (l == 2)
@@ -22288,10 +22299,14 @@ builtin_write_byte (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type != TYPE_INTEGER || CAR (CDR (list))->type != TYPE_STREAM)
+  if (CAR (list)->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_STREAM)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:STREAM", env, outcome);
     }
 
   b = mpz_get_ui (CAR (list)->value_ptr.integer);
@@ -22814,8 +22829,8 @@ builtin_make_string_output_stream (struct object *list, struct environment *env,
 
   if (l && CAR (list)->type != TYPE_STRING && SYMBOL (CAR (list)) != &nil_object)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:NULL)", env,
+			       outcome);
     }
 
   str = (l && CAR (list)->type == TYPE_STRING) ? CAR (list) : NULL;
@@ -23975,8 +23990,8 @@ builtin_mapcar (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
+			       outcome);
     }
 
 
@@ -24093,8 +24108,8 @@ builtin_map (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:SYMBOL CL:FUNCTION)",
+			       env, outcome);
     }
 
 
@@ -24216,8 +24231,8 @@ builtin_remove_if (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
+			       outcome);
     }
 
   if (!IS_SEQUENCE (CAR (CDR (list))))
@@ -24970,8 +24985,7 @@ builtin_method_print_object (struct object *list, struct environment *env,
 
   if (CAR (CDR (list))->type != TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:STREAM", env, outcome);
     }
 
   if (print_object (CAR (list), env, CAR (CDR (list))->value_ptr.stream) < 0)
@@ -25583,6 +25597,7 @@ struct object *
 perform_division_with_remainder (struct object *args,
 				 enum rounding_behavior round_behavior,
 				 enum object_type quotient_type,
+				 struct environment *env,
 				 struct outcome *outcome)
 {
   int l = list_length (args);
@@ -25605,16 +25620,14 @@ perform_division_with_remainder (struct object *args,
 
   if (!IS_REAL (CAR (args)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (args), "CL:REAL", env, outcome);
     }
 
   if (l == 2)
     {
       if (!IS_REAL (CAR (CDR (args))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (args)), "CL:REAL", env, outcome);
 	}
 
       div_ = CAR (CDR (args));
@@ -25933,7 +25946,7 @@ struct object *
 builtin_floor (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  return perform_division_with_remainder (list, FLOOR, TYPE_INTEGER, outcome);
+  return perform_division_with_remainder (list, FLOOR, TYPE_INTEGER, env, outcome);
 }
 
 
@@ -25941,7 +25954,7 @@ struct object *
 builtin_ffloor (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  return perform_division_with_remainder (list, FLOOR, TYPE_FLOAT, outcome);
+  return perform_division_with_remainder (list, FLOOR, TYPE_FLOAT, env, outcome);
 }
 
 
@@ -25949,7 +25962,8 @@ struct object *
 builtin_ceiling (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  return perform_division_with_remainder (list, CEILING, TYPE_INTEGER, outcome);
+  return perform_division_with_remainder (list, CEILING, TYPE_INTEGER, env,
+					  outcome);
 }
 
 
@@ -25957,7 +25971,7 @@ struct object *
 builtin_fceiling (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  return perform_division_with_remainder (list, CEILING, TYPE_FLOAT, outcome);
+  return perform_division_with_remainder (list, CEILING, TYPE_FLOAT, env, outcome);
 }
 
 
@@ -25965,7 +25979,8 @@ struct object *
 builtin_truncate (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
-  return perform_division_with_remainder (list, TRUNCATE, TYPE_INTEGER, outcome);
+  return perform_division_with_remainder (list, TRUNCATE, TYPE_INTEGER, env,
+					  outcome);
 }
 
 
@@ -25973,7 +25988,8 @@ struct object *
 builtin_ftruncate (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
-  return perform_division_with_remainder (list, TRUNCATE, TYPE_FLOAT, outcome);
+  return perform_division_with_remainder (list, TRUNCATE, TYPE_FLOAT, env,
+					  outcome);
 }
 
 
@@ -25982,7 +25998,7 @@ builtin_round (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
   return perform_division_with_remainder (list, ROUND_TO_NEAREST, TYPE_INTEGER,
-					  outcome);
+					  env, outcome);
 }
 
 
@@ -25991,7 +26007,7 @@ builtin_fround (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
   return perform_division_with_remainder (list, ROUND_TO_NEAREST, TYPE_FLOAT,
-					  outcome);
+					  env, outcome);
 }
 
 
@@ -26083,8 +26099,7 @@ builtin_rational (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
     }
 }
 
@@ -26191,8 +26206,7 @@ builtin_realpart (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (num, "CL:NUMBER", env, outcome);
     }
 }
 
@@ -26226,8 +26240,7 @@ builtin_imagpart (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (num, "CL:NUMBER", env, outcome);
     }
 }
 
@@ -27164,8 +27177,7 @@ builtin_coerce (struct object *list, struct environment *env,
     {
       if (!IS_REAL (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:REAL", env, outcome);
 	}
 
       if (CAR (list)->type == TYPE_FLOAT)
@@ -27183,8 +27195,7 @@ builtin_coerce (struct object *list, struct environment *env,
     {
       if (!IS_SYMBOL (CAR (list)))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
 	}
 
       return get_function (CAR (list), env, 1, 0, 1, 1);
@@ -27349,8 +27360,8 @@ builtin_intern (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -27418,8 +27429,8 @@ builtin_find_symbol (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -27480,8 +27491,8 @@ builtin_unintern (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -28176,9 +28187,8 @@ builtin_string (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
+			       "CL:CHARACTER)", env, outcome);
     }
 }
 
@@ -28524,8 +28534,8 @@ builtin_find_package (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING CL:SYMBOL"
+			       " CL:CHARACTER)", env, outcome);
     }
 
   if (!ret)
@@ -28549,8 +28559,8 @@ builtin_package_name (struct object *list, struct environment *env,
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING CL:SYMBOL"
+			       " CL:CHARACTER)", env, outcome);
     }
 
   pack = inspect_package_by_designator (CAR (list), env);
@@ -28581,8 +28591,8 @@ builtin_package_nicknames (struct object *list, struct environment *env,
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING"
+			       " CL:SYMBOL CL:CHARACTER)", env, outcome);
     }
 
   pack = inspect_package_by_designator (CAR (list), env);
@@ -28773,8 +28783,8 @@ builtin_package_use_list (struct object *list, struct environment *env,
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING"
+			       " CL:SYMBOL CL:CHARACTER)", env, outcome);
     }
 
   pack = inspect_package_by_designator (CAR (list), env);
@@ -28821,8 +28831,8 @@ builtin_package_used_by_list (struct object *list, struct environment *env,
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING"
+			       " CL:SYMBOL CL:CHARACTER)", env, outcome);
     }
 
   pack = inspect_package_by_designator (CAR (list), env);
@@ -29079,8 +29089,8 @@ builtin_import (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -29160,8 +29170,8 @@ builtin_export (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -29265,8 +29275,8 @@ builtin_unexport (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -29349,8 +29359,8 @@ builtin_use_package (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+				   " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -29386,8 +29396,8 @@ builtin_use_package (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (des))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (des, "(CL:OR CL:PACKAGE CL:STRING CL:SYMBOL "
+				   "CL:CHARACTER)", env, outcome);
 	}
 
       use = inspect_package_by_designator (des, env);
@@ -29441,8 +29451,9 @@ builtin_unuse_package (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE "
+				   "CL:STRING CL:SYMBOL CL:CHARACTER)", env,
+				   outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -29478,8 +29489,8 @@ builtin_unuse_package (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (des))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (des, "(CL:OR CL:PACKAGE CL:STRING CL:SYMBOL "
+				   "CL:CHARACTER)", env, outcome);
 	}
 
       use = inspect_package_by_designator (des, env);
@@ -29533,8 +29544,9 @@ builtin_shadow (struct object *list, struct environment *env,
     {
       if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE "
+				   "CL:STRING CL:SYMBOL CL:CHARACTER)", env,
+				   outcome);
 	}
 
       pack = inspect_package_by_designator (CAR (CDR (list)), env);
@@ -29634,8 +29646,8 @@ builtin_package_shadowing_symbols (struct object *list, struct environment *env,
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING "
+			       "CL:SYMBOL CL:CHARACTER)", env, outcome);
     }
 
   pack = inspect_package_by_designator (CAR (list), env);
@@ -29700,8 +29712,8 @@ builtin_do_symbols (struct object *list, struct environment *env,
       if (!IS_PACKAGE_DESIGNATOR (des))
 	{
 	  env->blocks->frame = remove_block (env->blocks->frame);
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (des, "(CL:OR CL:PACKAGE CL:STRING CL:SYMBOL "
+				   "CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (des, env);
@@ -29858,9 +29870,8 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
       if (!IS_PACKAGE_DESIGNATOR (des))
 	{
-	  env->blocks->frame = remove_block (env->blocks->frame);
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (des, "(CL:OR CL:PACKAGE CL:STRING "
+				   "CL:SYMBOL CL:CHARACTER)", env, outcome);
 	}
 
       pack = inspect_package_by_designator (des, env);
