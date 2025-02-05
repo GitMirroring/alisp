@@ -2207,6 +2207,50 @@
   (make-pathname :directory (cl-user:al-getenv "HOME")))
 
 
+(defun split-pathname (path)
+  (let ((pn (namestring (pathname path)))
+	out
+	start)
+    (dotimes (i (length pn))
+      (if (and (= i 0)
+	       (char= (elt pn 0) #\/))
+	  (setq out (cons (copy-seq "/") out))
+	  (if (not start)
+	      (when (not (char= (elt pn i) #\/))
+		(setq start i)
+		(if (= i (- (length pn) 1))
+		    (setq out (cons (subseq pn start) out))))
+	      (if (char= (elt pn i) #\/)
+		  (progn
+		    (setq out (cons (subseq pn start i) out))
+		    (setq start nil))
+		  (when (= i (- (length pn) 1))
+		    (setq out (cons (subseq pn start) out)))))))
+    (reverse out)))
+
+
+(defun pathname-match-p (path wild)
+  (let ((path (split-pathname path))
+	(wild (split-pathname wild)))
+    (do ((p path (cdr p))
+	 (w wild (cdr w)))
+	(nil)
+      (if (and (not (cdr p))
+	       (not (cdr w))
+	       (or (string= (car w) "*")
+		   (string= (car p) (car w))))
+	  (return-from pathname-match-p t))
+      (if (not (string= (car w) (car p)))
+	  (return-from pathname-match-p nil)))))
+
+
+(defun directory (fn)
+  (let ((name (pathname-name fn))
+	(dir (pathname-directory fn)))
+    (if (string= name "*")
+	(cl-user:al-list-directory (or dir "."))
+	(list (probe-file fn)))))
+
 
 
 (defmacro with-open-file ((str fn &rest opts) &body forms)
@@ -3272,16 +3316,16 @@
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
 	  merge pathname-host pathname-device pathname-version file-namestring
 	  directory-namestring host-namestring enough-namestring merge-pathnames
-	  file-author file-write-date user-homedir-pathname with-open-file
-	  terpri write-line write-sequence prin1 princ print write-to-string
-	  prin1-to-string princ-to-string force-output with-input-from-string
-	  with-output-to-string pprint do-all-symbols find-all-symbols
-	  with-slots with-accessors loop format encode-universal-time
-	  *readtable* with-compilation-unit *compile-file-truename*
-	  *compile-file-pathname* *compile-print* *compile-verbose*
-	  compile-file-pathname compile-file with-standard-io-syntax
-	  handler-case restart-case with-simple-restart find-restart cerror
-	  break ignore-errors abort continue documentation))
+	  file-author file-write-date user-homedir-pathname pathname-match-p
+	  directory with-open-file terpri write-line write-sequence prin1 princ
+	  print write-to-string prin1-to-string princ-to-string force-output
+	  with-input-from-string with-output-to-string pprint do-all-symbols
+	  find-all-symbols with-slots with-accessors loop format
+	  encode-universal-time *readtable* with-compilation-unit
+	  *compile-file-truename* *compile-file-pathname* *compile-print*
+	  *compile-verbose* compile-file-pathname compile-file
+	  with-standard-io-syntax handler-case restart-case with-simple-restart
+	  find-restart cerror break ignore-errors abort continue documentation))
 
 
 
