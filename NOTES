@@ -105,6 +105,8 @@ package.  There are also some non-standard extensions of standard functions.
   bound dinamically to that condition object; if you entered the debugger due to
   stepping, this variable is NIL
 
+- the functions AL-WATCH and AL-UNWATCH control watchpoints, see "Watchpoints"
+
 - the variable *AL-PPRINT-DEPTH* is used by the pretty printer and contains the
   current level of indentation
 
@@ -390,6 +392,15 @@ form is displayed preceded by " -> ", then a blank line, then the next form is
 showed.  If the next form is a non-builtin macro, then it is followed by
 "(macro)".  If you input an empty line at the debugger prompt, the last form or
 debugging command is executed again.
+
+
+
+__Watchpoints__
+
+You can watch standard objects for modification.  The function AL-WATCH takes a
+standard object as argument and toggles watching on it; AL-UNWATCH untoggles
+watching.
+When a watched object is modified in any field, the debugger is entered.
 
 
 
