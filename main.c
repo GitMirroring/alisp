@@ -755,7 +755,7 @@ environment
   int debugging_depth;
 
   enum stepping_flags stepping_flags;
-  struct object *next_eval, *last_command;
+  struct object *next_eval, *watched_obj, *obj_field, *new_value, *last_command;
 
   int is_profiling;
   struct profiling_record **profiling_data;
@@ -1571,6 +1571,15 @@ object
 
 #define SET_CONSTANT_FLAG(obj) ((obj)->flags =				\
 				WITH_CHANGED_BIT ((obj)->flags, 10, 1))
+
+
+#define IS_WATCHED(obj) ((obj)->flags & 0x800)
+
+#define SET_WATCHED_FLAG(obj) ((obj)->flags =				\
+			       WITH_CHANGED_BIT ((obj)->flags, 11, 1))
+
+#define CLEAR_WATCHED_FLAG(obj) ((obj)->flags =				\
+				 WITH_CHANGED_BIT ((obj)->flags, 11, 0))
 
 
 
@@ -3129,6 +3138,11 @@ struct object *builtin_al_report_profiling
 struct object *builtin_al_print_backtrace
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_watch
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_unwatch
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_next
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -4488,6 +4502,10 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
 		    TYPE_FUNCTION, NULL, 0);
+
+  add_builtin_form ("AL-WATCH", env, builtin_al_watch, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-UNWATCH", env, builtin_al_unwatch, TYPE_FUNCTION, NULL,
+		    0);
 
   add_builtin_form ("AL-NEXT", env, builtin_al_next, TYPE_FUNCTION, NULL, 0);
 
@@ -12314,6 +12332,17 @@ enter_debugger (struct object *cond, struct environment *env,
       print_available_restarts (env, 1, env->c_stdout);
       printf ("\n");
     }
+  else if (env->watched_obj)
+    {
+      printf ("object ");
+      print_object (env->watched_obj, env, env->c_stdout->value_ptr.stream);
+      printf (" changing field ");
+      print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
+      printf (" to ");
+      print_object (env->new_value, env, env->c_stdout->value_ptr.stream);
+      printf ("\n\n");
+      env->watched_obj = env->obj_field = env->new_value = NULL;
+    }
   else if (env->stepping_flags)
     {
       printf ("\n");
@@ -15812,6 +15841,16 @@ call_method (struct method_list *methlist, struct object *arglist,
 	      if (f->decl->name
 		  == methlist->meth->value_ptr.method->object_writer_field)
 		{
+		  if (IS_WATCHED (CAR (CDR (arglist))))
+		    {
+		      env->watched_obj = CAR (CDR (arglist));
+		      env->obj_field = f->decl->name;
+		      env->new_value = CAR (arglist);
+
+		      if (!enter_debugger (NULL, env, outcome))
+			return NULL;
+		    }
+
 		  if (f->name)
 		    {
 		      decrement_refcount (f->value);
@@ -15907,6 +15946,16 @@ call_method (struct method_list *methlist, struct object *arglist,
 	      if (f->decl->name
 		  == methlist->meth->value_ptr.method->object_accessor_field)
 		{
+		  if (IS_WATCHED (CAR (CDR (arglist))))
+		    {
+		      env->watched_obj = CAR (CDR (arglist));
+		      env->obj_field = f->decl->name;
+		      env->new_value = CAR (arglist);
+
+		      if (!enter_debugger (NULL, env, outcome))
+			return NULL;
+		    }
+
 		  if (f->name)
 		    {
 		      decrement_refcount (f->value);
@@ -24942,6 +24991,16 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
       if (f->decl->name == req)
 	{
 	  increment_refcount (newval);
+
+	  if (IS_WATCHED (CAR (list)))
+	    {
+	      env->watched_obj = CAR (list);
+	      env->obj_field = f->decl->name;
+	      env->new_value = newval;
+
+	      if (!enter_debugger (NULL, env, outcome))
+		return NULL;
+	    }
 
 	  if (f->name)
 	    {
@@ -35633,6 +35692,38 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
     }
 
   print_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_watch (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  SET_WATCHED_FLAG (CAR (list));
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_unwatch (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  CLEAR_WATCHED_FLAG (CAR (list));
 
   return &t_object;
 }
