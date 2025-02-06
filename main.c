@@ -18638,12 +18638,15 @@ builtin_nth (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_INTEGER
-      || mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0
-      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && SYMBOL (CAR (CDR (list))) != &nil_object))
+      || mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:INTEGER 0)", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_CONS_PAIR
+      && SYMBOL (CAR (CDR (list))) != &nil_object)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
     }
 
   ret = nth (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
@@ -18667,12 +18670,15 @@ builtin_nthcdr (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_INTEGER
-      || mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0
-      || (CAR (CDR (list))->type != TYPE_CONS_PAIR
-	  && SYMBOL (CAR (CDR (list))) != &nil_object))
+      || mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:INTEGER 0)", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_CONS_PAIR
+      && SYMBOL (CAR (CDR (list))) != &nil_object)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
     }
 
   ret = nthcdr (mpz_get_ui (CAR (list)->value_ptr.integer), CAR (CDR (list)));
@@ -19079,12 +19085,21 @@ builtin_subseq (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SEQUENCE (CAR (list)) || CAR (CDR (list))->type != TYPE_INTEGER
-      || (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
-	  && CAR (CDR (CDR (list)))->type != TYPE_INTEGER))
+  if (!IS_SEQUENCE (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+    }
+
+  if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
+      && CAR (CDR (CDR (list)))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "(CL:OR CL:INTEGER "
+			       "CL:NULL)", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -19438,8 +19453,7 @@ builtin_make_array (struct object *list, struct environment *env,
 
       if (fillp < 0)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (fp, "(CL:INTEGER 0)", env, outcome);
 	}
     }
 
@@ -19569,8 +19583,7 @@ builtin_make_array (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (dims, "(CL:OR CL:INTEGER CL:LIST)", env, outcome);
     }
 
   if (initial_contents)
@@ -19865,12 +19878,18 @@ builtin_adjust_array (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if ((CAR (CDR (list))->type != TYPE_CONS_PAIR
-       || CAR (CAR (CDR (list)))->type != TYPE_INTEGER)
+  if (CAR (CDR (list))->type != TYPE_CONS_PAIR
       && CAR (CDR (list))->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:CONS CL:INTEGER)",
+			       env, outcome);
+    }
+
+  if (CAR (CDR (list))->type == TYPE_CONS_PAIR
+      && CAR (CAR (CDR (list)))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CAR (CDR (list))), "CL:INTEGER", env,
+			       outcome);
     }
 
   newsz = CAR (CDR (list))->type == TYPE_CONS_PAIR
@@ -20401,11 +20420,14 @@ builtin_last (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if ((CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
-      || (length == 2 && CAR (CDR (list))->type != TYPE_INTEGER))
+  if (CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
+    }
+
+  if (length == 2 && CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
     }
 
   if (length == 2)
@@ -20414,8 +20436,8 @@ builtin_last (struct object *list, struct environment *env,
 
       if (n < 0)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (CAR (CDR (list)), "(CL:INTEGER 0)", env,
+				   outcome);
 	}
     }
 
@@ -20454,8 +20476,8 @@ builtin_pathname (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   return ret;
@@ -20584,8 +20606,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (defaults && !IS_PATHNAME_DESIGNATOR (defaults))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (defaults, "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
   else if (defaults)
     defaults = inspect_pathname_by_designator (defaults);
@@ -20882,8 +20904,8 @@ builtin_namestring (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -20908,8 +20930,8 @@ builtin_pathname_directory (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -20994,8 +21016,8 @@ builtin_pathname_name (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -21085,8 +21107,8 @@ builtin_pathname_type (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -21171,11 +21193,15 @@ builtin_wild_pathname_p (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_PATHNAME_DESIGNATOR (CAR (list))
-      || (l == 2 && !IS_SYMBOL (CAR (CDR (list)))))
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
+    }
+
+  if (l == 2 && !IS_SYMBOL (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:SYMBOL", env, outcome);
     }
 
   if (l == 1 || symbol_equals (CAR (CDR (list)), ":NAME", env))
@@ -21220,8 +21246,8 @@ builtin_logical_pathname (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ret = create_filename (copy_string (inspect_pathname_by_designator (CAR (list))));
@@ -21245,8 +21271,8 @@ builtin_translate_logical_pathname (struct object *list, struct environment *env
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ret = create_filename (copy_string (inspect_pathname_by_designator (CAR (list))));
@@ -21271,8 +21297,8 @@ builtin_truename (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -21310,8 +21336,8 @@ builtin_probe_file (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -21349,8 +21375,8 @@ builtin_ensure_directories_exist (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -21411,12 +21437,15 @@ builtin_file_position (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_STREAM
-      || CAR (list)->value_ptr.stream->type != FILE_STREAM
-      || (l == 2 && (CAR (CDR (list))->type != TYPE_INTEGER
-		     || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0)))
+      || CAR (list)->value_ptr.stream->type != FILE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:FILE-STREAM", env, outcome);
+    }
+
+  if (l == 2 && (CAR (CDR (list))->type != TYPE_INTEGER
+		 || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0))
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:INTEGER 0)", env, outcome);
     }
 
   if (l == 1)
@@ -21455,8 +21484,7 @@ builtin_file_length (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_STREAM
       || CAR (list)->value_ptr.stream->type != FILE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:FILE-STREAM", env, outcome);
     }
 
   f = CAR (list)->value_ptr.stream->file;
@@ -21490,12 +21518,17 @@ builtin_rename_file (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_PATHNAME_DESIGNATOR (CAR (list))
-      || !IS_PATHNAME_DESIGNATOR (CAR (CDR (list)))
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (CDR (list)))
       || CAR (CDR (list))->type == TYPE_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:STRING CL:PATHNAME)",
+			       env, outcome);
     }
 
   oldn = copy_string_to_c_string
@@ -21541,8 +21574,8 @@ builtin_delete_file (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   fn = copy_string_to_c_string
@@ -22367,8 +22400,8 @@ builtin_load (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = CAR (list);
@@ -22500,8 +22533,8 @@ builtin_open (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -22787,12 +22820,16 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
-  if ((l >= 2 && CAR (CDR (list))->type != TYPE_INTEGER)
-      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_INTEGER
-	  && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object))
+  if (l >= 2 && CAR (CDR (list))->type != TYPE_INTEGER)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+    }
+
+  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_INTEGER
+      && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object)
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "(CL:OR CL:INTEGER "
+			       "CL:NULL)", env, outcome);
     }
 
   if (l >= 2)
@@ -22854,8 +22891,7 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_STREAM
       || CAR (list)->value_ptr.stream->type != STRING_STREAM)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:STRING-STREAM", env, outcome);
     }
 
   ret = CAR (list)->value_ptr.stream->string;
@@ -24519,11 +24555,14 @@ builtin_setf_nth (struct object *list, struct environment *env,
   list = CDR (list);
 
   if (CAR (list)->type != TYPE_INTEGER
-      || (i = mpz_get_si (CAR (list)->value_ptr.integer)) < 0
-      || (CAR (CDR (list))->type != TYPE_CONS_PAIR))
+      || (i = mpz_get_si (CAR (list)->value_ptr.integer)) < 0)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:INTEGER 0)", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_CONS_PAIR)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:CONS", env, outcome);
     }
 
   cons = nthcdr (i, CAR (CDR (list)));
@@ -26569,10 +26608,14 @@ builtin_expt (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_REAL (CAR (list)) || !IS_REAL (CAR (CDR (list))))
+  if (!IS_REAL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
+    }
+
+  if (!IS_REAL (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:REAL", env, outcome);
     }
 
   exp = convert_number_to_double (CAR (CDR (list)));
@@ -28641,11 +28684,16 @@ builtin_rename_package (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_PACKAGE_DESIGNATOR (CAR (list))
-      || !IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+  if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:PACKAGE CL:STRING"
+			       " CL:SYMBOL CL:CHARACTER)", env, outcome);
+    }
+
+  if (!IS_PACKAGE_DESIGNATOR (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:PACKAGE CL:STRING"
+			       " CL:SYMBOL CL:CHARACTER)", env, outcome);
     }
 
   if (l == 3)
@@ -28662,8 +28710,8 @@ builtin_rename_package (struct object *list, struct environment *env,
 	{
 	  if (!IS_STRING_DESIGNATOR (CAR (cons)))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (CAR (cons), "(CL:OR CL:STRING"
+				       " CL:SYMBOL CL:CHARACTER)", env, outcome);
 	    }
 
 	  cons = CDR (cons);
@@ -28916,8 +28964,8 @@ builtin_make_package (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
       && !IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
+			       "CL:CHARACTER)", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -29040,8 +29088,8 @@ builtin_in_package (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
       && !IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
+			       "CL:CHARACTER)", env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -29126,8 +29174,7 @@ builtin_import (struct object *list, struct environment *env,
 	{
 	  if (!IS_SYMBOL (CAR (cons)))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (CAR (cons), "CL:SYMBOL", env, outcome);
 	    }
 
 	  ret = import_symbol (SYMBOL (CAR (cons)), pack, NULL);
@@ -29597,8 +29644,8 @@ builtin_shadow (struct object *list, struct environment *env,
 	}
       else
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (des, "(CL:OR CL:STRING CL:SYMBOL "
+				   "CL:CHARACTER)", env, outcome);
 	}
 
       r = inspect_accessible_symbol_by_name (s, sl, pack, 1, &p);
@@ -30344,10 +30391,14 @@ evaluate_progv (struct object *list, struct environment *env,
   if (!vals)
     return NULL;
 
-  if (!IS_LIST (syms) || !IS_LIST (vals))
+  if (!IS_LIST (syms))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (syms, "CL:LIST", env, outcome);
+    }
+
+  if (!IS_LIST (vals))
+    {
+      return raise_type_error (vals, "CL:LIST", env, outcome);
     }
 
   cons1 = syms, cons2 = vals;
@@ -31119,8 +31170,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (form, "(CL:OR CL:SYMBOL CL:CONS)", env, outcome);
     }
 
   return val;
@@ -31313,8 +31363,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
     }
   else if (fun->type != TYPE_FUNCTION)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (fun, "(CL:OR CL:SYMBOL CL:FUNCTION)", env, outcome);
     }
 
   list = CDR (list);
@@ -31443,11 +31492,14 @@ evaluate_defconstant (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list))
-      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING))
+  if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+    }
+
+  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING)
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
     }
 
   return define_constant (SYMBOL (CAR (list)), CAR (CDR (list)), env, outcome);
@@ -31509,11 +31561,14 @@ evaluate_defparameter (struct object *list, struct environment *env,
 
   s = CAR (list);
 
-  if ((s->type != TYPE_SYMBOL && s->type != TYPE_SYMBOL_NAME)
-      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING))
+  if (s->type != TYPE_SYMBOL && s->type != TYPE_SYMBOL_NAME)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (s, "CL:SYMBOL", env, outcome);
+    }
+
+  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING)
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
     }
 
   s = SYMBOL (s);
@@ -31541,11 +31596,14 @@ evaluate_defvar (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if ((s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
-      || (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING))
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (s, "CL:SYMBOL", env, outcome);
+    }
+
+  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING)
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
     }
 
   s = SYMBOL (s);
@@ -31964,9 +32022,8 @@ evaluate_apply (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
       && CAR (list)->type != TYPE_FUNCTION)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
+			       outcome);
     }
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
@@ -32031,8 +32088,8 @@ evaluate_funcall (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
+			       outcome);
     }
 
   return call_function (fun, CDR (list), 0, 0, 1, 0, 0, env, outcome);
@@ -32287,10 +32344,14 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list))))
+  if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
     }
 
   fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
@@ -32656,10 +32717,14 @@ evaluate_defclass (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_LIST (CAR (CDR (list))) || !IS_LIST (CAR (CDR (CDR (list)))))
+  if (!IS_LIST (CAR (CDR (list))))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR (CDR (list)))))
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:LIST", env, outcome);
     }
 
   return define_class (name, CDR (list), 0, env, outcome);
@@ -33984,8 +34049,8 @@ evaluate_go (struct object *list, struct environment *env,
 
   if (CAR (list)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:INTEGER)", env,
+			       outcome);
     }
 
   while (f)
@@ -34202,8 +34267,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 
   if (!IS_LIST (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
     }
 
   cons = CAR (list);
@@ -34321,8 +34385,7 @@ evaluate_restart_bind (struct object *list, struct environment *env,
 
   if (!IS_LIST (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:LIST", env, outcome);
     }
 
   cons = CAR (list);
@@ -34461,8 +34524,8 @@ builtin_invoke_restart (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
+			       outcome);
     }
 
   if (!b && SYMBOL (CAR (list)) == env->abort_sym)
@@ -34708,11 +34771,19 @@ evaluate_define_condition (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)) || !IS_LIST (CAR (CDR (list)))
-      || !IS_LIST (CAR (CDR (CDR (list)))))
+  if (!IS_SYMBOL (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR (CDR (list)))))
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:LIST", env, outcome);
     }
 
   condcl = define_class (SYMBOL (CAR (list)), CDR (list), 1, env, outcome);
@@ -35234,8 +35305,7 @@ builtin_al_dump_methods (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_FUNCTION
       || !(CAR (list)->value_ptr.function->flags & GENERIC_FUNCTION))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:GENERIC-FUNCTION", env, outcome);
     }
 
   ml = CAR (list)->value_ptr.function->methods;
@@ -36195,8 +36265,8 @@ builtin_al_list_directory (struct object *list, struct environment *env,
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
     }
 
   ns = inspect_pathname_by_designator (CAR (list));
@@ -36300,8 +36370,7 @@ builtin_al_system (struct object *list, struct environment *env,
       return create_integer_from_long (ret);
     }
 
-  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-  return NULL;
+  return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:NULL)", env, outcome);
 }
 
 
