@@ -1149,6 +1149,7 @@ make_test ("(merge-pathnames \"foo/\" #p\"bar\")", "#P\"foo/bar\"");
 make_test ("(merge-pathnames #p\"foo\" \"bar/\")", "#P\"bar/foo\"");
 make_test ("(merge-pathnames \"/foo/\" #p\"bar\")", "#P\"/foo/bar\"");
 make_test ("(merge-pathnames \".\" \"..\")", "#P\".\"");
+make_test ("(merge-pathnames \"/\" \"foo.bar\")", "#P\"/foo.bar\"");
 make_test ("(truename #p\"README\")", "#P\"README\"");
 make_test ("(pathnamep (user-homedir-pathname))", "T");
 make_test ("(pathname-match-p \"foo\" \"*\")", "T");
