@@ -2245,12 +2245,42 @@
 	  (return-from pathname-match-p nil)))))
 
 
+(defun cl-user::al-list-directory-with-full-path (dir)
+  (mapcar (lambda (f) (merge-pathnames dir f))
+	  (cl-user:al-list-directory dir)))
+(export 'cl-user::al-list-directory-with-full-path 'cl-user)
+
+
+(defun cl-user::al-list-subdirs (dir)
+  (let (out
+	(dir (namestring dir)))
+    (dolist (f (cl-user:al-list-directory-with-full-path dir))
+      (if (and (string/= (pathname-name f) ".")
+	       (string/= (pathname-name f) "..")
+	       (cl-user:al-directoryp f))
+	  (setq out (cons (make-pathname
+			   :directory (list (if (char= (elt dir 0) #\/)
+						:absolute
+						:relative)
+					    (namestring f)))
+			  out))))
+    out))
+(export 'cl-user::al-list-subdirs 'cl-user)
+
+
 (defun directory (fn)
   (let ((name (pathname-name fn))
 	(dir (pathname-directory fn)))
     (if (string= name "*")
-	(cl-user:al-list-directory (or dir "."))
-	(list (probe-file fn)))))
+	(cl-user:al-list-directory-with-full-path (or dir "."))
+	(if (string= (car (last (split-pathname fn))) "*")
+	    (let ((spl (split-pathname fn)))
+	      (cl-user:al-list-subdirs (make-pathname
+					:directory (if (string= (car spl) "/")
+						       `(:absolute ,@(subseq spl 1 (1- (length spl))))
+						       `,@(subseq spl 0 (1- (length spl)))))))
+	    (if (probe-file fn)
+		(list fn))))))
 
 
 
