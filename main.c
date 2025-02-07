@@ -48,6 +48,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#include <unistd.h>
+
 
 
 #ifndef HAVE_MEMMEM
@@ -504,6 +506,7 @@ outcome_type
     FILE_ALREADY_EXISTS,
     ERROR_READING_FILE,
     ERROR_DURING_OUTPUT,
+    ERROR_PERFORMING_STAT_ON_FILE,
     COULD_NOT_OPEN_DIR,
     COULD_NOT_CREATE_DIR,
     ERROR_READING_DIR,
@@ -3156,6 +3159,8 @@ struct object *builtin_al_print_terms_and_conditions
 
 struct object *builtin_al_list_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_directoryp
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_getenv
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4520,6 +4525,8 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("AL-LIST-DIRECTORY", env, builtin_al_list_directory,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-DIRECTORYP", env, builtin_al_directoryp, TYPE_FUNCTION,
+		    NULL, 0);
 
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
@@ -36398,6 +36405,46 @@ builtin_al_list_directory (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_al_directoryp (struct object *list, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *ns;
+  struct stat st;
+  char *fn;
+
+  if (list_length (list) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:FILE-STREAM "
+			       "CL:PATHNAME)", env, outcome);
+    }
+
+  ns = inspect_pathname_by_designator (CAR (list));
+
+  fn = copy_string_to_c_string (ns->value_ptr.string);
+
+  if (stat (fn, &st))
+    {
+      free (fn);
+      outcome->type = ERROR_PERFORMING_STAT_ON_FILE;
+      return NULL;
+    }
+
+  free (fn);
+
+  if ((st.st_mode & S_IFMT) == S_IFDIR)
+    return &t_object;
+
+  return &nil_object;
+}
+
+
+struct object *
 builtin_al_getenv (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
@@ -38358,6 +38405,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == ERROR_DURING_OUTPUT)
     {
       printf ("eval error: there was an error during output\n");
+    }
+  else if (err->type == ERROR_PERFORMING_STAT_ON_FILE)
+    {
+      printf ("eval error: there was an error while performing stat on a file\n");
     }
   else if (err->type == COULD_NOT_OPEN_DIR)
     {
