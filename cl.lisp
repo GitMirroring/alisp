@@ -2193,9 +2193,10 @@
 		       (> (length dir) 0) (char= (elt dir 0) #\/))
 		      :absolute
 		      :relative))
-	 (name (or (pathname-name p1) (pathname-name p2))))
+	 (name (or (pathname-name p1) (pathname-name p2)))
+	 (type (or (pathname-type p1) (pathname-type p2))))
     (make-pathname :directory (if dir (list dirtype dir))
-		   :name name)))
+		   :name name :type type)))
 
 
 
