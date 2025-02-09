@@ -2245,42 +2245,62 @@
 	  (return-from pathname-match-p nil)))))
 
 
+(defun ensure-directory (path)
+  (let ((path (namestring path)))
+    (if (char= (elt path (1- (length path))) #\/)
+	path
+	(concatenate 'string path "/"))))
+
+
 (defun cl-user::al-list-directory-with-full-path (dir)
-  (mapcar (lambda (f) (merge-pathnames dir f))
+  (mapcar (lambda (f) (merge-pathnames (ensure-directory dir)
+				       f))
 	  (cl-user:al-list-directory dir)))
 (export 'cl-user::al-list-directory-with-full-path 'cl-user)
 
 
+(defun exclude-directory (path)
+  "Returns the pathname without the directory, that is name+type (or just the name in Posix parlance)."
+  (let ((name (pathname-name path))
+	(type (pathname-type path)))
+    (if type
+	(concatenate 'string name "." type)
+	(or name (make-string 0)))))
+
+
 (defun cl-user::al-list-subdirs (dir)
+  "List the subdirectories of DIR with full path.  Excludes '.' and '..'."
   (let (out
 	(dir (namestring dir)))
     (dolist (f (cl-user:al-list-directory-with-full-path dir))
-      (if (and (string/= (pathname-name f) ".")
-	       (string/= (pathname-name f) "..")
+      (if (and (string/= (exclude-directory f) ".")
+	       (string/= (exclude-directory f) "..")
 	       (cl-user:al-directoryp f))
-	  (setq out (cons (make-pathname
-			   :directory (list (if (char= (elt dir 0) #\/)
-						:absolute
-						:relative)
-					    (namestring f)))
-			  out))))
+	  (setq out (cons (ensure-directory f) out))))
     out))
 (export 'cl-user::al-list-subdirs 'cl-user)
 
 
 (defun directory (fn)
   (let ((name (pathname-name fn))
-	(dir (pathname-directory fn)))
-    (if (string= name "*")
-	(cl-user:al-list-directory-with-full-path (or dir "."))
-	(if (string= (car (last (split-pathname fn))) "*")
-	    (let ((spl (split-pathname fn)))
-	      (cl-user:al-list-subdirs (make-pathname
-					:directory (if (string= (car spl) "/")
-						       `(:absolute ,@(subseq spl 1 (1- (length spl))))
-						       `,@(subseq spl 0 (1- (length spl)))))))
-	    (if (probe-file fn)
-		(list fn))))))
+	(type (pathname-type fn))
+	(dir (pathname-directory fn))
+	(full (namestring fn))
+	(spl (split-pathname fn)))
+    (cond
+      ((and (string= name "*")
+	    (or (not type)
+		(string= type "*")))
+       (cl-user:al-list-directory-with-full-path (or dir ".")))
+      ((string= name "*")
+       (remove-if (lambda (f) (string/= (or (pathname-type f) "") type))
+		  (cl-user:al-list-directory-with-full-path (or dir "."))))
+      ((string= (car (last spl)) "*")
+       (mapcar 'pathname
+	       (cl-user:al-list-subdirs (subseq full 0 (- (length full) 2)))))
+      (t
+       (if (probe-file fn)
+	   (list (pathname fn)))))))
 
 
 
