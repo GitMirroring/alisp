@@ -9187,8 +9187,7 @@ get_filename (struct object *string, int *end)
 
   for (i = string->value_ptr.string->used_size-1; i >= 0; i--)
     {
-      if (string->value_ptr.string->value [i] == '.'
-	  && i != string->value_ptr.string->used_size-1)
+      if (string->value_ptr.string->value [i] == '.' && *end == -1)
 	*end = i;
 
       if (string->value_ptr.string->value [i] == '/')
@@ -9199,9 +9198,6 @@ get_filename (struct object *string, int *end)
 	  return i;
 	}
     }
-
-  if (!*end)
-    *end = -1;
 
   return i;
 }
@@ -21128,6 +21124,16 @@ builtin_pathname_name (struct object *list, struct environment *env,
       return NULL;
     }
 
+  if (!ns->value_ptr.string->used_size)
+    return &nil_object;
+
+  if (ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '.'
+      && (ns->value_ptr.string->used_size == 1
+	  || ns->value_ptr.string->value [ns->value_ptr.string->used_size-2] == '/'))
+    {
+      return create_string_copying_c_string (".");
+    }
+
   s = get_filename (ns, &dot);
 
   if (s < 0 && dot < 0)
@@ -21219,9 +21225,15 @@ builtin_pathname_type (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '/'
-      || ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '.')
+  if (!ns->value_ptr.string->used_size
+      || ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '/')
     return &nil_object;
+
+  if (ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '.'
+      && ns->value_ptr.string->used_size > 1
+      && ns->value_ptr.string->value [ns->value_ptr.string->used_size-2] != '/')
+    return alloc_string (0);
+
 
   for (i = ns->value_ptr.string->used_size-2; i >= 0; i--)
     {
