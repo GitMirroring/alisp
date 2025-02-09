@@ -2476,7 +2476,7 @@ struct object *builtin_make_pathname
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_namestring
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_pathname_directory
+struct object *builtin_al_pathname_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_pathname_name
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3760,8 +3760,6 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("NAMESTRING", env, builtin_namestring, TYPE_FUNCTION, NULL,
 		    0);
-  add_builtin_form ("PATHNAME-DIRECTORY", env, builtin_pathname_directory,
-		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
 		    NULL, 0);
   add_builtin_form ("PATHNAME-TYPE", env, builtin_pathname_type, TYPE_FUNCTION,
@@ -4523,6 +4521,8 @@ add_standard_definitions (struct environment *env)
 		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
 		    0);
 
+  add_builtin_form ("AL-PATHNAME-DIRECTORY", env, builtin_al_pathname_directory,
+		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-LIST-DIRECTORY", env, builtin_al_list_directory,
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-DIRECTORYP", env, builtin_al_directoryp, TYPE_FUNCTION,
@@ -20968,8 +20968,8 @@ builtin_namestring (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_pathname_directory (struct object *list, struct environment *env,
-			    struct outcome *outcome)
+builtin_al_pathname_directory (struct object *list, struct environment *env,
+			       struct outcome *outcome)
 {
   struct object *ns, *allow_other_keys = NULL;
   int found_unknown_key = 0, s;

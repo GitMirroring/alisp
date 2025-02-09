@@ -2169,6 +2169,16 @@
 
 
 
+(defun pathname-directory (fn &key case)
+  (let ((dir (cl-user:al-pathname-directory fn)))
+    (if dir
+	(let ((spl (split-pathname dir)))
+	  (if (string= (car spl) "/")
+	      (progn
+		(setf (car spl) :absolute)
+		spl)
+	      (cons :relative spl))))))
+
 (defun pathname-host (fn &key case))
 
 (defun pathname-device (fn &key case))
@@ -2188,7 +2198,8 @@
 (defun merge-pathnames (pn &optional defpn defv)
   (let* ((p1 (pathname pn))
 	 (p2 (pathname defpn))
-	 (dir (or (pathname-directory p1) (pathname-directory p2)))
+	 (dir (or (cl-user:al-pathname-directory p1)
+		  (cl-user:al-pathname-directory p2)))
 	 (dirtype (if (and
 		       (> (length dir) 0) (char= (elt dir 0) #\/))
 		      :absolute
@@ -2284,7 +2295,7 @@
 (defun directory (fn)
   (let ((name (pathname-name fn))
 	(type (pathname-type fn))
-	(dir (pathname-directory fn))
+	(dir (cl-user:al-pathname-directory fn))
 	(full (namestring fn))
 	(spl (split-pathname fn)))
     (cond
@@ -3093,7 +3104,7 @@
 
 
 (defun compile-file-pathname (infile &key output-file &allow-other-keys)
-  (let ((dir (pathname-directory infile)))
+  (let ((dir (cl-user:al-pathname-directory infile)))
     (make-pathname :directory (and dir (if (char= (elt dir 0) #\/) dir (list :relative dir)))
 		   :name (pathname-name infile)
 		   :type "alc")))
@@ -3365,18 +3376,19 @@
 	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
 	  pathnamep streamp realp numberp check-type assert macroexpand equal
 	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
-	  merge pathname-host pathname-device pathname-version file-namestring
-	  directory-namestring host-namestring enough-namestring merge-pathnames
-	  file-author file-write-date user-homedir-pathname pathname-match-p
-	  directory with-open-file terpri write-line write-sequence prin1 princ
-	  print write-to-string prin1-to-string princ-to-string force-output
-	  with-input-from-string with-output-to-string pprint do-all-symbols
-	  find-all-symbols with-slots with-accessors loop format
-	  encode-universal-time *readtable* with-compilation-unit
-	  *compile-file-truename* *compile-file-pathname* *compile-print*
-	  *compile-verbose* compile-file-pathname compile-file
-	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart cerror break ignore-errors abort continue documentation))
+	  merge pathname-directory pathname-host pathname-device
+	  pathname-version file-namestring directory-namestring host-namestring
+	  enough-namestring merge-pathnames file-author file-write-date
+	  user-homedir-pathname pathname-match-p directory with-open-file terpri
+	  write-line write-sequence prin1 princ print write-to-string
+	  prin1-to-string princ-to-string force-output with-input-from-string
+	  with-output-to-string pprint do-all-symbols find-all-symbols
+	  with-slots with-accessors loop format encode-universal-time
+	  *readtable* with-compilation-unit *compile-file-truename*
+	  *compile-file-pathname* *compile-print* *compile-verbose*
+	  compile-file-pathname compile-file with-standard-io-syntax
+	  handler-case restart-case with-simple-restart find-restart cerror
+	  break ignore-errors abort continue documentation))
 
 
 
