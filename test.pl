@@ -2201,6 +2201,7 @@ make_test ("(rename-package (find-package '|newtest|) (find-package '|newtest|))
 make_test ("(in-package \"newtest\")", "#<PACKAGE \"newtest\">");
 make_test ("'a", "A");
 make_test ("'b", "B");
+make_test ("#+foo 0 1", "1");
 make_test ("(cl:do-symbols (s '|newtest|) (cl:write s))", "ABS|newtest|\nCOMMON-LISP:NIL");
 make_test ("(cl:do-symbols (s '|newtest|) 0 (cl:write s) (cl:go 2) 1 (cl:write 1) 2 (cl:write 2))", "A2B2S2|newtest|2\nCOMMON-LISP:NIL");
 make_test ("(cl:package-use-list cl:*package*)", "COMMON-LISP:NIL");
