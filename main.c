@@ -30822,10 +30822,9 @@ is_macro (struct object *sym, struct environment *env)
 struct object *
 inspect_variable_by_c_string (char *var, struct environment *env)
 {
-  struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (var, strlen (var), 0,
 						     INTERNAL_VISIBILITY, 0,
-						     pack, 0);
+						     env->cluser_package, 0);
 
   if (sym)
     return inspect_variable (sym, env);
