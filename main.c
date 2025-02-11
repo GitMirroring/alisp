@@ -781,7 +781,8 @@ environment
 
   struct object *declare_sym, *ignorable_sym, *ignore_sym, *inline_sym,
     *notinline_sym, *optimize_sym, *compilation_speed_sym, *debug_sym,
-    *safety_sym, *space_sym, *speed_sym, *special_sym, *type_sym, *ftype_sym;
+    *safety_sym, *space_sym, *speed_sym, *special_sym, *type_sym, *ftype_sym,
+    *dynamic_extent_sym;
 
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
     *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym,
@@ -4396,6 +4397,7 @@ add_standard_definitions (struct environment *env)
   env->special_sym = CREATE_BUILTIN_SYMBOL ("SPECIAL");
   env->type_sym = CREATE_BUILTIN_SYMBOL ("TYPE");
   env->ftype_sym = CREATE_BUILTIN_SYMBOL ("FTYPE");
+  env->dynamic_extent_sym = CREATE_BUILTIN_SYMBOL ("DYNAMIC-EXTENT");
 
   env->print_escape_sym = define_variable ("*PRINT-ESCAPE*", &t_object, env);
   env->print_readably_sym = define_variable ("*PRINT-READABLY*", &nil_object,
@@ -14478,7 +14480,7 @@ parse_declaration_specifier (struct object *spec, int is_local,
 	  form = CDR (form);
 	}
     }
-  else
+  else if (declid != env->dynamic_extent_sym)
     {
       outcome->type = UNKNOWN_DECLARATION;
       return 0;
