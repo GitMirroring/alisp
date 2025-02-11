@@ -1956,6 +1956,8 @@ make_test ("(dotimes (tmp 10 tmp))", "10");
 make_test ("(dotimes (j 1) (+ 1) 1)", "NIL");
 make_test ("(dotimes (i 10) (write i) (if (= i 5) (return (values 11 12))))", "012345\n11\n12");
 make_test ("(dotimes (i 2) 1 (write i) (go 2) (write 3) 2 (write 4))", "0414\nNIL");
+make_test ("(defun dotimestest nil (write i))", "DOTIMESTEST");
+make_test ("(dotimes (i 5) (declare (special i)) (dotimestest))", "01234\nNIL");
 make_test ("(dolist (i nil) (write i))", "NIL");
 make_test ("(dolist (i nil (values 0 1)))", "0\n1");
 make_test ("(dolist (i '(0 1 2 3)) (write i))", "0123\nNIL");
