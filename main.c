@@ -2165,7 +2165,7 @@ int parse_declarations (struct object *body, struct environment *env,
 void undo_special_declarations (struct object *decl, struct environment *env);
 
 struct object *evaluate_body
-(struct object *body, int is_tagbody, int collect_tags,
+(struct object *body, int parse_decls, int is_tagbody, int collect_tags,
  struct object *block_name, struct environment *env, struct outcome *outcome);
 
 int parse_argument_list (struct object *arglist, struct parameter *par,
@@ -14574,12 +14574,18 @@ undo_special_declarations (struct object *decl, struct environment *env)
 
 
 struct object *
-evaluate_body (struct object *body, int is_tagbody, int collect_tags,
-	       struct object *block_name, struct environment *env,
-	       struct outcome *outcome)
+evaluate_body (struct object *body, int parse_decls, int is_tagbody,
+	       int collect_tags, struct object *block_name,
+	       struct environment *env, struct outcome *outcome)
 {
-  struct object *res = &nil_object;
+  struct object *res = &nil_object, *firstdecl = body;
   int found_tags;
+
+  if (parse_decls >= 0)
+    {
+      if (!parse_declarations (body, env, parse_decls, 0, outcome, &body))
+	return NULL;
+    }
 
   if (collect_tags)
     {
@@ -14656,6 +14662,8 @@ evaluate_body (struct object *body, int is_tagbody, int collect_tags,
 
   if (block_name)
     env->blocks->frame = remove_block (env->blocks->frame);
+
+  undo_special_declarations (firstdecl, env);
 
   return res;
 }
@@ -15438,7 +15446,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  prevf = env->go_tag_stack;
 	  env->go_tag_stack = func->value_ptr.function->encl_tags;
 
-	  ret = evaluate_body (body, 0, 0, NULL, env, outcome);
+	  ret = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
 
 	  env->go_tag_stack = prevf;
 
@@ -16038,7 +16046,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	}
       else
 	{
-	  ret = evaluate_body (body, 0, 0, NULL, env, outcome);
+	  ret = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
 
 	  if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 		      || (env->stepping_flags
@@ -23509,7 +23517,7 @@ builtin_do (struct object *list, struct environment *env,
     {
       decrement_refcount (testres);
 
-      bodyres = evaluate_body (body, found_tags, 0, NULL, env, outcome);
+      bodyres = evaluate_body (body, bin_num, found_tags, 0, NULL, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!bodyres)
@@ -23605,7 +23613,7 @@ builtin_do (struct object *list, struct environment *env,
       found_tags = 0;
     }
 
-  ret = evaluate_body (CDR (CAR (CDR (list))), 0, 0, NULL, env, outcome);
+  ret = evaluate_body (CDR (CAR (CDR (list))), bin_num, 0, 0, NULL, env, outcome);
 
   if (!ret && outcome->block_to_leave == env->blocks->frame)
     {
@@ -23706,7 +23714,7 @@ builtin_do_star (struct object *list, struct environment *env,
     {
       decrement_refcount (testres);
 
-      bodyres = evaluate_body (body, found_tags, 0, NULL, env, outcome);
+      bodyres = evaluate_body (body, bin_num, found_tags, 0, NULL, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!bodyres)
@@ -23785,7 +23793,7 @@ builtin_do_star (struct object *list, struct environment *env,
       found_tags = 0;
     }
 
-  ret = evaluate_body (CDR (CAR (CDR (list))), 0, 0, NULL, env, outcome);
+  ret = evaluate_body (CDR (CAR (CDR (list))), bin_num, 0, 0, NULL, env, outcome);
 
   if (!ret && outcome->block_to_leave == env->blocks->frame)
     {
@@ -23868,7 +23876,7 @@ builtin_dotimes (struct object *list, struct environment *env,
 
       env->lex_env_vars_boundary++;
 
-      ret = evaluate_body (CDR (list), found_tags, 0, NULL, env, outcome);
+      ret = evaluate_body (CDR (list), 1, found_tags, 0, NULL, env, outcome);
 
       env->lex_env_vars_boundary--;
 
@@ -24001,7 +24009,7 @@ builtin_dolist (struct object *list, struct environment *env,
 
       env->lex_env_vars_boundary++;
 
-      ret = evaluate_body (CDR (list), found_tags, 0, NULL, env, outcome);
+      ret = evaluate_body (CDR (list), 1, found_tags, 0, NULL, env, outcome);
 
       env->lex_env_vars_boundary--;
 
@@ -29903,7 +29911,8 @@ builtin_do_symbols (struct object *list, struct environment *env,
 
 	      env->lex_env_vars_boundary++;
 
-	      ret = evaluate_body (CDR (list), found_tags, 0, NULL, env, outcome);
+	      ret = evaluate_body (CDR (list), 1, found_tags, 0, NULL, env,
+				   outcome);
 
 	      env->lex_env_vars_boundary--;
 
@@ -30058,7 +30067,7 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
 	  env->lex_env_vars_boundary++;
 
-	  ret = evaluate_body (CDR (list), found_tags, 0, NULL, env, outcome);
+	  ret = evaluate_body (CDR (list), 1, found_tags, 0, NULL, env, outcome);
 
 	  env->lex_env_vars_boundary--;
 
@@ -30399,7 +30408,7 @@ evaluate_let (struct object *list, struct environment *env,
       goto cleanup_and_leave;
     }
 
-  res = evaluate_body (body, 0, 0, NULL, env, outcome);
+  res = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
 
   undo_special_declarations (CDR (list), env);
 
@@ -30453,7 +30462,7 @@ evaluate_let_star (struct object *list, struct environment *env,
       return NULL;
     }
 
-  res = evaluate_body (body, 0, 0, NULL, env, outcome);
+  res = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
 
   undo_special_declarations (CDR (list), env);
 
@@ -30534,7 +30543,7 @@ evaluate_progv (struct object *list, struct environment *env,
   env->lex_env_vars_boundary += binnum;
   bins = NULL;
 
-  ret = evaluate_body (CDR (CDR (list)), 0, 0, NULL, env, outcome);
+  ret = evaluate_body (CDR (CDR (list)), -1, 0, 0, NULL, env, outcome);
 
  cleanup_and_leave:
   env->lex_env_vars_boundary -= binnum;
@@ -30564,7 +30573,7 @@ evaluate_locally (struct object *list, struct environment *env,
   if (!parse_declarations (list, env, 0, 0, outcome, &body))
     return NULL;
 
-  res = evaluate_body (body, 0, 0, NULL, env, outcome);
+  res = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
 
   undo_special_declarations (list, env);
 
@@ -30660,7 +30669,7 @@ evaluate_flet (struct object *list, struct environment *env,
 
   env->lex_env_funcs_boundary += bin_num;
 
-  res = evaluate_body (body, 0, 0, NULL, env, outcome);
+  res = evaluate_body (body, 0, 0, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num, 0);
 
@@ -30702,7 +30711,7 @@ evaluate_labels (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_body (body, 0, 0, NULL, env, outcome);
+  res = evaluate_body (body, 0, 0, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num, 0);
 
@@ -30748,7 +30757,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
 
   env->lex_env_funcs_boundary += bin_num;
 
-  res = evaluate_body (body, 0, 0, NULL, env, outcome);
+  res = evaluate_body (body, 0, 0, 0, NULL, env, outcome);
 
   env->funcs = remove_bindings (env->funcs, bin_num, 0);
 
@@ -31338,7 +31347,7 @@ struct object *
 evaluate_progn (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  return evaluate_body (list, 0, 0, NULL, env, outcome);
+  return evaluate_body (list, -1, 0, 0, NULL, env, outcome);
 }
 
 
@@ -31570,7 +31579,7 @@ evaluate_eval_when (struct object *list, struct environment *env,
 
   if (run)
     {
-      return evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+      return evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
     }
   else
     {
@@ -32306,7 +32315,7 @@ evaluate_prog1 (struct object *list, struct environment *env,
   if (!ret)
     return NULL;
 
-  tmp = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+  tmp = evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   decrement_refcount (tmp);
@@ -32341,7 +32350,7 @@ evaluate_prog2 (struct object *list, struct environment *env,
   if (!ret)
     return NULL;
 
-  tmp = evaluate_body (CDR (CDR (list)), 0, 0, NULL, env, outcome);
+  tmp = evaluate_body (CDR (CDR (list)), -1, 0, 0, NULL, env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   decrement_refcount (tmp);
@@ -32655,7 +32664,7 @@ evaluate_symbol_macrolet (struct object *list, struct environment *env,
       bind_forms = CDR (bind_forms);
     }
 
-  res = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+  res = evaluate_body (CDR (list), bin_num, 0, 0, NULL, env, outcome);
 
   env->vars = remove_bindings (env->vars, bin_num, 1);
 
@@ -34120,7 +34129,7 @@ struct object *
 evaluate_tagbody (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *ret = evaluate_body (list, 1, 1, NULL, env, outcome);
+  struct object *ret = evaluate_body (list, -1, 1, 1, NULL, env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!ret)
@@ -34180,7 +34189,7 @@ evaluate_block (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
-  return evaluate_body (CDR (list), 0, 0, SYMBOL (CAR (list)), env, outcome);
+  return evaluate_body (CDR (list), -1, 0, 0, SYMBOL (CAR (list)), env, outcome);
 }
 
 
@@ -34266,7 +34275,7 @@ evaluate_catch (struct object *list, struct environment *env,
   c->next = env->catches;
   env->catches = c;
 
-  ret = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+  ret = evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
 
   if (!ret && outcome->catching_tag
       && eq_objects (tag, outcome->catching_tag) == &t_object)
@@ -34417,7 +34426,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
       env->handlers = f;
     }
 
-  ret = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+  ret = evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
 
   if (!ret && first)
     {
@@ -34529,7 +34538,7 @@ evaluate_restart_bind (struct object *list, struct environment *env,
       cons = CDR (cons);
     }
 
-  ret = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+  ret = evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
 
  cleanup_and_leave:
   for (; restarts; restarts--)
@@ -34664,7 +34673,7 @@ evaluate_unwind_protect (struct object *list, struct environment *env,
   pack = outcome->pack;
   outcome->other_values = NULL;
 
-  clres = evaluate_body (CDR (list), 0, 0, NULL, env, outcome);
+  clres = evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!clres)
@@ -35246,7 +35255,7 @@ evaluate_al_loopy_destructuring_bind (struct object *list,
       env->vars = chain_bindings (bins, env->vars, 1, NULL, NULL);
       env->lex_env_vars_boundary += binnum;
 
-      ret = evaluate_body (CDR (CDR (list)), 0, 0, NULL, env, outcome);
+      ret = evaluate_body (CDR (CDR (list)), binnum, 0, 0, NULL, env, outcome);
 
       env->vars = remove_bindings (env->vars, binnum, 1);
 
