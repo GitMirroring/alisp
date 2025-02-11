@@ -2013,6 +2013,8 @@ struct object *raise_type_error (struct object *datum, char *type,
 struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct environment *env,
 				 struct outcome *outcome);
+struct object *raise_program_error (struct environment *env,
+				    struct outcome *outcome);
 
 struct object *create_room_pair (char *sym, int val, struct environment *env);
 struct object *create_pair (struct object *car, struct object *cdr);
@@ -4234,6 +4236,8 @@ add_standard_definitions (struct environment *env)
   add_condition_class ("STREAM-ERROR", env, 1, "ERROR", (char *)NULL, "STREAM",
 		       (char *)NULL);
   add_condition_class ("PARSE-ERROR", env, 1, "ERROR", (char *)NULL,
+		       (char *)NULL);
+  add_condition_class ("PROGRAM-ERROR", env, 1, "ERROR", (char *)NULL,
 		       (char *)NULL);
   add_condition_class ("DIVISION-BY-ZERO", env, 1, "ARITHMETIC-ERROR",
 		       (char *)NULL, (char *)NULL);
@@ -11956,6 +11960,24 @@ raise_file_error (struct object *fn, const char *fs, struct environment *env,
     increment_refcount (fn);
 
   cond->value_ptr.standard_object->fields->value = fn;
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_program_error (struct environment *env, struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("PROGRAM-ERROR",
+							    env), *ret;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -32177,9 +32199,7 @@ struct object *
 evaluate_declare (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
-  outcome->type = DECLARE_NOT_ALLOWED_HERE;
-
-  return NULL;
+  return raise_program_error (env, outcome);
 }
 
 
