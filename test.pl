@@ -1408,10 +1408,12 @@ make_test ("(with-open-file (s \"writetest3\" :direction :io) (list (input-strea
 make_test ("(with-open-file (s \"writetest3\" :direction :output :if-exists :overwrite))", "NIL");
 make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
 make_test ("(open \"writetest\" :direction :output :if-exists nil)", "NIL");
+make_test ("(open \"writetest5\" :direction :output :if-does-not-exist :create)", "#<STREAM FILE OUTPUT>");
 make_test ("(delete-file \"writetest\")", "T");
 make_test ("(delete-file \"writetest2\")", "T");
 make_test ("(rename-file \"writetest3\" #p\"writetest4\")", "#P\"writetest4\"\n#P\"writetest3\"\n#P\"writetest4\"");
 make_test ("(delete-file #p\"writetest4\")", "T");
+make_test ("(delete-file #p\"writetest5\")", "T");
 make_test ("(write \"hello\" :stream str)", "\"hello\"");
 make_test ("(write-char #\\newline str)", "#\\Newline");
 make_test ("(file-length str)", "8");
