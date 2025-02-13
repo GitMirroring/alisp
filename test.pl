@@ -1899,6 +1899,7 @@ make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (a
 make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) (function foooo))", "UNDEFINED");
 make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (car 0))", "WRONGTYPE");
 make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (pathname 0))", "WRONGTYPE");
+make_test ("(handler-bind ((program-error (lambda (e) (write 'invalidkeyword) (abort)))) (count 0 nil :foo 0))", "INVALIDKEYWORD");
 make_test ("(cddr '(0 1 2))", "(2)");
 make_test ("(cddddr '(0 1 2 3 4))", "(4)");
 make_test ("(cadddr '(0 1 2 3 4))", "3");
