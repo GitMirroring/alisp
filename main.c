@@ -22701,6 +22701,17 @@ builtin_open (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (symbol_equals (CAR (list), ":ELEMENT-TYPE", env)
+	       || symbol_equals (CAR (list), ":EXTERNAL-FORMAT", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
       else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
