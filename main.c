@@ -1894,7 +1894,7 @@ int set_nth_character (struct object *str, int ind, char *ch);
 struct object *create_file_stream (enum stream_content_type content_type,
 				   enum stream_direction direction,
 				   struct object *namestring, int overwrite,
-				   struct outcome *outcome);
+				   int if_doesnt_exist, struct outcome *outcome);
 struct object *create_stream_from_open_file (enum stream_content_type content_type,
 					     enum stream_direction direction,
 					     FILE *file);
@@ -9740,7 +9740,7 @@ set_nth_character (struct object *str, int ind, char *ch)
 struct object *
 create_file_stream (enum stream_content_type content_type,
 		    enum stream_direction direction, struct object *namestring,
-		    int overwrite, struct outcome *outcome)
+		    int overwrite, int if_doesnt_exist, struct outcome *outcome)
 {
   struct object *obj;
   struct stream *str;
@@ -9752,6 +9752,14 @@ create_file_stream (enum stream_content_type content_type,
   else if (direction == OUTPUT_STREAM || direction == BIDIRECTIONAL_STREAM)
     {
       f = fopen (fn, "r");
+
+      if (!f && !if_doesnt_exist)
+	{
+	  free (fn);
+	  fclose (f);
+	  outcome->type = COULD_NOT_OPEN_FILE;
+	  return NULL;
+	}
 
       if (f && !overwrite)
 	{
@@ -22615,7 +22623,7 @@ builtin_open (struct object *list, struct environment *env,
 {
   enum stream_direction dir = -1;
   struct object *ns, *allow_other_keys = NULL, *ret;
-  int found_unknown_key = 0, ifexists = -1;
+  int found_unknown_key = 0, ifexists = -1, ifdoesntexist = -1;
 
   if (!list_length (list))
     {
@@ -22701,6 +22709,27 @@ builtin_open (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (symbol_equals (CAR (list), ":IF-DOES-NOT-EXIST", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      return NULL;
+	    }
+
+	  if (symbol_equals (CAR (CDR (list)), ":CREATE", env))
+	    {
+	      if (ifdoesntexist == -1)
+		ifdoesntexist = 1;
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
       else if (symbol_equals (CAR (list), ":ELEMENT-TYPE", env)
 	       || symbol_equals (CAR (list), ":EXTERNAL-FORMAT", env))
 	{
@@ -22753,7 +22782,11 @@ builtin_open (struct object *list, struct environment *env,
   if (ifexists == -1)
     ifexists = 0;
 
-  ret = create_file_stream (BINARY_STREAM, dir, ns, ifexists == 1, outcome);
+  if (ifdoesntexist == -1)
+    ifdoesntexist = 1;
+
+  ret = create_file_stream (BINARY_STREAM, dir, ns, ifexists == 1, ifdoesntexist,
+			    outcome);
 
   if (!ret && outcome->type == FILE_ALREADY_EXISTS && ifexists == 2)
     return &nil_object;
