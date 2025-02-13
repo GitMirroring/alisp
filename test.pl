@@ -1407,6 +1407,7 @@ make_test ("(with-open-file (s \"writetest2\" :direction :io) (write 'hello :str
 make_test ("(with-open-file (s \"writetest3\" :direction :io) (list (input-stream-p s) (output-stream-p s)))", "(T T)");
 make_test ("(with-open-file (s \"writetest3\" :direction :output :if-exists :overwrite))", "NIL");
 make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
+make_test ("(open \"writetest\" :direction :output :if-exists nil)", "NIL");
 make_test ("(delete-file \"writetest\")", "T");
 make_test ("(delete-file \"writetest2\")", "T");
 make_test ("(rename-file \"writetest3\" #p\"writetest4\")", "#P\"writetest4\"\n#P\"writetest3\"\n#P\"writetest4\"");
