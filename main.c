@@ -9742,21 +9742,20 @@ create_file_stream (enum stream_content_type content_type,
 		    enum stream_direction direction, struct object *namestring,
 		    int overwrite, struct outcome *outcome)
 {
-  struct object *obj = alloc_object ();
-  struct stream *str = malloc_and_check (sizeof (*str));
+  struct object *obj;
+  struct stream *str;
   char *fn = copy_string_to_c_string (namestring->value_ptr.string);
   FILE *f;
 
-  str->type = FILE_STREAM;
-
   if (direction == INPUT_STREAM)
-    str->file = fopen (fn, "rb");
+    f = fopen (fn, "rb");
   else if (direction == OUTPUT_STREAM || direction == BIDIRECTIONAL_STREAM)
     {
       f = fopen (fn, "r");
 
       if (f && !overwrite)
 	{
+	  free (fn);
 	  fclose (f);
 	  outcome->type = FILE_ALREADY_EXISTS;
 	  return NULL;
@@ -9766,21 +9765,24 @@ create_file_stream (enum stream_content_type content_type,
 	fclose (f);
 
       if (direction == OUTPUT_STREAM)
-	str->file = fopen (fn, "wb");
+	f = fopen (fn, "wb");
       else
-	str->file = fopen (fn, "wb+");
+	f = fopen (fn, "wb+");
     }
 
   free (fn);
 
-  if (!str->file)
+  if (!f)
     {
-      free (str);
-      free (obj);
       outcome->type = COULD_NOT_OPEN_FILE;
       return NULL;
     }
 
+  obj = alloc_object ();
+  str = malloc_and_check (sizeof (*str));
+
+  str->type = FILE_STREAM;
+  str->file = f;
   str->content_type = content_type;
   str->direction = direction;
   str->is_open = 1;
@@ -22612,8 +22614,8 @@ builtin_open (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
   enum stream_direction dir = -1;
-  struct object *ns, *allow_other_keys = NULL;
-  int found_unknown_key = 0, overwrite = -1;
+  struct object *ns, *allow_other_keys = NULL, *ret;
+  int found_unknown_key = 0, ifexists = -1;
 
   if (!list_length (list))
     {
@@ -22678,13 +22680,18 @@ builtin_open (struct object *list, struct environment *env,
 
 	  if (symbol_equals (CAR (CDR (list)), ":OVERWRITE", env))
 	    {
-	      if (overwrite == -1)
-		overwrite = 1;
+	      if (ifexists == -1)
+		ifexists = 1;
 	    }
 	  else if (symbol_equals (CAR (CDR (list)), ":ERROR", env))
 	    {
-	      if (overwrite == -1)
-		overwrite = 0;
+	      if (ifexists == -1)
+		ifexists = 0;
+	    }
+	  else if (SYMBOL (CAR (CDR (list))) == &nil_object)
+	    {
+	      if (ifexists == -1)
+		ifexists = 2;
 	    }
 	  else
 	    {
@@ -22732,10 +22739,15 @@ builtin_open (struct object *list, struct environment *env,
   if (dir == -1)
     dir = INPUT_STREAM;
 
-  if (overwrite == -1)
-    overwrite = 0;
+  if (ifexists == -1)
+    ifexists = 0;
 
-  return create_file_stream (BINARY_STREAM, dir, ns, overwrite, outcome);
+  ret = create_file_stream (BINARY_STREAM, dir, ns, ifexists == 1, outcome);
+
+  if (!ret && outcome->type == FILE_ALREADY_EXISTS && ifexists == 2)
+    return &nil_object;
+
+  return ret;
 }
 
 
