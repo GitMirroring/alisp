@@ -14916,8 +14916,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       && (!key_allow_other_k || SYMBOL (key_allow_other_k) == &nil_object))
     {
       remove_bindings (*bins, *argsnum, 0);
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return 0;
+      return raise_program_error (env, outcome) ? 1 : 0;
     }
 
 
@@ -15646,8 +15645,7 @@ call_structure_constructor (struct object *class_name, struct object *args,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
 
@@ -19524,8 +19522,7 @@ builtin_make_array (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (!element_type)
@@ -20214,8 +20211,7 @@ builtin_make_hash_table (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (type == HT_NONE)
@@ -20684,8 +20680,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (defaults && !IS_PATHNAME_DESIGNATOR (defaults))
@@ -21066,8 +21061,7 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   s = get_directory_file_split (ns);
@@ -21152,8 +21146,7 @@ builtin_pathname_name (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (!ns->value_ptr.string->used_size)
@@ -21253,8 +21246,7 @@ builtin_pathname_type (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (!ns->value_ptr.string->used_size
@@ -22294,8 +22286,7 @@ builtin_write (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (!str)
@@ -22580,8 +22571,7 @@ builtin_load (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   loadpn = create_filename (inspect_pathname_by_designator (ns));
@@ -22736,8 +22726,7 @@ builtin_open (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (dir == -1)
@@ -27449,8 +27438,7 @@ builtin_make_string (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   if (initial_element && initial_element->type != TYPE_CHARACTER)
@@ -29149,8 +29137,7 @@ builtin_make_package (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
   ret = create_package (name, len);
@@ -33565,8 +33552,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      outcome->type = UNKNOWN_KEYWORD_ARGUMENT;
-      return NULL;
+      return raise_program_error (env, outcome);
     }
 
 
