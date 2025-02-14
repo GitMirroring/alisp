@@ -12371,13 +12371,41 @@ enter_debugger (struct object *cond, struct environment *env,
     }
   else if (env->watched_obj)
     {
-      printf ("object ");
-      print_object (env->watched_obj, env, env->c_stdout->value_ptr.stream);
-      printf (" changing field ");
-      print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
-      printf (" to ");
-      print_object (env->new_value, env, env->c_stdout->value_ptr.stream);
-      printf ("\n\n");
+      if (env->watched_obj->type == TYPE_STANDARD_OBJECT)
+	{
+	  printf ("standard object ");
+	  print_object (env->watched_obj, env, env->c_stdout->value_ptr.stream);
+	  printf (" changing field ");
+	  print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
+	  printf (" to ");
+	  print_object (env->new_value, env, env->c_stdout->value_ptr.stream);
+	  printf ("\n\n");
+	}
+      else if (env->watched_obj->type == TYPE_HASHTABLE)
+	{
+	  printf ("hash table ");
+	  print_object (env->watched_obj, env, env->c_stdout->value_ptr.stream);
+
+	  if (env->obj_field && env->new_value)
+	    {
+	      printf (" setting key ");
+	      print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
+	      printf (" to ");
+	      print_object (env->new_value, env, env->c_stdout->value_ptr.stream);
+	      printf ("\n\n");
+	    }
+	  else if (env->obj_field)
+	    {
+	      printf (" clearing key ");
+	      print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
+	      printf ("\n\n");
+	    }
+	  else
+	    {
+	      printf (" clearing completely\n\n");
+	    }
+	}
+
       env->watched_obj = env->obj_field = env->new_value = NULL;
     }
   else if (env->stepping_flags)
@@ -20388,6 +20416,16 @@ builtin_remhash (struct object *list, struct environment *env,
 
   if (r)
     {
+      if (IS_WATCHED (CAR (CDR (list))))
+	{
+	  env->watched_obj = CAR (CDR (list));
+	  env->obj_field = CAR (list);
+	  env->new_value = NULL;
+
+	  if (!enter_debugger (NULL, env, outcome))
+	    return NULL;
+	}
+
       delete_reference (CAR (CDR (list)), r->key, ind+j*2*LISP_HASHTABLE_SIZE);
       delete_reference (CAR (CDR (list)), r->value, ind+(j*2+1)*LISP_HASHTABLE_SIZE);
 
@@ -20418,6 +20456,16 @@ builtin_clrhash (struct object *list, struct environment *env,
   if (CAR (list)->type != TYPE_HASHTABLE)
     {
       return raise_type_error (CAR (list), "CL:HASH-TABLE", env, outcome);
+    }
+
+  if (IS_WATCHED (CAR (list)))
+    {
+      env->watched_obj = CAR (list);
+      env->obj_field = NULL;
+      env->new_value = NULL;
+
+      if (!enter_debugger (NULL, env, outcome))
+	return NULL;
     }
 
   clear_hash_table (CAR (list));
@@ -24995,6 +25043,16 @@ builtin_setf_gethash (struct object *list, struct environment *env,
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
     {
       return raise_type_error (CAR (CDR (list)), "CL:HASH-TABLE", env, outcome);
+    }
+
+  if (IS_WATCHED (CAR (CDR (list))))
+    {
+      env->watched_obj = CAR (CDR (list));
+      env->obj_field = CAR (list);
+      env->new_value = newval;
+
+      if (!enter_debugger (NULL, env, outcome))
+	return NULL;
     }
 
   r = find_hashtable_record (CAR (list), CAR (CDR (list)), &ind, &j, NULL);
@@ -35800,7 +35858,11 @@ builtin_al_watch (struct object *list, struct environment *env,
 
   SET_WATCHED_FLAG (CAR (list));
 
-  return &t_object;
+  if (CAR (list)->type == TYPE_STANDARD_OBJECT
+      || CAR (list)->type == TYPE_HASHTABLE)
+    return &t_object;
+
+  return &nil_object;
 }
 
 
