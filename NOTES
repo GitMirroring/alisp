@@ -397,10 +397,12 @@ debugging command is executed again.
 
 __Watchpoints__
 
-You can watch standard objects for modification.  The function AL-WATCH takes a
-standard object as argument and toggles watching on it; AL-UNWATCH untoggles
-watching.
-When a watched object is modified in any field, the debugger is entered.
+You can watch standard objects and hash tables for modifications.  The function
+AL-WATCH takes a standard object or an hash table as argument and toggles
+watching on it; it returns T if the object is one of those types, NIL otherwise.
+AL-UNWATCH untoggles watching.  When a watched object is modified in any field
+or a watched hash table has an object added or removed or is cleared, the
+debugger is entered.
 
 
 
