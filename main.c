@@ -21646,8 +21646,8 @@ builtin_rename_file (struct object *list, struct environment *env,
 
   if (ret)
     {
-      outcome->type = COULD_NOT_RENAME_FILE;
-      return NULL;
+      return raise_file_error (inspect_pathname_by_designator (CAR (list)), NULL,
+			       env, outcome);
     }
 
   prepend_object_to_obj_list
@@ -21689,8 +21689,8 @@ builtin_delete_file (struct object *list, struct environment *env,
 
   if (ret)
     {
-      outcome->type = COULD_NOT_DELETE_FILE;
-      return NULL;
+      return raise_file_error (inspect_pathname_by_designator (CAR (list)), NULL,
+			       env, outcome);
     }
 
   return &t_object;
