@@ -2016,6 +2016,7 @@ struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct outcome *outcome);
 struct object *raise_program_error (struct environment *env,
 				    struct outcome *outcome);
+struct object *raise_error (struct environment *env, struct outcome *outcome);
 
 struct object *create_room_pair (char *sym, int val, struct environment *env);
 struct object *create_pair (struct object *car, struct object *cdr);
@@ -11990,6 +11991,24 @@ raise_program_error (struct environment *env, struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string ("PROGRAM-ERROR",
 							    env), *ret;
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_error (struct environment *env, struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("ERROR", env),
+    *ret;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -32971,8 +32990,7 @@ builtin_find_class (struct object *list, struct environment *env,
   else if (SYMBOL (errorp) == &nil_object)
     return &nil_object;
 
-  outcome->type = CLASS_NOT_FOUND;
-  return NULL;
+  return raise_error (env, outcome);
 }
 
 
