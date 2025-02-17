@@ -148,6 +148,18 @@
 
 
 
+(defmacro while (cond &rest body)
+  (let ((tag (gensym)))
+    `(tagbody
+	,tag
+	(if ,cond
+	    (progn
+	      (progn
+		,@body)
+	      (go ,tag))))))
+
+
+
 (defun identity (x) x)
 
 (defun constantly (x) (lambda (&rest r) x))
@@ -2220,6 +2232,8 @@
 
 
 (defun split-pathname (path)
+  (unless path
+    (return-from split-pathname nil))
   (let ((pn (namestring (pathname path)))
 	out
 	start)
@@ -2242,18 +2256,27 @@
 
 
 (defun pathname-match-p (path wild)
-  (let ((path (split-pathname path))
-	(wild (split-pathname wild)))
-    (do ((p path (cdr p))
-	 (w wild (cdr w)))
-	(nil)
-      (if (and (not (cdr p))
-	       (not (cdr w))
-	       (or (string= (car w) "*")
-		   (string= (car p) (car w))))
-	  (return-from pathname-match-p t))
-      (if (not (string= (car w) (car p)))
-	  (return-from pathname-match-p nil)))))
+  (let ((pdir (split-pathname (cl-user:al-pathname-directory path)))
+	(wdir (split-pathname (cl-user:al-pathname-directory wild))))
+    (while (and pdir wdir)
+      (when (string= (car wdir) "**")
+	(while (/= (length wdir) (length pdir))
+	  (setq pdir (cdr pdir)))
+	(setq wdir (cdr wdir))
+	(setq pdir (cdr pdir)))
+      (if (not (string= (car wdir) (car pdir)))
+	  (return-from pathname-match-p nil))
+      (setq pdir (cdr pdir))
+      (setq wdir (cdr wdir)))
+    (and
+     (not wdir)
+     (not pdir)
+     (or (string= (pathname-name path) (pathname-name wild))
+	 (string= (pathname-name wild) "*"))
+     (or (string= (pathname-type path) (pathname-type wild))
+	 (string= (pathname-name wild) "*")
+	 (string= (pathname-type wild) "*")))))
+
 
 
 (defun ensure-directory (path)
