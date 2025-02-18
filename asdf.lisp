@@ -10628,7 +10628,7 @@ initialized with SEED."
            ;; Has any input changed since we last generated the files?
            ;; Note that we use timestamp<= instead of timestamp< to play nice with generated files.
            ;; Any race condition is intrinsic to the limited timestamp resolution.
-           (up-to-date-p (timestamp<= latest-in earliest-out))
+	   (up-to-date-p (and (timestamp<= latest-in earliest-out) (not (equal (list latest-in earliest-out) '(t t)))))
            ;; If everything is up to date, the latest of inputs and outputs is our stamp
            (done-stamp (timestamps-latest (cons latest-in out-stamps))))
        ;; Warn if some files are missing:
