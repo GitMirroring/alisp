@@ -100,6 +100,12 @@
 ;; that might use :import-from to import the symbols from UIOP/PACKAGE,
 ;; if you must somehow define them in UIOP/PACKAGE.
 
+
+
+(setq cl-user:*al-compile-when-defining* t)
+
+
+
 (defpackage :uiop/package ;;; THOU SHALT NOT modify this definition, EVER. See explanations above.
   (:use :common-lisp)
   (:export
@@ -14136,3 +14142,7 @@ using (SYS:UPDATE-ALLEGRO)."))
 
 (when *load-verbose*
   (asdf-message ";; ASDF, version ~a~%" (asdf-version)))
+
+
+
+(setq cl-user:*al-compile-when-defining* nil)

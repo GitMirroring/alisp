@@ -17,8 +17,11 @@
 
 
 
-(in-package cl)
+(setq cl-user:*al-compile-when-defining* t)
 
+
+
+(in-package cl)
 
 
 
@@ -3447,3 +3450,7 @@
 
 
 (in-package cl-user)
+
+
+
+(setq cl-user:*al-compile-when-defining* nil)
