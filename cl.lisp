@@ -3367,6 +3367,10 @@
 
 
 
+(defun muffle-warning (&optional cond))
+
+
+
 (defgeneric documentation (x doc-type))
 
 (defmethod documentation ((x t) (doc-type t)))
@@ -3437,7 +3441,8 @@
 	  *compile-file-truename* *compile-file-pathname* *compile-print*
 	  *compile-verbose* compile-file-pathname compile-file
 	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart cerror break ignore-errors abort continue documentation))
+	  find-restart cerror break ignore-errors abort continue muffle-warning
+	  documentation))
 
 
 
