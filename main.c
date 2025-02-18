@@ -1317,8 +1317,6 @@ standard_class
   struct object_list *class_precedence_list;
 
   struct class_field_decl *fields;
-
-  struct object_list *instances;
 };
 
 
@@ -10390,7 +10388,6 @@ define_class (struct object *name, struct object *form, int is_condition_class,
       form = CDR (form);
     }
 
-  sc->instances = NULL;
   return class;
 }
 
@@ -11585,7 +11582,6 @@ create_condition (struct object *type, struct object *args,
   increment_refcount (type);
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
-  prepend_object_to_obj_list (ret, &type->value_ptr.standard_class->instances);
 
   allocate_object_fields (ret, type);
 
@@ -11657,7 +11653,6 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   cc->parents = NULL;
   cc->descendants = NULL;
   cc->class_precedence_list = NULL;
-  cc->instances = NULL;
 
   while ((s = va_arg (valist, char *)))
     {
@@ -11881,7 +11876,6 @@ create_empty_condition_by_c_string (char *classname, struct environment *env)
   increment_refcount (class);
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
-  prepend_object_to_obj_list (ret, &class->value_ptr.standard_class->instances);
 
   return allocate_object_fields (ret, class);
 }
@@ -33045,7 +33039,6 @@ builtin_method_make_instance (struct object *list, struct environment *env,
   increment_refcount (class);
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
-  prepend_object_to_obj_list (ret, &class->value_ptr.standard_class->instances);
 
   allocate_object_fields (ret, class);
 
@@ -33086,8 +33079,6 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
   increment_refcount (CAR (list));
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
-  prepend_object_to_obj_list (ret, &CAR (list)->value_ptr.standard_class->
-			      instances);
 
   allocate_object_fields (ret, CAR (list));
 
@@ -35056,7 +35047,6 @@ builtin_make_condition (struct object *list, struct environment *env,
   increment_refcount (class);
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
-  prepend_object_to_obj_list (ret, &class->value_ptr.standard_class->instances);
 
   allocate_object_fields (ret, class);
 
@@ -39721,15 +39711,6 @@ free_standard_class (struct object *obj)
       p = n;
     }
 
-  p = obj->value_ptr.standard_class->instances;
-
-  while (p)
-    {
-      n = p->next;
-      free (p);
-      p = n;
-    }
-
   while (f)
     {
       nf = f->next;
@@ -39758,8 +39739,6 @@ void
 free_standard_object (struct object *obj)
 {
   struct class_field *f = obj->value_ptr.standard_object->fields, *n;
-  struct object_list *l = obj->value_ptr.standard_object->class->
-    value_ptr.standard_class->instances, *p = NULL;
 
   while (f)
     {
@@ -39767,24 +39746,6 @@ free_standard_object (struct object *obj)
       decrement_refcount (f->value);
       free (f);
       f = n;
-    }
-
-  while (l)
-    {
-      if (l->obj == obj)
-	{
-	  if (p)
-	    p->next = l->next;
-	  else
-	    obj->value_ptr.standard_object->class->value_ptr.standard_class->
-	      instances = l->next;
-
-	  free (l);
-	  break;
-	}
-
-      p = l;
-      l = l->next;
     }
 
   decrement_refcount (obj->value_ptr.standard_object->class);
