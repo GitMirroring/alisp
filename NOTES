@@ -274,6 +274,13 @@ Common Lisp.
 
 
 
+__Using ASDF__
+
+alisp ships with a modified version of ASDF that you can load.  Only
+ASDF:LOAD-SYSTEM has been confirmed to work.
+
+
+
 __Number bases__
 
 *READ-BASE* works correctly, so you can read numbers in any base from 2 to 36.
