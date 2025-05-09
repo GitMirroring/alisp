@@ -3162,7 +3162,7 @@
 		   :type "alc")))
 
 
-(defun write-preserving-gensyms (obj str gensyms)
+(defun write-preserving-similarity (obj str gensyms)
   (typecase obj
     (cons
      (write-string "(" str)
@@ -3172,12 +3172,12 @@
 	 (unless firstobjp
 	   (write-string " " str))
 	 (setq firstobjp nil)
-	 (setq gensyms (write-preserving-gensyms (car c) str gensyms))
+	 (setq gensyms (write-preserving-similarity (car c) str gensyms))
 	 (if (not (cdr c))
 	     (return nil))
 	 (when (atom (cdr c))
 	   (write-string " . " str)
-	   (setq gensyms (write-preserving-gensyms (cdr c) str gensyms))
+	   (setq gensyms (write-preserving-similarity (cdr c) str gensyms))
 	   (return nil)))
        (write-string ")" str)))
     (symbol
@@ -3190,18 +3190,20 @@
 		 (progn
 		   (setq gensyms (nconc gensyms (list obj)))
 		   (format str "#~s=~s" (1- (length gensyms)) obj)))))))
+    (package
+     (format str "#.(CL:FIND-PACKAGE ~s)" (package-name obj)))
     (cl-user:al-backquote
      (write-string "`" str)
-     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
     (cl-user:al-comma
      (write-string "," str)
-     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
     (cl-user:al-at
      (write-string "@" str)
-     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
     (cl-user:al-dot
      (write-string "." str)
-     (setq gensyms (write-preserving-gensyms (cl-user:al-next obj) str gensyms)))
+     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
     (otherwise (write obj :stream str)))
   gensyms)
 
@@ -3249,7 +3251,7 @@
 		   (parse-toplevel-form-at-compile-time obj)
 		   (if print
 		       (terpri))
-		   (write-preserving-gensyms obj outstr nil)
+		   (write-preserving-similarity obj outstr nil)
 		   (terpri outstr)
 		   (terpri outstr))))))
       (setq *readtable* old-readtable)
