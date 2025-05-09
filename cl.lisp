@@ -3237,8 +3237,10 @@
 	       (do nil
 		   (nil)
 		 (let ((obj (read instr nil eofsym)))
-		   (if (eq obj eofsym)
-		       (return-from compile-file (values outname nil nil)))
+		   (when (eq obj eofsym)
+		     (if verbose
+			 (format t ";;; Compiling file ~a succeeded~%" infile))
+		     (return-from compile-file (values outname nil nil)))
 		   (when print
 		     (format t "Compiling ")
 		     (write obj)
