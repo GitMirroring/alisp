@@ -22666,6 +22666,7 @@ builtin_load (struct object *list, struct environment *env,
     {
       printf (";;; Loading file %s returned ", fn);
       print_object (ret, env, env->c_stdout->value_ptr.stream);
+      printf ("\n");
     }
 
   set_value (env->package_sym, pack, 0, 0, env, outcome);
