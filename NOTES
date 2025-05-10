@@ -77,6 +77,16 @@ package.  There are also some non-standard extensions of standard functions.
 - the AL-EXIT function takes an optional integer (defaulting to 0) and exits the
   interpreter with that return value
 
+- the function AL-LIST-DIRECTORY takes a single pathname designator and returns
+  a list with the filenames (without any leading path) contained in that
+  directory
+
+- the function AL-DIRECTORYP takes a single pathname designator, it queries the
+  filesystem and returns T if the path designates a directory, NIL otherwise
+
+- the function AL-GETCWD takes no arguments and returns the current working
+  directory as a slash-terminated string
+
 - the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
   legal information
 
