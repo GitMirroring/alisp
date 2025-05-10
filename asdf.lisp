@@ -2364,6 +2364,7 @@ suitable for use as a directory name to segregate Lisp FASLs, C dynamic librarie
     "Get the current working directory as per POSIX getcwd(3), as a pathname object"
     (or #+(or abcl genera mezzano xcl) (truename *default-pathname-defaults*) ;; d-p-d is canonical!
         #+allegro (excl::current-directory)
+	#+alisp (pathname (cl-user:al-getcwd))
         #+clisp (ext:default-directory)
         #+clozure (ccl:current-directory)
         #+(or cmucl scl) (#+cmucl parse-unix-namestring* #+scl lisp::parse-unix-namestring
