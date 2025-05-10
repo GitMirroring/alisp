@@ -510,6 +510,7 @@ outcome_type
     COULD_NOT_OPEN_DIR,
     COULD_NOT_CREATE_DIR,
     ERROR_READING_DIR,
+    COULD_NOT_DETERMINE_CWD,
     INVALID_TYPE_SPECIFIER,
     UNKNOWN_TYPE,
     CLASS_NOT_FOUND,
@@ -3163,6 +3164,8 @@ struct object *builtin_al_list_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_directoryp
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_getcwd
+(struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_getenv
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4532,6 +4535,7 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-DIRECTORYP", env, builtin_al_directoryp, TYPE_FUNCTION,
 		    NULL, 0);
+  add_builtin_form ("AL-GETCWD", env, builtin_al_getcwd, TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
@@ -36600,6 +36604,57 @@ builtin_al_directoryp (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_al_getcwd (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  char *buf = NULL, *res;
+  int sz = 64, len;
+  struct object *ret;
+
+  if (list_length (list))
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  do
+    {
+      free (buf);
+      sz *= 2;
+      buf = malloc_and_check (sz);
+
+      res = getcwd (buf, sz);
+    } while (!res && errno == ERANGE);
+
+  if (!res)
+    {
+      outcome->type = COULD_NOT_DETERMINE_CWD;
+      return NULL;
+    }
+
+  len = strlen (buf);
+
+  if (buf [len-1] != '/')
+    {
+      if (len == sz-1)
+	{
+	  buf = realloc_and_check (buf, sz+1);
+	  sz++;
+	}
+
+      buf [len] = '/';
+      buf [len+1] = 0;
+      len++;
+    }
+
+  ret = create_string_with_char_vector (buf, len);
+  ret->value_ptr.string->fill_pointer = -1;
+
+  return ret;
+}
+
+
+struct object *
 builtin_al_getenv (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
@@ -38576,6 +38631,10 @@ print_error (struct outcome *err, struct environment *env)
   else if (err->type == ERROR_READING_DIR)
     {
       printf ("file error: could not read directory\n");
+    }
+  else if (err->type == COULD_NOT_DETERMINE_CWD)
+    {
+      printf ("eval error: could not determine current working directory\n");
     }
   else if (err->type == INVALID_TYPE_SPECIFIER)
     {
