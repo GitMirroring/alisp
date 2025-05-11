@@ -374,6 +374,7 @@ make_test ("(let ((l (list 'a 'b 'c))) (list (setf (elt l 2) 'd) l))", "(D (A B 
 make_test ("(let ((arr (make-array 3))) (setf (elt arr 1) 10) arr)", "#(NIL 10 NIL)");
 make_test ("(let ((v #*100010)) (setf (elt v 2) 1) v)", "#*101010");
 make_test ("(let* ((x 1) (y x)) y)", "1");
+make_test ("((lambda (x) (* 2 x)) (*))", "2");
 make_test ("(defun f ())", "F");
 make_test ("#'f", "#<FUNCTION F>");
 make_test ("#'car", "#<FUNCTION BUILTIN CAR>");
