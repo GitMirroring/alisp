@@ -17860,7 +17860,7 @@ struct object *
 evaluate_list (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
-  struct object *sym, *fun = NULL;
+  struct object *sym = NULL, *fun, *ret;
 
   if (is_dotted_list (list))
     {
@@ -17869,7 +17869,23 @@ evaluate_list (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!IS_SYMBOL (CAR (list)))
+  if (IS_SYMBOL (CAR (list)))
+    {
+      sym = SYMBOL (CAR (list));
+      fun = get_function (sym, env, 0, 0, 0, 0);
+
+      if (!fun)
+	return raise_undefined_function (sym, env, outcome);
+    }
+  else if (CAR (list)->type == TYPE_CONS_PAIR
+	   && SYMBOL (CAR (CAR (list))) == env->lambda_sym)
+    {
+      fun = evaluate_object (CAR (list), env, outcome);
+
+      if (!fun)
+	return NULL;
+    }
+  else
     {
       outcome->type = INVALID_FUNCTION_CALL;
       increment_refcount (CAR (list));
@@ -17878,18 +17894,17 @@ evaluate_list (struct object *list, struct environment *env,
     }
 
 
-  sym = SYMBOL (CAR (list));
+  if (fun->type == TYPE_FUNCTION)
+    ret = call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
+  else if (fun->value_ptr.macro->builtin_form)
+    ret = call_function (fun, CDR (list), 0, 0, 0, 0, 0, env, outcome);
+  else
+    ret = call_function (fun, list, 0, 1, 0, 1, 0, env, outcome);
 
-  fun = get_function (sym, env, 0, 0, 0, 0);
+  if (!sym)
+    decrement_refcount (fun);
 
-  if (fun && fun->type == TYPE_FUNCTION)
-    return call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
-  else if (fun && fun->value_ptr.macro->builtin_form)
-    return call_function (fun, CDR (list), 0, 0, 0, 0, 0, env, outcome);
-  else if (fun)
-    return call_function (fun, list, 0, 1, 0, 1, 0, env, outcome);
-
-  return raise_undefined_function (sym, env, outcome);
+  return ret;
 }
 
 
