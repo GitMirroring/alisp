@@ -2191,6 +2191,10 @@ struct object *call_structure_constructor (struct object *class_name,
 					   struct object *args,
 					   struct environment *env,
 					   struct outcome *outcome);
+struct object *call_structure_predicate (struct object *class_name,
+					 struct object *args,
+					 struct environment *env,
+					 struct outcome *outcome);
 struct object *call_structure_accessor (struct object *class_name,
 					struct object *field,
 					struct object *args,
@@ -15359,6 +15363,25 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->stack_depth--;
       return ret;
     }
+  else if (func->value_ptr.function->struct_predicate_class_name)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	{
+	  env->stack_depth--;
+	  return NULL;
+	}
+
+      ret = call_structure_predicate (func->value_ptr.function->
+				      struct_predicate_class_name, args, env,
+				      outcome);
+
+      decrement_refcount (args);
+
+      env->stack_depth--;
+      return ret;
+    }
   else if (func->value_ptr.function->struct_accessor_class_name)
     {
       args = evaluate_through_list (arglist, env, outcome);
@@ -15717,6 +15740,24 @@ call_structure_constructor (struct object *class_name, struct object *args,
     }
 
   return ret;
+}
+
+
+struct object *
+call_structure_predicate (struct object *class_name, struct object *args,
+			  struct environment *env, struct outcome *outcome)
+{
+  if (list_length (args) != 1)
+    {
+      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
+      return NULL;
+    }
+
+  if (CAR (args)->type == TYPE_STRUCTURE
+      && CAR (args)->value_ptr.structure->class_name == class_name)
+    return &t_object;
+
+  return &nil_object;
 }
 
 
@@ -32814,11 +32855,11 @@ struct object *
 evaluate_defstruct (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct object *name, *strcl, *funcname,
+  struct object *name, *strcl, *funcname, *cons, *opt, *predname = NULL,
     *pack = inspect_variable (env->package_sym, env);
   struct structure_class *sc;
   struct structure_field_decl *f, *prev;
-  char *constr_name, *acc_name;
+  char *constr_name, *pred_name, *acc_name;
 
   if (!list_length (list))
     {
@@ -32828,8 +32869,47 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (CAR (list)))
     name = SYMBOL (CAR (list));
-  else if (IS_LIST (CAR (list)) && IS_SYMBOL (CAR (CAR (list))))
-    name = SYMBOL (CAR (CAR (list)));
+  else if (IS_LIST (CAR (list)))
+    {
+      if (!IS_SYMBOL (CAR (CAR (list))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      name = SYMBOL (CAR (CAR (list)));
+
+      cons = CDR (CAR (list));
+
+      while (cons->type == TYPE_CONS_PAIR)
+	{
+	  if (IS_SYMBOL (CAR (cons)))
+	    opt = SYMBOL (CAR (cons));
+	  else if (CAR (cons)->type == TYPE_CONS_PAIR
+		   && IS_SYMBOL (CAR (CAR ((cons)))))
+	    opt = SYMBOL (CAR (CAR (cons)));
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  if (symbol_equals (opt, ":PREDICATE", env))
+	    {
+	      if (CAR (cons)->type == TYPE_CONS_PAIR
+		  && list_length (CAR (cons)) > 1
+		  && IS_SYMBOL (CAR (CDR (CAR (cons)))))
+		predname = SYMBOL (CAR (CDR (CAR (cons))));
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  cons = CDR (cons);
+	}
+    }
   else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -32892,6 +32972,34 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
   add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
+
+
+  if (!predname)
+    {
+      pred_name =
+	concatenate_char_vectors (2 + name->value_ptr.symbol->name_len,
+				  name->value_ptr.symbol->name,
+				  name->value_ptr.symbol->name_len, "-P", 2,
+				  (char *)NULL);
+
+      predname = intern_symbol_by_char_vector (pred_name,
+					       2+name->value_ptr.symbol->name_len,
+					       1, INTERNAL_VISIBILITY, 1, pack, 0);
+      free (pred_name);
+      increment_refcount (predname);
+    }
+
+  delete_reference (predname, predname->value_ptr.symbol->function_cell, 1);
+  predname->value_ptr.symbol->function_cell = alloc_function ();
+  add_reference (predname, predname->value_ptr.symbol->function_cell, 1);
+  decrement_refcount (predname->value_ptr.symbol->function_cell);
+
+  predname->value_ptr.symbol->function_cell->value_ptr.function->
+    struct_predicate_class_name = name;
+
+  predname->value_ptr.symbol->function_cell->value_ptr.function->name = predname;
+  add_reference (predname->value_ptr.symbol->function_cell, predname, 0);
+
 
   f = sc->fields;
 
