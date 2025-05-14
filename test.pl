@@ -1528,7 +1528,7 @@ make_test ("(let (x y) (al-loopy-setq ((x y)) '(nil)) x)", "NIL");
 make_test ("(let (x y z) (al-loopy-setq (x (y z)) '(nil)) y)", "NIL");
 make_test ("'make-ship", "MAKE-SHIP");
 make_test ("(defstruct ship x y)", "SHIP");
-make_test ("(defstruct ship x y)", "SHIP");
+make_test ("(defstruct ship \"A ship.\" x y)", "SHIP");
 make_test ("#'make-ship", "#<FUNCTION MAKE-SHIP>");
 make_test ("#'ship-x", "#<FUNCTION SHIP-X>");
 make_test ("(defparameter s1 (make-ship))", "S1");
