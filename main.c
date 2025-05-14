@@ -32936,6 +32936,9 @@ evaluate_defstruct (struct object *list, struct environment *env,
   sc->fields = NULL;
   list = CDR (list);
 
+  if (list->type == TYPE_CONS_PAIR && CAR (list)->type == TYPE_STRING)
+    list = CDR (list);
+
   while (SYMBOL (list) != &nil_object)
     {
       f = create_structure_field_decl (CAR (list), env, outcome);
