@@ -239,15 +239,15 @@ typedef long fixnum;
 
 #define BUILTIN_SYMBOL(sym)						\
   (intern_symbol_by_char_vector ((sym), strlen (sym), 0, EXTERNAL_VISIBILITY, \
-				 0, env->cl_package, 0))
+				 0, env->cl_package, 0, 0))
 
 #define CREATE_BUILTIN_SYMBOL(sym)					\
   (intern_symbol_by_char_vector ((sym), strlen (sym), 1, EXTERNAL_VISIBILITY, \
-				 1, env->cl_package, 0))
+				 1, env->cl_package, 0, 0))
 
 #define KEYWORD(name)							\
   (intern_symbol_by_char_vector ((name)+1, strlen (name)-1, 1,		\
-				 EXTERNAL_VISIBILITY, 1, env->keyword_package, 1))
+				 EXTERNAL_VISIBILITY, 1, env->keyword_package, 1, 0))
 
 
 #define ANTILOOP_HASH_T_SIZE 64
@@ -459,7 +459,6 @@ outcome_type
     UNKNOWN_KEYWORD_ARGUMENT,
     ODD_NUMBER_OF_ARGUMENTS,
     ODD_NUMBER_OF_KEYWORD_ARGUMENTS,
-    MAX_STACK_DEPTH_REACHED,
     DOTTED_LIST_NOT_ALLOWED_HERE,
     COMMA_AT_OR_DOT_NOT_ALLOWED_AT_TOP_LEVEL,
     CANT_SPLICE_AN_ATOM_HERE,
@@ -1947,7 +1946,8 @@ struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     enum package_record_flags vis,
 					     int always_create_if_missing,
 					     struct object *package,
-					     int is_keyword_package);
+					     int is_keyword_package,
+					     int always_export_if_created);
 struct object *intern_symbol_name (struct object *symname,
 				   struct environment *env,
 				   enum outcome_type *out);
@@ -2013,6 +2013,9 @@ struct object *raise_type_error (struct object *datum, char *type,
 struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct environment *env,
 				 struct outcome *outcome);
+struct object *raise_al_maximum_stack_depth_exceeded (int maxdepth,
+						      struct environment *env,
+						      struct outcome *outcome);
 struct object *raise_program_error (struct environment *env,
 				    struct outcome *outcome);
 struct object *raise_error (struct environment *env, struct outcome *outcome);
@@ -3691,7 +3694,7 @@ add_standard_definitions (struct environment *env)
   env->package_sym = intern_symbol_by_char_vector ("*PACKAGE*",
 						   strlen ("*PACKAGE*"), 1,
 						   EXTERNAL_VISIBILITY, 1,
-						   env->cl_package, 0);
+						   env->cl_package, 0, 0);
   env->package_sym->value_ptr.symbol->is_parameter = 1;
   env->package_sym->value_ptr.symbol->is_special = 1;
   env->package_sym->value_ptr.symbol->value_cell = env->cl_package;
@@ -3703,7 +3706,7 @@ add_standard_definitions (struct environment *env)
 
   env->random_state_sym =
     intern_symbol_by_char_vector ("*RANDOM-STATE*", strlen ("*RANDOM-STATE*"), 1,
-				  EXTERNAL_VISIBILITY, 1, env->cl_package, 0);
+				  EXTERNAL_VISIBILITY, 1, env->cl_package, 0, 0);
   env->random_state_sym->value_ptr.symbol->is_parameter = 1;
   env->random_state_sym->value_ptr.symbol->is_special = 1;
   rs = alloc_object ();
@@ -4273,32 +4276,33 @@ add_standard_definitions (struct environment *env)
   env->amp_optional_sym = intern_symbol_by_char_vector ("&OPTIONAL",
 							strlen ("&OPTIONAL"),
 							1, EXTERNAL_VISIBILITY,
-							1, env->cl_package, 0);
+							1, env->cl_package, 0, 0);
   env->amp_rest_sym = intern_symbol_by_char_vector ("&REST", strlen ("&REST"),
 						    1, EXTERNAL_VISIBILITY, 1,
-						    env->cl_package, 0);
+						    env->cl_package, 0, 0);
   env->amp_body_sym = intern_symbol_by_char_vector ("&BODY", strlen ("&BODY"),
 						    1, EXTERNAL_VISIBILITY, 1,
-						    env->cl_package, 0);
+						    env->cl_package, 0, 0);
   env->amp_key_sym = intern_symbol_by_char_vector ("&KEY", strlen ("&KEY"), 1,
 						   EXTERNAL_VISIBILITY, 1,
-						   env->cl_package, 0);
+						   env->cl_package, 0, 0);
   env->amp_allow_other_keys_sym =
     intern_symbol_by_char_vector ("&ALLOW-OTHER-KEYS",
 				  strlen ("&ALLOW-OTHER-KEYS"), 1,
-				  EXTERNAL_VISIBILITY, 1, env->cl_package, 0);
+				  EXTERNAL_VISIBILITY, 1, env->cl_package, 0, 0);
   env->amp_aux_sym = intern_symbol_by_char_vector ("&AUX",
 						   strlen ("&AUX"), 1,
 						   EXTERNAL_VISIBILITY, 1,
-						   env->cl_package, 0);
+						   env->cl_package, 0, 0);
   env->amp_whole_sym = intern_symbol_by_char_vector ("&WHOLE",
 						     strlen ("&WHOLE"), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     env->cl_package, 0);
+						     env->cl_package, 0, 0);
   env->key_allow_other_keys_sym =
     intern_symbol_by_char_vector ("ALLOW-OTHER-KEYS",
 				  strlen ("ALLOW-OTHER-KEYS"), 1,
-				  EXTERNAL_VISIBILITY, 1, env->keyword_package, 1);
+				  EXTERNAL_VISIBILITY, 1, env->keyword_package,
+				  1, 0);
 
   env->not_sym = CREATE_BUILTIN_SYMBOL ("NOT");
   env->and_sym = CREATE_BUILTIN_SYMBOL ("AND");
@@ -4446,7 +4450,7 @@ add_standard_definitions (struct environment *env)
   lambdal->next->name = intern_symbol_by_char_vector ("INITARGS",
 						      strlen ("INITARGS"), 1,
 						      INTERNAL_VISIBILITY, 0,
-						      env->cl_package, 0);
+						      env->cl_package, 0, 0);
   lambdal->next->reference_strength_factor
     = !STRENGTH_FACTOR_OF_OBJECT (lambdal->next->name);
   INC_WEAK_REFCOUNT (lambdal->next->name);
@@ -4470,7 +4474,7 @@ add_standard_definitions (struct environment *env)
   lambdal->next->next = alloc_parameter (REST_PARAM, NULL);
   lambdal->next->next->name =
     intern_symbol_by_char_vector ("INITARGS", strlen ("INITARGS"), 1,
-				  INTERNAL_VISIBILITY, 0, env->cl_package, 0);
+				  INTERNAL_VISIBILITY, 0, env->cl_package, 0, 0);
   lambdal->next->next->reference_strength_factor
     = !STRENGTH_FACTOR_OF_OBJECT (lambdal->next->next->name);
   INC_WEAK_REFCOUNT (lambdal->next->next->name);
@@ -4560,6 +4564,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("AL-COMMA", env, type_al_comma, 1, (char *)NULL);
   add_builtin_type ("AL-AT", env, type_al_at, 1, (char *)NULL);
   add_builtin_type ("AL-DOT", env, type_al_dot, 1, (char *)NULL);
+
+  add_condition_class ("AL-MAXIMUM-STACK-DEPTH-EXCEEDED", env, 1, "PROGRAM-ERROR",
+		       (char *)NULL, "MAX-DEPTH", (char *)NULL);
 }
 
 
@@ -10997,7 +11004,8 @@ struct object *
 intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
 			      enum package_record_flags vis,
 			      int always_create_if_missing,
-			      struct object *package, int is_keyword_package)
+			      struct object *package, int is_keyword_package,
+			      int always_export_if_created)
 {
   struct object *sym;
   int ind = hash_char_vector (name, len, SYMTABLE_SIZE);
@@ -11058,7 +11066,12 @@ intern_symbol_by_char_vector (char *name, size_t len, int do_copy,
     }
 
   new_sym = malloc_and_check (sizeof (*new_sym));
-  new_sym->flags = vis;
+
+  if (always_export_if_created)
+    new_sym->flags = EXTERNAL_VISIBILITY;
+  else
+    new_sym->flags = vis;
+
   new_sym->sym = sym;
   new_sym->next = cell;
 
@@ -11603,7 +11616,7 @@ create_condition_by_c_string (char *type, struct object *args,
 {
   struct object *sym = intern_symbol_by_char_vector (type, strlen (type), 1,
 						     EXTERNAL_VISIBILITY, 0,
-						     env->cl_package, 0);
+						     env->cl_package, 0, 0);
 
   return create_condition (sym->value_ptr.symbol->typespec, args, env, outcome);
 }
@@ -11638,8 +11651,8 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   char *s, *rn;
   struct object *condcl, *pack = inspect_variable (env->package_sym, env),
     *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
-					 EXTERNAL_VISIBILITY, 1, pack, 0), *par,
-    *rs;
+					 EXTERNAL_VISIBILITY, 1, pack, 0, 0),
+    *par, *rs;
   struct object_list *l;
   struct standard_class *cc;
   struct class_field_decl *f, *prev;
@@ -11664,8 +11677,8 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
 
   while ((s = va_arg (valist, char *)))
     {
-      par = intern_symbol_by_char_vector (s, strlen (s), 1, EXTERNAL_VISIBILITY,
-					  1, pack, 0);
+      par = intern_symbol_by_char_vector (s, strlen (s), 1, INTERNAL_VISIBILITY,
+					  1, pack, 0, 1);
 
       prepend_object_to_obj_list (par, &cc->parents);
     }
@@ -11675,14 +11688,14 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1, INTERNAL_VISIBILITY,
-					  1, pack, 0);
+					  1, pack, 0, 0);
 
       f = create_class_field_decl (condcl, par, env, NULL);
 
       l = malloc_and_check (sizeof (*l));
       l->obj = intern_symbol_by_char_vector (s, strlen (s), 1,
 					     EXTERNAL_VISIBILITY, 1,
-					     env->keyword_package, 1);
+					     env->keyword_package, 1, 0);
       increment_refcount (l->obj);
       l->next = NULL;
       f->initargs = l;
@@ -11702,7 +11715,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
 
       rs = intern_symbol_by_char_vector (rn, sym->value_ptr.symbol->name_len+1+
 					 par->value_ptr.symbol->name_len, 0,
-					 EXTERNAL_VISIBILITY, 1, pack, 0);
+					 EXTERNAL_VISIBILITY, 1, pack, 0, 0);
       increment_refcount (rs);
       rs->value_ptr.symbol->function_cell = alloc_function ();
       rs->value_ptr.symbol->function_cell->value_ptr.function->
@@ -11865,10 +11878,14 @@ list_lambda_list (struct parameter *par, int allow_other_keys,
 struct object *
 create_empty_condition_by_c_string (char *classname, struct environment *env)
 {
-  struct object *ret, *class;
+  struct object *ret, *class, *class_name;
   struct standard_object *so;
 
-  class = BUILTIN_SYMBOL (classname)->value_ptr.symbol->typespec;
+  class_name = intern_symbol_by_char_vector (classname, strlen (classname), 0,
+					     INTERNAL_VISIBILITY, 0,
+					     env->cluser_package, 0, 0);
+
+  class = SYMBOL (class_name)->value_ptr.symbol->typespec;
 
   if (!class->value_ptr.standard_class->class_precedence_list
       && !compute_class_precedence_list (class, NULL))
@@ -11975,6 +11992,30 @@ raise_file_error (struct object *fn, const char *fs, struct environment *env,
     increment_refcount (fn);
 
   cond->value_ptr.standard_object->fields->value = fn;
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_al_maximum_stack_depth_exceeded (int maxdepth, struct environment *env,
+				       struct outcome *outcome)
+{
+  struct object *cond =
+    create_empty_condition_by_c_string ("AL-MAXIMUM-STACK-DEPTH-EXCEEDED", env),
+    *ret, *depth;
+
+  depth = create_integer_from_long (maxdepth);
+
+  cond->value_ptr.standard_object->fields->value = depth;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -12833,7 +12874,7 @@ add_builtin_type (char *name, struct environment *env,
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack, 0);
+						     pack, 0, 0);
   struct object *par;
 
   va_start (valist, is_standard);
@@ -12845,7 +12886,7 @@ add_builtin_type (char *name, struct environment *env,
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1,
-					  EXTERNAL_VISIBILITY, 1, pack, 0);
+					  EXTERNAL_VISIBILITY, 1, pack, 0, 0);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -12866,7 +12907,7 @@ add_builtin_form (char *name, struct environment *env,
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack, 0);
+						     pack, 0, 0);
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
@@ -12906,7 +12947,7 @@ define_generic_function (char *name, struct environment *env,
 {
   struct object *pack = inspect_variable (env->package_sym, env),
     *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
-					 EXTERNAL_VISIBILITY, 1, pack, 0),
+					 EXTERNAL_VISIBILITY, 1, pack, 0, 0),
     *fun = alloc_function (), *meth;
   struct function *f = fun->value_ptr.function;
   struct method *m;
@@ -13021,7 +13062,7 @@ define_constant_by_name (char *name, struct object *value,
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack, 0);
+						     pack, 0, 0);
 
   sym->value_ptr.symbol->is_const = 1;
   sym->value_ptr.symbol->value_cell = value;
@@ -13037,7 +13078,7 @@ define_variable (char *name, struct object *value, struct environment *env)
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 						     EXTERNAL_VISIBILITY, 1,
-						     pack, 0);
+						     pack, 0, 0);
 
   sym->value_ptr.symbol->is_parameter = 1;
   sym->value_ptr.symbol->is_special = 1;
@@ -13864,7 +13905,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 	  key = intern_symbol_by_char_vector (var->value_ptr.symbol->name,
 					      var->value_ptr.symbol->name_len,
 					      1, EXTERNAL_VISIBILITY, 1,
-					      env->keyword_package, 1);
+					      env->keyword_package, 1, 0);
 
 	  if (!first)
 	    *last = first = alloc_parameter (KEYWORD_PARAM, var);
@@ -13906,7 +13947,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
 	      key = intern_symbol_by_char_vector
 		(var->value_ptr.symbol->name, var->value_ptr.symbol->name_len,
-		 1, EXTERNAL_VISIBILITY, 1, env->keyword_package, 1);
+		 1, EXTERNAL_VISIBILITY, 1, env->keyword_package, 1, 0);
 	    }
 	  else if (caar->type == TYPE_CONS_PAIR)
 	    {
@@ -14279,13 +14320,13 @@ create_lambda_list (struct environment *env, ...)
 	  = alloc_parameter (REQUIRED_PARAM,
 			     intern_symbol_by_char_vector (n, strlen (n), 1,
 							   INTERNAL_VISIBILITY,
-							   1, pack, 0));
+							   1, pack, 0, 0));
       else
 	ret = par =
 	  alloc_parameter (REQUIRED_PARAM,
 			   intern_symbol_by_char_vector (n, strlen (n), 1,
 							 INTERNAL_VISIBILITY, 1,
-							 pack, 0));
+							 pack, 0, 0));
 
       par->reference_strength_factor = !STRENGTH_FACTOR_OF_OBJECT (par->name);
       INC_WEAK_REFCOUNT (par->name);
@@ -15266,8 +15307,8 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
   if (env->stack_depth > LISP_STACK_SIZE)
     {
-      outcome->type = MAX_STACK_DEPTH_REACHED;
-      return NULL;
+      return raise_al_maximum_stack_depth_exceeded (LISP_STACK_SIZE,
+						    env, outcome);
     }
 
   if (stepping_over_this_macroexp)
@@ -17091,7 +17132,7 @@ check_type_by_char_vector (struct object *obj, char *type,
   return check_type (obj,
 		     intern_symbol_by_char_vector (type, strlen (type), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package, 0),
+						   env->cl_package, 0, 0),
 		     env, outcome);
 }
 
@@ -17116,7 +17157,7 @@ is_subtype_by_char_vector (const struct object *first, char *second,
   return is_subtype (first,
 		     intern_symbol_by_char_vector (second, strlen (second), 1,
 						   EXTERNAL_VISIBILITY, 0,
-						   env->cl_package, 0), NULL,
+						   env->cl_package, 0, 0), NULL,
 		     env, NULL);
 }
 
@@ -20405,22 +20446,22 @@ builtin_hash_table_test (struct object *list, struct environment *env,
     case HT_EQ:
       ret = intern_symbol_by_char_vector ("EQ", strlen ("EQ"), 1,
 					  EXTERNAL_VISIBILITY, 1,
-					  env->cl_package, 0);
+					  env->cl_package, 0, 0);
       break;
     case HT_EQL:
       ret = intern_symbol_by_char_vector ("EQL", strlen ("EQL"), 1,
 					  EXTERNAL_VISIBILITY, 1,
-					  env->cl_package, 0);
+					  env->cl_package, 0, 0);
       break;
     case HT_EQUAL:
       ret = intern_symbol_by_char_vector ("EQUAL", strlen ("EQUAL"), 1,
 					  EXTERNAL_VISIBILITY, 1,
-					  env->cl_package, 0);
+					  env->cl_package, 0, 0);
       break;
     case HT_EQUALP:
       ret = intern_symbol_by_char_vector ("EQUALP", strlen ("EQUALP"), 1,
 					  EXTERNAL_VISIBILITY, 1,
-					  env->cl_package, 0);
+					  env->cl_package, 0, 0);
       break;
     default:
       break;
@@ -27360,28 +27401,28 @@ builtin_type_of (struct object *list, struct environment *env,
       ret =
 	intern_symbol_by_char_vector ("AL-BACKQUOTE", strlen ("AL-BACKQUOTE"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0);
+				      env->cluser_package, 0, 0);
     }
   else if (CAR (list)->type == TYPE_COMMA)
     {
       ret =
 	intern_symbol_by_char_vector ("AL-COMMA", strlen ("AL-COMMA"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0);
+				      env->cluser_package, 0, 0);
     }
   else if (CAR (list)->type == TYPE_AT)
     {
       ret =
 	intern_symbol_by_char_vector ("AL-AT", strlen ("AL-AT"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0);
+				      env->cluser_package, 0, 0);
     }
   else if (CAR (list)->type == TYPE_DOT)
     {
       ret =
 	intern_symbol_by_char_vector ("AL-DOT", strlen ("AL-DOT"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0);
+				      env->cluser_package, 0, 0);
     }
 
   increment_refcount (ret);
@@ -27725,7 +27766,7 @@ builtin_intern (struct object *list, struct environment *env,
 					  1, pack == env->keyword_package
 					  ? EXTERNAL_VISIBILITY
 					  : INTERNAL_VISIBILITY, 1, pack,
-					  pack == env->keyword_package);
+					  pack == env->keyword_package, 0);
       ret2 = &nil_object;
     }
 
@@ -31032,7 +31073,7 @@ inspect_variable_by_c_string (char *var, struct environment *env)
 {
   struct object *sym = intern_symbol_by_char_vector (var, strlen (var), 0,
 						     INTERNAL_VISIBILITY, 0,
-						     env->cluser_package, 0);
+						     env->cluser_package, 0, 0);
 
   if (sym)
     return inspect_variable (sym, env);
@@ -32961,7 +33002,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   funcname = intern_symbol_by_char_vector (constr_name,
 					   5+name->value_ptr.symbol->name_len, 1,
-					   INTERNAL_VISIBILITY, 1, pack, 0);
+					   INTERNAL_VISIBILITY, 1, pack, 0, 0);
   free (constr_name);
   increment_refcount (funcname);
 
@@ -32987,7 +33028,8 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
       predname = intern_symbol_by_char_vector (pred_name,
 					       2+name->value_ptr.symbol->name_len,
-					       1, INTERNAL_VISIBILITY, 1, pack, 0);
+					       1, INTERNAL_VISIBILITY, 1, pack,
+					       0, 0);
       free (pred_name);
       increment_refcount (predname);
     }
@@ -33022,7 +33064,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
 					       1 +
 					       f->name->value_ptr.symbol->name_len,
 					       1, INTERNAL_VISIBILITY, 1, pack,
-					       0);
+					       0, 0);
       free (acc_name);
       increment_refcount (funcname);
 
@@ -38552,10 +38594,6 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: odd number of arguments in keyword part of function "
 	      "call\n");
-    }
-  else if (err->type == MAX_STACK_DEPTH_REACHED)
-    {
-      printf ("eval error: maximum stack depth exceeded\n");
     }
   else if (err->type == DOTTED_LIST_NOT_ALLOWED_HERE)
     {
