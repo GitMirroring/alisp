@@ -132,6 +132,10 @@ package.  There are also some non-standard extensions of standard functions.
   also prints special forms and builtin macros as frames.  The function always
   returns T
 
+- the function AL-LIST-BACKTRACE takes an optional argument and returns a list
+  with the argument lists of each call in the backtrace, in the same order as
+  AL-PRINT-BACKTRACE.  The argument has the same effect as AL-PRINT-BACKTRACE
+
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
   established.  Each binding is a list containing the symbol, the value, the
