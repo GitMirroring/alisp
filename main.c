@@ -11738,20 +11738,17 @@ handle_condition (struct object *cond, struct environment *env,
   struct handler_binding *b;
   struct handler_binding_frame *f;
   struct object *hret;
-  struct object arg;
-  struct cons_pair c;
+  struct object *arg;
 
   if (!env->handlers)
     return &nil_object;
 
   b = env->handlers->frame;
 
-  arg.type = TYPE_CONS_PAIR;
-  arg.value_ptr.cons_pair = &c;
-  arg.refcount1 = 0;
-  arg.refcount2 = 1;
-  c.car = cond;
-  c.cdr = &nil_object;
+  arg = alloc_empty_cons_pair ();
+  arg->value_ptr.cons_pair->car = cond;
+  add_reference (arg, cond, 0);
+  arg->value_ptr.cons_pair->cdr = &nil_object;
 
   while (b)
     {
@@ -11761,18 +11758,23 @@ handle_condition (struct object *cond, struct environment *env,
 	  f = env->handlers;
 	  env->handlers = env->handlers->next;
 
-	  hret = call_function (b->handler, &arg, 1, 0, 1, 0, 0, env, outcome);
+	  hret = call_function (b->handler, arg, 1, 0, 1, 0, 0, env, outcome);
 
 	  env->handlers = f;
 
 	  if (!hret)
-	    return NULL;
+	    {
+	      decrement_refcount (arg);
+	      return NULL;
+	    }
 
 	  decrement_refcount (hret);
 	}
 
       b = b->next;
     }
+
+  decrement_refcount (arg);
 
   return &nil_object;
 }
@@ -34646,8 +34648,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
   struct object *cons, *ret = NULL, *res, *hret;
   struct handler_binding *b, *prev, *first = NULL;
   struct handler_binding_frame *f;
-  struct object arg;
-  struct cons_pair c;
+  struct object *arg = NULL;
 
   if (!list_length (list))
     {
@@ -34716,19 +34717,16 @@ evaluate_handler_bind (struct object *list, struct environment *env,
     {
       b = first;
 
-      arg.type = TYPE_CONS_PAIR;
-      arg.value_ptr.cons_pair = &c;
-      arg.refcount1 = 0;
-      arg.refcount2 = 1;
-      c.car = &nil_object;
-      c.cdr = &nil_object;
+      arg = alloc_empty_cons_pair ();
+      arg->value_ptr.cons_pair->car = &nil_object;
+      arg->value_ptr.cons_pair->cdr = &nil_object;
 
       while (b)
 	{
 	  if (does_condition_include_outcome_type (b->condition, outcome->type,
 						   env))
 	    {
-	      hret = call_function (b->handler, &arg, 1, 0, 1, 0, 0, env, outcome);
+	      hret = call_function (b->handler, arg, 1, 0, 1, 0, 0, env, outcome);
 
 	      if (!hret)
 		goto cleanup_and_leave;
@@ -34741,6 +34739,8 @@ evaluate_handler_bind (struct object *list, struct environment *env,
     }
 
  cleanup_and_leave:
+  decrement_refcount (arg);
+
   if (first)
     {
       for (; handlers; handlers--)
