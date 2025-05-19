@@ -706,8 +706,11 @@ struct
 call_frame
 {
   struct object *funcobj;
+
   struct object *arglist;
+
   struct binding *args;
+  int argsnum;
 
   struct call_frame *next;
 };
@@ -2039,6 +2042,7 @@ void print_fields (struct object *stdobj, struct environment *env,
 		   struct object *str);
 
 void print_backtrace (struct environment *env, int be_verbose);
+struct object *list_backtrace (struct environment *env, int be_verbose);
 
 void print_available_restarts (struct environment *env, int show_help,
 			       struct object *str);
@@ -3149,6 +3153,8 @@ struct object *builtin_al_report_profiling
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_print_backtrace
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_list_backtrace
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_watch
@@ -4520,6 +4526,8 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
+		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-LIST-BACKTRACE", env, builtin_al_list_backtrace,
 		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-WATCH", env, builtin_al_watch, TYPE_FUNCTION, NULL, 0);
@@ -12310,7 +12318,7 @@ print_backtrace (struct environment *env, int be_verbose)
 	  printf (" ");
 	}
 
-      if (f->arglist)
+      if (f->argsnum < 0)
 	print_object (f->arglist, env, env->c_stdout->value_ptr.stream);
       else
 	{
@@ -12346,6 +12354,40 @@ print_backtrace (struct environment *env, int be_verbose)
       i++;
       f = f->next;
     }
+}
+
+
+struct object *
+list_backtrace (struct environment *env, int be_verbose)
+{
+  struct object *ret = &nil_object, *cons;
+  struct call_frame *f = env->call_stack;
+
+  while (f)
+    {
+      if (!be_verbose && f->funcobj->type == TYPE_MACRO
+	  && f->funcobj->value_ptr.macro->builtin_form)
+	{
+	  f = f->next;
+	  continue;
+	}
+
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car = f->arglist;
+      add_reference (cons, CAR (cons), 0);
+      cons->value_ptr.cons_pair->cdr = &nil_object;
+
+      f = f->next;
+    }
+
+  return ret;
 }
 
 
@@ -12763,18 +12805,17 @@ add_call_frame (struct object *funcobj, struct object *args,
 
   increment_refcount (funcobj);
   ret->funcobj = funcobj;
+  ret->argsnum = argsnum;
   ret->next = stack;
 
-  if (args)
-    {
-      increment_refcount (args);
-      ret->arglist = args;
-    }
-  else
+  increment_refcount (args);
+  ret->arglist = args;
+
+  ret->args = NULL;
+
+  if (argsnum >= 0)
     {
       b = env->vars;
-      ret->arglist = NULL;
-      ret->args = NULL;
 
       for (; argsnum; argsnum--)
 	{
@@ -12812,7 +12853,8 @@ remove_call_frame (struct call_frame *stack)
 
   if (stack->arglist)
     decrement_refcount (stack->arglist);
-  else
+
+  if (stack->argsnum >= 0)
     {
       b = stack->args;
 
@@ -15532,7 +15574,7 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
-      env->call_stack = add_call_frame (func, NULL, env, argsnum,
+      env->call_stack = add_call_frame (func, arglist, env, argsnum,
 					env->call_stack);
 
       if (env->is_profiling && func->value_ptr.function->name)
@@ -16175,7 +16217,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
 	}
 
-      env->call_stack = add_call_frame (methlist->meth, NULL, env, argsnum,
+      env->call_stack = add_call_frame (methlist->meth, arglist, env, argsnum,
 					env->call_stack);
 
       if (!parse_declarations (methlist->meth->value_ptr.method->body, env,
@@ -36024,6 +36066,22 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
   print_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
 
   return &t_object;
+}
+
+
+struct object *
+builtin_al_list_backtrace (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  int l = list_length (list);
+
+  if (l > 1)
+    {
+      outcome->type = TOO_MANY_ARGUMENTS;
+      return NULL;
+    }
+
+  return list_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
 }
 
 
