@@ -10853,7 +10853,9 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	    return NULL;
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("HANDLER-BIND")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("RESTART-BIND"))
 	{
 	  cons = CAR (CDR (form));
 
@@ -10878,10 +10880,21 @@ compile_form (struct object *form, int backt_comma_bal, struct environment *env,
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO-SYMBOLS")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO-EXTERNAL-SYMBOLS")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DESTRUCTURING-BIND")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AL-LOOPY-DESTRUCTURING-BIND"))
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AL-LOOPY-DESTRUCTURING-BIND")
+	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("RETURN-FROM"))
 	{
 	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
 	    return NULL;
+	}
+      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("FUNCTION"))
+	{
+	  if (CAR (CDR (form))->type == TYPE_CONS_PAIR
+	      && SYMBOL (CAR (CAR (CDR (form)))) == BUILTIN_SYMBOL ("LAMBDA"))
+	    {
+	      if (!compile_body (CDR (CDR (CAR (CDR (form)))), backt_comma_bal,
+				 env, outcome))
+		return NULL;
+	    }
 	}
       else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("FLET")
 	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LABELS")
