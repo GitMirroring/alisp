@@ -2019,6 +2019,9 @@ struct object *raise_file_error (struct object *fn, const char *fs,
 struct object *raise_al_maximum_stack_depth_exceeded (int maxdepth,
 						      struct environment *env,
 						      struct outcome *outcome);
+struct object *raise_al_wrong_number_of_arguments (int minargs, int maxargs,
+						   struct environment *env,
+						   struct outcome *outcome);
 struct object *raise_program_error (struct environment *env,
 				    struct outcome *outcome);
 struct object *raise_error (struct environment *env, struct outcome *outcome);
@@ -4575,6 +4578,9 @@ add_standard_definitions (struct environment *env)
 
   add_condition_class ("AL-MAXIMUM-STACK-DEPTH-EXCEEDED", env, 1, "PROGRAM-ERROR",
 		       (char *)NULL, "MAX-DEPTH", (char *)NULL);
+  add_condition_class ("AL-WRONG-NUMBER-OF-ARGUMENTS", env, 1, "PROGRAM-ERROR",
+		       (char *)NULL, "MIN-ARGS", "MAX-ARGS", (char *)NULL);
+
 }
 
 
@@ -12053,6 +12059,32 @@ raise_al_maximum_stack_depth_exceeded (int maxdepth, struct environment *env,
 
 
 struct object *
+raise_al_wrong_number_of_arguments (int minargs, int maxargs,
+				    struct environment *env,
+				    struct outcome *outcome)
+{
+  struct object *cond =
+    create_empty_condition_by_c_string ("AL-WRONG-NUMBER-OF-ARGUMENTS", env),
+    *ret;
+
+  cond->value_ptr.standard_object->fields->value =
+    create_integer_from_long (maxargs);
+  cond->value_ptr.standard_object->fields->next->value =
+    create_integer_from_long (minargs);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
 raise_program_error (struct environment *env, struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string ("PROGRAM-ERROR",
@@ -15847,8 +15879,7 @@ call_structure_predicate (struct object *class_name, struct object *args,
 {
   if (list_length (args) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (args)->type == TYPE_STRUCTURE
@@ -15868,8 +15899,7 @@ call_structure_accessor (struct object *class_name, struct object *field,
 
   if (list_length (args) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (args)->type != TYPE_STRUCTURE
@@ -15911,8 +15941,7 @@ call_condition_reader (struct object *class_name, struct object *field,
 
   if (list_length (args) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (args)->type != TYPE_STANDARD_OBJECT
@@ -16000,8 +16029,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	{
 	  if (list_length (arglist) != 1)
 	    {
-	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	      return NULL;
+	      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
 	    }
 
 	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
@@ -16047,8 +16075,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	{
 	  if (list_length (arglist) != 2)
 	    {
-	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	      return NULL;
+	      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
 	    }
 
 	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
@@ -16105,8 +16132,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	{
 	  if (list_length (arglist) != 1)
 	    {
-	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	      return NULL;
+	      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
 	    }
 
 	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
@@ -16152,8 +16178,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	{
 	  if (list_length (arglist) != 2)
 	    {
-	      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	      return NULL;
+	      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
 	    }
 
 	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
@@ -18647,8 +18672,7 @@ builtin_car (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -18669,8 +18693,7 @@ builtin_cdr (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -18691,8 +18714,7 @@ builtin_rplaca (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
@@ -18713,8 +18735,7 @@ builtin_rplacd (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
@@ -18737,8 +18758,7 @@ builtin_cons (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   cons = alloc_empty_cons_pair ();
@@ -18924,8 +18944,7 @@ builtin_nth (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER
@@ -18956,8 +18975,7 @@ builtin_nthcdr (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER
@@ -18996,8 +19014,7 @@ builtin_nth_value (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER)
@@ -19051,8 +19068,7 @@ builtin_elt (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (CDR (list))->type != TYPE_INTEGER)
@@ -19156,8 +19172,7 @@ builtin_aref (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   arr = CAR (list);
@@ -19168,8 +19183,7 @@ builtin_aref (struct object *list, struct environment *env,
 
       if (l != 2)
 	{
-	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	  return NULL;
+	  return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
 	}
 
       if (CAR (list)->type != TYPE_INTEGER)
@@ -19229,8 +19243,7 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_ARRAY (CAR (list)))
@@ -19290,8 +19303,7 @@ builtin_copy_list (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -19315,8 +19327,7 @@ builtin_copy_seq (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SEQUENCE (CAR (list)))
@@ -19372,8 +19383,7 @@ builtin_subseq (struct object *list, struct environment *env,
 
   if (l != 2 && l != 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 3, env, outcome);
     }
 
   if (!IS_SEQUENCE (CAR (list)))
@@ -19531,8 +19541,7 @@ builtin_list_length (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
@@ -19561,8 +19570,7 @@ builtin_length (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   seq = CAR (list);
@@ -19604,8 +19612,7 @@ builtin_fill_pointer (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_VECTOR (CAR (list)) || !HAS_FILL_POINTER (CAR (list)))
@@ -19633,8 +19640,7 @@ builtin_make_array (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   dims = CAR (list);
@@ -19975,8 +19981,7 @@ builtin_array_has_fill_pointer_p (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_ARRAY (CAR (list)))
@@ -20000,8 +20005,7 @@ builtin_array_dimensions (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   arr = CAR (list);
@@ -20061,8 +20065,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_ARRAY (CAR (list)))
@@ -20077,8 +20080,7 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
     {
       if (l != 2)
 	{
-	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	  return NULL;
+	  return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
 	}
 
       if (CAR (list)->type != TYPE_INTEGER)
@@ -20164,8 +20166,7 @@ builtin_adjust_array (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (CDR (list))->type != TYPE_CONS_PAIR
@@ -20332,8 +20333,7 @@ builtin_sxhash (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   return create_integer_from_long (hash_object_respecting_equal (CAR (list),
@@ -20445,8 +20445,7 @@ builtin_hash_table_size (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_HASHTABLE)
@@ -20464,8 +20463,7 @@ builtin_hash_table_count (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_HASHTABLE)
@@ -20487,8 +20485,7 @@ builtin_hash_table_test (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_HASHTABLE)
@@ -20540,8 +20537,7 @@ builtin_gethash (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
@@ -20574,8 +20570,7 @@ builtin_remhash (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (CDR (list))->type != TYPE_HASHTABLE)
@@ -20620,8 +20615,7 @@ builtin_clrhash (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_HASHTABLE)
@@ -20725,8 +20719,7 @@ builtin_last (struct object *list, struct environment *env,
 
   if (!length || length > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR && SYMBOL (CAR (list)) != &nil_object)
@@ -20765,8 +20758,7 @@ builtin_pathname (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -21206,8 +21198,7 @@ builtin_namestring (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21510,8 +21501,7 @@ builtin_wild_pathname_p (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21561,8 +21551,7 @@ builtin_logical_pathname (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21586,8 +21575,7 @@ builtin_translate_logical_pathname (struct object *list, struct environment *env
 
   if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21612,8 +21600,7 @@ builtin_truename (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21651,8 +21638,7 @@ builtin_probe_file (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21690,8 +21676,7 @@ builtin_ensure_directories_exist (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21753,8 +21738,7 @@ builtin_file_position (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM
@@ -21798,8 +21782,7 @@ builtin_file_length (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM
@@ -21835,8 +21818,7 @@ builtin_rename_file (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21889,8 +21871,7 @@ builtin_delete_file (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21927,8 +21908,7 @@ builtin_read_line (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_STREAM)
@@ -22038,8 +22018,7 @@ builtin_read (struct object *list, struct environment *env,
 
   if (l > 3)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 3, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_STREAM)
@@ -22149,8 +22128,7 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 
   if (l > 3)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 3, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_STREAM)
@@ -22258,8 +22236,7 @@ builtin_read_from_string (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -22321,8 +22298,7 @@ builtin_parse_integer (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -22359,8 +22335,7 @@ builtin_eval (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   env->lex_env_vars_boundary = env->lex_env_funcs_boundary = 0;
@@ -22383,8 +22358,7 @@ builtin_compile (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -22453,8 +22427,7 @@ builtin_write (struct object *list, struct environment *env,
 
   if (list_length (list) < 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   obj = CAR (list);
@@ -22555,8 +22528,7 @@ builtin_write_string (struct object *list, struct environment *env,
 
   if (!(l = list_length (list)) || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -22601,8 +22573,7 @@ builtin_write_char (struct object *list, struct environment *env,
 
   if (!(l = list_length (list)) || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -22648,8 +22619,7 @@ builtin_write_byte (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER)
@@ -22687,8 +22657,7 @@ builtin_fresh_line (struct object *list, struct environment *env,
 
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   std_out = inspect_variable (env->std_out_sym, env);
@@ -23023,8 +22992,7 @@ builtin_close (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM)
@@ -23060,8 +23028,7 @@ builtin_open_stream_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM)
@@ -23092,8 +23059,7 @@ builtin_input_stream_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM)
@@ -23124,8 +23090,7 @@ builtin_output_stream_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM)
@@ -23154,8 +23119,7 @@ builtin_interactive_stream_p (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM)
@@ -23176,8 +23140,7 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
 
   if (!l || l > 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 3, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -23225,8 +23188,7 @@ builtin_make_string_output_stream (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_STRING && SYMBOL (CAR (list)) != &nil_object)
@@ -23249,8 +23211,7 @@ builtin_get_output_stream_string (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM
@@ -23277,8 +23238,7 @@ builtin_make_synonym_stream (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -23296,8 +23256,7 @@ builtin_synonym_stream_symbol (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM
@@ -23361,8 +23320,7 @@ builtin_broadcast_stream_streams (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM
@@ -23398,8 +23356,7 @@ builtin_finish_output (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_STREAM
@@ -23428,8 +23385,7 @@ builtin_upper_case_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -23456,8 +23412,7 @@ builtin_lower_case_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -23484,8 +23439,7 @@ builtin_both_case_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -23510,8 +23464,7 @@ builtin_eq (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   return eq_objects (CAR (list), CAR (CDR (list)));
@@ -23524,8 +23477,7 @@ builtin_eql (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   return eql_objects (CAR (list), CAR (CDR (list)));
@@ -23538,8 +23490,7 @@ builtin_equalp (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   return equalp_objects (CAR (list), CAR (CDR (list)));
@@ -23552,8 +23503,7 @@ builtin_not (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (SYMBOL (CAR (list)) == &nil_object)
@@ -24613,8 +24563,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
@@ -24770,8 +24719,7 @@ builtin_reverse (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SEQUENCE (CAR (list)))
@@ -24839,8 +24787,7 @@ builtin_setf_car (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   newval = CAR (list);
@@ -24875,8 +24822,7 @@ builtin_setf_cdr (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   newval = CAR (list);
@@ -24912,8 +24858,7 @@ builtin_setf_nth (struct object *list, struct environment *env,
 
   if (list_length (list) != 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
     }
 
   newval = CAR (list);
@@ -24956,8 +24901,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
 
   if (l < 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   newval = CAR (list);
@@ -24972,8 +24916,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
     {
       if (l != 3)
 	{
-	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	  return NULL;
+	  return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
 	}
 
       if (CAR (CDR (list))->type != TYPE_INTEGER)
@@ -25047,8 +24990,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
 
   if (list_length (list) != 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
     }
 
   newval = CAR (list);
@@ -25147,8 +25089,7 @@ builtin_setf_fill_pointer (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   newval = CAR (list);
@@ -25205,8 +25146,7 @@ builtin_setf_gethash (struct object *list, struct environment *env,
 
   if (list_length (list) != 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
     }
 
   newval = CAR (list);
@@ -25265,8 +25205,7 @@ builtin_setf_symbol_plist (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   newval = CAR (list);
@@ -25296,8 +25235,7 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
 
   if (list_length (list) != 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
     }
 
   newval = CAR (list);
@@ -25359,8 +25297,7 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   newval = CAR (list);
@@ -25403,8 +25340,7 @@ builtin_method_print_object (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (CDR (list))->type != TYPE_STREAM)
@@ -26038,8 +25974,7 @@ perform_division_with_remainder (struct object *args,
 
   if (l > 2)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 2, env, outcome);
     }
 
   if (!IS_REAL (CAR (args)))
@@ -26443,8 +26378,7 @@ builtin_numerator (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_RATIONAL (CAR (list)))
@@ -26475,8 +26409,7 @@ builtin_denominator (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_RATIONAL (CAR (list)))
@@ -26506,8 +26439,7 @@ builtin_rational (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (IS_RATIONAL (CAR (list)))
@@ -26537,8 +26469,7 @@ builtin_float (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26567,8 +26498,7 @@ builtin_sqrt (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26595,8 +26525,7 @@ builtin_complex (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   return create_complex (CAR (list), l == 2 ? CAR (CDR (list)) : NULL, 0, env,
@@ -26612,8 +26541,7 @@ builtin_realpart (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   num = CAR (list);
@@ -26643,8 +26571,7 @@ builtin_imagpart (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   num = CAR (list);
@@ -26838,8 +26765,7 @@ builtin_sin (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26857,8 +26783,7 @@ builtin_cos (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26876,8 +26801,7 @@ builtin_tan (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26895,8 +26819,7 @@ builtin_sinh (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26914,8 +26837,7 @@ builtin_cosh (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26933,8 +26855,7 @@ builtin_tanh (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26954,8 +26875,7 @@ builtin_exp (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -26989,8 +26909,7 @@ builtin_expt (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)))
@@ -27067,8 +26986,7 @@ builtin_log (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_REAL (CAR (list)) || convert_number_to_double (CAR (list)) <= 0
@@ -27102,8 +27020,7 @@ builtin_lognot (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER)
@@ -27166,8 +27083,7 @@ builtin_make_random_state (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   if (l == 1 && CAR (list)->type != TYPE_RANDOM_STATE
@@ -27261,8 +27177,7 @@ builtin_byte (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER
@@ -27291,8 +27206,7 @@ builtin_byte_size (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_BYTESPEC)
@@ -27317,8 +27231,7 @@ builtin_byte_position (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_BYTESPEC)
@@ -27343,9 +27256,7 @@ builtin_typep (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   ret = check_type (CAR (list), CAR (CDR (list)), env, outcome);
@@ -27367,9 +27278,7 @@ builtin_type_of (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (IS_SYMBOL (CAR (list)))
@@ -27495,8 +27404,7 @@ builtin_subtypep (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_TYPE_SPECIFIER (CAR (list)) || !IS_TYPE_SPECIFIER (CAR (CDR (list))))
@@ -27529,8 +27437,7 @@ builtin_coerce (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   res = check_type (CAR (list), CAR (CDR (list)), env, outcome);
@@ -27774,8 +27681,7 @@ builtin_intern (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -27843,8 +27749,7 @@ builtin_find_symbol (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -27905,8 +27810,7 @@ builtin_unintern (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -27951,9 +27855,7 @@ builtin_make_symbol (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -27980,8 +27882,7 @@ builtin_copy_symbol (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28024,9 +27925,7 @@ builtin_boundp (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   s = CAR (list);
@@ -28054,9 +27953,7 @@ builtin_symbol_value (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   s = CAR (list);
@@ -28085,8 +27982,7 @@ builtin_set (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28130,9 +28026,7 @@ builtin_fboundp (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   s = CAR (list);
@@ -28169,9 +28063,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   s = CAR (list);
@@ -28200,9 +28092,7 @@ builtin_symbol_name (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28222,9 +28112,7 @@ builtin_symbol_package (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28242,9 +28130,7 @@ builtin_symbol_plist (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28265,9 +28151,7 @@ builtin_special_operator_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28293,8 +28177,7 @@ builtin_makunbound (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28334,8 +28217,7 @@ builtin_fmakunbound (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28362,8 +28244,7 @@ builtin_gensym (struct object *list, struct environment *env,
 
   if (list_length (list) > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   if (SYMBOL (list) == &nil_object)
@@ -28431,8 +28312,7 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list)))
@@ -28491,8 +28371,7 @@ builtin_macro_function (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -28537,8 +28416,7 @@ builtin_compiler_macro_function (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list))
@@ -28586,9 +28464,7 @@ builtin_string (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -28730,8 +28606,7 @@ builtin_char_upcase (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -28759,8 +28634,7 @@ builtin_char_downcase (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -28788,8 +28662,7 @@ builtin_alpha_char_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -28817,8 +28690,7 @@ builtin_alphanumericp (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -28847,8 +28719,7 @@ builtin_char_code (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CHARACTER)
@@ -28880,8 +28751,7 @@ builtin_code_char (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER)
@@ -28936,8 +28806,7 @@ builtin_find_package (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_PACKAGE)
@@ -28980,8 +28849,7 @@ builtin_package_name (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
@@ -29012,8 +28880,7 @@ builtin_package_nicknames (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
@@ -29064,8 +28931,7 @@ builtin_rename_package (struct object *list, struct environment *env,
 
   if (l < 2 || l > 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 3, env, outcome);
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
@@ -29209,8 +29075,7 @@ builtin_package_use_list (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
@@ -29257,8 +29122,7 @@ builtin_package_used_by_list (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
@@ -29305,8 +29169,7 @@ builtin_list_all_packages (struct object *list, struct environment *env,
 
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   p = env->packages;
@@ -29464,8 +29327,7 @@ builtin_in_package (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
@@ -29512,8 +29374,7 @@ builtin_import (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (l == 2)
@@ -29592,8 +29453,7 @@ builtin_export (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (l == 2)
@@ -29697,8 +29557,7 @@ builtin_unexport (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (l == 2)
@@ -29781,8 +29640,7 @@ builtin_use_package (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (l == 2)
@@ -29873,8 +29731,7 @@ builtin_unuse_package (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (l == 2)
@@ -29966,8 +29823,7 @@ builtin_shadow (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (l == 2)
@@ -30070,8 +29926,7 @@ builtin_package_shadowing_symbols (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PACKAGE_DESIGNATOR (CAR (list)))
@@ -30427,8 +30282,7 @@ builtin_time (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   t = clock ();
@@ -30452,8 +30306,7 @@ builtin_get_internal_run_time (struct object *list, struct environment *env,
 {
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return create_integer_from_long (clock ());
@@ -30470,8 +30323,7 @@ builtin_get_decoded_time (struct object *list, struct environment *env,
 
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   t = time (NULL);
@@ -30510,9 +30362,7 @@ builtin_lisp_implementation_type (struct object *list, struct environment *env,
 {
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return create_string_copying_c_string ("alisp");
@@ -30526,9 +30376,7 @@ builtin_lisp_implementation_version (struct object *list,
 {
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return create_string_copying_c_string (PACKAGE_VERSION);
@@ -30541,8 +30389,7 @@ builtin_software_type (struct object *list, struct environment *env,
 {
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return &nil_object;
@@ -30555,8 +30402,7 @@ builtin_software_version (struct object *list, struct environment *env,
 {
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return &nil_object;
@@ -31566,8 +31412,7 @@ evaluate_quote (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   increment_refcount (CAR (list));
@@ -31649,8 +31494,7 @@ evaluate_values_list (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -31671,8 +31515,7 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   res = evaluate_object (CAR (list), env, outcome);
@@ -31871,8 +31714,7 @@ evaluate_defconstant (struct object *list, struct environment *env,
 
   if (l < 2 || l > 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 3, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -31897,8 +31739,7 @@ builtin_constantp (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (IS_NUMBER (CAR (list)) || CAR (list)->type == TYPE_CHARACTER
@@ -31938,8 +31779,7 @@ evaluate_defparameter (struct object *list, struct environment *env,
 
   if (l < 2 || l > 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 3, env, outcome);
     }
 
   s = CAR (list);
@@ -31975,8 +31815,7 @@ evaluate_defvar (struct object *list, struct environment *env,
 
   if (!l || l > 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 3, env, outcome);
     }
 
   if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL)
@@ -32329,9 +32168,7 @@ evaluate_function (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
@@ -32493,8 +32330,7 @@ evaluate_the (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_TYPE_SPECIFIER (CAR (list)))
@@ -32580,8 +32416,7 @@ evaluate_prog1 (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   ret = evaluate_object (CAR (list), env, outcome);
@@ -32607,8 +32442,7 @@ evaluate_prog2 (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   tmp = evaluate_object (CAR (list), env, outcome);
@@ -32761,8 +32595,7 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (IS_SYMBOL (CAR (list)))
@@ -32876,8 +32709,7 @@ evaluate_define_symbol_macro (struct object *list, struct environment *env,
 {
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list))
@@ -33192,8 +33024,7 @@ builtin_find_class (struct object *list, struct environment *env,
 
   if (!l || l > 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 3, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -33509,8 +33340,7 @@ builtin_class_of (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STANDARD_OBJECT)
@@ -33546,8 +33376,7 @@ builtin_class_name (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STANDARD_CLASS)
@@ -33582,8 +33411,7 @@ builtin_slot_exists_p (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
@@ -33618,8 +33446,7 @@ builtin_slot_boundp (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
@@ -33658,8 +33485,7 @@ builtin_slot_value (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
@@ -33710,8 +33536,7 @@ builtin_slot_makunbound (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
@@ -34121,8 +33946,7 @@ builtin_add_method (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_FUNCTION
@@ -34174,8 +33998,7 @@ builtin_find_method (struct object *list, struct environment *env,
 
   if (list_length (list) != 3)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_FUNCTION
@@ -34216,8 +34039,7 @@ builtin_remove_method (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_FUNCTION
@@ -34261,8 +34083,7 @@ builtin_next_method_p (struct object *list, struct environment *env,
 {
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   if (env->method_list && env->method_list->next)
@@ -34366,8 +34187,7 @@ builtin_function_lambda_expression (struct object *list, struct environment *env
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_FUNCTION)
@@ -34455,8 +34275,7 @@ builtin_proclaim (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!parse_declaration_specifier (CAR (list), 0, env, -1, outcome))
@@ -34490,8 +34309,7 @@ evaluate_go (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER && !IS_SYMBOL (CAR (list)))
@@ -34521,8 +34339,7 @@ evaluate_block (struct object *list, struct environment *env,
 {
   if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -34544,8 +34361,7 @@ evaluate_return_from (struct object *list, struct environment *env,
 
   if (!l || l > 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -34601,8 +34417,7 @@ evaluate_catch (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   tag = evaluate_object (CAR (list), env, outcome);
@@ -34651,8 +34466,7 @@ evaluate_throw (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   tag = evaluate_object (CAR (list), env, outcome);
@@ -34901,8 +34715,7 @@ builtin_compute_restarts (struct object *list, struct environment *env,
 
   if (list_length (list) > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   while (r)
@@ -34937,8 +34750,7 @@ builtin_invoke_restart (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (IS_SYMBOL (CAR (list)))
@@ -35368,8 +35180,7 @@ builtin_room (struct object *list, struct environment *env,
 
   if (list_length (list) > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   cons = ret = alloc_empty_list (7);
@@ -35529,8 +35340,7 @@ builtin_invoke_debugger (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT
@@ -35553,8 +35363,7 @@ builtin_step (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   env->stepping_flags = STEP_INSIDE_FORM;
@@ -35652,8 +35461,7 @@ builtin_al_string_input_stream_string (struct object *list,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STREAM
@@ -35675,8 +35483,7 @@ builtin_al_print_restarts (struct object *list, struct environment *env,
 {
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   print_available_restarts (env, 0, env->c_stdout);
@@ -35692,8 +35499,7 @@ builtin_al_dump_bindings (struct object *list, struct environment *env,
 {
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return dump_bindings (env->vars, env->lex_env_vars_boundary, env);
@@ -35706,8 +35512,7 @@ builtin_al_dump_function_bindings (struct object *list, struct environment *env,
 {
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   return dump_bindings (env->funcs, env->lex_env_funcs_boundary, env);
@@ -35720,8 +35525,7 @@ builtin_al_dump_captured_env (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_FUNCTION)
@@ -35742,8 +35546,7 @@ builtin_al_dump_methods (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_FUNCTION
@@ -35781,8 +35584,7 @@ builtin_al_dump_fields (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   obj = CAR (list);
@@ -35879,8 +35681,7 @@ builtin_al_class_precedence_list (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_CLASS)
@@ -35926,8 +35727,7 @@ builtin_al_start_profiling (struct object *list, struct environment *env,
 
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   if (!env->profiling_data)
@@ -35951,8 +35751,7 @@ builtin_al_stop_profiling (struct object *list, struct environment *env,
 {
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   env->is_profiling = 0;
@@ -35970,8 +35769,7 @@ builtin_al_clear_profiling (struct object *list, struct environment *env,
 
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   if (env->profiling_data)
@@ -36006,8 +35804,7 @@ builtin_al_report_profiling (struct object *list, struct environment *env,
 
   if (SYMBOL (list) != &nil_object)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   if (!env->profiling_data)
@@ -36072,8 +35869,7 @@ builtin_al_print_backtrace (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   print_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
@@ -36090,8 +35886,7 @@ builtin_al_list_backtrace (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   return list_backtrace (env, l && SYMBOL (CAR (list)) != &nil_object);
@@ -36104,8 +35899,7 @@ builtin_al_watch (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   SET_WATCHED_FLAG (CAR (list));
@@ -36124,8 +35918,7 @@ builtin_al_unwatch (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   CLEAR_WATCHED_FLAG (CAR (list));
@@ -36140,8 +35933,7 @@ builtin_al_next (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (IS_PREFIX (CAR (list)->type))
@@ -36161,8 +35953,7 @@ builtin_al_compile_form (struct object *list, struct environment *env,
 {
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   return compile_form (CAR (list), 0, env, outcome);
@@ -36755,8 +36546,7 @@ builtin_al_list_directory (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -36812,8 +36602,7 @@ builtin_al_directoryp (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -36852,8 +36641,7 @@ builtin_al_getcwd (struct object *list, struct environment *env,
 
   if (list_length (list))
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
     }
 
   do
@@ -36902,8 +36690,7 @@ builtin_al_getenv (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING)
@@ -36935,8 +36722,7 @@ builtin_al_system (struct object *list, struct environment *env,
 
   if (list_length (list) != 1)
     {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
   if (SYMBOL (CAR (list)) == &nil_object)
@@ -36969,8 +36755,7 @@ builtin_al_exit (struct object *list, struct environment *env,
 
   if (l > 1)
     {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_INTEGER)
