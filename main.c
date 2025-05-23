@@ -4579,7 +4579,7 @@ add_standard_definitions (struct environment *env)
   add_condition_class ("AL-MAXIMUM-STACK-DEPTH-EXCEEDED", env, 1, "PROGRAM-ERROR",
 		       (char *)NULL, "MAX-DEPTH", (char *)NULL);
   add_condition_class ("AL-WRONG-NUMBER-OF-ARGUMENTS", env, 1, "PROGRAM-ERROR",
-		       (char *)NULL, "MIN-ARGS", "MAX-ARGS", (char *)NULL);
+		       (char *)NULL, "MAX-ARGS", "MIN-ARGS", (char *)NULL);
 
 }
 
@@ -12068,9 +12068,9 @@ raise_al_wrong_number_of_arguments (int minargs, int maxargs,
     *ret;
 
   cond->value_ptr.standard_object->fields->value =
-    create_integer_from_long (maxargs);
-  cond->value_ptr.standard_object->fields->next->value =
     create_integer_from_long (minargs);
+  cond->value_ptr.standard_object->fields->next->value =
+    create_integer_from_long (maxargs);
 
   ret = handle_condition (cond, env, outcome);
 
@@ -14872,7 +14872,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   struct object *val, *args = NULL, *as, *key_allow_other_k = NULL;
   struct binding *subbins, *lastbin = NULL;
   int rest_found = 0, subargs, found_unknown_key = 0, binsnum, subclos,
-    prev_lex_bin_num = env->lex_env_vars_boundary;
+    prev_lex_bin_num = env->lex_env_vars_boundary, reqpars = 0, optpars = 0;
 
   *bins = NULL, *argsnum = 0;
 
@@ -14893,6 +14893,11 @@ parse_argument_list (struct object *arglist, struct parameter *par,
   while (SYMBOL (arglist) != &nil_object && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
+      if (par->type == REQUIRED_PARAM)
+	reqpars++;
+      else
+	optpars++;
+
       if (!par->name)
 	{
 	  if (!IS_LIST (CAR (arglist)))
@@ -14949,20 +14954,25 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       arglist = CDR (arglist);
     }
 
-  if (par && par->type == REQUIRED_PARAM)
+  if ((par && par->type == REQUIRED_PARAM)
+      || (SYMBOL (arglist) != &nil_object
+	  && !found_amp_key && (!par || par->type != REST_PARAM)))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
+      while (par && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
+	{
+	  if (par->type == REQUIRED_PARAM)
+	    reqpars++;
+	  else
+	    optpars++;
+
+	  par = par->next;
+	}
+
       remove_bindings (*bins, *argsnum, 0);
+      raise_al_wrong_number_of_arguments (reqpars, reqpars+optpars, env, outcome);
       return 0;
     }
 
-  if (SYMBOL (arglist) != &nil_object
-      && !found_amp_key && (!par || par->type != REST_PARAM))
-    {
-      outcome->type = TOO_MANY_ARGUMENTS;
-      remove_bindings (*bins, *argsnum, 0);
-      return 0;
-    }
 
   if (par && par->type == OPTIONAL_PARAM)
     opts = par;
@@ -18812,8 +18822,7 @@ builtin_list_star (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (SYMBOL (CDR (list)) == &nil_object)
@@ -20650,8 +20659,7 @@ builtin_maphash (struct object *list, struct environment *env,
 
   if (list_length (list) != 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
@@ -21223,8 +21231,7 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21308,8 +21315,7 @@ builtin_pathname_name (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -21408,8 +21414,7 @@ builtin_pathname_type (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -22683,8 +22688,7 @@ builtin_load (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -22816,8 +22820,7 @@ builtin_open (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_PATHNAME_DESIGNATOR (CAR (list)))
@@ -23523,8 +23526,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -24322,8 +24324,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 
   if (l < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
@@ -24433,8 +24434,7 @@ builtin_map (struct object *list, struct environment *env,
 
   if (l < 3)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
@@ -25968,8 +25968,7 @@ perform_division_with_remainder (struct object *args,
 
   if (!l)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (l > 2)
@@ -26170,8 +26169,7 @@ builtin_minus (struct object *list, struct environment *env,
 
   if (!(l = list_length (list)))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
   else if (l == 1)
     {
@@ -26260,8 +26258,7 @@ builtin_divide (struct object *list, struct environment *env,
 
   if (!(l = list_length (list)))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
   else if (l == 1)
     {
@@ -26692,8 +26689,7 @@ builtin_min (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   cur = list;
@@ -26730,8 +26726,7 @@ builtin_max (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   cur = list;
@@ -27552,9 +27547,7 @@ builtin_make_string (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_INTEGER)
@@ -28568,8 +28561,7 @@ builtin_char_eq (struct object *list, struct environment *env,
 
   if (!l)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   ch = CAR (list);
@@ -29204,8 +29196,7 @@ builtin_make_package (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
@@ -30605,8 +30596,7 @@ evaluate_progv (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   syms = evaluate_object (CAR (list), env, outcome);
@@ -31566,8 +31556,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   fun = evaluate_object (CAR (list), env, outcome);
@@ -31660,8 +31649,7 @@ evaluate_eval_when (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_CONS_PAIR)
@@ -32234,9 +32222,7 @@ evaluate_apply (struct object *list, struct environment *env,
 
   if (length < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_SYMBOL_NAME && CAR (list)->type != TYPE_SYMBOL
@@ -32476,8 +32462,7 @@ evaluate_destructuring_bind (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   fun = create_function (CAR (list), CDR (CDR (list)), env, outcome, 0, 1);
@@ -32555,8 +32540,7 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -32741,8 +32725,7 @@ evaluate_symbol_macrolet (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -32793,8 +32776,7 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (IS_SYMBOL (CAR (list)))
@@ -32987,8 +32969,7 @@ evaluate_defclass (struct object *list, struct environment *env,
 
   if (list_length (list) < 3)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, -1, env, outcome);
     }
 
   if (IS_SYMBOL (CAR (list)))
@@ -33058,8 +33039,7 @@ builtin_method_make_instance (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STANDARD_CLASS)
@@ -33116,8 +33096,7 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_CLASS)
@@ -33153,8 +33132,7 @@ builtin_method_initialize_instance (struct object *list, struct environment *env
 {
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT)
@@ -33176,8 +33154,7 @@ builtin_method_reinitialize_instance (struct object *list,
 {
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT)
@@ -33575,8 +33552,7 @@ evaluate_defgeneric (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   if ((!IS_SYMBOL (CAR (list))
@@ -33655,8 +33631,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 
   if (SYMBOL (list) == &nil_object)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -33801,8 +33776,7 @@ evaluate_defmethod (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   if ((!IS_SYMBOL (CAR (list))
@@ -34521,8 +34495,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -34638,8 +34611,7 @@ evaluate_restart_bind (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_LIST (CAR (list)))
@@ -34812,8 +34784,7 @@ evaluate_unwind_protect (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   res = evaluate_object (CAR (list), env, outcome);
@@ -34854,8 +34825,7 @@ builtin_signal (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -34937,8 +34907,7 @@ builtin_error (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (CAR (list)->type == TYPE_STRING)
@@ -35024,8 +34993,7 @@ evaluate_define_condition (struct object *list, struct environment *env,
 
   if (list_length (list) < 3)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (3, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)))
@@ -35060,8 +35028,7 @@ builtin_make_condition (struct object *list, struct environment *env,
 
   if (!list_length (list))
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
@@ -35103,8 +35070,7 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   if ((!IS_SYMBOL (CAR (list))
@@ -35387,8 +35353,7 @@ evaluate_al_loopy_destructuring_bind (struct object *list,
 
   if (list_length (list) < 2)
     {
-      outcome->type = TOO_FEW_ARGUMENTS;
-      return NULL;
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
   vals = evaluate_object (CAR (CDR (list)), env, outcome);
