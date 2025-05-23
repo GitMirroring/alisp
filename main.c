@@ -3101,6 +3101,8 @@ struct object *builtin_signal
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_error
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_warn
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_define_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_condition
@@ -4020,6 +4022,7 @@ add_standard_definitions (struct environment *env)
 		    NULL, 1);
   add_builtin_form ("SIGNAL", env, builtin_signal, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ERROR", env, builtin_error, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("WARN", env, builtin_warn, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
 		    TYPE_MACRO, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
@@ -34978,6 +34981,115 @@ builtin_error (struct object *list, struct environment *env,
     }
 
   ret = enter_debugger (cond, env, outcome);
+
+  decrement_refcount (cond);
+
+  return ret;
+}
+
+
+struct object *
+builtin_warn (struct object *list, struct environment *env,
+	      struct outcome *outcome)
+{
+  struct object *cond, *ret, *bos;
+  int res;
+
+  if (!list_length (list))
+    {
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
+    }
+
+  if (CAR (list)->type == TYPE_STRING)
+    {
+      cond = create_condition_by_c_string ("SIMPLE-WARNING", &nil_object, env,
+					   outcome);
+      cond->value_ptr.standard_object->fields->value = CAR (list);
+      increment_refcount (CAR (list));
+      cond->value_ptr.standard_object->fields->next->value = CDR (list);
+      increment_refcount (CDR (list));
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      if (!SYMBOL (CAR (list))->value_ptr.symbol->typespec
+	  || SYMBOL (CAR (list))->value_ptr.symbol->typespec->type
+	  != TYPE_STANDARD_CLASS
+	  || !SYMBOL (CAR (list))->value_ptr.symbol->typespec->
+	  value_ptr.standard_class->is_condition_class)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      cond = create_condition (SYMBOL (CAR (list))->value_ptr.symbol->typespec,
+			       CDR (list), env, outcome);
+
+      if (!cond)
+	return NULL;
+    }
+  else if (CAR (list)->type == TYPE_STANDARD_OBJECT &&
+	   is_subtype_by_char_vector (CAR (list)->value_ptr.standard_object->class,
+				      "CONDITION", env))
+    {
+      increment_refcount (CAR (list));
+      cond = CAR (list);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+
+  if (!IS_SYMBOL (bos = inspect_variable (env->break_on_signals_sym, env)))
+    {
+      outcome->type = WRONG_TYPE_OF_STANDARD_VARIABLE;
+      return NULL;
+    }
+
+  res = check_type (cond, bos, env, outcome);
+
+  if (res < 0)
+    return NULL;
+
+  if (res)
+    {
+      if (!enter_debugger (NULL, env, outcome))
+	return NULL;
+    }
+
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  if (is_subtype_by_char_vector (cond->value_ptr.standard_object->class,
+				 "SIMPLE-WARNING", env))
+    {
+      printf ("emitted ");
+      print_object (cond->value_ptr.standard_object->class->
+		    value_ptr.standard_class->name, env,
+		    env->c_stdout->value_ptr.stream);
+      printf (": ");
+      print_object (cond->value_ptr.standard_object->fields->value, env,
+		    env->c_stdout->value_ptr.stream);
+      printf ("\n");
+      env->c_stdout->value_ptr.stream->dirty_line = 0;
+    }
+  else if (is_subtype_by_char_vector (cond->value_ptr.standard_object->class,
+				      "WARNING", env))
+    {
+      printf ("emitted ");
+      print_object (cond->value_ptr.standard_object->class->
+		    value_ptr.standard_class->name, env,
+		    env->c_stdout->value_ptr.stream);
+      printf ("\n");
+      env->c_stdout->value_ptr.stream->dirty_line = 0;
+    }
 
   decrement_refcount (cond);
 
