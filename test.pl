@@ -1895,6 +1895,8 @@ make_test ("(signal \"blah\")", "NIL");
 make_test ("(signal 'type-error)", "NIL");
 make_test ("(signal 'error)", "NIL");
 make_test ("(signal (make-condition 'error))", "NIL");
+make_test ("(warn \"something bad may happen\")", "emitted SIMPLE-WARNING: \"something bad may happen\"\nNIL");
+make_test ("(handler-bind ((warning (lambda (e) (write 'warningignored) (abort)))) (warn \"something bad may happen\"))", "WARNINGIGNORED");
 make_test ("(handler-bind ((simple-condition (lambda (e) (write 'oh)))) (signal \"blah\"))", "OH\nNIL");
 make_test ("(handler-bind ((condition (lambda (e) (write 'ah))) (simple-condition (lambda (e) (write 'oh)))) (signal \"blah\"))", "AHOH\nNIL");
 make_test ("(handler-bind ((condition (lambda (e) (write (signal \"w\"))))) (signal \"blah\"))", "NIL\nNIL");
