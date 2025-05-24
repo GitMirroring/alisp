@@ -32182,7 +32182,9 @@ evaluate_function (struct object *list, struct environment *env,
 
       if (!f)
 	{
-	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
+	  return raise_undefined_function (IS_SYMBOL (CAR (list))
+					   ? SYMBOL (CAR (list)) : CAR (list),
+					   env, outcome);
 	}
     }
   else
