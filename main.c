@@ -2791,6 +2791,8 @@ struct object *builtin_fboundp (struct object *list, struct environment *env,
 struct object *builtin_symbol_function (struct object *list,
 					struct environment *env,
 					struct outcome *outcome);
+struct object *builtin_fdefinition (struct object *list, struct environment *env,
+				    struct outcome *outcome);
 struct object *builtin_symbol_name (struct object *list, struct environment *env,
 				    struct outcome *outcome);
 struct object *builtin_symbol_package (struct object *list,
@@ -4063,6 +4065,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
 		    TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("FDEFINITION", env, builtin_fdefinition, TYPE_FUNCTION, NULL,
+		    0);
   add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
@@ -28074,6 +28078,39 @@ builtin_symbol_function (struct object *list, struct environment *env,
   if (!ret)
     {
       return raise_undefined_function (SYMBOL (s), env, outcome);
+    }
+
+  return ret;
+}
+
+
+struct object *
+builtin_fdefinition (struct object *list, struct environment *env,
+		     struct outcome *outcome)
+{
+  struct object *s, *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  s = CAR (list);
+
+  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL
+      && !(s->type == TYPE_CONS_PAIR && list_length (s) == 2
+	   && SYMBOL (CAR (s)) == env->setf_sym && IS_SYMBOL (CAR (CDR (s)))))
+    {
+      return raise_type_error (s, "CL:SYMBOL", env, outcome);
+    }
+
+  ret = get_function (IS_SYMBOL (s) ? SYMBOL (s) : SYMBOL (CAR (CDR (s))), env,
+		      0, s->type == TYPE_CONS_PAIR, 1, 1);
+
+  if (!ret)
+    {
+      return raise_undefined_function (IS_SYMBOL (s) ? SYMBOL (s) : s, env,
+				       outcome);
     }
 
   return ret;

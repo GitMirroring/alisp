@@ -2067,11 +2067,6 @@
 |#
 
 
-(defun fdefinition (fname)
-  (symbol-function fname))
-
-
-
 (defun complement (func)
   (lambda (&rest args) (not (apply func args))))
 
@@ -3435,21 +3430,20 @@
 	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
 	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
 	  pathnamep streamp realp numberp check-type assert macroexpand equal
-	  fdefinition complement mapc mapcan maplist mapl mapcon map-into reduce
-	  merge pathname-directory pathname-host pathname-device
-	  pathname-version file-namestring directory-namestring host-namestring
-	  enough-namestring merge-pathnames file-author file-write-date
-	  user-homedir-pathname pathname-match-p directory translate-pathname
-	  with-open-file terpri write-line write-sequence prin1 princ print
-	  write-to-string prin1-to-string princ-to-string force-output
-	  with-input-from-string with-output-to-string pprint do-all-symbols
-	  find-all-symbols with-slots with-accessors loop format
-	  encode-universal-time *readtable* with-compilation-unit
-	  *compile-file-truename* *compile-file-pathname* *compile-print*
-	  *compile-verbose* compile-file-pathname compile-file
-	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart cerror break ignore-errors abort continue muffle-warning
-	  documentation))
+	  complement mapc mapcan maplist mapl mapcon map-into reduce merge
+	  pathname-directory pathname-host pathname-device pathname-version
+	  file-namestring directory-namestring host-namestring enough-namestring
+	  merge-pathnames file-author file-write-date user-homedir-pathname
+	  pathname-match-p directory translate-pathname with-open-file terpri
+	  write-line write-sequence prin1 princ print write-to-string
+	  prin1-to-string princ-to-string force-output with-input-from-string
+	  with-output-to-string pprint do-all-symbols find-all-symbols
+	  with-slots with-accessors loop format encode-universal-time
+	  *readtable* with-compilation-unit *compile-file-truename*
+	  *compile-file-pathname* *compile-print* *compile-verbose*
+	  compile-file-pathname compile-file with-standard-io-syntax
+	  handler-case restart-case with-simple-restart find-restart cerror
+	  break ignore-errors abort continue muffle-warning documentation))
 
 
 
