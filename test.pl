@@ -756,6 +756,7 @@ make_test ("(symbol-function 'if)", "#<SPECIAL OPERATOR IF>");
 make_test ("(flet ((foo nil)) (symbol-function 'car))", "#<FUNCTION BUILTIN CAR>");
 make_test ("(fdefinition 'fun)", "#<FUNCTION FUN>");
 make_test ("(fdefinition 'car)", "#<FUNCTION BUILTIN CAR>");
+make_test ("(fdefinition '(setf car))", "#<FUNCTION BUILTIN (SETF CAR)>");
 make_test ("(funcall (complement #'numberp) \"\")", "T");
 make_test ("(symbol-name 'aaa)", "\"AAA\"");
 make_test ("(symbol-name :bbb)", "\"BBB\"");
