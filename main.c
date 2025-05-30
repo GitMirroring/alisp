@@ -2205,6 +2205,10 @@ struct object *call_structure_predicate (struct object *class_name,
 					 struct object *args,
 					 struct environment *env,
 					 struct outcome *outcome);
+struct object *call_structure_copyier (struct object *class_name,
+				       struct object *args,
+				       struct environment *env,
+				       struct outcome *outcome);
 struct object *call_structure_accessor (struct object *class_name,
 					struct object *field,
 					struct object *args,
@@ -15529,6 +15533,25 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->stack_depth--;
       return ret;
     }
+  else if (func->value_ptr.function->struct_copyier_class_name)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	{
+	  env->stack_depth--;
+	  return NULL;
+	}
+
+      ret = call_structure_copyier (func->value_ptr.function->
+				    struct_copyier_class_name, args, env,
+				    outcome);
+
+      decrement_refcount (args);
+
+      env->stack_depth--;
+      return ret;
+    }
   else if (func->value_ptr.function->struct_accessor_class_name)
     {
       args = evaluate_through_list (arglist, env, outcome);
@@ -15904,6 +15927,60 @@ call_structure_predicate (struct object *class_name, struct object *args,
     return &t_object;
 
   return &nil_object;
+}
+
+
+struct object *
+call_structure_copyier (struct object *class_name, struct object *args,
+			struct environment *env, struct outcome *outcome)
+{
+  struct object *ret;
+  struct structure *s;
+  struct structure_field *fs, *f;
+
+  if (list_length (args) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (args)->type != TYPE_STRUCTURE
+      || CAR (args)->value_ptr.structure->class_name != class_name)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_object ();
+  ret->type = TYPE_STRUCTURE;
+
+  s = malloc_and_check (sizeof (*s));
+  s->class_name = class_name;
+  s->fields = NULL;
+  ret->value_ptr.structure = s;
+
+  fs = CAR (args)->value_ptr.structure->fields;
+
+  while (fs)
+    {
+      if (s->fields)
+	{
+	  f->next = malloc_and_check (sizeof (*f));
+	  f = f->next;
+	}
+      else
+	s->fields = f = malloc_and_check (sizeof (*f));
+
+      f->name = fs->name;
+      f->value = fs->value;
+      increment_refcount (f->value);
+
+      fs = fs->next;
+    }
+
+  if (s->fields)
+    f->next = NULL;
+
+  return ret;
 }
 
 
@@ -32811,10 +32888,10 @@ evaluate_defstruct (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
   struct object *name, *strcl, *funcname, *cons, *opt, *predname = NULL,
-    *pack = inspect_variable (env->package_sym, env);
+    *copiername = NULL, *pack = inspect_variable (env->package_sym, env);
   struct structure_class *sc;
   struct structure_field_decl *f, *prev;
-  char *constr_name, *pred_name, *acc_name;
+  char *constr_name, *pred_name, *cop_name, *acc_name;
 
   if (!list_length (list))
     {
@@ -32848,13 +32925,16 @@ evaluate_defstruct (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (symbol_equals (opt, ":PREDICATE", env))
-	    {
-	      if (CAR (cons)->type == TYPE_CONS_PAIR
-		  && list_length (CAR (cons)) > 1
-		  && IS_SYMBOL (CAR (CDR (CAR (cons)))))
-		predname = SYMBOL (CAR (CDR (CAR (cons))));
-	    }
+	  if (symbol_equals (opt, ":PREDICATE", env)
+	      && CAR (cons)->type == TYPE_CONS_PAIR
+	      && list_length (CAR (cons)) > 1
+	      && IS_SYMBOL (CAR (CDR (CAR (cons)))))
+	    predname = SYMBOL (CAR (CDR (CAR (cons))));
+	  else if (symbol_equals (opt, ":COPIER", env)
+		   && CAR (cons)->type == TYPE_CONS_PAIR
+		   && list_length (CAR (cons)) > 1
+		   && IS_SYMBOL (CAR (CDR (CAR (cons)))))
+	    copiername = SYMBOL (CAR (CDR (CAR (cons))));
 	  else
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -32930,34 +33010,68 @@ evaluate_defstruct (struct object *list, struct environment *env,
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
   add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
 
-
-  if (!predname)
+  if (!predname || SYMBOL (predname) != &nil_object)
     {
-      pred_name =
-	concatenate_char_vectors (2 + name->value_ptr.symbol->name_len,
-				  name->value_ptr.symbol->name,
-				  name->value_ptr.symbol->name_len, "-P", 2,
-				  (char *)NULL);
+      if (!predname)
+	{
+	  pred_name =
+	    concatenate_char_vectors (2 + name->value_ptr.symbol->name_len,
+				      name->value_ptr.symbol->name,
+				      name->value_ptr.symbol->name_len, "-P", 2,
+				      (char *)NULL);
 
-      predname = intern_symbol_by_char_vector (pred_name,
-					       2+name->value_ptr.symbol->name_len,
-					       1, INTERNAL_VISIBILITY, 1, pack,
-					       0, 0);
-      free (pred_name);
-      increment_refcount (predname);
+	  predname = intern_symbol_by_char_vector (pred_name,
+						   2+name->value_ptr.symbol->name_len,
+						   1, INTERNAL_VISIBILITY, 1,
+						   pack, 0, 0);
+	  free (pred_name);
+	  increment_refcount (predname);
+	}
+
+      delete_reference (predname, predname->value_ptr.symbol->function_cell, 1);
+      predname->value_ptr.symbol->function_cell = alloc_function ();
+      add_reference (predname, predname->value_ptr.symbol->function_cell, 1);
+      decrement_refcount (predname->value_ptr.symbol->function_cell);
+
+      predname->value_ptr.symbol->function_cell->value_ptr.function->
+	struct_predicate_class_name = name;
+
+      predname->value_ptr.symbol->function_cell->value_ptr.function->name
+	= predname;
+      add_reference (predname->value_ptr.symbol->function_cell, predname, 0);
     }
 
-  delete_reference (predname, predname->value_ptr.symbol->function_cell, 1);
-  predname->value_ptr.symbol->function_cell = alloc_function ();
-  add_reference (predname, predname->value_ptr.symbol->function_cell, 1);
-  decrement_refcount (predname->value_ptr.symbol->function_cell);
+  if (!copiername || SYMBOL (copiername) != &nil_object)
+    {
+      if (!copiername)
+	{
+	  cop_name =
+	    concatenate_char_vectors (5 + name->value_ptr.symbol->name_len, "COPY-",
+				      5, name->value_ptr.symbol->name,
+				      name->value_ptr.symbol->name_len,
+				      (char *)NULL);
 
-  predname->value_ptr.symbol->function_cell->value_ptr.function->
-    struct_predicate_class_name = name;
+	  copiername =
+	    intern_symbol_by_char_vector (cop_name,
+					  5+name->value_ptr.symbol->name_len, 1,
+					  INTERNAL_VISIBILITY, 1, pack, 0, 0);
+	  free (cop_name);
+	  increment_refcount (copiername);
+	}
 
-  predname->value_ptr.symbol->function_cell->value_ptr.function->name = predname;
-  add_reference (predname->value_ptr.symbol->function_cell, predname, 0);
+      delete_reference (copiername, copiername->value_ptr.symbol->function_cell,
+			1);
+      copiername->value_ptr.symbol->function_cell = alloc_function ();
+      add_reference (copiername, copiername->value_ptr.symbol->function_cell, 1);
+      decrement_refcount (copiername->value_ptr.symbol->function_cell);
 
+      copiername->value_ptr.symbol->function_cell->value_ptr.function->
+	struct_copyier_class_name = name;
+
+      copiername->value_ptr.symbol->function_cell->value_ptr.function->name =
+	copiername;
+      add_reference (copiername->value_ptr.symbol->function_cell, copiername, 0);
+    }
 
   f = sc->fields;
 
