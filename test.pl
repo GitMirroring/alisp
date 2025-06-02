@@ -1084,7 +1084,7 @@ make_test ("(gethash 'k tbl)", "10\nT");
 make_test ("(remhash 'k tbl)", "T");
 make_test ("(gethash 'k tbl)", "NIL\nNIL");
 make_test ("(hash-table-count tbl)", "0");
-make_test ("(defparameter tbl (make-hash-table :test 'equal))", "TBL");
+make_test ("(defparameter tbl (make-hash-table :test #'equal))", "TBL");
 make_test ("(setf (gethash \"hello\" tbl) 12)", "12");
 make_test ("(gethash \"hello\" tbl)", "12\nT");
 make_test ("(setf (gethash \"helloo\" tbl) 13)", "13");
