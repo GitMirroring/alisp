@@ -20438,7 +20438,7 @@ struct object *
 builtin_make_hash_table (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct object *ret, *allow_other_keys = NULL;
+  struct object *ret, *allow_other_keys = NULL, *fun, *name;
   struct hashtable *ht;
   enum hashtable_type type = HT_NONE;
   int found_unknown_key = 0;
@@ -20453,22 +20453,44 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (symbol_equals (CAR (CDR (list)), "EQ", env))
+	  if (IS_SYMBOL (CAR (CDR (list))))
+	    {
+	      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 1, 0);
+
+	      if (!fun)
+		{
+		  return raise_undefined_function (SYMBOL (CAR (CDR (list))), env,
+						   outcome);
+		}
+	    }
+	  else if (CAR (CDR (list))->type == TYPE_FUNCTION)
+	    {
+	      fun = CAR (CDR (list));
+	    }
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  name = fun->value_ptr.function->name;
+
+	  if (name && symbol_equals (name, "EQ", env))
 	    {
 	      if (!type)
 		type = HT_EQ;
 	    }
-	  else if (symbol_equals (CAR (CDR (list)), "EQL", env))
+	  else if (name && symbol_equals (name, "EQL", env))
 	    {
 	      if (!type)
 		type = HT_EQL;
 	    }
-	  else if (symbol_equals (CAR (CDR (list)), "EQUAL", env))
+	  else if (name && symbol_equals (name, "EQUAL", env))
 	    {
 	      if (!type)
 		type = HT_EQUAL;
 	    }
-	  else if (symbol_equals (CAR (CDR (list)), "EQUALP", env))
+	  else if (name && symbol_equals (name, "EQUALP", env))
 	    {
 	      if (!type)
 		type = HT_EQUALP;
