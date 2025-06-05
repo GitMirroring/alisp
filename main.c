@@ -2632,6 +2632,12 @@ struct object *builtin_setf_symbol_plist (struct object *list,
 struct object *builtin_setf_slot_value (struct object *list,
 					struct environment *env,
 					struct outcome *outcome);
+struct object *builtin_setf_symbol_function (struct object *list,
+					     struct environment *env,
+					     struct outcome *outcome);
+struct object *builtin_setf_fdefinition (struct object *list,
+					 struct environment *env,
+					 struct outcome *outcome);
 struct object *builtin_setf_macro_function (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
@@ -4068,9 +4074,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SET", env, builtin_set, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FDEFINITION", env, builtin_fdefinition, TYPE_FUNCTION, NULL,
-		    0);
+		    TYPE_FUNCTION, builtin_setf_symbol_function, 0);
+  add_builtin_form ("FDEFINITION", env, builtin_fdefinition, TYPE_FUNCTION,
+		    builtin_setf_fdefinition, 0);
   add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
@@ -25392,6 +25398,93 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
 
   outcome->type = SLOT_NOT_FOUND;
   return NULL;
+}
+
+
+struct object *
+builtin_setf_symbol_function (struct object *list, struct environment *env,
+			      struct outcome *outcome)
+{
+  struct object *sym;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION)
+    {
+      return raise_type_error (CAR (list), "CL:FUNCTION", env, outcome);
+    }
+
+  if (!IS_SYMBOL (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:SYMBOL", env, outcome);
+    }
+
+  sym = SYMBOL (CAR (CDR (list)));
+
+  if (sym->value_ptr.symbol->function_cell)
+    {
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+    }
+
+  sym->value_ptr.symbol->function_cell = CAR (list);
+  add_reference (sym, CAR (list), 1);
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
+builtin_setf_fdefinition (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *sym;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION)
+    {
+      return raise_type_error (CAR (list), "CL:FUNCTION", env, outcome);
+    }
+
+  if (!IS_FUNCTION_NAME (CAR (CDR (list))))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  sym = IS_SYMBOL (CAR (CDR (list))) ? SYMBOL (CAR (CDR (list)))
+    : SYMBOL (CAR (CDR (CAR (CDR (list)))));
+
+  if (IS_SYMBOL (CAR (CDR (list))))
+    {
+      if (sym->value_ptr.symbol->function_cell)
+	{
+	  delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+	}
+
+      sym->value_ptr.symbol->function_cell = CAR (list);
+      add_reference (sym, CAR (list), 1);
+    }
+  else
+    {
+      if (sym->value_ptr.symbol->setf_func_cell)
+	{
+	  delete_reference (sym, sym->value_ptr.symbol->setf_func_cell, 2);
+	}
+
+      sym->value_ptr.symbol->setf_func_cell = CAR (list);
+      add_reference (sym, CAR (list), 2);
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
