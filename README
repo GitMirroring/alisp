@@ -17,7 +17,10 @@ Currently it depends on GNU Readline (optionally) and on GNU Multiple Precision
 Arithmetic Library.  It uses autotools for building.
 
 
-If you have a cloned git repository and the last commit is not a versioned
+
+__Building and installing__
+
+If you have a cloned git repository and the latest commit is not a versioned
 release, you can execute set-version-from-git.sh to set a meaningful alisp
 version in the relevant line of configure.ac.
 
@@ -29,21 +32,33 @@ To build from a git snapshot, start with
 
   $ ./configure
 
-configure only admits --with[out]-readline as options, to build with line
-editing or not; also note that the test suite will not work without readline,
-because the script is written around readline's unusual echo behavior.  Then
+configure admits --with[out]-readline as an option, to build with line editing
+or not; also note that the test suite will not work without readline, because
+the script is written around readline's unusual echo behavior.
+
+configure will also accept the option AL_MODULE_PATH containing a
+slash-terminated path where al will look for cl.lisp and for modules like ASDF.
+
+If you don't set AL_MODULE_PATH, you'll get a build that looks in the current
+directory and so runs fine from the source tree; if you want a true installation
+then set the variable, if your installation prefix is "/usr/local", I'd suggest
+setting it to "/usr/local/lib/alisp/" like this
+
+  $ ./configure AL_MODULE_PATH=/usr/local/lib/alisp/
+
+(remember the trailing slash!) Then
 
   $ make
 
-plus optionally
+will build the program and
 
-  # make install
+  $ make install
 
-will build and optionally install the program.
+will install it if you have write permissions on the target directories.
 
 A lisp file named cl.lisp contains many standard definitions.  By default, this
-file gets loaded at startup from the current directory, unless you pass -q or
---dont-load-cl.  To load the file manually, run
+file gets loaded at startup, unless you pass -q or --dont-load-cl.  To load the
+file manually, run
 
   [CL-USER]> (load "cl.lisp")
 
@@ -64,13 +79,14 @@ of the times.
 
 
 
-__Debugging__
+__Debugging the C core__
 
 The file al_gdb_debug.py defines a gdb command called al_print_object.  You may
 load it with "source al_gdb_debug.py" in your gdb session.
 
-Then the gdb command al_print_object takes a C pointer as argument and displays
-the attached lisp object.  A string may be displayed like this
+Then the gdb command al_print_object takes a pointer to a struct object as
+argument and displays the corresponding lisp object.  A string may be displayed
+like this
 
   (gdb) al_print_object obj
   "abc"
