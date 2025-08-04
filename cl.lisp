@@ -42,10 +42,17 @@
 
 
 
-(defparameter *modules* '("this variable is deprecated per ANSI CL"))
-(defun provide (mod) "this function is deprecated per ANSI CL.  It does nothing")
-(defun require (mod &optional pl) "this function is deprecated per ANSI CL.  It does nothing")
+(defparameter *modules* nil)
 
+(defun provide (mod)
+  (unless (member mod *modules* :test #'string=)
+    (setq *modules* (cons (string mod) *modules*))))
+
+(defun require (mod &optional pl)
+  (unless (member mod *modules* :test #'string=)
+    (if (string= mod "ASDF")
+	(load (concatenate 'string cl-user:*al-module-path* "asdf.lisp"))
+	(error (format nil "don't know how to require ~a" mod)))))
 
 
 (defun describe (obj &optional str) (values))

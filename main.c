@@ -3367,7 +3367,7 @@ main (int argc, char *argv [])
 
   const char *input_left = NULL;
   size_t input_left_s = 0;
-  char *wholel = NULL;
+  char *wholel = NULL, *cl_path;
 
   struct command_line_options opts = {1};
 
@@ -3395,12 +3395,23 @@ main (int argc, char *argv [])
   if (!opts.load_and_exit)
     print_welcome_message ();
 
+
+  define_variable ("*AL-MODULE-PATH*",
+		   create_string_copying_c_string (MODULE_PATH), &env);
+
   if (opts.load_cl)
     {
-      if (!opts.load_and_exit)
-	printf ("Loading cl.lisp... ");
+      cl_path = concatenate_char_vectors (strlen (MODULE_PATH)+strlen ("cl.lisp"),
+					  MODULE_PATH, strlen (MODULE_PATH),
+					  "cl.lisp", strlen ("cl.lisp"),
+					  (char *)NULL);
 
-      result = load_file ("cl.lisp", 0, &env, &eval_out);
+      cl_path = append_zero_byte (cl_path, strlen (MODULE_PATH)+strlen ("cl.lisp"));
+
+      if (!opts.load_and_exit)
+	printf ("Loading %s... ", cl_path);
+
+      result = load_file (cl_path, 0, &env, &eval_out);
 
       if (result && !opts.load_and_exit)
 	print_object (result, &env, c_stdout->value_ptr.stream);
@@ -3414,6 +3425,8 @@ main (int argc, char *argv [])
 	  printf ("\n");
 	  c_stdout->value_ptr.stream->dirty_line = 0;
 	}
+
+      free (cl_path);
     }
 
   if (opts.load_before_repl)

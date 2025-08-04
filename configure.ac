@@ -81,6 +81,10 @@ else
 fi
 
 
+AC_ARG_VAR(AL_MODULE_PATH, [slash-terminated path where al looks for cl.lisp and for modules like ASDF @<:@default=""@:>@])
+
+AC_DEFINE_UNQUOTED([MODULE_PATH], ["$AL_MODULE_PATH"], [Where to look for cl.lisp and for modules like ASDF])
+
 
 
 AC_OUTPUT
