@@ -12876,7 +12876,7 @@ add_call_frame (struct object *funcobj, struct object *args,
 		struct environment *env, int argsnum, struct call_frame *stack)
 {
   struct call_frame *ret = malloc_and_check (sizeof (*ret));
-  struct binding *b, *bin;
+  struct binding *b, *var, *bin;
 
   increment_refcount (funcobj);
   ret->funcobj = funcobj;
@@ -12894,9 +12894,11 @@ add_call_frame (struct object *funcobj, struct object *args,
 
       for (; argsnum; argsnum--)
 	{
-	  while (!b->sym)
+	  var = b;
+
+	  while (!var->sym)
 	    {
-	      b = b->closure_bin;
+	      var = var->closure_bin;
 	    }
 
 	  bin = malloc_and_check (sizeof (*bin));
@@ -12904,11 +12906,11 @@ add_call_frame (struct object *funcobj, struct object *args,
 	  bin->refcount = 0;
 	  bin->sym = NULL;
 	  bin->obj = NULL;
-	  bin->closure_bin = b;
+	  bin->closure_bin = var;
 	  bin->next = ret->args;
 	  ret->args = bin;
 
-	  b->refcount++;
+	  var->refcount++;
 
 	  b = b->next;
 	}
