@@ -1609,18 +1609,27 @@ line_list
 };
 
 
-struct
-command_line_options
-{
-  int load_cl;
+enum
+command_line_action
+  {
+    ACTION_LOAD,
+    ACTION_EVAL
+  };
 
-  char *load_before_repl, *load_and_exit;
+
+struct
+command_line_option
+{
+  enum command_line_action action;
+  char *arg;
+
+  struct command_line_option *next;
 };
 
 
 
-void parse_command_line (struct command_line_options *opts, int argc,
-			 char *argv []);
+struct command_line_option *parse_command_line (int argc, char *argv [],
+						int *load_cl, int *quit);
 
 void add_standard_definitions (struct environment *env);
 
@@ -1934,8 +1943,9 @@ struct object *fill_object_fields (struct object *stdobj, struct object *class,
 
 void create_condition_fields (struct object *stdobj, struct object *class);
 
-struct object *load_file (const char *filename, int print_each_form,
-			  struct environment *env, struct outcome *outcome);
+struct object *load_file (const char *filename, int print_filename,
+			  int print_each_form, struct environment *env,
+			  struct outcome *outcome);
 
 struct object *compile_function (struct object *fun, struct environment *env,
 				 struct outcome *outcome);
@@ -3353,7 +3363,7 @@ int num_functions;
 int
 main (int argc, char *argv [])
 {
-  int end_repl = 0, i;
+  int end_repl = 0, i, load_cl, quit_after_opts;
 
 #ifdef HAVE_LIBREADLINE
   int c;
@@ -3368,11 +3378,11 @@ main (int argc, char *argv [])
   const char *input_left = NULL;
   size_t input_left_s = 0;
   char *wholel = NULL, *cl_path;
+  const char *objb, *obje;
 
-  struct command_line_options opts = {1};
+  struct command_line_option *opts = parse_command_line (argc, argv, &load_cl,
+							 &quit_after_opts);
 
-
-  parse_command_line (&opts, argc, argv);
 
   add_standard_definitions (&env);
 
@@ -3391,15 +3401,14 @@ main (int argc, char *argv [])
 
   define_variable ("*AL-ARGV*", al_argv, &env);
 
-
-  if (!opts.load_and_exit)
-    print_welcome_message ();
-
-
   define_variable ("*AL-MODULE-PATH*",
 		   create_string_copying_c_string (MODULE_PATH), &env);
 
-  if (opts.load_cl)
+
+  if (!quit_after_opts)
+    print_welcome_message ();
+
+  if (load_cl)
     {
       cl_path = concatenate_char_vectors (strlen (MODULE_PATH)+strlen ("cl.lisp"),
 					  MODULE_PATH, strlen (MODULE_PATH),
@@ -3408,19 +3417,19 @@ main (int argc, char *argv [])
 
       cl_path = append_zero_byte (cl_path, strlen (MODULE_PATH)+strlen ("cl.lisp"));
 
-      if (!opts.load_and_exit)
+      if (!quit_after_opts)
 	printf ("Loading %s... ", cl_path);
 
-      result = load_file (cl_path, 0, &env, &eval_out);
+      result = load_file (cl_path, -1, -1, &env, &eval_out);
 
-      if (result && !opts.load_and_exit)
+      if (result && !quit_after_opts)
 	print_object (result, &env, c_stdout->value_ptr.stream);
-      else if (!opts.load_and_exit)
+      else if (!quit_after_opts)
 	print_error (&eval_out, &env);
 
       eval_out.type = EVAL_OK;
 
-      if (!opts.load_and_exit)
+      if (!quit_after_opts)
 	{
 	  printf ("\n");
 	  c_stdout->value_ptr.stream->dirty_line = 0;
@@ -3429,30 +3438,51 @@ main (int argc, char *argv [])
       free (cl_path);
     }
 
-  if (opts.load_before_repl)
+  while (opts)
     {
-      if (!opts.load_and_exit)
-	printf ("Loading %s...\n", opts.load_before_repl);
+      if (opts->action == ACTION_LOAD)
+	{
+	  if (!quit_after_opts)
+	    printf ("Loading %s... ", opts->arg);
 
-      result = load_file (opts.load_before_repl, 0, &env, &eval_out);
+	  result = load_file (opts->arg, -1, -1, &env, &eval_out);
 
-      if (result && !opts.load_and_exit)
-	print_object (result, &env, c_stdout->value_ptr.stream);
-      else if (!opts.load_and_exit)
-	print_error (&eval_out, &env);
+	  if (result && !quit_after_opts)
+	    print_object (result, &env, c_stdout->value_ptr.stream);
+	  else if (!quit_after_opts)
+	    print_error (&eval_out, &env);
 
-      eval_out.type = EVAL_OK;
+	  eval_out.type = EVAL_OK;
 
-      if (!opts.load_and_exit)
-	printf ("\n");
+	  if (!quit_after_opts)
+	    printf ("\n");
+	}
+      else if (opts->action == ACTION_EVAL)
+	{
+	  if (!quit_after_opts)
+	    printf ("Reading and evaluating %s...\n", opts->arg);
+
+	  obj = NULL;
+	  eval_out.type = read_object (&obj, 0, opts->arg, strlen (opts->arg),
+				       NULL, 0, 0, &env, &eval_out, &objb, &obje);
+	  result = evaluate_object (obj, &env, &eval_out);
+
+	  if (result && !quit_after_opts)
+	    print_object (result, &env, c_stdout->value_ptr.stream);
+	  else if (!quit_after_opts)
+	    print_error (&eval_out, &env);
+
+	  eval_out.type = EVAL_OK;
+
+	  if (!quit_after_opts)
+	    printf ("\n");
+	}
+
+      opts = opts->next;
     }
 
-  if (opts.load_and_exit)
-    {
-      result = load_file (opts.load_and_exit, 0, &env, &eval_out);
-
-      exit (0);
-    }
+  if (quit_after_opts)
+    exit (0);
 
 
 #ifdef HAVE_LIBREADLINE
@@ -3564,30 +3594,37 @@ main (int argc, char *argv [])
 }
 
 
-void
-parse_command_line (struct command_line_options *opts, int argc, char *argv [])
+struct command_line_option *
+parse_command_line (int argc, char *argv [], int *load_cl, int *quit)
 {
-  int i = 1, options_finished = 0, found_file_to_load_and_exit = 0,
-    file_to_load_before_repl_expected = 0;
+  int i = 1, options_finished = 0, expected_argument = 0;
   char *s;
+  struct command_line_option *ret = NULL, *opt;
+
+  *load_cl = 1, *quit = 0;
 
   while (i < argc)
     {
-      if (options_finished && found_file_to_load_and_exit)
+      if (expected_argument)
 	{
-	  puts ("at most one file to be load and exit can be provided\n"
-		"Try 'al --help' for a summary of options");
-	  exit (1);
+	  opt->arg = argv [i];
+	  expected_argument = 0;
 	}
       else if (options_finished)
 	{
-	  opts->load_and_exit = argv [i];
-	  found_file_to_load_and_exit = 1;
-	}
-      else if (file_to_load_before_repl_expected)
-	{
-	  opts->load_before_repl = argv [i];
-	  file_to_load_before_repl_expected = 0;
+	  if (!ret)
+	    ret = opt = malloc_and_check (sizeof (*ret));
+	  else
+	    {
+	      opt->next = malloc_and_check (sizeof (*ret));
+	      opt = opt->next;
+	    }
+
+	  opt->action = ACTION_LOAD;
+	  opt->arg = argv [i];
+	  opt->next = NULL;
+
+	  *quit = 1;
 	}
       else if (!strcmp (argv [i], "--help"))
 	{
@@ -3601,7 +3638,43 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 	}
       else if (!strcmp (argv [i], "--dont-load-cl"))
 	{
-	  opts->load_cl = 0;
+	  *load_cl = 0;
+	}
+      else if (!strcmp (argv [i], "--quit"))
+	{
+	  *quit = 1;
+	}
+      else if (!strcmp (argv [i], "--load"))
+	{
+	  if (!ret)
+	    ret = opt = malloc_and_check (sizeof (*ret));
+	  else
+	    {
+	      opt->next = malloc_and_check (sizeof (*ret));
+	      opt = opt->next;
+	    }
+
+	  opt->action = ACTION_LOAD;
+	  opt->next = NULL;
+
+	  expected_argument = 1;
+	  *quit = 0;
+	}
+      else if (!strcmp (argv [i], "--eval"))
+	{
+	  if (!ret)
+	    ret = opt = malloc_and_check (sizeof (*ret));
+	  else
+	    {
+	      opt->next = malloc_and_check (sizeof (*ret));
+	      opt = opt->next;
+	    }
+
+	  opt->action = ACTION_EVAL;
+	  opt->next = NULL;
+
+	  expected_argument = 1;
+	  *quit = 0;
 	}
       else if (!strcmp (argv [i], "--"))
 	{
@@ -3617,8 +3690,22 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 	{
 	  s = argv [i] + 1;
 
+	  if (!*s)
+	    {
+	      printf ("unrecognized short option '-'\n");
+	      puts ("Try 'al --help' for a summary of options");
+	      exit (1);
+	    }
+
 	  while (*s)
 	    {
+	      if (expected_argument)
+		{
+		  printf ("option '%s' requires an argument\n"
+			  "Try 'al --help' for a summary of options\n",
+			  opt->action == ACTION_LOAD ? "--load" : "--eval");
+		  exit (1);
+		}
 	      if (*s == 'h')
 		{
 		  print_help ();
@@ -3629,25 +3716,45 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 		  print_version ();
 		  exit (0);
 		}
-
-	      if (file_to_load_before_repl_expected)
+	      else if (*s == 'q')
 		{
-		  puts ("option 'l' requires an argument\n"
-			"Try 'al --help' for a summary of options");
-		  exit (1);
-		}
-
-	      if (*s == 'q')
-		{
-		  opts->load_cl = 0;
+		  *load_cl = 0;
 		}
 	      else if (*s == 'l')
 		{
-		  file_to_load_before_repl_expected = 1;
+		  if (!ret)
+		    ret = opt = malloc_and_check (sizeof (*ret));
+		  else
+		    {
+		      opt->next = malloc_and_check (sizeof (*ret));
+		      opt = opt->next;
+		    }
+
+		  opt->action = ACTION_LOAD;
+		  opt->next = NULL;
+
+		  expected_argument = 1;
+		  *quit = 0;
+		}
+	      else if (*s == 'e')
+		{
+		  if (!ret)
+		    ret = opt = malloc_and_check (sizeof (*ret));
+		  else
+		    {
+		      opt->next = malloc_and_check (sizeof (*ret));
+		      opt = opt->next;
+		    }
+
+		  opt->action = ACTION_EVAL;
+		  opt->next = NULL;
+
+		  expected_argument = 1;
+		  *quit = 0;
 		}
 	      else
 		{
-		  printf ("unrecognized short option '%c'\n", *s);
+		  printf ("unrecognized short option '-%c'\n", *s);
 		  puts ("Try 'al --help' for a summary of options");
 		  exit (1);
 		}
@@ -3657,26 +3764,33 @@ parse_command_line (struct command_line_options *opts, int argc, char *argv [])
 	}
       else
 	{
-	  if (found_file_to_load_and_exit)
+	  if (!ret)
+	    ret = opt = malloc_and_check (sizeof (*ret));
+	  else
 	    {
-	      puts ("at most one file to be load and exit can be provided\n"
-		    "Try 'al --help' for a summary of options");
-	      exit (1);
+	      opt->next = malloc_and_check (sizeof (*ret));
+	      opt = opt->next;
 	    }
 
-	  opts->load_and_exit = argv [i];
-	  found_file_to_load_and_exit = 1;
+	  opt->action = ACTION_LOAD;
+	  opt->arg = argv [i];
+	  opt->next = NULL;
+
+	  *quit = 1;
 	}
 
       i++;
     }
 
-  if (file_to_load_before_repl_expected)
+  if (expected_argument)
     {
-      puts ("option 'l' requires an argument\n"
-	    "Try 'al --help' for a summary of options");
+      printf ("option '%s' requires an argument\n"
+	      "Try 'al --help' for a summary of options\n",
+	      opt->action == ACTION_LOAD ? "--load" : "--eval");
       exit (1);
     }
+
+  return ret;
 }
 
 
@@ -10671,8 +10785,8 @@ create_condition_fields (struct object *stdobj, struct object *class)
 
 
 struct object *
-load_file (const char *filename, int print_each_form, struct environment *env,
-	   struct outcome *outcome)
+load_file (const char *filename, int print_filename, int print_each_form,
+	   struct environment *env, struct outcome *outcome)
 {
   FILE *f;
   long l;
@@ -10680,7 +10794,8 @@ load_file (const char *filename, int print_each_form, struct environment *env,
   enum outcome_type out;
   const char *in, *obj_b, *obj_e;
   size_t sz;
-  struct object *obj = NULL, *res;
+  struct object *obj = NULL, *res, *ret, *fnstr, *loadpn,
+    *pack = inspect_variable (env->package_sym, env);
 
 
   f = fopen (filename, "r");
@@ -10721,6 +10836,27 @@ load_file (const char *filename, int print_each_form, struct environment *env,
       return NULL;
     }
 
+  fnstr = create_string_copying_c_string (filename);
+  loadpn = create_filename (inspect_pathname_by_designator (fnstr));
+  decrement_refcount (fnstr);
+
+  env->vars = bind_variable (env->load_pathname_sym, loadpn, 1, env->vars);
+  increment_refcount (loadpn);
+  env->vars = bind_variable (env->load_truename_sym, loadpn, 1, env->vars);
+  env->lex_env_vars_boundary += 2;
+
+  if (print_filename < 0)
+    print_filename = SYMBOL (inspect_variable (BUILTIN_SYMBOL ("*LOAD-VERBOSE*"), env))
+      != &nil_object;
+
+  if (print_each_form < 0)
+    print_each_form = SYMBOL (inspect_variable (BUILTIN_SYMBOL ("*LOAD-PRINT*"), env))
+      != &nil_object;
+
+  if (print_filename)
+    printf (";;; Loading file %s...\n", filename);
+
+
   out = read_object (&obj, 0, buf, l, NULL, 0, 1, env, outcome, &obj_b, &obj_e);
   sz = l - (obj_e + 1 - buf);
   in = obj_e + 1;
@@ -10746,7 +10882,8 @@ load_file (const char *filename, int print_each_form, struct environment *env,
 		  free (buf);
 		  fclose (f);
 
-		  return NULL;
+		  ret = NULL;
+		  goto cleanup_and_leave;
 		}
 
 	      if (print_each_form)
@@ -10773,7 +10910,8 @@ load_file (const char *filename, int print_each_form, struct environment *env,
 	  fclose (f);
 	  CLEAR_READER_STATUS (*outcome);
 
-	  return &t_object;
+	  ret = &t_object;
+	  goto cleanup_and_leave;
 	}
       else if (IS_READ_OR_EVAL_ERROR (out) || IS_INCOMPLETE_OBJECT (out))
 	{
@@ -10786,9 +10924,24 @@ load_file (const char *filename, int print_each_form, struct environment *env,
 	  else
 	    outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
 
-	  return NULL;
+	  ret = NULL;
+	  goto cleanup_and_leave;
 	}
     }
+
+ cleanup_and_leave:
+  if (print_filename && ret)
+    {
+      printf (";;; Loading file %s returned ", filename);
+      print_object (ret, env, env->c_stdout->value_ptr.stream);
+      printf ("\n");
+    }
+
+  set_value (env->package_sym, pack, 0, 0, env, outcome);
+
+  env->vars = remove_bindings (env->vars, 2, 1);
+
+  return ret;
 }
 
 
@@ -22903,33 +23056,8 @@ builtin_load (struct object *list, struct environment *env,
       return raise_program_error (env, outcome);
     }
 
-  loadpn = create_filename (inspect_pathname_by_designator (ns));
-  env->vars = bind_variable (env->load_pathname_sym, loadpn, 1, env->vars);
-  increment_refcount (loadpn);
-  env->vars = bind_variable (env->load_truename_sym, loadpn, 1, env->vars);
-  env->lex_env_vars_boundary += 2;
-
-  if (!verbose)
-    verbose = inspect_variable (BUILTIN_SYMBOL ("*LOAD-VERBOSE*"), env);
-
-  if (!print)
-    print = inspect_variable (BUILTIN_SYMBOL ("*LOAD-PRINT*"), env);
-
-  if (SYMBOL (verbose) != &nil_object)
-    printf (";;; Loading file %s...\n", fn);
-
-  ret = load_file (fn, SYMBOL (print) != &nil_object, env, outcome);
-
-  if (SYMBOL (verbose) != &nil_object && ret)
-    {
-      printf (";;; Loading file %s returned ", fn);
-      print_object (ret, env, env->c_stdout->value_ptr.stream);
-      printf ("\n");
-    }
-
-  set_value (env->package_sym, pack, 0, 0, env, outcome);
-
-  env->vars = remove_bindings (env->vars, 2, 1);
+  ret = load_file (fn, !verbose ? -1 : SYMBOL (verbose) != &nil_object,
+		   !print ? -1 : SYMBOL (print) != &nil_object, env, outcome);
 
   free (fn);
 
@@ -40437,9 +40565,12 @@ void
 print_help (void)
 {
   puts ("Usage: al [OPTIONS] [FILE]\n\n"
-	"  If a FILE is provided, load it and then exit\n\n"
-	"  -l FILE              load FILE and then start a REPL\n"
-	"  -q, --dont-load-cl   don't load cl.lisp at startup\n"
-	"  -h, --help           display this help and exit\n"
-	"  -v, --version        display version information and exit");
+	"  Providing a FILE is equivalent to \"--load FILE --quit\"\n\n"
+	"  -l FILE, --load FILE  load FILE and then start a REPL\n"
+	"  -e EXPR, --eval EXPR  read and evaluate EXPR, then start a REPL\n"
+	"  --quit                quit after executing command line instructions\n"
+	"  --                    treat everything as a FILE afterwards\n"
+	"  -q, --dont-load-cl    don't load cl.lisp at startup\n"
+	"  -h, --help            display this help and exit\n"
+	"  -v, --version         display version information and exit");
 }
