@@ -22963,8 +22963,8 @@ builtin_load (struct object *list, struct environment *env,
 {
   int l = list_length (list), found_unknown_key = 0;
   char *fn;
-  struct object *ret, *pack = inspect_variable (env->package_sym, env),
-    *verbose = NULL, *print = NULL, *allow_other_keys = NULL, *ns, *loadpn;
+  struct object *ret, *verbose = NULL, *print = NULL, *allow_other_keys = NULL,
+    *ns;
 
   if (!l)
     {
