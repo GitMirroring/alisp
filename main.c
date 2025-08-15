@@ -20944,7 +20944,7 @@ builtin_maphash (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
 
       if (!fun)
 	{
@@ -24584,7 +24584,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
 
       if (!fun)
 	{
@@ -24701,7 +24701,7 @@ builtin_map (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (CAR (CDR (list))))
     {
-      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 0, 0);
+      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 1, 0);
 
       if (!fun)
 	{
@@ -24823,7 +24823,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
 
       if (!fun)
 	{
@@ -31942,7 +31942,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (fun))
     {
-      fun = get_function (SYMBOL (fun), env, 1, 0, 0, 0);
+      fun = get_function (SYMBOL (fun), env, 1, 0, 1, 0);
 
       if (!fun)
 	{
@@ -32613,7 +32613,7 @@ evaluate_apply (struct object *list, struct environment *env,
     {
       s = SYMBOL (CAR (list));
 
-      fun = get_function (s, env, 1, 0, 0, 0);
+      fun = get_function (s, env, 1, 0, 1, 0);
 
       if (!fun)
 	{
@@ -32662,7 +32662,7 @@ evaluate_funcall (struct object *list, struct environment *env,
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 0, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
 
       if (!fun)
 	{
