@@ -1999,6 +1999,8 @@ make_test ("(mapcar #'abs '(3 -4 2 -5 -6))", "(3 4 2 5 6)");
 make_test ("(mapcar 'abs '(3 -4 2 -5 -6))", "(3 4 2 5 6)");
 make_test ("(mapcar #'cons '(a b c) '(1 2 3))", "((A . 1) (B . 2) (C . 3))");
 make_test ("(let ((s 0)) (write (mapcar (lambda (s) s) '(1 2 3))) s)", "(1 2 3)\n0");
+make_test ("(defun funcdes (x) 0)", "FUNCDES");
+make_test ("(flet ((funcdes (x) 1)) (mapcar 'funcdes '(nil nil nil)))", "(0 0 0)");
 make_test ("(mapc #'+ '(0 1 2) '(10 11) '(20 21 22 23))", "(0 1 2)");
 make_test ("(mapcan #'list '(0 1 2 3 4) '(6 7 8 9))", "(0 6 1 7 2 8 3 9)");
 make_test ("(maplist #'write '(0 1 2))", "(0 1 2)(1 2)(2)\n((0 1 2) (1 2) (2))");
