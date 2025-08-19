@@ -6332,8 +6332,9 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
   else if (call->dispatch_ch == '(')
     {
       call->obj = NULL;
-      out = read_list (&call->obj, 0, input, size, stream, preserve_whitespace,
-		       ends_with_eof, env, outcome, macro_end);
+      out = read_list (&call->obj, backts_commas_balance, input, size, stream,
+		       preserve_whitespace, ends_with_eof, env, outcome,
+		       macro_end);
 
       if (out == UNCLOSED_EMPTY_LIST)
 	call->is_empty_list = 1;
@@ -17948,7 +17949,7 @@ apply_backquote (struct object *form, int backts_commas_balance,
 {
   struct object *obj, *ret, *retform, *retcons, *reading_cons, *cons, *lastpr,
     *tmp, *lp, *last_fresh, *first_nonfresh;
-  int do_spl;
+  int do_spl, i, last_written, did_allocate;
 
   if (form->type == TYPE_BACKQUOTE)
     {
@@ -18279,6 +18280,102 @@ apply_backquote (struct object *form, int backts_commas_balance,
 
       if (last_fresh && !last_fresh->value_ptr.cons_pair->cdr)
 	last_fresh->value_ptr.cons_pair->cdr = &nil_object;
+
+      return retform;
+    }
+  else if (form->type == TYPE_ARRAY && form->value_ptr.array->alloc_size
+	   && !form->value_ptr.array->alloc_size->next)
+    {
+      retform = form;
+      did_allocate = 0;
+
+      for (i = 0; i < form->value_ptr.array->alloc_size->size; i++)
+	{
+	  do_spl = 0;
+	  lastpr = NULL;
+	  obj = form->value_ptr.array->value [i];
+
+	  ret = apply_backquote (obj, backts_commas_balance, env, outcome, 0,
+				 &do_spl, &lastpr);
+
+	  if (!ret)
+	    return NULL;
+
+	  if (do_spl && !IS_LIST (ret))
+	    {
+	      outcome->type = CANT_SPLICE_AN_ATOM_HERE;
+	      return NULL;
+	    }
+
+	  if (do_spl || ret != obj)
+	    {
+	      if (!did_allocate)
+		{
+		  if (do_spl)
+		    {
+		      retform = alloc_vector (form->value_ptr.array->alloc_size->size
+					      -1+list_length (ret), 0, 0);
+		    }
+		  else
+		    {
+		      retform = alloc_vector (form->value_ptr.array->alloc_size->size,
+					      0, 0);
+		    }
+
+		  did_allocate = 1;
+
+		  for (last_written = 0; last_written < i; last_written++)
+		    {
+		      retform->value_ptr.array->value [last_written] =
+			form->value_ptr.array->value [last_written];
+		      add_reference (retform,
+				     form->value_ptr.array->value [last_written],
+				     last_written);
+		    }
+
+		  last_written--;
+		}
+	      else if (do_spl)
+		{
+		  if (list_length (ret) != 1)
+		    {
+		      resize_vector (retform, retform->value_ptr.array->
+				     alloc_size->size-1+list_length (ret));
+		    }
+		}
+
+	      if (do_spl)
+		{
+		  cons = ret;
+
+		  while (SYMBOL (cons) != &nil_object)
+		    {
+		      last_written++;
+		      retform->value_ptr.array->value [last_written] = CAR (cons);
+		      add_reference (retform, CAR (cons), last_written);
+
+		      cons = CDR (cons);
+		    }
+		}
+	      else
+		{
+		  last_written++;
+		  retform->value_ptr.array->value [last_written] = ret;
+		  add_reference (retform, ret, last_written);
+		}
+	    }
+	  else if (did_allocate)
+	    {
+	      last_written++;
+	      retform->value_ptr.array->value [last_written] = ret;
+	      add_reference (retform, ret, last_written);
+	    }
+
+	  decrement_refcount (ret);
+	}
+
+      if (!did_allocate)
+	increment_refcount (retform);
 
       return retform;
     }
