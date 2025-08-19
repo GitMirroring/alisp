@@ -198,6 +198,9 @@ make_test ("#3A(((a b c) (d e f)) ((g h i) (j k l)))", "#3A(((A B C) (D E F)) ((
 make_test ("#1a(0 1 2)", "#(0 1 2)");
 make_test ("#2a (#(a b c) \"def\" #*100 (g h i))", "#2A((A B C) (#\\d #\\e #\\f) (1 0 0) (G H I))");
 make_test ("#2a #(#(a b c) \"def\" #*100 (g h i))", "#2A((A B C) (#\\d #\\e #\\f) (1 0 0) (G H I))");
+make_test ("`#(,(+))", "#(0)");
+make_test ("`#(0 ,@(list 1 2 3) 4)", "#(0 1 2 3 4)");
+make_test ("`#(0 ,@(list 1 2 3) ,\@nil ,@(list 4) 5)", "#(0 1 2 3 4 5)");
 make_test ("'#:a", "#:A");
 make_test ("'#:car", "#:CAR");
 make_test ("#b01010", "10");
