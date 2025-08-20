@@ -5689,11 +5689,11 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 
 enum outcome_type
 read_list (struct object **obj, int backts_commas_balance, const char *input,
-	   size_t size, FILE *stream, int preserve_whitespace,
-	   int ends_with_eof, struct environment *env,
-	   struct outcome *outcome, const char **list_end)
+	   size_t size, FILE *stream, int preserve_whitespace, int ends_with_eof,
+	   struct environment *env, struct outcome *outcome,
+	   const char **list_end)
 {
-  struct object *last_cons = *obj, *car = NULL, *ob = *obj, *cons;
+  struct object *last_cons = NULL, *car = NULL, *ob = *obj, *cons;
   const char *obj_beg, *obj_end = NULL;
   enum outcome_type out;
   int found_dot = 0;
@@ -5722,6 +5722,23 @@ read_list (struct object **obj, int backts_commas_balance, const char *input,
 						 FILLING_CAR (ob) ? 0 : 1);
 	      CLEAR_FILLING_CAR (ob);
 	      CLEAR_FILLING_CDR (ob);
+	    }
+	  else if (out == SKIPPED_OBJECT)
+	    {
+	      ob->value_ptr.cons_pair->car = NULL;
+	      free_cons_pair (ob);
+
+	      if (last_cons)
+		{
+		  last_cons->value_ptr.cons_pair->cdr = NULL;
+		  ob = last_cons;
+		}
+	      else
+		{
+		  ob = NULL;
+		}
+
+	      continue;
 	    }
 	  else if (out == UNCLOSED_EMPTY_LIST)
 	    {
