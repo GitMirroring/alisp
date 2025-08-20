@@ -2210,6 +2210,8 @@ make_test ("#+foo (1\n2 (3)) 0", "0");
 make_test ("#+foo (\"\") 0", "0");
 make_test ("#+foo (foo \"a\") 0", "0");
 make_test ("#-fooo :fooo 0", ":FOOO\n0");
+make_test ("(#+foo\n0)", "NIL");
+make_test ("'(1 2 #+foo\n3)", "(1 2)");
 make_test ("`(#+foo ,@'(\"\"))", "NIL");
 make_test ("(list `(#+foo ,@'(\"\")))", "(NIL)");
 make_test ("`(+ #-foo ,0)", "(+ 0)");
