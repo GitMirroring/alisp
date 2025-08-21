@@ -1205,6 +1205,7 @@ make_test ("(probe-file \"README\")", "#P\"README\"");
 make_test ("(probe-file \"foo\")", "NIL");
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (write (read s)) (write (file-position s)) (file-position s 0) (write (read s)))", "(C)13COPYRIGHT\nCOPYRIGHT");
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (read s))", "(C)");
+make_test ("(with-open-stream (s (make-string-input-stream \"0\")) (read s))", "0");
 make_test ("(read-line)\nabc", "\"abc\"\nNIL", 1);
 make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
 make_test ("(read-line (make-string-input-stream \"hello world\n" .
