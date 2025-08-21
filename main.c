@@ -9943,10 +9943,11 @@ create_file_stream (enum stream_content_type content_type,
     {
       f = fopen (fn, "r");
 
-      if (!f && !if_doesnt_exist)
+      if (!f
+	  && (!if_doesnt_exist || if_doesnt_exist == 2
+	      || (if_doesnt_exist == -1 && overwrite == 1)))
 	{
 	  free (fn);
-	  fclose (f);
 	  outcome->type = COULD_NOT_OPEN_FILE;
 	  return NULL;
 	}
@@ -23283,6 +23284,16 @@ builtin_open (struct object *list, struct environment *env,
 	      if (ifdoesntexist == -1)
 		ifdoesntexist = 1;
 	    }
+	  else if (symbol_equals (CAR (CDR (list)), ":ERROR", env))
+	    {
+	      if (ifdoesntexist == -1)
+		ifdoesntexist = 0;
+	    }
+	  else if (SYMBOL (CAR (CDR (list))) == &nil_object)
+	    {
+	      if (ifdoesntexist == -1)
+		ifdoesntexist = 2;
+	    }
 	  else
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -23343,13 +23354,13 @@ builtin_open (struct object *list, struct environment *env,
   if (ifexists == -1)
     ifexists = 0;
 
-  if (ifdoesntexist == -1)
-    ifdoesntexist = 1;
-
   ret = create_file_stream (BINARY_STREAM, dir, ns, ifexists == 1, ifdoesntexist,
 			    outcome);
 
   if (!ret && outcome->type == FILE_ALREADY_EXISTS && ifexists == 2)
+    return &nil_object;
+
+  if (!ret && outcome->type == COULD_NOT_OPEN_FILE && ifdoesntexist == 2)
     return &nil_object;
 
   return ret;
