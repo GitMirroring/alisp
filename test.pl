@@ -1431,6 +1431,7 @@ make_test ("(with-open-file (s \"writetest3\" :direction :output :if-exists :ove
 make_test ("(defparameter str (open \"writetest\" :direction :output :direction :input))", "STR");
 make_test ("(open \"writetest\" :direction :output :if-exists nil)", "NIL");
 make_test ("(open \"writetest5\" :direction :output :if-does-not-exist :create)", "#<STREAM FILE OUTPUT>");
+make_test ("(open \"bohboh\" :direction :output :if-exists :overwrite :if-does-not-exist nil)", "NIL");
 make_test ("(delete-file \"writetest\")", "T");
 make_test ("(delete-file \"writetest2\")", "T");
 make_test ("(rename-file \"writetest3\" #p\"writetest4\")", "#P\"writetest4\"\n#P\"writetest3\"\n#P\"writetest4\"");
