@@ -2382,6 +2382,14 @@
        (close ,str))))
 
 
+(defmacro with-open-stream ((var stream) &body forms)
+  `(let ((,var ,stream))
+     (unwind-protect
+	  (progn
+	    ,@forms)
+       (close ,var))))
+
+
 
 (defun terpri (&optional (out *standard-output*))
   (write-char #\newline out)
@@ -3446,16 +3454,17 @@
 	  pathname-directory pathname-host pathname-device pathname-version
 	  file-namestring directory-namestring host-namestring enough-namestring
 	  merge-pathnames file-author file-write-date user-homedir-pathname
-	  pathname-match-p directory translate-pathname with-open-file terpri
-	  write-line write-sequence prin1 princ print write-to-string
-	  prin1-to-string princ-to-string force-output with-input-from-string
-	  with-output-to-string pprint do-all-symbols find-all-symbols
-	  with-slots with-accessors loop format encode-universal-time
-	  *readtable* with-compilation-unit *compile-file-truename*
-	  *compile-file-pathname* *compile-print* *compile-verbose*
-	  compile-file-pathname compile-file with-standard-io-syntax
-	  handler-case restart-case with-simple-restart find-restart cerror
-	  break ignore-errors abort continue muffle-warning documentation))
+	  pathname-match-p directory translate-pathname with-open-file
+	  with-open-stream terpri write-line write-sequence prin1 princ print
+	  write-to-string prin1-to-string princ-to-string force-output
+	  with-input-from-string with-output-to-string pprint do-all-symbols
+	  find-all-symbols with-slots with-accessors loop format
+	  encode-universal-time *readtable* with-compilation-unit
+	  *compile-file-truename* *compile-file-pathname* *compile-print*
+	  *compile-verbose* compile-file-pathname compile-file
+	  with-standard-io-syntax handler-case restart-case with-simple-restart
+	  find-restart cerror break ignore-errors abort continue muffle-warning
+	  documentation))
 
 
 
