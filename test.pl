@@ -1207,6 +1207,7 @@ make_test ("(with-open-file (s \"README\" :direction :input) (read s) (write (re
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (read s))", "(C)");
 make_test ("(with-open-stream (s (make-string-input-stream \"0\")) (read s))", "0");
 make_test ("(read-char (make-string-input-stream \"abcd\"))", "#\\a");
+make_test ("(let ((str (make-string-input-stream \"abcd\"))) (write (read-char str)) (write (read-char str)))", "#\\a#\\b\n#\\b");
 make_test ("(read-char (make-string-input-stream \"\") nil 0)", "0");
 make_test ("(read-line)\nabc", "\"abc\"\nNIL", 1);
 make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
