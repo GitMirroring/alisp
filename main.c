@@ -22332,7 +22332,7 @@ builtin_read_char (struct object *list, struct environment *env,
 {
   int l = list_length (list), ch, i, eof;
   struct stream *s;
-  struct object *ret, *str, *eofval = NULL;
+  struct object *ret, *str, *eofval = NULL, *newstr;
   char out [5];
 
   if (l > 3)
@@ -22409,7 +22409,17 @@ builtin_read_char (struct object *list, struct environment *env,
 	}
 
       if (!eof)
-	ret = create_character_from_utf8 (s->string->value_ptr.string->value, i);
+	{
+	  ret = create_character_from_utf8 (s->string->value_ptr.string->value, i);
+
+	  newstr = create_string_copying_char_vector
+	    (s->string->value_ptr.string->value+i,
+	     s->string->value_ptr.string->used_size-i);
+	  delete_reference (str, s->string, 0);
+	  s->string = newstr;
+	  add_reference (str, s->string, 0);
+	  decrement_refcount (newstr);
+	}
       else
 	i = 0;
     }
