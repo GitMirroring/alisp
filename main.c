@@ -2023,6 +2023,8 @@ struct object *raise_undefined_function (struct object *sym,
 struct object *raise_type_error (struct object *datum, char *type,
 				 struct environment *env,
 				 struct outcome *outcome);
+struct object *raise_end_of_file (struct object *stream, struct environment *env,
+				  struct outcome *outcome);
 struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct environment *env,
 				 struct outcome *outcome);
@@ -2532,6 +2534,8 @@ struct object *builtin_file_length
 struct object *builtin_rename_file
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_delete_file
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_read_char
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_read_line
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3945,6 +3949,7 @@ add_standard_definitions (struct environment *env)
 		    0);
   add_builtin_form ("DELETE-FILE", env, builtin_delete_file, TYPE_FUNCTION, NULL,
 		    0);
+  add_builtin_form ("READ-CHAR", env, builtin_read_char, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
@@ -4396,6 +4401,8 @@ add_standard_definitions (struct environment *env)
 		       (char *)NULL);
   add_condition_class ("READER-ERROR", env, 1, "PARSE-ERROR", "STREAM-ERROR",
 		       (char *)NULL, (char *)NULL);
+  add_condition_class ("END-OF-FILE", env, 1, "STREAM-ERROR", (char *)NULL,
+		       (char *)NULL);
   add_condition_class ("STREAM-ERROR", env, 1, "ERROR", (char *)NULL, "STREAM",
 		       (char *)NULL);
   add_condition_class ("PARSE-ERROR", env, 1, "ERROR", (char *)NULL,
@@ -12194,6 +12201,28 @@ raise_type_error (struct object *datum, char *type, struct environment *env,
 
   read_object (&cond->value_ptr.standard_object->fields->next->value, 0, type,
 	       strlen (type), NULL, 0, 1, env, outcome, &b, &e);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_end_of_file (struct object *stream, struct environment *env,
+		   struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("END-OF-FILE", env),
+    *ret;
+
+  cond->value_ptr.standard_object->fields->value = stream;
+  increment_refcount (stream);
 
   ret = handle_condition (cond, env, outcome);
 
@@ -22298,17 +22327,17 @@ builtin_delete_file (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_read_line (struct object *list, struct environment *env,
+builtin_read_char (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
-  int l = list_length (list), ch, sz = 32, i, eof;
+  int l = list_length (list), ch, i, eof;
   struct stream *s;
-  struct object *ret, *str;
-  char *in;
+  struct object *ret, *str, *eofval = NULL;
+  char out [5];
 
-  if (l > 1)
+  if (l > 3)
     {
-      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
+      return raise_al_wrong_number_of_arguments (0, 3, env, outcome);
     }
 
   if (l && CAR (list)->type != TYPE_STREAM)
@@ -22326,6 +22355,113 @@ builtin_read_line (struct object *list, struct environment *env,
     }
 
   s = str->value_ptr.stream;
+
+  if (l >= 2 && SYMBOL (CAR (CDR (list))) == &nil_object)
+    eofval = &nil_object;
+
+  if (l >= 3 && eofval)
+    eofval = CAR (CDR (CDR (list)));
+
+  if (s->type == FILE_STREAM)
+    {
+      i = 0, eof = 0;
+
+      ch = getc (s->file);
+
+      if (ch == EOF)
+	{
+	  eof = 1;
+	}
+      else if (!IS_LOWEST_BYTE_IN_UTF8 (ch))
+	{
+	  out [i++] = ch;
+
+	  while (i < 4)
+	    {
+	      ch = getc (s->file);
+
+	      if (ch == EOF)
+		{
+		  eof = 1;
+		  break;
+		}
+
+	      if (IS_LOWEST_BYTE_IN_UTF8 (ch))
+		break;
+
+	      out [i++] = ch;
+	    }
+	}
+
+      if (i)
+	ret = create_character_from_utf8 (out, i);
+    }
+  else if (s->type == STRING_STREAM)
+    {
+      eof = 1;
+
+      for (i = 1; i < s->string->value_ptr.string->used_size && i < 4; i++)
+	{
+	  eof = 0;
+
+	  if (IS_LOWEST_BYTE_IN_UTF8 (s->string->value_ptr.string->value [i]))
+	    break;
+	}
+
+      if (!eof)
+	ret = create_character_from_utf8 (s->string->value_ptr.string->value, i);
+      else
+	i = 0;
+    }
+
+  if (eof && !i)
+    {
+      if (!eofval)
+	return raise_end_of_file (str, env, outcome);
+
+      increment_refcount (eofval);
+      return eofval;
+    }
+
+  return ret;
+}
+
+
+struct object *
+builtin_read_line (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  int l = list_length (list), ch, sz = 32, i, eof;
+  struct stream *s;
+  struct object *ret, *str, *eofval = NULL;
+  char *in;
+
+  if (l > 3)
+    {
+      return raise_al_wrong_number_of_arguments (0, 3, env, outcome);
+    }
+
+  if (l && CAR (list)->type != TYPE_STREAM)
+    {
+      return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
+    }
+
+  str = l ? CAR (list) : inspect_variable (env->std_in_sym, env);
+  s = str->value_ptr.stream;
+
+  if (s->type == SYNONYM_STREAM &&
+      !(str = resolve_synonym_stream (str, env, outcome)))
+    {
+      return NULL;
+    }
+
+  s = str->value_ptr.stream;
+
+  if (l >= 2 && SYMBOL (CAR (CDR (list))) == &nil_object)
+    eofval = &nil_object;
+
+  if (l >= 3 && eofval)
+    eofval = CAR (CDR (CDR (list)));
 
   if (s->type == FILE_STREAM)
     {
@@ -22395,6 +22531,19 @@ builtin_read_line (struct object *list, struct environment *env,
 	  add_reference (str, s->string, 0);
 	  decrement_refcount (s->string);
 	}
+    }
+
+  if (eof && !i)
+    {
+      if (!eofval)
+	return raise_end_of_file (str, env, outcome);
+
+      decrement_refcount (ret);
+
+      prepend_object_to_obj_list (&t_object, &outcome->other_values);
+
+      increment_refcount (eofval);
+      return eofval;
     }
 
   if (eof)
@@ -22485,7 +22634,10 @@ builtin_read (struct object *list, struct environment *env,
 	      return eofval;
 	    }
 
-	  outcome->type = GOT_EOF;
+	  if (s->type == FILE_STREAM)
+	    clearerr (s->file);
+
+	  return raise_end_of_file (str, env, outcome);
 	}
       else
 	outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
@@ -22595,7 +22747,10 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
 	      return eofval;
 	    }
 
-	  outcome->type = GOT_EOF;
+	  if (s->type == FILE_STREAM)
+	    clearerr (s->file);
+
+	  return raise_end_of_file (str, env, outcome);
 	}
       else
 	outcome->type = GOT_EOF_IN_MIDDLE_OF_OBJECT;
