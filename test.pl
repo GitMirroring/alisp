@@ -1206,6 +1206,8 @@ make_test ("(probe-file \"foo\")", "NIL");
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (write (read s)) (write (file-position s)) (file-position s 0) (write (read s)))", "(C)13COPYRIGHT\nCOPYRIGHT");
 make_test ("(with-open-file (s \"README\" :direction :input) (read s) (read s))", "(C)");
 make_test ("(with-open-stream (s (make-string-input-stream \"0\")) (read s))", "0");
+make_test ("(read-char (make-string-input-stream \"abcd\"))", "#\\a");
+make_test ("(read-char (make-string-input-stream \"\") nil 0)", "0");
 make_test ("(read-line)\nabc", "\"abc\"\nNIL", 1);
 make_test ("(read-line (make-string-input-stream \"hello world\"))", "\"hello world\"\nT");
 make_test ("(read-line (make-string-input-stream \"hello world\n" .
@@ -1455,6 +1457,7 @@ make_test ("(read-line (make-string-input-stream \"abcdef\" 1))", "\"bcdef\"\nT"
 make_test ("(read-line (make-string-input-stream \"abcdef\" 1 2))", "\"b\"\nT");
 make_test ("(read-line (make-string-input-stream \"abcdef\" 1 6))", "\"bcdef\"\nT");
 make_test ("(read-line (make-string-input-stream \"abcdef\" 1 nil))", "\"bcdef\"\nT");
+make_test ("(read-line (make-string-input-stream \"\") nil 0)", "0\nT");
 make_test ("(make-string-input-stream \"abc\" 1 1)", "#<STREAM STRING INPUT>");
 make_test ("(defparameter str (make-string-output-stream))", "STR");
 make_test ("(write 'aaa :stream str)", "AAA");
