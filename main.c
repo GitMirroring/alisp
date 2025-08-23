@@ -22372,14 +22372,14 @@ builtin_read_char (struct object *list, struct environment *env,
 	{
 	  eof = 1;
 	}
-      else if (!IS_LOWEST_BYTE_IN_UTF8 (ch))
+      else
 	{
 	  out [i++] = ch;
 
+	  ch = getc (s->file);
+
 	  while (i < 4)
 	    {
-	      ch = getc (s->file);
-
 	      if (ch == EOF)
 		{
 		  eof = 1;
@@ -22387,7 +22387,10 @@ builtin_read_char (struct object *list, struct environment *env,
 		}
 
 	      if (IS_LOWEST_BYTE_IN_UTF8 (ch))
-		break;
+		{
+		  ungetc (ch, s->file);
+		  break;
+		}
 
 	      out [i++] = ch;
 	    }
