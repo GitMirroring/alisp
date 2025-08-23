@@ -1262,6 +1262,7 @@ make_test ("(let ((*package* *package*)) (read-from-string \"#:foo\"))", "#:FOO\
 make_test ("(parse-integer \"2\")", "2\n1");
 make_test ("(parse-integer \"  25 \")", "25\n5");
 make_test ("(parse-integer \"  -4\")", "-4\n4");
+make_test ("(let ((seq (make-array 8))) (write (read-sequence seq (make-string-input-stream \"0 1 2 3 4 5\") :start 5)) seq)", "8\n#(NIL NIL NIL NIL NIL #\\0 #\\Space #\\1)");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
 make_test ("(let ((var 12)) (eval 'var))", "12");
