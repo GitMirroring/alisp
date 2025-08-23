@@ -2034,6 +2034,11 @@ struct object *raise_al_maximum_stack_depth_exceeded (int maxdepth,
 struct object *raise_al_wrong_number_of_arguments (int minargs, int maxargs,
 						   struct environment *env,
 						   struct outcome *outcome);
+struct object *raise_al_unknown_keyword_argument (struct environment *env,
+						  struct outcome *outcome);
+struct object *raise_al_odd_number_of_arguments_in_keyword_part_of_form
+(struct environment *env, struct outcome *outcome);
+
 struct object *raise_program_error (struct environment *env,
 				    struct outcome *outcome);
 struct object *raise_error (struct environment *env, struct outcome *outcome);
@@ -4732,6 +4737,10 @@ add_standard_definitions (struct environment *env)
   add_condition_class ("AL-WRONG-NUMBER-OF-ARGUMENTS", env, 1, "PROGRAM-ERROR",
 		       (char *)NULL, "MAX-ARGS", "MIN-ARGS", (char *)NULL);
 
+  add_condition_class ("AL-UNKNOWN-KEYWORD-ARGUMENT", env, 1, "PROGRAM-ERROR",
+		       (char *)NULL, (char *)NULL);
+  add_condition_class ("AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env,
+		       1, "PROGRAM-ERROR", (char *)NULL, (char *)NULL);
 }
 
 
@@ -10173,7 +10182,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form (env,
+									outcome);
 	      return NULL;
 	    }
 
@@ -10189,7 +10199,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -10203,7 +10214,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -10257,7 +10269,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -10318,7 +10331,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -10412,7 +10426,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -10436,7 +10451,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -10450,7 +10466,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	{
 	  if (SYMBOL (CDR (fieldform)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 	}
@@ -10710,7 +10727,8 @@ fill_object_fields_by_initargs (struct object *stdobj, struct object *class,
 
       if (SYMBOL (CDR (initargs)) == &nil_object)
 	{
-	  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	  raise_al_odd_number_of_arguments_in_keyword_part_of_form
+	    (env, outcome);
 	  return NULL;
 	}
 
@@ -12302,6 +12320,44 @@ raise_al_wrong_number_of_arguments (int minargs, int maxargs,
     create_integer_from_long (minargs);
   cond->value_ptr.standard_object->fields->next->value =
     create_integer_from_long (maxargs);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_al_unknown_keyword_argument (struct environment *env,
+				   struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string
+    ("AL-UNKNOWN-KEYWORD-ARGUMENT", env), *ret;
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_al_odd_number_of_arguments_in_keyword_part_of_form (struct environment *env,
+							  struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string
+    ("AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env), *ret;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -15297,7 +15353,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	      if (SYMBOL (CDR (as)) == &nil_object)
 		{
 		  remove_bindings (*bins, *argsnum, 0);
-		  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+		  raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		    (env, outcome);
 		  return 0;
 		}
 
@@ -15318,7 +15375,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	  if (SYMBOL (as) == &nil_object)
 	    {
 	      remove_bindings (*bins, *argsnum, 0);
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return 0;
 	    }
 
@@ -15348,7 +15406,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       && (!key_allow_other_k || SYMBOL (key_allow_other_k) == &nil_object))
     {
       remove_bindings (*bins, *argsnum, 0);
-      return raise_program_error (env, outcome) ? 1 : 0;
+      raise_al_unknown_keyword_argument (env, outcome);
+      return 0;
     }
 
 
@@ -16070,7 +16129,8 @@ call_structure_constructor (struct object *class_name, struct object *args,
 	    {
 	      if (SYMBOL (CDR (args)) == &nil_object)
 		{
-		  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+		  raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		    (env, outcome);
 		  return NULL;
 		}
 
@@ -16090,7 +16150,8 @@ call_structure_constructor (struct object *class_name, struct object *args,
 	{
 	  if (SYMBOL (CDR (args)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -16105,7 +16166,8 @@ call_structure_constructor (struct object *class_name, struct object *args,
 
       if (SYMBOL (CDR (args)) == &nil_object)
 	{
-	  outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	  raise_al_odd_number_of_arguments_in_keyword_part_of_form
+	    (env, outcome);
 	  return NULL;
 	}
 
@@ -16115,7 +16177,8 @@ call_structure_constructor (struct object *class_name, struct object *args,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
 
@@ -20063,7 +20126,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20086,7 +20150,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20099,7 +20164,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20120,7 +20186,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20133,7 +20200,8 @@ builtin_make_array (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20148,7 +20216,8 @@ builtin_make_array (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (!element_type)
@@ -20767,7 +20836,8 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20825,7 +20895,8 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20838,7 +20909,8 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -20853,7 +20925,8 @@ builtin_make_hash_table (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (type == HT_NONE)
@@ -21235,7 +21308,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21245,7 +21319,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21260,7 +21335,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21275,7 +21351,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21290,7 +21367,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21303,7 +21381,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21318,7 +21397,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21333,7 +21413,8 @@ builtin_make_pathname (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (defaults && !IS_PATHNAME_DESIGNATOR (defaults))
@@ -21674,7 +21755,8 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21684,7 +21766,8 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21697,7 +21780,8 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21712,7 +21796,8 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   s = get_directory_file_split (ns);
@@ -21758,7 +21843,8 @@ builtin_pathname_name (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21768,7 +21854,8 @@ builtin_pathname_name (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21781,7 +21868,8 @@ builtin_pathname_name (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21796,7 +21884,8 @@ builtin_pathname_name (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (!ns->value_ptr.string->used_size)
@@ -21857,7 +21946,8 @@ builtin_pathname_type (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21867,7 +21957,8 @@ builtin_pathname_type (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21880,7 +21971,8 @@ builtin_pathname_type (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -21895,7 +21987,8 @@ builtin_pathname_type (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (!ns->value_ptr.string->used_size
@@ -23007,7 +23100,8 @@ builtin_write (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23028,7 +23122,8 @@ builtin_write (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23041,7 +23136,8 @@ builtin_write (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23056,7 +23152,8 @@ builtin_write (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (!str)
@@ -23272,7 +23369,8 @@ builtin_load (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23285,7 +23383,8 @@ builtin_load (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23298,7 +23397,8 @@ builtin_load (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23308,7 +23408,8 @@ builtin_load (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23321,7 +23422,8 @@ builtin_load (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23336,7 +23438,8 @@ builtin_load (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   ret = load_file (fn, !verbose ? -1 : SYMBOL (verbose) != &nil_object,
@@ -23376,7 +23479,8 @@ builtin_open (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23412,7 +23516,8 @@ builtin_open (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23443,7 +23548,8 @@ builtin_open (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23475,7 +23581,8 @@ builtin_open (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23485,7 +23592,8 @@ builtin_open (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23498,7 +23606,8 @@ builtin_open (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -23513,7 +23622,8 @@ builtin_open (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (dir == -1)
@@ -28208,7 +28318,8 @@ builtin_make_string (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -28218,7 +28329,8 @@ builtin_make_string (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -28231,7 +28343,8 @@ builtin_make_string (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -28244,7 +28357,8 @@ builtin_make_string (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -28259,7 +28373,8 @@ builtin_make_string (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   if (initial_element && initial_element->type != TYPE_CHARACTER)
@@ -29904,7 +30019,8 @@ builtin_make_package (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -29917,7 +30033,8 @@ builtin_make_package (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -29930,7 +30047,8 @@ builtin_make_package (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -29945,7 +30063,8 @@ builtin_make_package (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
   ret = create_package (name, len);
@@ -34366,7 +34485,8 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -34384,7 +34504,8 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -34397,7 +34518,8 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
 	    {
-	      outcome->type = ODD_NUMBER_OF_KEYWORD_ARGUMENTS;
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
 	      return NULL;
 	    }
 
@@ -34412,7 +34534,8 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
     {
-      return raise_program_error (env, outcome);
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
     }
 
 
