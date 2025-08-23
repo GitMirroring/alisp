@@ -2391,6 +2391,19 @@
 
 
 
+(defun read-sequence (seq str &key (start 0) end)
+  (unless end
+    (setq end (length seq)))
+  (let ((eof (cons nil nil)))
+    (dotimes (i (- end start))
+      (let ((ch (read-char str nil eof)))
+	(if (eq ch eof)
+	    (return-from read-sequence (+ i start))
+	    (setf (elt seq (+ start i)) ch))))
+    end))
+
+
+
 (defun terpri (&optional (out *standard-output*))
   (write-char #\newline out)
   nil)
@@ -3455,10 +3468,10 @@
 	  file-namestring directory-namestring host-namestring enough-namestring
 	  merge-pathnames file-author file-write-date user-homedir-pathname
 	  pathname-match-p directory translate-pathname with-open-file
-	  with-open-stream terpri write-line write-sequence prin1 princ print
-	  write-to-string prin1-to-string princ-to-string force-output
-	  with-input-from-string with-output-to-string pprint do-all-symbols
-	  find-all-symbols with-slots with-accessors loop format
+	  with-open-stream read-sequence terpri write-line write-sequence prin1
+	  princ print write-to-string prin1-to-string princ-to-string
+	  force-output with-input-from-string with-output-to-string pprint
+	  do-all-symbols find-all-symbols with-slots with-accessors loop format
 	  encode-universal-time *readtable* with-compilation-unit
 	  *compile-file-truename* *compile-file-pathname* *compile-print*
 	  *compile-verbose* compile-file-pathname compile-file
