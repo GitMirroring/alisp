@@ -1938,7 +1938,8 @@ make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (a
 make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) #'(setf foooo))", "UNDEFINED");
 make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (car 0))", "WRONGTYPE");
 make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (pathname 0))", "WRONGTYPE");
-make_test ("(handler-bind ((program-error (lambda (e) (write 'invalidkeyword) (abort)))) (count 0 nil :foo 0))", "INVALIDKEYWORD");
+make_test ("(handler-bind ((al-unknown-keyword-argument (lambda (e) (write 'invalidkeyword) (abort)))) (count 0 nil :foo 0))", "INVALIDKEYWORD");
+make_test ("(handler-bind ((al-odd-number-of-arguments-in-keyword-part-of-form (lambda (e) (write 'oddargs) (abort)))) (write 0 :stream))", "ODDARGS");
 make_test ("(handler-bind ((program-error (lambda (e) (write 'wrongnumargs) (abort)))) (car))", "WRONGNUMARGS");
 make_test ("(handler-bind ((error (lambda (e) (write 'error) (abort)))) (find-class 'foo))", "ERROR");
 make_test ("(cddr '(0 1 2))", "(2)");
