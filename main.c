@@ -17750,10 +17750,12 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
     {
       p = SYMBOL (first)->value_ptr.symbol->builtin_type
 	? SYMBOL (first)->value_ptr.symbol->parent_types
-	: SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS
+	: (SYMBOL (first)->value_ptr.symbol->typespec
+	   && SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
 	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.standard_class->
 	parents
-	: SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS
+	: (SYMBOL (first)->value_ptr.symbol->typespec
+	   && SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
 	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->
 	parents : NULL;
 
