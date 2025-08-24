@@ -17221,7 +17221,7 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
   struct object *args, *ret = NULL, *res, *tmp, *margs;
   struct method_list *applm = NULL, *lapplm, *mlist,
     *ml = func->value_ptr.function->methods;
-  int applnum = 0, i, found_primary = 0, isprof = 0;
+  int applnum = 0, i, found_primary = 0, isprof = 0, isappl;
   clock_t time;
 
   if (eval_args)
@@ -17257,7 +17257,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
   while (ml)
     {
-      if (is_method_applicable (ml->meth, args, env, outcome))
+      isappl = is_method_applicable (ml->meth, args, env, outcome);
+
+      if (isappl < 0)
+	return NULL;
+
+      if (isappl)
 	{
 	  if (ml->meth->value_ptr.method->qualifier == PRIMARY_METHOD)
 	    found_primary = 1;
