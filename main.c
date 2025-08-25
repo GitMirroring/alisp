@@ -1773,7 +1773,8 @@ struct object *create_package_from_c_strings (char *name, ...);
 void free_name_list (struct name_list *list);
 struct package_record *inspect_accessible_symbol (const struct object *sym,
 						  const struct object *pack,
-						  int *is_present);
+						  int *is_present,
+						  int *is_shadowed);
 struct package_record *inspect_accessible_symbol_by_name (char *name, size_t len,
 							  struct object *pack,
 							  int only_check_presence,
@@ -8000,11 +8001,11 @@ free_name_list (struct name_list *list)
 
 struct package_record *
 inspect_accessible_symbol (const struct object *sym, const struct object *pack,
-			   int *is_present)
+			   int *is_present, int *is_shadowed)
 {
   int ind = hash_char_vector (sym->value_ptr.symbol->name,
 			      sym->value_ptr.symbol->name_len, SYMTABLE_SIZE);
-  struct package_record *cur = pack->value_ptr.package->symtable [ind];
+  struct package_record *cur = pack->value_ptr.package->symtable [ind], *shad;
   struct object_list *uses;
 
   while (cur)
@@ -8029,6 +8030,29 @@ inspect_accessible_symbol (const struct object *sym, const struct object *pack,
 	  if (cur->flags & EXTERNAL_VISIBILITY && sym == cur->sym)
 	    {
 	      *is_present = 0;
+
+	      if (is_shadowed)
+		{
+		  *is_shadowed = 0;
+		  shad = pack->value_ptr.package->symtable [ind];
+
+		  while (shad)
+		    {
+		      if (eqmem (shad->sym->value_ptr.symbol->name,
+				 shad->sym->value_ptr.symbol->name_len,
+				 sym->value_ptr.symbol->name,
+				 sym->value_ptr.symbol->name_len))
+			{
+			  if (shad->flags & IS_SHADOWING)
+			    *is_shadowed = 1;
+
+			  break;
+			}
+
+		      shad = shad->next;
+		    }
+		}
+
 	      return cur;
 	    }
 
@@ -30280,7 +30304,7 @@ builtin_export (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      rec = inspect_accessible_symbol (sym, pack, &pres);
+      rec = inspect_accessible_symbol (sym, pack, &pres, NULL);
 
       if (!rec)
 	{
@@ -30384,7 +30408,7 @@ builtin_unexport (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      rec = inspect_accessible_symbol (sym, pack, &pres);
+      rec = inspect_accessible_symbol (sym, pack, &pres, NULL);
 
       if (!rec)
 	{
@@ -38267,7 +38291,7 @@ int
 print_symbol (const struct object *sym, struct environment *env,
 	      struct stream *str)
 {
-  int pesc = is_printer_escaping_enabled (env), ispres;
+  int pesc = is_printer_escaping_enabled (env), ispres, isshad;
   struct object *pack = inspect_variable (env->package_sym, env),
     *home = sym->value_ptr.symbol->home_package,
     *patc = inspect_variable (env->al_print_always_two_colons, env);
@@ -38283,7 +38307,8 @@ print_symbol (const struct object *sym, struct environment *env,
       else if (home == env->keyword_package && write_to_stream (str, ":", 1) < 0)
 	return -1;
       else if (home != &nil_object && home != env->keyword_package
-	       && !inspect_accessible_symbol (sym, pack, &ispres))
+	       && (!inspect_accessible_symbol (sym, pack, &ispres, &isshad)
+		   || (!ispres && isshad)))
 	{
 	  print_as_symbol (home->value_ptr.package->name,
 			   home->value_ptr.package->name_len, pesc, str);
