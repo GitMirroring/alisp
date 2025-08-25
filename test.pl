@@ -2313,6 +2313,9 @@ make_test ("(package-shadowing-symbols 'pack1)", "(PACK1::BAR)");
 make_test ("(package-shadowing-symbols 'pack2)", "(PACK2::FOO)");
 make_test ("(import 'pack1::bar 'pack2)", "T");
 make_test ("(package-shadowing-symbols 'pack2)", "(PACK2::FOO)");
+make_test ("(in-package \"PACK2\")", "#<PACKAGE \"PACK2\">");
+make_test ("'pack1:foo", "PACK1:FOO");
+make_test ("(cl:in-package \"CL-USER\")", "#<PACKAGE \"COMMON-LISP-USER\">");
 
 
 # arithmetic tests
