@@ -2225,6 +2225,11 @@ make_test ("`(#+foo ,@'(\"\"))", "NIL");
 make_test ("(list `(#+foo ,@'(\"\")))", "(NIL)");
 make_test ("`(+ #-foo ,0)", "(+ 0)");
 
+make_test ("(encode-universal-time 10 10 10 1 2 1900 0)", "2715010");
+make_test ("(encode-universal-time 10 11 12 19 8 2004 0)", "3301906270");
+#make_test ("(encode-universal-time 10 11 12 19 8 2004)", "3301899070");
+make_test ("(encode-universal-time 10 11 12 19 8 2004 3)", "3301917070");
+
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package *package*)", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package \"CL\")", "#<PACKAGE \"COMMON-LISP\">");
