@@ -3153,9 +3153,18 @@
 
 (defun encode-universal-time (sec min hour d m y &optional tz)
   (+ (* (- y 1900) 31536000)
-     (* 86400 (+ (1+ (floor (- y 1900 1) 4))
-		 (- (1+ (floor (- y 1901) 100)))
-		 (floor (- y 1601))))
+     (if tz
+	 (* tz 3600)
+	 (* (nth-value 8 (get-decoded-time)) 3600))  ; fixme: add DST based on time of the year
+     (if (and (= (mod y 4) 0)
+	      (or (/= (mod y 100) 0)
+		  (= (mod y 400) 0))
+	      (< 2 m))
+	 86400
+	 0)
+     (* 86400 (+ (ceiling (- y 1900) 4)
+		 (- (ceiling (- y 1900) 100))
+		 (ceiling (- y 1900) 400)))
      (* 86400 (nth m '(0 0 31 59 90 120 151 181 212 243 273 304 334)))
      (* (1- d) 86400)
      (* hour 3600)
