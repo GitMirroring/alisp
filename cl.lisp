@@ -3172,6 +3172,57 @@
      sec))
 
 
+(defun decode-universal-time (time &optional tz)
+  (let (sec min hour d m y dow)
+    (decf time (* tz 3600))
+    (setq sec (mod time 60))
+    (setq min (mod (floor time 60) 60))
+    (setq hour (mod (floor time 3600) 24))
+    (setq y (floor time (+ (* 86400 365 400)
+			   (* 86400 97))))
+    (decf time (* y (+ (* 86400 365 400)
+		       (* 86400 97))))
+    (setq dow (* y 400))
+    (setq y (+ (* y 400) 1900))
+    (do nil (nil)
+      (let* ((leapp (and (= (mod y 4) 0)
+			 (or (/= (mod y 100) 0)
+			     (= (mod y 400) 0))))
+	     (this-year (+ (* 86400 365)
+			   (if leapp
+			       86400
+			       0))))
+	(if (< 0 (floor time this-year))
+	    (progn
+	      (incf y)
+	      (incf dow (if leapp 366 365))
+	      (decf time this-year))
+	    (return))))
+    (setq m 1)
+    (let ((days-for-month (if (and (= (mod y 4) 0)
+				   (or (/= (mod y 100) 0)
+				       (= (mod y 400) 0)))
+			      '(31 29 31 30 31 30 31 31 30 31 30 31)
+			      '(31 28 31 30 31 30 31 31 30 31 30 31))))
+      (do nil (nil)
+	(if (< 0 (floor time (* 86400 (car days-for-month))))
+	    (progn
+	      (incf m)
+	      (incf dow (car days-for-month))
+	      (decf time (* 86400 (car days-for-month)))
+	      (setq days-for-month (cdr days-for-month)))
+	    (return))))
+    (setq d (+ 1 (floor time 86400)))
+    (incf dow (1- d))
+    (values sec min hour d m y (mod dow 7) nil tz)))
+
+
+(defun get-universal-time nil
+  (multiple-value-bind (sec min hour d m y dow daylp tz)
+      (get-decoded-time)
+    (encode-universal-time sec min hour d m y tz)))
+
+
 
 (defparameter *readtable* nil)
 
@@ -3481,12 +3532,12 @@
 	  princ print write-to-string prin1-to-string princ-to-string
 	  force-output with-input-from-string with-output-to-string pprint
 	  do-all-symbols find-all-symbols with-slots with-accessors loop format
-	  encode-universal-time *readtable* with-compilation-unit
-	  *compile-file-truename* *compile-file-pathname* *compile-print*
-	  *compile-verbose* compile-file-pathname compile-file
-	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart cerror break ignore-errors abort continue muffle-warning
-	  documentation))
+	  encode-universal-time decode-universal-time get-universal-time
+	  *readtable* with-compilation-unit *compile-file-truename*
+	  *compile-file-pathname* *compile-print* *compile-verbose*
+	  compile-file-pathname compile-file with-standard-io-syntax
+	  handler-case restart-case with-simple-restart find-restart cerror
+	  break ignore-errors abort continue muffle-warning documentation))
 
 
 
