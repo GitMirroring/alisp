@@ -2229,6 +2229,9 @@ make_test ("(encode-universal-time 10 10 10 1 2 1900 0)", "2715010");
 make_test ("(encode-universal-time 10 11 12 19 8 2004 0)", "3301906270");
 #make_test ("(encode-universal-time 10 11 12 19 8 2004)", "3301899070");
 make_test ("(encode-universal-time 10 11 12 19 8 2004 3)", "3301917070");
+make_test ("(decode-universal-time 2201917080 0)", "0\n38\n3\n11\n10\n1969\n5\nNIL\n0");
+make_test ("(decode-universal-time 90000000000 0)", "0\n0\n16\n27\n12\n4751\n3\nNIL\n0");
+make_test ("(decode-universal-time 90000000000 7)", "0\n0\n9\n27\n12\n4751\n3\nNIL\n7");
 
 make_test ("*package*", "#<PACKAGE \"COMMON-LISP-USER\">");
 make_test ("(find-package *package*)", "#<PACKAGE \"COMMON-LISP-USER\">");
