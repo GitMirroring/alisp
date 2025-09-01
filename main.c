@@ -2039,7 +2039,8 @@ struct object *raise_al_unknown_keyword_argument (struct environment *env,
 						  struct outcome *outcome);
 struct object *raise_al_odd_number_of_arguments_in_keyword_part_of_form
 (struct environment *env, struct outcome *outcome);
-
+struct object *raise_al_invalid_form (struct object *form, struct environment *env,
+				      struct outcome *outcome);
 struct object *raise_program_error (struct environment *env,
 				    struct outcome *outcome);
 struct object *raise_error (struct environment *env, struct outcome *outcome);
@@ -4742,6 +4743,9 @@ add_standard_definitions (struct environment *env)
 		       (char *)NULL, (char *)NULL);
   add_condition_class ("AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env,
 		       1, "PROGRAM-ERROR", (char *)NULL, (char *)NULL);
+
+  add_condition_class ("AL-INVALID-FORM", env, 1, "PROGRAM-ERROR", (char *)NULL,
+		       "FORM", (char *)NULL);
 }
 
 
@@ -12396,6 +12400,28 @@ raise_al_odd_number_of_arguments_in_keyword_part_of_form (struct environment *en
 
 
 struct object *
+raise_al_invalid_form (struct object *form, struct environment *env,
+		       struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("AL-INVALID-FORM",
+							    env), *ret;
+
+  cond->value_ptr.standard_object->fields->value = form;
+  increment_refcount (form);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
 raise_program_error (struct environment *env, struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string ("PROGRAM-ERROR",
@@ -18557,10 +18583,7 @@ evaluate_list (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = INVALID_FUNCTION_CALL;
-      increment_refcount (CAR (list));
-      outcome->obj = CAR (list);
-      return NULL;
+      return raise_al_invalid_form (list, env, outcome);
     }
 
 
