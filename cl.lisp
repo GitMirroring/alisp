@@ -2581,6 +2581,41 @@
 
 
 
+(defmacro with-package-iterator ((name packlistf &rest symtypes) &body forms)
+  (let ((packlistsym (gensym))
+	(packcontsym (gensym)))
+    `(let ((,packlistsym ,packlistf)
+	   ,packcontsym)
+       (unless (listp ,packlistsym)
+	 (setq ,packlistsym (list ,packlistsym)))
+       (dolist (packdes ,packlistsym)
+	 (let ((pack (find-package packdes)))
+	   (do-symbols (sym pack)
+	     (let ((tp (nth-value 1 (find-symbol (string sym) pack))))
+	       (if (find tp ',symtypes)
+		   (setq ,packcontsym (cons (list sym tp pack) ,packcontsym)))))))
+       (macrolet ((,name nil `(let ((next (car ,',packcontsym)))
+				(setq ,',packcontsym (cdr ,',packcontsym))
+				(if next
+				    (values t (car next) (cadr next) (caddr next))))))
+	 ,@forms))))
+
+
+
+(defmacro with-hash-table-iterator ((name hashtf) &body forms)
+  (let ((hashtsym (gensym))
+	(hashtcontsym (gensym)))
+    `(let ((,hashtsym ,hashtf)
+	   ,hashtcontsym)
+       (maphash (lambda (k v) (setq ,hashtcontsym (cons (cons k v) ,hashtcontsym))) ,hashtsym)
+       (macrolet ((,name nil `(let ((next (car ,',hashtcontsym)))
+				(setq ,',hashtcontsym (cdr ,',hashtcontsym))
+				(if next
+				    (values t (car next) (cdr next))))))
+	 ,@forms))))
+
+
+
 (defun loop-parse-accumulation (forms ifclvar)
   (let ((sym (string (car forms)))
 	var
@@ -3531,7 +3566,8 @@
 	  with-open-stream read-sequence terpri write-line write-sequence prin1
 	  princ print write-to-string prin1-to-string princ-to-string
 	  force-output with-input-from-string with-output-to-string pprint
-	  do-all-symbols find-all-symbols with-slots with-accessors loop format
+	  do-all-symbols find-all-symbols with-slots with-accessors
+	  with-package-iterator with-hash-table-iterator loop format
 	  encode-universal-time decode-universal-time get-universal-time
 	  *readtable* with-compilation-unit *compile-file-truename*
 	  *compile-file-pathname* *compile-print* *compile-verbose*
