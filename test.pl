@@ -1083,6 +1083,7 @@ make_test ("(hash-table-count tbl)", "1");
 make_test ("(setf (gethash #\\a tbl) 12)", "12");
 make_test ("(maphash (lambda (k v) (write k) (write v)) tbl)", "1011#\\a12\nNIL");
 make_test ("(hash-table-count tbl)", "2");
+make_test ("(with-hash-table-iterator (nextval tbl) (do nil (nil) (multiple-value-bind (pred k v) (nextval) (if pred (write v) (return)))))", "1211\nNIL");
 make_test ("(defparameter tbl (make-hash-table :test 'eq))", "TBL");
 make_test ("tbl", "#<HASH-TABLE EQ 0/1024>");
 make_test ("(gethash 'k tbl)", "NIL\nNIL");
@@ -2324,6 +2325,7 @@ make_test ("(package-shadowing-symbols 'pack2)", "(PACK2::FOO)");
 make_test ("(in-package \"PACK2\")", "#<PACKAGE \"PACK2\">");
 make_test ("'pack1:foo", "PACK1:FOO");
 make_test ("(cl:in-package \"CL-USER\")", "#<PACKAGE \"COMMON-LISP-USER\">");
+make_test ("(with-package-iterator (next 'cl :inherited) (do nil (nil) (multiple-value-bind (pred s tp p) (next) (if pred (write s) (return)))))", "NIL");
 
 
 # arithmetic tests
