@@ -3313,6 +3313,8 @@
 		 (progn
 		   (setq gensyms (nconc gensyms (list obj)))
 		   (format str "#~s=~s" (1- (length gensyms)) obj)))))))
+    (function
+     (format str "#.(CL:FUNCTION ~s)" (nth-value 2 (function-lambda-expression obj))))
     (package
      (format str "#.(CL:FIND-PACKAGE ~s)" (package-name obj)))
     (cl-user:al-backquote
