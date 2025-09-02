@@ -2627,7 +2627,7 @@
 	init)
     (if (string= (string (caddr forms)) "INTO")
 	(setq var (cadddr forms))
-	(setq var (gensym)))
+	(setq var (or accvar (gensym))))
     (cond
       ((or (string= sym "COLLECT")
 	   (string= sym "COLLECTING"))
@@ -2728,10 +2728,11 @@
 	       (setq iter `(:on ,var nil ,(cadr f) ,#'cdr))
 	       (setq f (cddr f)))
 	      ((string= sym "=")
-	       (setq iter `(:eq ,var ,(cadr f) ,nil))
+	       (setq iter `(:eq ,var ,(cadr f) ,nil ,nil))
 	       (setq f (cddr f)))
 	      ((string= sym "THEN")
-	       (setf (elt iter 3) (cadr f))
+	       (setf (elt iter 3) t)
+	       (setf (elt iter 4) (cadr f))
 	       (setq f (cddr f)))
 	      ((string= sym "ACROSS")
 	       (setq iter `(:across ,var nil nil ,(cadr f)))
@@ -2779,7 +2780,7 @@
     (values iter forms)))
 
 
-(defun loop-parse-conditional (forms loopname)
+(defun loop-parse-conditional (forms loopname accvar)
   (let (out
 	docl
 	elsecl
@@ -2805,7 +2806,7 @@
 		   (string= sym "WHEN")
 		   (string= sym "UNLESS"))
 	       (multiple-value-bind (res frm vs rv ifcv)
-		   (loop-parse-conditional f loopname)
+		   (loop-parse-conditional f loopname accvar)
 		 (if (= (length (caddr out)) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
@@ -2838,7 +2839,7 @@
 		   (string= sym "NCONCING")
 		   (string= sym "SUM")
 		   (string= sym "SUMMING"))
-	       (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation f ifclvar)
+	       (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation f ifclvar accvar)
 		 (if (= (length (caddr out)) 3)
 		     (setq docl (cons res docl))
 		     (setq elsecl (cons res elsecl)))
@@ -2941,7 +2942,7 @@
 		     (string= sym "WHEN")
 		     (string= sym "UNLESS"))
 		 (multiple-value-bind (res frm vs rv ifcv)
-		     (loop-parse-conditional forms block-name)
+		     (loop-parse-conditional forms block-name returnvar)
 		   (setq do-forms (append do-forms `(,res)))
 		   (setq vars (append vs vars))
 		   (if rv
@@ -2987,7 +2988,7 @@
 		     (string= sym "NCONCING")
 		     (string= sym "SUM")
 		     (string= sym "SUMMING"))
-		 (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation forms ifclvar)
+		 (multiple-value-bind (res var1 var2 init frm) (loop-parse-accumulation forms ifclvar returnvar)
 		   (setq do-forms (append do-forms `(,res)))
 		   (setq vars (cons (list (list (or var1 var2) init)) vars))
 		   (if var2
@@ -3052,10 +3053,10 @@
 				      (setq ,(elt i 1) (+ ,(elt i 1) ,stepvar))
 				      . ,iteration-setup))))
 	(when (eq (car i) :eq)
-	  (setq vrs (cons (elt i 1) vrs))
+	  (setq vrs (append (flatten-tree-skipping-nils (elt i 1)) vrs))
 	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(elt i 2))
 				. ,initial-setup))
-	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(or (elt i 3) (elt i 2)))
+	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(if (elt i 3) (elt i 4) (elt i 2)))
 				  . ,iteration-setup)))
 	(when (eq (car i) :across)
 	  (setq vrs (list* (elt i 1) (elt i 2) (elt i 3) vrs))
