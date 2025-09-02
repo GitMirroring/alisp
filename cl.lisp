@@ -2616,7 +2616,7 @@
 
 
 
-(defun loop-parse-accumulation (forms ifclvar)
+(defun loop-parse-accumulation (forms ifclvar accvar)
   (let ((sym (string (car forms)))
 	var
 	(val (if (and (symbolp (cadr forms))
