@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 use strict;
 
-# Copyright (C) 2022-2024 Andrea G. Monaco
+# Copyright (C) 2022-2025 Andrea Monaco
 # 
 # This file is part of alisp, a lisp implementation.
 #

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2023 Andrea G. Monaco
+# Copyright (C) 2023-2025 Andrea Monaco
 # 
 # This file is part of alisp, a lisp implementation.
 #
