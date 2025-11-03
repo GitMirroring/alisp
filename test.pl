@@ -281,6 +281,8 @@ make_test ("(let ((x 0)) (let ((x 1)) (declare (special x)) (let () x)))", "1");
 make_test ("(let ((x 0)) (declare (special x)) (let ((x 1)) (declare (special x))) x)", "0");
 make_test ("(let ((var2 0)) (let ((var2 1)) (declare (special var2)) (let ((var2 1))) var2))", "1");
 make_test ("(let ((vars 0)) (declare (special vars1 vars)) vars)", "0");
+
+make_test ("(load \"cl.lisp\")", "T");
 make_test ("(defparameter var3 0)", "VAR3");
 make_test ("(defun f (x &optional (var3 var3)))", "F");
 make_test ("(f 9)", "NIL");
@@ -506,18 +508,17 @@ make_test ("(mac 0 1 2)", "((MAC 0 1 2) 0 1 2)");
 make_test ("(defmacro mac2 (&whole wh &rest args) wh)", "MAC2");
 make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 
-make_test ("(gensym)", "#:G1");
-make_test ("(gensym)", "#:G2");
+make_test ("(gensym)", "#:G33");
+make_test ("(gensym)", "#:G34");
 make_test ("(gensym 5)", "#:G5");
-make_test ("(gensym \"A\")", "#:A3");
-make_test ("(gensym)", "#:G4");
+make_test ("(gensym \"A\")", "#:A35");
+make_test ("(gensym)", "#:G36");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
-make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G5)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G5)\n(FOO2)");
-make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G6)\n(SETQ A #:G6)\nA");
-make_test ("(get-setf-expansion '(w a b))", "(#:G7 #:G8)\n(A B)\n(#:G9)\n(FUNCALL (FUNCTION (SETF W)) #:G9 #:G7 #:G8)\n(W #:G7 #:G8)");
+make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G37)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G37)\n(FOO2)");
+make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G38)\n(SETQ A #:G38)\nA");
+make_test ("(get-setf-expansion '(w a b))", "(#:G39 #:G40)\n(A B)\n(#:G41)\n(FUNCALL (FUNCTION (SETF W)) #:G41 #:G39 #:G40)\n(W #:G39 #:G40)");
 
-make_test ("(load \"cl.lisp\")", "T");
 make_test ("(open-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-output*)", "NIL");
