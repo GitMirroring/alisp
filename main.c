@@ -34490,7 +34490,7 @@ struct object *
 builtin_ensure_generic_function (struct object *list, struct environment *env,
 				 struct outcome *outcome)
 {
-  struct object *sym, *lambdal = NULL, *allow_other_keys = NULL, *fun;
+  struct object *name, *sym, *lambdal = NULL, *allow_other_keys = NULL, *fun;
   struct parameter *ll;
   int found_unknown_key = 0, i, found_amp_key;
 
@@ -34499,16 +34499,25 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
-  if (!IS_SYMBOL (CAR (list)))
+  if (!IS_SYMBOL (CAR (list))
+      && !(CAR (list)->type == TYPE_CONS_PAIR
+	   && list_length (CAR (list)) == 2
+	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
     {
-      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
     }
 
-  sym = SYMBOL (CAR (list));
+  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
 
-  if (sym->value_ptr.symbol->function_cell
+  if ((IS_SYMBOL (CAR (list)) && sym->value_ptr.symbol->function_cell
       && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
 	  || !(sym->value_ptr.symbol->function_cell->value_ptr.function->
+	       flags & GENERIC_FUNCTION)))
+      || (!IS_SYMBOL (CAR (list)) && sym->value_ptr.symbol->setf_func_cell
+	  && !(sym->value_ptr.symbol->setf_func_cell->value_ptr.function->
 	       flags & GENERIC_FUNCTION)))
     {
       outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
@@ -34516,6 +34525,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
     }
 
 
+  name = CAR (list);
   list = CDR (list);
 
   while (SYMBOL (list) != &nil_object)
@@ -34578,7 +34588,8 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
     }
 
 
-  fun = sym->value_ptr.symbol->function_cell;
+  fun = IS_SYMBOL (name) ? sym->value_ptr.symbol->function_cell
+    : sym->value_ptr.symbol->setf_func_cell;
 
   if (!fun)
     {
@@ -34589,6 +34600,9 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 	return NULL;
 
       fun->value_ptr.function->flags |= GENERIC_FUNCTION;
+
+      fun->value_ptr.function->name = sym;
+      add_reference (fun, sym, 0);
 
       if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
 	  != &nil_object)
@@ -34618,13 +34632,20 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
     }
 
 
-  if (!sym->value_ptr.symbol->function_cell)
+  if (IS_SYMBOL (name) && !sym->value_ptr.symbol->function_cell)
     {
       sym->value_ptr.symbol->function_cell = fun;
       add_reference (sym, fun, 1);
 
-      fun->value_ptr.function->name = sym;
-      add_reference (fun, sym, 0);
+      return fun;
+    }
+
+  if (!IS_SYMBOL (name) && !sym->value_ptr.symbol->setf_func_cell)
+    {
+      sym->value_ptr.symbol->setf_func_cell = fun;
+      add_reference (sym, fun, 2);
+
+      fun->value_ptr.function->is_setf_func = 1;
 
       return fun;
     }
