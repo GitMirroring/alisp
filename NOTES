@@ -157,6 +157,11 @@ package.  There are also some non-standard extensions of standard functions.
 - the standard function FUNCTION-LAMBDA-EXPRESSION also accepts a method object.
   In that case, it returns the body of that method as a list
 
+- each function object carries a name field for clarity and debugging purposes.
+  The function AL-FUNCTION-NAME takes a function and returns its name (or NIL
+  for anonymous functions), while (SETF AL-FUNCTION-NAME) lets you change the
+  name
+
 - the function AL-DUMP-FIELDS takes either a structure object, a standard object
   or a standard class and dumps the slots of that object or class as a list.
   Each slot of an object is represented as a symbol with its name, if it is
