@@ -2662,6 +2662,9 @@ struct object *builtin_setf_fdefinition (struct object *list,
 struct object *builtin_setf_macro_function (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
+struct object *builtin_setf_al_function_name (struct object *list,
+					      struct environment *env,
+					      struct outcome *outcome);
 
 struct object *builtin_method_print_object (struct object *list,
 					    struct environment *env,
@@ -3018,6 +3021,8 @@ struct object *evaluate_psetq
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_psetf
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_function_name
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_function
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4660,6 +4665,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-STRING-INPUT-STREAM-STRING", env,
 		    builtin_al_string_input_stream_string, TYPE_FUNCTION, NULL,
 		    0);
+
+  add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
+		    TYPE_FUNCTION, builtin_setf_al_function_name, 0);
 
   add_builtin_form ("AL-PRINT-RESTARTS", env, builtin_al_print_restarts,
 		    TYPE_FUNCTION, NULL, 0);
@@ -26134,6 +26142,44 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_setf_al_function_name (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  struct object *newval;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (!IS_FUNCTION_NAME (CAR (list)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  newval = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
+    : SYMBOL (CAR (CDR (CAR (list))));
+
+  if (CAR (CDR (list))->type != TYPE_FUNCTION)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:FUNCTION", env, outcome);
+    }
+
+  delete_reference (CAR (CDR (list)), CAR (CDR (list))->value_ptr.function->name,
+		    0);
+  CAR (CDR (list))->value_ptr.function->name = newval;
+  add_reference (CAR (CDR (list)), newval, 0);
+
+  CAR (CDR (list))->value_ptr.function->is_setf_func
+    = CAR (list)->type == TYPE_CONS_PAIR;
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
 builtin_method_print_object (struct object *list, struct environment *env,
 			     struct outcome *outcome)
 {
@@ -32986,6 +33032,47 @@ evaluate_psetf (struct object *list, struct environment *env,
   free_object_list (ls);
 
   return &nil_object;
+}
+
+
+struct object *
+builtin_al_function_name (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION)
+    {
+      return raise_type_error (CAR (list), "CL:FUNCTION", env,
+			       outcome);
+    }
+
+  if (!CAR (list)->value_ptr.function->name)
+    return &nil_object;
+  else if (CAR (list)->value_ptr.function->is_setf_func)
+    {
+      ret = alloc_empty_cons_pair ();
+
+      increment_refcount (env->setf_sym);
+      ret->value_ptr.cons_pair->car = env->setf_sym;
+
+      ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+
+      increment_refcount (CAR (list)->value_ptr.function->name);
+      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= CAR (list)->value_ptr.function->name;
+
+      return ret;
+    }
+
+  increment_refcount (CAR (list)->value_ptr.function->name);
+  return CAR (list)->value_ptr.function->name;
 }
 
 
