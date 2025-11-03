@@ -3010,9 +3010,7 @@ struct object *evaluate_defparameter
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defvar
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defun
-(struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defmacro
+struct object *builtin_al_defmacro
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4097,8 +4095,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
 		    0);
   add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DEFUN", env, evaluate_defun, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DEFMACRO", env, evaluate_defmacro, TYPE_MACRO, NULL, 0);
   add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, NULL, 1);
   add_builtin_form ("PSETQ", env, evaluate_psetq, TYPE_MACRO, NULL, 0);
   add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, NULL, 0);
@@ -4656,6 +4652,8 @@ add_standard_definitions (struct environment *env)
 
 
   env->package_sym->value_ptr.symbol->value_cell = env->cluser_package;
+
+  add_builtin_form ("AL-DEFMACRO", env, builtin_al_defmacro, TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
 		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
@@ -32731,99 +32729,8 @@ evaluate_defvar (struct object *list, struct environment *env,
 
 
 struct object *
-evaluate_defun (struct object *list, struct environment *env,
-		struct outcome *outcome)
-{
-  struct object *fun, *sym, *ret;
-
-  if (list_length (list) < 2
-      || (!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
-				       && list_length (CAR (list)) == 2
-				       && SYMBOL (CAR (CAR (list))) == env->setf_sym
-				       && IS_SYMBOL (CAR (CDR (CAR (list))))))
-      || (!IS_LIST (CAR (CDR (list)))))
-    {
-      outcome->type = INCORRECT_SYNTAX_IN_DEFUN;
-      return NULL;
-    }
-
-  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
-    : SYMBOL (CAR (CDR (CAR (list))));
-
-  if (sym->value_ptr.symbol->function_cell
-      && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
-      && sym->value_ptr.symbol->function_cell->value_ptr.macro->is_special_operator)
-    {
-      outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
-      return NULL;
-    }
-
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 0, 0);
-
-  if (!fun)
-    return NULL;
-
-  if (IS_SYMBOL (CAR (list)))
-    {
-      if (sym->value_ptr.symbol->function_cell)
-	{
-	  delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
-	}
-
-      sym->value_ptr.symbol->function_cell = fun;
-      add_reference (sym, fun, 1);
-      decrement_refcount (fun);
-    }
-  else
-    {
-      if (sym->value_ptr.symbol->setf_func_cell)
-	{
-	  delete_reference (sym, sym->value_ptr.symbol->setf_func_cell, 2);
-	}
-
-      sym->value_ptr.symbol->setf_func_cell = fun;
-      add_reference (sym, fun, 2);
-      decrement_refcount (fun);
-    }
-
-  fun->value_ptr.function->name = sym;
-  add_reference (fun, sym, 0);
-
-  if (!IS_SYMBOL (CAR (list)))
-    {
-      fun->value_ptr.function->is_setf_func = 1;
-
-      ret = alloc_empty_cons_pair ();
-
-      increment_refcount (env->setf_sym);
-      ret->value_ptr.cons_pair->car = env->setf_sym;
-
-      ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
-
-      increment_refcount (sym);
-      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = sym;
-
-      return ret;
-    }
-
-  if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
-      != &nil_object)
-    {
-      fun = compile_function (fun, env, outcome);
-
-      if (!fun)
-	return NULL;
-    }
-
-  increment_refcount (sym);
-  return sym;
-}
-
-
-struct object *
-evaluate_defmacro (struct object *list, struct environment *env,
-		   struct outcome *outcome)
+builtin_al_defmacro (struct object *list, struct environment *env,
+		     struct outcome *outcome)
 {
   struct object *mac, *sym;
 
@@ -32862,15 +32769,6 @@ evaluate_defmacro (struct object *list, struct environment *env,
 
   mac->value_ptr.function->name = sym;
   add_reference (mac, sym, 0);
-
-  if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
-      != &nil_object)
-    {
-      mac = compile_function (mac, env, outcome);
-
-      if (!mac)
-	return NULL;
-    }
 
   increment_refcount (sym);
   return sym;

@@ -33,6 +33,26 @@
 
 
 
+(cl-user:al-defmacro 'defmacro '(name lambdal &body body)
+		     '`(progn
+			 (apply 'cl-user:al-defmacro ',name ',lambdal ',body)
+			 (if cl-user:*al-compile-when-defining*
+			     (compile ',name))
+			 ',name))
+
+
+(defmacro defun (name lambdal &body body)
+  `(progn
+     (setf (fdefinition ',name)
+	   (if cl-user:*al-compile-when-defining*
+	       (compile nil (lambda ,lambdal . ,body))
+	       (function (lambda ,lambdal . ,body))))
+     (setf (cl-user:al-function-name (fdefinition ',name))
+	   ',name)
+     ',name))
+
+
+
 (defun machine-instance nil)
 (defun machine-type nil)
 (defun machine-version nil)
@@ -3515,32 +3535,32 @@
 
 
 
-(export '(*features* *default-pathname-defaults* machine-instance machine-type
-	  machine-version short-site-name long-site-name *modules* provide
-	  require describe describe-object inspect lambda-parameters-limit
-	  call-arguments-limit multiple-values-limit array-rank-limit
-	  array-dimension-limit array-total-size-limit char-code-limit
-	  lambda-list-keywords identity constantly *read-default-float-format*
-	  pi 1+ 1- minusp plusp abs zerop signum mod rem evenp oddp rationalize
-	  gcd lcm isqrt conjugate cis upgraded-complex-part-type logand logandc1
-	  logandc2 logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
-	  boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
-	  boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
-	  boole-set boole-xor boole *gensym-counter* gensym gentemp first second
-	  third fourth fifth sixth seventh eighth ninth tenth rest caar cadr
-	  cdar cddr caaar caadr cadar caddr cdaar cdadr cddar cdddr caaaar
-	  caaadr caadar caaddr cadaar cadadr caddar cadddr cdaaar cdaadr cdadar
-	  cdaddr cddaar cddadr cdddar cddddr make-list copy-alist copy-tree
-	  tree-equal sublis nsublis endp butlast nbutlast acons pairlis shiftf
-	  rotatef defsetf when unless define-modify-macro incf decf cond
-	  otherwise case ccase ecase typecase ctypecase etypecase return
-	  multiple-value-bind multiple-value-setq prog prog*
-	  multiple-value-prog1 every some notany notevery member member-if
-	  member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
-	  rassoc rassoc-if rassoc-if-not position position-if position-if-not
-	  count count-if count-if-not remove remove-if-not delete delete-if
-	  delete-if-not remove-duplicates delete-duplicates substitute
-	  substitute-if substitute-if-not nsubstitute nsubstitute-if
+(export '(*features* *default-pathname-defaults* defmacro defun machine-instance
+	  machine-type machine-version short-site-name long-site-name *modules*
+	  provide require describe describe-object inspect
+	  lambda-parameters-limit call-arguments-limit multiple-values-limit
+	  array-rank-limit array-dimension-limit array-total-size-limit
+	  char-code-limit lambda-list-keywords identity constantly
+	  *read-default-float-format* pi 1+ 1- minusp plusp abs zerop signum mod
+	  rem evenp oddp rationalize gcd lcm isqrt conjugate cis
+	  upgraded-complex-part-type logand logandc1 logandc2 logeqv lognand
+	  lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1 boole-andc2
+	  boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior boole-nand
+	  boole-nor boole-orc1 boole-orc2 boole-set boole-xor boole
+	  *gensym-counter* gensym gentemp first second third fourth fifth sixth
+	  seventh eighth ninth tenth rest caar cadr cdar cddr caaar caadr cadar
+	  caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar
+	  cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
+	  cddddr make-list copy-alist copy-tree tree-equal sublis nsublis endp
+	  butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
+	  define-modify-macro incf decf cond otherwise case ccase ecase typecase
+	  ctypecase etypecase return multiple-value-bind multiple-value-setq
+	  prog prog* multiple-value-prog1 every some notany notevery member
+	  member-if member-if-not find find-if find-if-not assoc assoc-if
+	  assoc-if-not rassoc rassoc-if rassoc-if-not position position-if
+	  position-if-not count count-if count-if-not remove remove-if-not
+	  delete delete-if delete-if-not remove-duplicates delete-duplicates
+	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
 	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
 	  nsubst-if-not nreverse revappend nreconc adjoin fill replace push
 	  pushnew pop set-difference nset-difference union nunion intersection
