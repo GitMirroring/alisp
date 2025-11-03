@@ -3381,7 +3381,7 @@
 	   (if verbose
 	       (format t ";;; Compiling file ~a...~%" infile))
 	   (with-open-file (instr infile :direction :input)
-	     (with-open-file (outstr outname :direction :output :if-exists :overwrite)
+	     (with-open-file (outstr outname :direction :output :if-exists :overwrite :if-does-not-exist :create)
 	       (do nil
 		   (nil)
 		 (let ((obj (read instr nil eofsym)))
