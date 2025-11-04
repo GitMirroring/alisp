@@ -3082,8 +3082,6 @@ struct object *builtin_slot_value
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_slot_makunbound
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defgeneric
-(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_ensure_generic_function
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defmethod
@@ -4135,7 +4133,6 @@ add_standard_definitions (struct environment *env)
 		    builtin_setf_slot_value, 0);
   add_builtin_form ("SLOT-MAKUNBOUND", env, builtin_slot_makunbound,
 		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DEFGENERIC", env, evaluate_defgeneric, TYPE_MACRO, NULL, 0);
   add_builtin_form ("ENSURE-GENERIC-FUNCTION", env,
 		    builtin_ensure_generic_function, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
@@ -34406,83 +34403,6 @@ builtin_slot_makunbound (struct object *list, struct environment *env,
 
   outcome->type = SLOT_NOT_FOUND;
   return NULL;
-}
-
-
-struct object *
-evaluate_defgeneric (struct object *list, struct environment *env,
-		     struct outcome *outcome)
-{
-  struct object *sym, *fun;
-
-  if (list_length (list) < 2)
-    {
-      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
-    }
-
-  if ((!IS_SYMBOL (CAR (list))
-       && !(CAR (list)->type == TYPE_CONS_PAIR
-	    && list_length (CAR (list)) == 2
-	    && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	    && IS_SYMBOL (CAR (CDR (CAR (list))))))
-      || !IS_LIST (CAR (CDR (list))))
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
-    : SYMBOL (CAR (CDR (CAR (list))));
-
-  if (sym->value_ptr.symbol->function_cell
-      && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
-	  || !(sym->value_ptr.symbol->function_cell->value_ptr.function->
-	       flags & GENERIC_FUNCTION)))
-    {
-      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-      return NULL;
-    }
-
-  fun = create_function (CAR (CDR (list)), &nil_object, env, outcome, 0, 0);
-
-  if (!fun)
-    return NULL;
-
-  fun->value_ptr.function->flags |= GENERIC_FUNCTION;
-
-  if (SYMBOL (inspect_variable (env->al_compile_when_defining_sym, env))
-      != &nil_object)
-    {
-      fun->value_ptr.function->flags |= COMPILED_FUNCTION;
-    }
-
-  if (IS_SYMBOL (CAR (list)))
-    {
-      if (sym->value_ptr.symbol->function_cell)
-	{
-	  delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
-	}
-
-      sym->value_ptr.symbol->function_cell = fun;
-      add_reference (sym, fun, 1);
-    }
-  else
-    {
-      if (sym->value_ptr.symbol->setf_func_cell)
-	{
-	  delete_reference (sym, sym->value_ptr.symbol->setf_func_cell, 2);
-	}
-
-      sym->value_ptr.symbol->setf_func_cell = fun;
-      add_reference (sym, fun, 2);
-
-      fun->value_ptr.function->is_setf_func = 1;
-    }
-
-  fun->value_ptr.function->name = sym;
-  add_reference (fun, sym, 0);
-
-  return fun;
 }
 
 

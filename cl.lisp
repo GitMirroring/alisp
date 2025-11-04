@@ -52,6 +52,10 @@
      ',name))
 
 
+(defmacro defgeneric (name lambdal &rest args)
+  `(ensure-generic-function ',name :lambda-list ',lambdal))
+
+
 
 (defun machine-instance nil)
 (defun machine-type nil)
@@ -3535,14 +3539,14 @@
 
 
 
-(export '(*features* *default-pathname-defaults* defmacro defun machine-instance
-	  machine-type machine-version short-site-name long-site-name *modules*
-	  provide require describe describe-object inspect
-	  lambda-parameters-limit call-arguments-limit multiple-values-limit
-	  array-rank-limit array-dimension-limit array-total-size-limit
-	  char-code-limit lambda-list-keywords identity constantly
-	  *read-default-float-format* pi 1+ 1- minusp plusp abs zerop signum mod
-	  rem evenp oddp rationalize gcd lcm isqrt conjugate cis
+(export '(*features* *default-pathname-defaults* defmacro defun defgeneric
+	  machine-instance machine-type machine-version short-site-name
+	  long-site-name *modules* provide require describe describe-object
+	  inspect lambda-parameters-limit call-arguments-limit
+	  multiple-values-limit array-rank-limit array-dimension-limit
+	  array-total-size-limit char-code-limit lambda-list-keywords identity
+	  constantly *read-default-float-format* pi 1+ 1- minusp plusp abs zerop
+	  signum mod rem evenp oddp rationalize gcd lcm isqrt conjugate cis
 	  upgraded-complex-part-type logand logandc1 logandc2 logeqv lognand
 	  lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1 boole-andc2
 	  boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior boole-nand
