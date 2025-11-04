@@ -1820,6 +1820,7 @@ make_test ("(add-method #'genfun8 meth)", "#<STANDARD-GENERIC-FUNCTION GENFUN8>"
 make_test ("(find-method #'genfun8 '(:before) '(integer))", "#<STANDARD-METHOD GENFUN8 :BEFORE (INTEGER)>");
 make_test ("(defgeneric genfun9 (x &key))", "#<STANDARD-GENERIC-FUNCTION GENFUN9>");
 make_test ("(defmethod genfun9 (x &key y))", "#<STANDARD-METHOD GENFUN9 (T)>");
+make_test ("(defun genfun10 nil)", "GENFUN10");
 make_test ("(defgeneric (setf genfun10) (x y z))", "#<STANDARD-GENERIC-FUNCTION (SETF GENFUN10)>");
 make_test ("(defmethod (setf genfun10) (x y z) (list x y z))", "#<STANDARD-METHOD (SETF GENFUN10) (T T T)>");
 make_test ("(setf (genfun10 0 1) 2)", "(2 0 1)");
