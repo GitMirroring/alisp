@@ -1808,6 +1808,8 @@ make_test ("(defmethod genfun8 :before ((x integer)) (write 'second))", "#<STAND
 make_test ("(defmethod genfun8 ((x integer)) (write 'third))", "#<STANDARD-METHOD GENFUN8 (INTEGER)>");
 make_test ("(genfun8 0)", "SECONDTHIRDFIRST\nTHIRD");
 make_test ("(find-method #'genfun8 nil '(integer))", "#<STANDARD-METHOD GENFUN8 (INTEGER)>");
+make_test ("(typep (find-method #'genfun8 nil '(integer)) 'method)", "T");
+make_test ("(typep 0 'method)", "NIL");
 make_test ("(find-method #'genfun8 '(:after) '(integer))", "#<STANDARD-METHOD GENFUN8 :AFTER (INTEGER)>");
 make_test ("(function-lambda-expression (find-method #'genfun8 '(:after) '(integer)))", "((WRITE 'FIRST))");
 make_test ("(find-method #'genfun8 '(:before) '(integer))", "#<STANDARD-METHOD GENFUN8 :BEFORE (INTEGER)>");
