@@ -1038,6 +1038,7 @@ method
   struct object *(*builtin_method)
     (struct object *list, struct environment *env, struct outcome *outcome);
 
+  int is_compiled;
   struct object *body;
 
   struct object *object_reader_class;
@@ -2398,6 +2399,11 @@ int type_broadcast_stream (const struct object *obj,
 			   struct environment *env, struct outcome *outcome);
 int type_standard_object (const struct object *obj, const struct object *typespec,
 			  struct environment *env, struct outcome *outcome);
+int type_method (const struct object *obj, const struct object *typespec,
+		 struct environment *env, struct outcome *outcome);
+int type_al_compiled_method (const struct object *obj,
+			     const struct object *typespec,
+			     struct environment *env, struct outcome *outcome);
 int type_generic_function (const struct object *obj, const struct object *typespec,
 			   struct environment *env, struct outcome *outcome);
 int type_class (const struct object *obj, const struct object *typespec,
@@ -4367,6 +4373,7 @@ add_standard_definitions (struct environment *env)
 		    "GENERIC-FUNCTION", (char *)NULL);
   add_builtin_type ("GENERIC-FUNCTION", env, type_generic_function, 1,
 		    "FUNCTION", (char *)NULL);
+  add_builtin_type ("METHOD", env, type_method, 1, (char *)NULL);
   add_builtin_type ("CLASS", env, type_class, 1, (char *)NULL);
   add_builtin_type ("STRUCTURE-CLASS", env, type_structure_class, 1,
 		    (char *)NULL);
@@ -4731,6 +4738,9 @@ add_standard_definitions (struct environment *env)
   env->al_print_always_two_colons =
     define_variable ("*AL-PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
 
+
+  add_builtin_type ("AL-COMPILED-METHOD", env, type_al_compiled_method, 1,
+		    "METHOD", (char *)NULL);
 
   add_builtin_type ("AL-BACKQUOTE", env, type_al_backquote, 1, (char *)NULL);
   add_builtin_type ("AL-COMMA", env, type_al_comma, 1, (char *)NULL);
@@ -7845,6 +7855,7 @@ alloc_method (void)
   meth->type = TYPE_METHOD;
   m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
   m->qualifier = PRIMARY_METHOD;
+  m->is_compiled = 0;
   m->body = NULL;
   m->builtin_method = NULL;
   m->object_reader_class = NULL;
@@ -11038,6 +11049,8 @@ compile_function (struct object *fun, struct environment *env,
 	  if (!compile_body (ml->meth->value_ptr.method->body, 0, env, outcome))
 	    return NULL;
 
+	  ml->meth->value_ptr.method->is_compiled = 1;
+
 	  ml = ml->next;
 	}
     }
@@ -13317,7 +13330,7 @@ add_builtin_type (char *name, struct environment *env,
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1,
-					  EXTERNAL_VISIBILITY, 1, pack, 0, 0);
+					  INTERNAL_VISIBILITY, 1, pack, 0, 1);
 
       prepend_object_to_obj_list (par, &sym->value_ptr.symbol->parent_types);
     }
@@ -19066,6 +19079,22 @@ type_standard_object (const struct object *obj, const struct object *typespec,
 {
   return obj->type == TYPE_STANDARD_OBJECT || obj->type == TYPE_STANDARD_CLASS
     || obj->type == TYPE_STRUCTURE_CLASS;
+}
+
+
+int
+type_method (const struct object *obj, const struct object *typespec,
+	     struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_METHOD;
+}
+
+
+int
+type_al_compiled_method (const struct object *obj, const struct object *typespec,
+			 struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_METHOD && obj->value_ptr.method->is_compiled;
 }
 
 
@@ -34706,6 +34735,8 @@ evaluate_defmethod (struct object *list, struct environment *env,
     {
       if (!compile_body (m->body, 0, env, outcome))
 	return NULL;
+
+      m->is_compiled = 1;
     }
 
   ml = malloc_and_check (sizeof (*ml));
@@ -34763,10 +34794,13 @@ builtin_add_method (struct object *list, struct environment *env,
       add_reference (CAR (list), ml->meth, 6+ind*8);
     }
 
-  if (CAR (list)->value_ptr.function->flags & COMPILED_FUNCTION)
+  if (CAR (list)->value_ptr.function->flags & COMPILED_FUNCTION
+      && !ml->meth->value_ptr.method->is_compiled)
     {
       if (!compile_body (ml->meth->value_ptr.method->body, 0, env, outcome))
 	return NULL;
+
+      ml->meth->value_ptr.method->is_compiled = 1;
     }
 
   increment_refcount (CAR (list));
