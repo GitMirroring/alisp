@@ -2671,6 +2671,12 @@ struct object *builtin_setf_macro_function (struct object *list,
 struct object *builtin_setf_al_function_name (struct object *list,
 					      struct environment *env,
 					      struct outcome *outcome);
+struct object *builtin_setf_al_function_body (struct object *list,
+					      struct environment *env,
+					      struct outcome *outcome);
+struct object *builtin_setf_al_function_attributes (struct object *list,
+						    struct environment *env,
+						    struct outcome *outcome);
 
 struct object *builtin_method_print_object (struct object *list,
 					    struct environment *env,
@@ -3027,6 +3033,10 @@ struct object *evaluate_setf
 struct object *evaluate_psetf
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_function_name
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_function_body
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_function_attributes
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_function
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4670,6 +4680,10 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
 		    TYPE_FUNCTION, builtin_setf_al_function_name, 0);
+  add_builtin_form ("AL-FUNCTION-BODY", env, builtin_al_function_body,
+		    TYPE_FUNCTION, builtin_setf_al_function_body, 0);
+  add_builtin_form ("AL-FUNCTION-ATTRIBUTES", env, builtin_al_function_attributes,
+		    TYPE_FUNCTION, builtin_setf_al_function_attributes, 0);
 
   add_builtin_form ("AL-PRINT-RESTARTS", env, builtin_al_print_restarts,
 		    TYPE_FUNCTION, NULL, 0);
@@ -26204,6 +26218,116 @@ builtin_setf_al_function_name (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_setf_al_function_body (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  struct object *newval;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  newval = CAR (list);
+
+  if (CAR (CDR (list))->type != TYPE_FUNCTION
+      && CAR (CDR (list))->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:FUNCTION CL:METHOD)",
+			       env, outcome);
+    }
+
+  if (CAR (CDR (list))->type == TYPE_FUNCTION)
+    {
+      delete_reference (CAR (CDR (list)),
+			CAR (CDR (list))->value_ptr.function->body, 1);
+      CAR (CDR (list))->value_ptr.function->body = newval;
+      add_reference (CAR (CDR (list)), newval, 1);
+    }
+  else
+    {
+      delete_reference (CAR (CDR (list)),
+			CAR (CDR (list))->value_ptr.method->body, 1);
+      CAR (CDR (list))->value_ptr.method->body = newval;
+      add_reference (CAR (CDR (list)), newval, 1);
+    }
+
+  increment_refcount (newval);
+  return newval;
+}
+
+
+struct object *
+builtin_setf_al_function_attributes (struct object *list, struct environment *env,
+				     struct outcome *outcome)
+{
+  struct object *cons;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  cons = CAR (list);
+
+  if (CAR (CDR (list))->type != TYPE_FUNCTION
+      && CAR (CDR (list))->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:FUNCTION CL:METHOD)",
+			       env, outcome);
+    }
+
+  if (CAR (CDR (list))->type == TYPE_FUNCTION)
+    {
+      CAR (CDR (list))->value_ptr.function->flags &= ~COMPILED_FUNCTION;
+
+      while (cons->type == TYPE_CONS_PAIR)
+	{
+	  if (CAR (cons) == KEYWORD (":COMPILED"))
+	    CAR (CDR (list))->value_ptr.function->flags |= COMPILED_FUNCTION;
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  cons = CDR (cons);
+	}
+    }
+  else
+    {
+      CAR (CDR (list))->value_ptr.method->is_compiled = 0;
+
+      while (cons->type == TYPE_CONS_PAIR)
+	{
+	  if (CAR (cons) == KEYWORD (":COMPILED"))
+	    CAR (CDR (list))->value_ptr.method->is_compiled = 1;
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return NULL;
+	    }
+
+	  cons = CDR (cons);
+	}
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
+}
+
+
+struct object *
 builtin_method_print_object (struct object *list, struct environment *env,
 			     struct outcome *outcome)
 {
@@ -32997,6 +33121,78 @@ builtin_al_function_name (struct object *list, struct environment *env,
 
   increment_refcount (CAR (list)->value_ptr.function->name);
   return CAR (list)->value_ptr.function->name;
+}
+
+
+struct object *
+builtin_al_function_body (struct object *list, struct environment *env,
+			  struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION && CAR (list)->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (list), "(CL:OR CL:FUNCTION CL:METHOD)", env,
+			       outcome);
+    }
+
+  ret = CAR (list)->type == TYPE_FUNCTION
+    ? (CAR (list)->value_ptr.function->body ? CAR (list)->value_ptr.function->body
+       : &nil_object)
+    : (CAR (list)->value_ptr.method->body ? CAR (list)->value_ptr.method->body
+       : &nil_object);
+  increment_refcount (ret);
+
+  return ret;
+}
+
+
+struct object *
+builtin_al_function_attributes (struct object *list, struct environment *env,
+				struct outcome *outcome)
+{
+  struct object *ret = &nil_object, *cons;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION && CAR (list)->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (list), "(CL:OR CL:FUNCTION CL:METHOD)", env,
+			       outcome);
+    }
+
+  if (CAR (list)->type == TYPE_FUNCTION)
+    {
+      if (CAR (list)->value_ptr.function->flags & COMPILED_FUNCTION)
+	{
+	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car = KEYWORD (":COMPILED");
+	  add_reference (cons, CAR (cons), 0);
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+	}
+    }
+  else
+    {
+      if (CAR (list)->value_ptr.method->is_compiled)
+	{
+	  cons = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->car = KEYWORD (":COMPILED");
+	  add_reference (cons, CAR (cons), 0);
+	  cons->value_ptr.cons_pair->cdr = ret;
+	  ret = cons;
+	}
+    }
+
+  return ret;
 }
 
 
