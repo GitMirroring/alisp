@@ -162,6 +162,14 @@ package.  There are also some non-standard extensions of standard functions.
   for anonymous functions), while (SETF AL-FUNCTION-NAME) lets you change the
   name
 
+- the functions AL-FUNCTION-BODY and (SETF AL-FUNCTION-BODY) let you inspect and
+  change the body of a function or method object
+
+- each function or method object carries a set of attributes expressed as a list
+  of keywords.  The functions AL-FUNCTION-ATTRIBUTES and (SETF
+  AL-FUNCTION-ATTRIBUTES) let you inspect and change such list.  Currently the
+  only recognised attribute is :COMPILED
+
 - the function AL-DUMP-FIELDS takes either a structure object, a standard object
   or a standard class and dumps the slots of that object or class as a list.
   Each slot of an object is represented as a symbol with its name, if it is
