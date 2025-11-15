@@ -713,6 +713,8 @@ make_test ("(defun (setf foo2) (a1 a2) (list a1 a2))", "(SETF FOO2)");
 make_test ("#'(setf foo2)", "#<FUNCTION (SETF FOO2)>");
 make_test ("(fboundp '(setf foo2))", "T");
 make_test ("(fboundp '(setf foo3))", "NIL");
+make_test ("(function-lambda-expression #'car)", "(LAMBDA NIL)\nNIL\nCAR");
+make_test ("(function-lambda-expression #'(setf macro-function))", "(LAMBDA NIL)\nNIL\n(SETF MACRO-FUNCTION)");
 make_test ("(let ((x 0) (y 1)) (setf (foo2 x) y))", "(1 0)");
 make_test ("(defsetf 2dlist (l x y) (newval) `(setf (elt (elt ,l ,x) ,y) ,newval))", "2DLIST");
 make_test ("(let ((ls '((1 2) (3 4))) (x_ 1) (y_ 0)) (list (setf (2dlist ls x_ y_) 10) ls))", "(10 ((1 2) (10 4)))");
