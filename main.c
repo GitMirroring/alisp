@@ -3072,6 +3072,8 @@ struct object *evaluate_symbol_macrolet
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_copy_structure
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defclass
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_find_class
@@ -4135,6 +4137,8 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SYMBOL-MACROLET", env, evaluate_symbol_macrolet, TYPE_MACRO,
 		    NULL, 1);
   add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("COPY-STRUCTURE", env, builtin_copy_structure, TYPE_FUNCTION,
+		    NULL, 0);
   add_builtin_form ("DEFCLASS", env, evaluate_defclass, TYPE_MACRO, NULL, 0);
   add_builtin_form ("FIND-CLASS", env, builtin_find_class, TYPE_FUNCTION, NULL,
 		    0);
@@ -34059,6 +34063,26 @@ evaluate_defstruct (struct object *list, struct environment *env,
 
   increment_refcount (name);
   return name;
+}
+
+
+struct object *
+builtin_copy_structure (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_STRUCTURE)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return call_structure_copyier (CAR (list)->value_ptr.structure->class_name,
+				 list, env, outcome);
 }
 
 
