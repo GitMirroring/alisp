@@ -35256,10 +35256,29 @@ builtin_function_lambda_expression (struct object *list, struct environment *env
 	}
       else
 	{
-	  prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
-				      CAR (list)->value_ptr.function->name :
-				      &nil_object, &outcome->other_values);
-	  increment_refcount (outcome->other_values->obj);
+	  if (CAR (list)->value_ptr.function->is_setf_func)
+	    {
+	      cons = alloc_empty_cons_pair ();
+
+	      increment_refcount (env->setf_sym);
+	      cons->value_ptr.cons_pair->car = env->setf_sym;
+
+	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
+
+	      increment_refcount (CAR (list)->value_ptr.function->name);
+	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+		= CAR (list)->value_ptr.function->name;
+
+	      prepend_object_to_obj_list (cons, &outcome->other_values);
+	    }
+	  else
+	    {
+	      prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
+					  CAR (list)->value_ptr.function->name :
+					  &nil_object, &outcome->other_values);
+	      increment_refcount (outcome->other_values->obj);
+	    }
 	}
 
       prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
