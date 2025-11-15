@@ -29013,7 +29013,7 @@ struct object *
 builtin_fboundp (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  struct object *s, *sym;
+  struct object *s;
 
   if (list_length (list) != 1)
     {
@@ -29031,13 +29031,11 @@ builtin_fboundp (struct object *list, struct environment *env,
       return NULL;
     }
 
-  sym = SYMBOL (s);
-
   if ((CAR (list)->type == TYPE_CONS_PAIR
        && SYMBOL (CAR (CDR (CAR (list))))->value_ptr.symbol->setf_func_cell)
       || (CAR (list)->type != TYPE_CONS_PAIR &&
-	  (sym->value_ptr.symbol->function_cell
-	   || sym->value_ptr.symbol->function_dyn_bins_num)))
+	  (SYMBOL (s)->value_ptr.symbol->function_cell
+	   || SYMBOL (s)->value_ptr.symbol->function_dyn_bins_num)))
     {
       return &t_object;
     }
@@ -29239,22 +29237,38 @@ struct object *
 builtin_fmakunbound (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
+  struct object *sym;
+
   if (list_length (list) != 1)
     {
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (!IS_SYMBOL (CAR (list)))
+  if (!IS_SYMBOL (CAR (list))
+      && !(CAR (list)->type == TYPE_CONS_PAIR && list_length (CAR (list)) == 2
+	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
+	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
     {
-      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
     }
 
-  delete_reference (SYMBOL (CAR (list)),
-		    SYMBOL (CAR (list))->value_ptr.symbol->function_cell, 1);
-  SYMBOL (CAR (list))->value_ptr.symbol->function_cell = NULL;
+  sym = CAR (list)->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (CAR (list))))
+    : SYMBOL (CAR (list));
 
-  increment_refcount (SYMBOL (CAR (list)));
-  return SYMBOL (CAR (list));
+  if (CAR (list)->type == TYPE_CONS_PAIR)
+    {
+      delete_reference (sym, sym->value_ptr.symbol->setf_func_cell, 2);
+      sym->value_ptr.symbol->setf_func_cell = NULL;
+    }
+  else
+    {
+      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
+      sym->value_ptr.symbol->function_cell = NULL;
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
