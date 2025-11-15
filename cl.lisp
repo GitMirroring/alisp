@@ -3294,6 +3294,42 @@
 
 
 
+(defun macroexpand-form-deeply (form)
+  (setq form (macroexpand form))
+  (cond
+    ((atom form) form)
+    ((member (car form) '(if progn block tagbody multiple-value-call and or catch throw progv unwind-protect) :test #'eq)
+     (let ((body (macroexpand-body (cdr form))))
+       (if (eq body (cdr form))
+	   form
+	   (cons (car form) body))))
+    ((member (car form) '(let let* dotimes dolist handler-bind restart-bind) :test #'eq)
+     (let ((body (macroexpand-body (cddr form))))
+       (if (eq body (cddr form))
+	   form
+	   (list* (car form) (cadr form) body))))))
+
+
+(defun macroexpand-body (body)
+  (let ((out body)
+	(cons body)
+	last-copied last-alloc)
+    (while cons
+      (let ((form (macroexpand-form-deeply (car cons))))
+	(when (not (eq form (car cons)))
+	  (while (not (eq last-copied cons))
+	    (if last-alloc
+		(progn
+		  (setf (cdr last-alloc) (cons (cadr last-copied) (cddr last-copied)))
+		  (setq last-alloc (cdr last-alloc) last-copied (cdr last-copied)))
+		(progn
+		  (setq last-alloc (cons (car body) (cdr body)))
+		  (setq last-copied body out last-alloc))))
+	  (setf (car last-alloc) form)))
+      (setq cons (cdr cons)))
+    out))
+
+
 (defparameter *compile-file-truename* nil)
 
 (defparameter *compile-file-pathname* nil)
