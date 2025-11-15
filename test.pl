@@ -1582,6 +1582,8 @@ make_test ("(ship-y s1)", "1");
 make_test ("(setf (ship-x s1) 2 (ship-y s1) 3)", "3");
 make_test ("(ship-x (copy-ship s1))", "2");
 make_test ("(ship-y (copy-ship s1))", "3");
+make_test ("(ship-x (copy-structure s1))", "2");
+make_test ("(ship-y (copy-structure s1))", "3");
 make_test ("(defparameter s1 (make-ship :y 0 :y 1 :x 2))", "S1");
 make_test ("(ship-x s1)", "2");
 make_test ("(ship-y s1)", "0");
