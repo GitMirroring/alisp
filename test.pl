@@ -508,16 +508,16 @@ make_test ("(mac 0 1 2)", "((MAC 0 1 2) 0 1 2)");
 make_test ("(defmacro mac2 (&whole wh &rest args) wh)", "MAC2");
 make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 
-make_test ("(gensym)", "#:G33");
-make_test ("(gensym)", "#:G34");
-make_test ("(gensym 5)", "#:G5");
-make_test ("(gensym \"A\")", "#:A35");
+make_test ("(gensym)", "#:G35");
 make_test ("(gensym)", "#:G36");
+make_test ("(gensym 5)", "#:G5");
+make_test ("(gensym \"A\")", "#:A37");
+make_test ("(gensym)", "#:G38");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
-make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G37)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G37)\n(FOO2)");
-make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G38)\n(SETQ A #:G38)\nA");
-make_test ("(get-setf-expansion '(w a b))", "(#:G39 #:G40)\n(A B)\n(#:G41)\n(FUNCALL (FUNCTION (SETF W)) #:G41 #:G39 #:G40)\n(W #:G39 #:G40)");
+make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G39)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G39)\n(FOO2)");
+make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G40)\n(SETQ A #:G40)\nA");
+make_test ("(get-setf-expansion '(w a b))", "(#:G41 #:G42)\n(A B)\n(#:G43)\n(FUNCALL (FUNCTION (SETF W)) #:G43 #:G41 #:G42)\n(W #:G41 #:G42)");
 
 make_test ("(open-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-input*)", "T");
