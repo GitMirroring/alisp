@@ -3149,7 +3149,7 @@
 
 
 
-(defun format (out fstr &rest args)
+(defun format-returning-unconsumed-args (out fstr &rest args)
   (let ((*standard-output* (if (not out)
 			       (make-string-output-stream)
 			       (if (streamp out)
@@ -3157,57 +3157,72 @@
 				   *standard-output*)))
 	in-spec at-sign colon sign num dirargs iterbegin otherargs skip-mode
 	(case-conv #'identity))
-    (do ((i 0 (+ 1 i)))
-	((= i (length fstr)))
-      (let ((ch (elt fstr i)))
-	(if in-spec
-	    (cond
-	      ((char= ch #\@) (setq at-sign t dirargs (cons num dirargs) num 0))
-	      ((char= ch #\:) (setq colon t dirargs (cons num dirargs) num 0))
-	      ((digit-char-p ch) (setq num (+ (* 10 num) (digit-char-p ch))))
-	      ((char= ch #\,) (setq dirargs (cons num dirargs) num 0))
-	      ((char= ch #\~) (unless skip-mode (write-char #\~)) (setq in-spec nil))
-	      ((char= ch #\%) (unless skip-mode (write-char #\newline)) (setq in-spec nil))
-	      ((char= ch #\&) (unless skip-mode (fresh-line)) (setq in-spec nil))
-	      ((char= ch #\() (setq case-conv (lambda (s) (if (or (stringp s)
-								  (symbolp s)
-								  (characterp s))
-							      (string-downcase (string s))
-							      s))
-				    in-spec nil))
-	      ((char= ch #\)) (setq case-conv #'identity in-spec nil))
-	      ((char= ch #\{) (setq iterbegin i in-spec nil)
-	       (if at-sign
-		   (setq otherargs nil)
-		   (setq otherargs args args (car args))))
-	      ((char= ch #\}) (if args
-				  (setq i iterbegin)
-				  (setq iterbegin nil args (cdr otherargs)))
-	       (setq in-spec nil skip-mode nil))
-	      ((char= ch #\^) (unless args (setq skip-mode t)) (setq in-spec nil))
-	      ((char-equal ch #\s) (unless skip-mode (prin1 (car args))) (setq args (cdr args)) (setq in-spec nil))
-	      ((char-equal ch #\a) (unless skip-mode (princ (funcall case-conv (car args)))) (setq args (cdr args)) (setq in-spec nil))
-	      ((find (char-downcase ch) "doxr")
-	       (setq dirargs (cons num dirargs))
-	       (let ((*print-base* (cond
-				     ((char-equal ch #\d) 10)
-				     ((char-equal ch #\o) 8)
-				     ((char-equal ch #\x) 16)
-				     ((char-equal ch #\r) (car dirargs))))
-		     (*print-escape* nil)
-		     (*print-radix* nil)
-		     (*print-readably* nil))
-		 (unless skip-mode
-		   (write (car args)))
-		 (setq args (cdr args))
-		 (setq in-spec nil)))
-	      (t (setq in-spec nil)))
-	    (if (char= ch #\~)
-		(setq in-spec t at-sign nil colon nil sign nil num 0 dirargs nil)
-		(unless skip-mode
-		  (write-char ch))))))
-    (if (not out)
-	(get-output-stream-string *standard-output*))))
+    (if (functionp fstr)
+	(progn
+	  (apply fstr out args)
+	  nil)
+	(progn
+	  (do ((i 0 (+ 1 i)))
+	      ((= i (length fstr)))
+	    (let ((ch (elt fstr i)))
+	      (if in-spec
+		  (cond
+		    ((char= ch #\@) (setq at-sign t dirargs (cons num dirargs) num 0))
+		    ((char= ch #\:) (setq colon t dirargs (cons num dirargs) num 0))
+		    ((digit-char-p ch) (setq num (+ (* 10 num) (digit-char-p ch))))
+		    ((char= ch #\,) (setq dirargs (cons num dirargs) num 0))
+		    ((char= ch #\~) (unless skip-mode (write-char #\~)) (setq in-spec nil))
+		    ((char= ch #\%) (unless skip-mode (write-char #\newline)) (setq in-spec nil))
+		    ((char= ch #\&) (unless skip-mode (fresh-line)) (setq in-spec nil))
+		    ((char= ch #\() (setq case-conv (lambda (s) (if (or (stringp s)
+									(symbolp s)
+									(characterp s))
+								    (string-downcase (string s))
+								    s))
+					  in-spec nil))
+		    ((char= ch #\)) (setq case-conv #'identity in-spec nil))
+		    ((char= ch #\{) (setq iterbegin i in-spec nil)
+		     (if at-sign
+			 (setq otherargs nil)
+			 (setq otherargs args args (car args))))
+		    ((char= ch #\}) (if args
+					(setq i iterbegin)
+					(setq iterbegin nil args (cdr otherargs)))
+		     (setq in-spec nil skip-mode nil))
+		    ((char= ch #\^) (unless args (setq skip-mode t)) (setq in-spec nil))
+		    ((char-equal ch #\s) (unless skip-mode (prin1 (car args))) (setq args (cdr args)) (setq in-spec nil))
+		    ((char-equal ch #\a) (unless skip-mode (princ (funcall case-conv (car args)))) (setq args (cdr args)) (setq in-spec nil))
+		    ((find (char-downcase ch) "doxr")
+		     (setq dirargs (cons num dirargs))
+		     (let ((*print-base* (cond
+					   ((char-equal ch #\d) 10)
+					   ((char-equal ch #\o) 8)
+					   ((char-equal ch #\x) 16)
+					   ((char-equal ch #\r) (car dirargs))))
+			   (*print-escape* nil)
+			   (*print-radix* nil)
+			   (*print-readably* nil))
+		       (unless skip-mode
+			 (write (car args)))
+		       (setq args (cdr args))
+		       (setq in-spec nil)))
+		    (t (setq in-spec nil)))
+		  (if (char= ch #\~)
+		      (setq in-spec t at-sign nil colon nil sign nil num 0 dirargs nil)
+		      (unless skip-mode
+			(write-char ch))))))
+	  (if (not out)
+	      (values (get-output-stream-string *standard-output*) args)
+	      (values nil args))))))
+
+
+(defun format (out fstr &rest args)
+  (values (apply 'format-returning-unconsumed-args out fstr args)))
+
+
+(defmacro formatter (fstr)
+  (lambda (out &rest args)
+    (nth-value 1 (apply 'format-returning-unconsumed-args out fstr args))))
 
 
 
@@ -3630,7 +3645,7 @@
 	  princ print write-to-string prin1-to-string princ-to-string
 	  force-output with-input-from-string with-output-to-string pprint
 	  do-all-symbols find-all-symbols with-slots with-accessors
-	  with-package-iterator with-hash-table-iterator loop format
+	  with-package-iterator with-hash-table-iterator loop format formatter
 	  encode-universal-time decode-universal-time get-universal-time
 	  *readtable* with-compilation-unit *compile-file-truename*
 	  *compile-file-pathname* *compile-print* *compile-verbose*
