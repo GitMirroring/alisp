@@ -798,9 +798,9 @@ environment
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *err_out_sym, *print_escape_sym, *print_readably_sym, *print_base_sym,
-    *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_pretty_sym,
-    *print_pprint_dispatch_sym, *read_eval_sym, *read_base_sym,
-    *read_suppress_sym, *load_pathname_sym, *load_truename_sym,
+    *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_case_sym,
+    *print_pretty_sym, *print_pprint_dispatch_sym, *read_eval_sym,
+    *read_base_sym, *read_suppress_sym, *load_pathname_sym, *load_truename_sym,
     *break_on_signals_sym;
 
   struct object *abort_sym;
@@ -3271,7 +3271,7 @@ int write_char_to_stream (struct stream *stream, char ch);
 int write_long_to_stream (struct stream *stream, long z);
 
 int print_as_symbol (const char *sym, size_t len, int print_escapes,
-		     struct stream *str);
+		     struct environment *env, struct stream *str);
 int print_symbol_name (const struct symbol_name *sym, struct environment *env,
 		       struct stream *str);
 int print_symbol (const struct object *sym, struct environment *env,
@@ -4603,6 +4603,7 @@ add_standard_definitions (struct environment *env)
   env->print_radix_sym = define_variable ("*PRINT-RADIX*", &nil_object, env);
   env->print_array_sym = define_variable ("*PRINT-ARRAY*", &t_object, env);
   env->print_gensym_sym = define_variable ("*PRINT-GENSYM*", &t_object, env);
+  env->print_case_sym = define_variable ("*PRINT-CASE*", KEYWORD (":UPCASE"), env);
   env->print_pretty_sym = define_variable ("*PRINT-PRETTY*", &nil_object, env);
   env->print_pprint_dispatch_sym = define_variable ("*PRINT-PPRINT-DISPATCH*",
 						    &nil_object, env);
@@ -38439,13 +38440,14 @@ is_printer_escaping_enabled (struct environment *env)
 
 int
 print_as_symbol (const char *sym, size_t len, int print_escapes,
-		 struct stream *str)
+		 struct environment *env, struct stream *str)
 {
   size_t i, sz, emp;
   char need_multiple_escape [] = "().,;'#\"\n";
-  int do_need_multiple_escape = 0;
+  int do_need_multiple_escape = 0, word_begins = 1, ch;
   enum object_type t;
   const char *ne, *te;
+  struct object *p_case = SYMBOL (inspect_variable (env->print_case_sym, env));
 
   sz = len;
 
@@ -38490,11 +38492,44 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 
   for (i = 0; i < len; i++)
     {
+      if (!isalnum ((unsigned char)sym [i]))
+	word_begins = 1;
+
       if (print_escapes && (sym [i] == '|' || sym [i] == '\\')
 	  && write_to_stream (str, "\\", 1) < 0)
 	return -1;
 
-      if (write_to_stream (str, &sym [i], 1) < 0)
+      if (!do_need_multiple_escape && isupper ((unsigned char)sym [i]))
+	{
+	  if (p_case == KEYWORD (":DOWNCASE"))
+	    {
+	      ch = tolower (*(unsigned char *)&sym [i]);
+
+	      if (write_to_stream (str, (char *)&ch, 1) < 0)
+		return -1;
+	    }
+	  else if (p_case == KEYWORD (":CAPITALIZE"))
+	    {
+	      if (word_begins && isalnum ((unsigned char)sym [i]))
+		{
+		  ch = toupper (*(unsigned char *)&sym [i]);
+		  word_begins = 0;
+		}
+	      else
+		ch = tolower (*(unsigned char *)&sym [i]);
+
+	      if (write_to_stream (str, (char *)&ch, 1) < 0)
+		return -1;
+	    }
+	  else
+	    {
+	      ch = toupper (*(unsigned char *)&sym [i]);
+
+	      if (write_to_stream (str, (char *)&ch, 1) < 0)
+		return -1;
+	    }
+	}
+      else if (write_to_stream (str, &sym [i], 1) < 0)
 	return -1;
     }
 
@@ -38518,7 +38553,7 @@ print_symbol_name (const struct symbol_name *sym, struct environment *env,
       if (pesc && write_to_stream (str, "#:", 2) < 0)
 	return -1;
 
-      return print_as_symbol (sym->value, sym->used_size, 1, str);
+      return print_as_symbol (sym->value, sym->used_size, 1, env, str);
     }
 }
 
@@ -38547,7 +38582,7 @@ print_symbol (const struct object *sym, struct environment *env,
 		   || (!ispres && isshad)))
 	{
 	  print_as_symbol (home->value_ptr.package->name,
-			   home->value_ptr.package->name_len, pesc, str);
+			   home->value_ptr.package->name_len, pesc, env, str);
 
 	  if (is_external_in_home_package (sym) && SYMBOL (patc) == &nil_object)
 	    {
@@ -38560,7 +38595,7 @@ print_symbol (const struct object *sym, struct environment *env,
     }
 
   return print_as_symbol (sym->value_ptr.symbol->name,
-			  sym->value_ptr.symbol->name_len, pesc, str);
+			  sym->value_ptr.symbol->name_len, pesc, env, str);
 }
 
 
@@ -39564,7 +39599,7 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("read error: package ");
       print_as_symbol (err->obj->value_ptr.package->name,
-		       err->obj->value_ptr.package->name_len, 1,
+		       err->obj->value_ptr.package->name_len, 1, env,
 		       std_out->value_ptr.stream);
       printf (" not found\n");
     }
@@ -39573,10 +39608,10 @@ print_error (struct outcome *err, struct environment *env)
       printf ("read error: symbol ");
       print_as_symbol (err->obj->value_ptr.symbol_name->actual_symname,
 		       err->obj->value_ptr.symbol_name->actual_symname_used_s, 1,
-		       std_out->value_ptr.stream);
+		       env, std_out->value_ptr.stream);
       printf (" is not external in package ");
       print_as_symbol (err->obj->value_ptr.symbol_name->value,
-		       err->obj->value_ptr.symbol_name->used_size, 1,
+		       err->obj->value_ptr.symbol_name->used_size, 1, env,
 		       std_out->value_ptr.stream);
       printf ("\n");
     }
@@ -39949,7 +39984,7 @@ print_error (struct outcome *err, struct environment *env)
     {
       printf ("eval error: using package ");
       print_as_symbol (err->pack->value_ptr.package->name,
-		       err->pack->value_ptr.package->name_len, 1,
+		       err->pack->value_ptr.package->name_len, 1, env,
 		       std_out->value_ptr.stream);
       printf (" would cause conflict on symbol ");
       print_symbol (err->obj, env, std_out->value_ptr.stream);
