@@ -1335,6 +1335,9 @@ make_test ("(let ((*print-base* 8) (*print-radix* t)) (write 1/2))", "#o1/2\n1/2
 make_test ("(let ((*print-base* 8) (*print-radix* t)) (write 10))", "#o12\n10");
 make_test ("(let ((*print-base* 16) (*print-radix* t)) (write 10))", "#xa\n10");
 make_test ("(let ((*print-gensym* nil)) (write (make-symbol \"FOOO\")) (write '#:foo))", "FOOOFOO\n#:FOO");
+make_test ("(let ((*print-case* :downcase)) (write 'hello))", "hello\nHELLO");
+make_test ("(let ((*print-case* :upcase)) (write 'he|ll|o))", "|HEllO|\n|HEllO|");
+make_test ("(let ((*print-case* :capitalize)) (write 'hello))", "Hello\nHELLO");
 make_test ("(prin1 '|Aa,a|)", "|Aa,a|\n|Aa,a|");
 make_test ("(prin1 #\\a)", "#\\a\n#\\a");
 make_test ("(prin1 \"aaa\" *standard-output*)", "\"aaa\"\n\"aaa\"");
