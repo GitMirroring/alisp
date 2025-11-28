@@ -801,7 +801,8 @@ environment
     *print_radix_sym, *print_array_sym, *print_gensym_sym, *print_case_sym,
     *print_pretty_sym, *print_pprint_dispatch_sym, *read_eval_sym,
     *read_base_sym, *read_suppress_sym, *load_pathname_sym, *load_truename_sym,
-    *break_on_signals_sym;
+    *break_on_signals_sym, *plus_sym, *plus2_sym, *plus3_sym, *minus_sym,
+    *star2_sym, *star3_sym, *slash_sym, *slash2_sym, *slash3_sym;
 
   struct object *abort_sym;
 
@@ -1675,7 +1676,9 @@ struct line_list *append_line_to_list
 
 fixnum object_list_length (struct object_list *list);
 void prepend_object_to_obj_list (struct object *obj, struct object_list **list);
+struct object *prepend_object_to_list (struct object *obj, struct object *list);
 struct object_list *copy_list_to_obj_list (struct object *list);
+struct object *copy_obj_list_to_list (struct object_list *list);
 struct object *pop_object_from_obj_list (struct object_list **list);
 int is_object_in_obj_list (const struct object *obj,
 			   const struct object_list *list);
@@ -3399,7 +3402,7 @@ main (int argc, char *argv [])
   int c;
 #endif
 
-  struct object *result, *obj, *c_stdout, *al_argv;
+  struct object *result, *obj, *c_stdout, *al_argv, *slash;
   struct object_list *vals;
   struct environment env = {NULL};
 
@@ -3533,7 +3536,15 @@ main (int argc, char *argv [])
 
       while (obj)
 	{
+	  set_value (env.minus_sym, obj, 0, 0, &env, &eval_out);
+
 	  result = evaluate_object (obj, &env, &eval_out);
+
+	  set_value (env.plus3_sym, inspect_variable (env.plus2_sym, &env), 0, 0,
+		     &env, &eval_out);
+	  set_value (env.plus2_sym, inspect_variable (env.plus_sym, &env), 0, 0,
+		     &env, &eval_out);
+	  set_value (env.plus_sym, obj, 0, 0, &env, &eval_out);
 
 	  if (!result && eval_out.tag_to_jump_to)
 	    {
@@ -3575,32 +3586,57 @@ main (int argc, char *argv [])
 	      else if (eval_out.type != ABORT_TO_TOP_LEVEL)
 		print_error (&eval_out, &env);
 	    }
-	  else if (eval_out.no_value)
-	    {
-	      fresh_line (c_stdout->value_ptr.stream);
-	      eval_out.no_value = 0;
-	    }
 	  else
 	    {
-	      fresh_line (c_stdout->value_ptr.stream);
+	      set_value (env.star3_sym, inspect_variable (env.star2_sym, &env),
+			 0, 0, &env, &eval_out);
+	      set_value (env.star2_sym, inspect_variable (env.star_sym, &env),
+			 0, 0, &env, &eval_out);
 
-	      print_object (result, &env, c_stdout->value_ptr.stream);
-	      printf ("\n");
-	      c_stdout->value_ptr.stream->dirty_line = 0;
+	      set_value (env.slash3_sym, inspect_variable (env.slash2_sym, &env),
+			 0, 0, &env, &eval_out);
+	      set_value (env.slash2_sym, inspect_variable (env.slash_sym, &env),
+			 0, 0, &env, &eval_out);
 
-	      vals = eval_out.other_values;
-
-	      while (vals)
+	      if (eval_out.no_value)
 		{
-		  print_object (vals->obj, &env, c_stdout->value_ptr.stream);
+		  set_value (env.star_sym, &nil_object, 0, 0, &env, &eval_out);
+
+		  set_value (env.slash_sym, &nil_object, 0, 0, &env, &eval_out);
+
+		  fresh_line (c_stdout->value_ptr.stream);
+		  eval_out.no_value = 0;
+		}
+	      else
+		{
+		  set_value (env.star_sym, result, 0, 0, &env, &eval_out);
+
+		  slash = copy_obj_list_to_list (eval_out.other_values);
+		  slash = prepend_object_to_list (result, slash);
+		  decrement_refcount (CDR (slash));
+		  set_value (env.slash_sym, slash, 0, 0, &env, &eval_out);
+		  decrement_refcount (slash);
+
+		  fresh_line (c_stdout->value_ptr.stream);
+
+		  print_object (result, &env, c_stdout->value_ptr.stream);
 		  printf ("\n");
 		  c_stdout->value_ptr.stream->dirty_line = 0;
-		  vals = vals->next;
+
+		  vals = eval_out.other_values;
+
+		  while (vals)
+		    {
+		      print_object (vals->obj, &env, c_stdout->value_ptr.stream);
+		      printf ("\n");
+		      c_stdout->value_ptr.stream->dirty_line = 0;
+		      vals = vals->next;
+		    }
+
+		  free_object_list (eval_out.other_values);
+
+		  eval_out.other_values = NULL;
 		}
-
-	      free_object_list (eval_out.other_values);
-
-	      eval_out.other_values = NULL;
 	    }
 
 	  decrement_refcount (result);
@@ -4622,6 +4658,17 @@ add_standard_definitions (struct environment *env)
   env->break_on_signals_sym = define_variable ("*BREAK-ON-SIGNALS*", &nil_object,
 					       env);
 
+  env->plus_sym = define_variable ("+", &nil_object, env);
+  env->plus2_sym = define_variable ("++", &nil_object, env);
+  env->plus3_sym = define_variable ("+++", &nil_object, env);
+  env->minus_sym = define_variable ("-", &nil_object, env);
+  env->star_sym = define_variable ("*", &nil_object, env);
+  env->star2_sym = define_variable ("**", &nil_object, env);
+  env->star3_sym = define_variable ("***", &nil_object, env);
+  env->slash_sym = define_variable ("/", &nil_object, env);
+  env->slash2_sym = define_variable ("//", &nil_object, env);
+  env->slash3_sym = define_variable ("///", &nil_object, env);
+
   define_variable ("*FEATURES*", &nil_object, env);
 
   env->abort_sym = CREATE_BUILTIN_SYMBOL ("ABORT");
@@ -5389,6 +5436,20 @@ prepend_object_to_obj_list (struct object *obj, struct object_list **list)
 }
 
 
+struct object *
+prepend_object_to_list (struct object *obj, struct object *list)
+{
+  struct object *ret = alloc_empty_cons_pair ();
+
+  ret->value_ptr.cons_pair->car = obj;
+  add_reference (ret, obj, 0);
+  ret->value_ptr.cons_pair->cdr = list;
+  add_reference (ret, list, 1);
+
+  return ret;
+}
+
+
 struct object_list *
 copy_list_to_obj_list (struct object *list)
 {
@@ -5409,6 +5470,34 @@ copy_list_to_obj_list (struct object *list)
 
   if (curr)
     curr->next = NULL;
+
+  return ret;
+}
+
+
+struct object *
+copy_obj_list_to_list (struct object_list *list)
+{
+  struct object *ret = &nil_object, *cons;
+
+  while (list)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car = list->obj;
+      add_reference (cons, list->obj, 0);
+
+      list = list->next;
+    }
+
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
 }
@@ -12859,7 +12948,7 @@ struct object *
 enter_debugger (struct object *cond, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *obj, *result, *fun;
+  struct object *obj, *result, *fun, *slash;
   struct object_list *vals;
   struct restart_binding *r = env->restarts;
   int end_repl = 0, restnum = 1, restind;
@@ -13077,7 +13166,16 @@ enter_debugger (struct object *cond, struct environment *env,
 	  else
 	    {
 	      env->stepping_flags = 0;
+
+	      set_value (env->minus_sym, obj, 0, 0, env, outcome);
+
 	      result = evaluate_object (obj, env, outcome);
+
+	      set_value (env->plus3_sym, inspect_variable (env->plus2_sym, env),
+			 0, 0, env, outcome);
+	      set_value (env->plus2_sym, inspect_variable (env->plus_sym, env),
+			 0, 0, env, outcome);
+	      set_value (env->plus_sym, obj, 0, 0, env, outcome);
 	    }
 
 	  if (!result && (outcome->tag_to_jump_to || outcome->block_to_leave))
@@ -13131,32 +13229,57 @@ enter_debugger (struct object *cond, struct environment *env,
 		  print_error (outcome, env);
 		}
 	    }
-	  else if (outcome->no_value)
-	    {
-	      fresh_line (env->c_stdout->value_ptr.stream);
-	      outcome->no_value = 0;
-	    }
 	  else
 	    {
-	      fresh_line (env->c_stdout->value_ptr.stream);
+	      set_value (env->star3_sym, inspect_variable (env->star2_sym, env),
+			 0, 0, env, outcome);
+	      set_value (env->star2_sym, inspect_variable (env->star_sym, env),
+			 0, 0, env, outcome);
 
-	      print_object (result, env, env->c_stdout->value_ptr.stream);
-	      printf ("\n");
-	      env->c_stdout->value_ptr.stream->dirty_line = 0;
+	      set_value (env->slash3_sym, inspect_variable (env->slash2_sym, env),
+			 0, 0, env, outcome);
+	      set_value (env->slash2_sym, inspect_variable (env->slash_sym, env),
+			 0, 0, env, outcome);
 
-	      vals = outcome->other_values;
-
-	      while (vals)
+	      if (outcome->no_value)
 		{
-		  print_object (vals->obj, env, env->c_stdout->value_ptr.stream);
+		  set_value (env->star_sym, &nil_object, 0, 0, env, outcome);
+
+		  set_value (env->slash_sym, &nil_object, 0, 0, env, outcome);
+
+		  fresh_line (env->c_stdout->value_ptr.stream);
+		  outcome->no_value = 0;
+		}
+	      else
+		{
+		  set_value (env->star_sym, result, 0, 0, env, outcome);
+
+		  slash = copy_obj_list_to_list (outcome->other_values);
+		  slash = prepend_object_to_list (result, slash);
+		  decrement_refcount (CDR (slash));
+		  set_value (env->slash_sym, slash, 0, 0, env, outcome);
+		  decrement_refcount (slash);
+
+		  fresh_line (env->c_stdout->value_ptr.stream);
+
+		  print_object (result, env, env->c_stdout->value_ptr.stream);
 		  printf ("\n");
 		  env->c_stdout->value_ptr.stream->dirty_line = 0;
-		  vals = vals->next;
+
+		  vals = outcome->other_values;
+
+		  while (vals)
+		    {
+		      print_object (vals->obj, env, env->c_stdout->value_ptr.stream);
+		      printf ("\n");
+		      env->c_stdout->value_ptr.stream->dirty_line = 0;
+		      vals = vals->next;
+		    }
+
+		  free_object_list (outcome->other_values);
+
+		  outcome->other_values = NULL;
 		}
-
-	      free_object_list (outcome->other_values);
-
-	      outcome->other_values = NULL;
 	    }
 
 	  decrement_refcount (result);
@@ -32555,7 +32678,6 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
 			      struct outcome *outcome)
 {
   struct object *res, *ret, *cons;
-  struct object_list *vals;
 
   if (list_length (list) != 1)
     {
@@ -32578,22 +32700,9 @@ evaluate_multiple_value_list (struct object *list, struct environment *env,
   add_reference (ret, res, 0);
   decrement_refcount (res);
 
-  vals = outcome->other_values;
+  ret->value_ptr.cons_pair->cdr = copy_obj_list_to_list (outcome->other_values);
 
-  while (vals)
-    {
-      cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-
-      cons->value_ptr.cons_pair->car = vals->obj;
-      add_reference (cons, vals->obj, 0);
-      decrement_refcount (vals->obj);
-
-      vals = vals->next;
-    }
-
-  cons->value_ptr.cons_pair->cdr = &nil_object;
-
-  free_object_list_structure (outcome->other_values);
+  free_object_list (outcome->other_values);
 
   outcome->other_values = NULL;
 
