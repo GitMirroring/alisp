@@ -23546,22 +23546,29 @@ struct object *
 builtin_fresh_line (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct object *std_out;
+  struct object *stream;
+  int l;
 
-  if (list_length (list))
+  if ((l = list_length (list)) > 1)
     {
-      return raise_al_wrong_number_of_arguments (0, 0, env, outcome);
+      return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
-  std_out = inspect_variable (env->std_out_sym, env);
+  if (l && CAR (list)->type != TYPE_STREAM)
+    return raise_type_error (CAR (list), "CL:STREAM", env, outcome);
 
-  if (std_out->value_ptr.stream->type == SYNONYM_STREAM
-      && !(std_out = resolve_synonym_stream (std_out, env, outcome)))
+  if (!l)
+    stream = inspect_variable (env->std_out_sym, env);
+  else
+    stream = CAR (list);
+
+  if (stream->value_ptr.stream->type == SYNONYM_STREAM
+      && !(stream = resolve_synonym_stream (stream, env, outcome)))
     {
       return NULL;
     }
 
-  return fresh_line (std_out->value_ptr.stream);
+  return fresh_line (stream->value_ptr.stream);
 }
 
 
