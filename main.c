@@ -1213,6 +1213,7 @@ stream
   enum stream_direction direction;
 
   FILE *file;
+  FILE *otherfile;
   struct object *namestring;
 
   struct object *string;
@@ -1912,7 +1913,7 @@ struct object *create_file_stream (enum stream_content_type content_type,
 				   int if_doesnt_exist, struct outcome *outcome);
 struct object *create_stream_from_open_file (enum stream_content_type content_type,
 					     enum stream_direction direction,
-					     FILE *file);
+					     FILE *file, FILE *otherfile);
 struct object *create_string_stream (enum stream_direction direction,
 				     struct object *instr, int begin, int end);
 struct object *create_synonym_stream (struct object *sym);
@@ -4599,16 +4600,21 @@ add_standard_definitions (struct environment *env)
 
   env->std_in_sym = define_variable ("*STANDARD-INPUT*",
 				     create_stream_from_open_file
-				     (CHARACTER_STREAM, INPUT_STREAM, stdin),
+				     (CHARACTER_STREAM, INPUT_STREAM, stdin, NULL),
 				     env);
 
   env->c_stdout = create_stream_from_open_file (CHARACTER_STREAM, OUTPUT_STREAM,
-						stdout);
+						stdout, NULL);
 
   env->std_out_sym = define_variable ("*STANDARD-OUTPUT*", env->c_stdout, env);
 
   env->err_out_sym = define_variable ("*ERROR-OUTPUT*", env->c_stdout, env);
   add_reference (env->err_out_sym, env->c_stdout, 0);
+
+  define_variable ("*QUERY-IO*",
+		   create_stream_from_open_file (CHARACTER_STREAM,
+						 BIDIRECTIONAL_STREAM, stdin,
+						 stdout), env);
 
   env->quote_sym = CREATE_BUILTIN_SYMBOL ("QUOTE");
   env->function_sym = CREATE_BUILTIN_SYMBOL ("FUNCTION");
@@ -10148,6 +10154,7 @@ create_file_stream (enum stream_content_type content_type,
 
   str->type = FILE_STREAM;
   str->file = f;
+  str->otherfile = NULL;
   str->content_type = content_type;
   str->direction = direction;
   str->is_open = 1;
@@ -10163,9 +10170,9 @@ create_file_stream (enum stream_content_type content_type,
 }
 
 
-struct object *
-create_stream_from_open_file (enum stream_content_type content_type,
-			      enum stream_direction direction, FILE *file)
+struct object *create_stream_from_open_file (enum stream_content_type content_type,
+					     enum stream_direction direction,
+					     FILE *file, FILE *otherfile)
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
@@ -10177,6 +10184,7 @@ create_stream_from_open_file (enum stream_content_type content_type,
   str->is_open = 1;
   str->dirty_line = 0;
   str->file = file;
+  str->otherfile = otherfile;
 
   obj->type = TYPE_STREAM;
   obj->value_ptr.stream = str;
@@ -22503,6 +22511,9 @@ builtin_file_position (struct object *list, struct environment *env,
       return raise_type_error (CAR (CDR (list)), "(CL:INTEGER 0)", env, outcome);
     }
 
+  if (CAR (list)->value_ptr.stream->otherfile)
+    return &nil_object;
+
   if (l == 1)
     {
       ret = ftell (CAR (list)->value_ptr.stream->file);
@@ -22540,6 +22551,9 @@ builtin_file_length (struct object *list, struct environment *env,
     {
       return raise_type_error (CAR (list), "CL:FILE-STREAM", env, outcome);
     }
+
+  if (CAR (list)->value_ptr.stream->otherfile)
+    return &nil_object;
 
   f = CAR (list)->value_ptr.stream->file;
 
@@ -23908,7 +23922,12 @@ builtin_close (struct object *list, struct environment *env,
     return &nil_object;
 
   if (str->value_ptr.stream->type == FILE_STREAM)
-    fclose (str->value_ptr.stream->file);
+    {
+      if (str->value_ptr.stream->otherfile)
+	fclose (str->value_ptr.stream->otherfile);
+
+      fclose (str->value_ptr.stream->file);
+    }
 
   str->value_ptr.stream->is_open = 0;
 
@@ -24266,7 +24285,10 @@ builtin_finish_output (struct object *list, struct environment *env,
 
   if (str->value_ptr.stream->type == FILE_STREAM)
     {
-      fflush (str->value_ptr.stream->file);
+      if (str->value_ptr.stream->otherfile)
+	fflush (str->value_ptr.stream->otherfile);
+      else
+	fflush (str->value_ptr.stream->file);
     }
 
   return &nil_object;
@@ -38426,7 +38448,8 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
     }
   else if (stream->type == FILE_STREAM)
     {
-      if (fwrite (str, 1, size, stream->file) < size)
+      if (fwrite (str, 1, size, stream->otherfile ? stream->otherfile
+		  : stream->file) < size)
 	return -1;
 
       if (str [size-1] == '\n')
@@ -40870,7 +40893,12 @@ free_object (struct object *obj)
     {
       if (obj->value_ptr.stream->is_open
 	  && obj->value_ptr.stream->type == FILE_STREAM)
-	fclose (obj->value_ptr.stream->file);
+	{
+	  if (obj->value_ptr.stream->otherfile)
+	    fclose (obj->value_ptr.stream->otherfile);
+
+	  fclose (obj->value_ptr.stream->file);
+	}
 
       if (obj->value_ptr.stream->type == STRING_STREAM)
 	delete_reference (obj, obj->value_ptr.stream->string, 0);

@@ -2558,6 +2558,25 @@
 (setq *print-pprint-dispatch* (cons (list 't #'print-object-nicely 0) *print-pprint-dispatch*))
 
 
+(defun yes-or-no-p (&optional contr &rest args)
+  (when contr
+    (fresh-line *query-io*)
+    (apply 'format *query-io* contr args)
+    (write-string " " *query-io*))
+  (write-string "[yes/no] " *query-io*)
+  (let ((answ (read-line *query-io*)))
+    (not (null (string-equal answ "yes")))))
+
+(defun y-or-n-p (&optional contr &rest args)
+  (when contr
+    (fresh-line *query-io*)
+    (apply 'format *query-io* contr args)
+    (write-string " " *query-io*))
+  (write-string "[y/n] " *query-io*)
+  (let ((answ (read-line *query-io*)))
+    (not (null (string-equal answ "y")))))
+
+
 
 (defmacro do-all-symbols (varres &body body)
   (let ((packsym (gensym)))
@@ -3644,14 +3663,15 @@
 	  with-open-stream read-sequence terpri write-line write-sequence prin1
 	  princ print write-to-string prin1-to-string princ-to-string
 	  force-output with-input-from-string with-output-to-string pprint
-	  do-all-symbols find-all-symbols with-slots with-accessors
-	  with-package-iterator with-hash-table-iterator loop format formatter
-	  encode-universal-time decode-universal-time get-universal-time
-	  *readtable* with-compilation-unit *compile-file-truename*
-	  *compile-file-pathname* *compile-print* *compile-verbose*
-	  compile-file-pathname compile-file with-standard-io-syntax
-	  handler-case restart-case with-simple-restart find-restart cerror
-	  break ignore-errors abort continue muffle-warning documentation))
+	  yes-or-no-p y-or-n-p do-all-symbols find-all-symbols with-slots
+	  with-accessors with-package-iterator with-hash-table-iterator loop
+	  format formatter encode-universal-time decode-universal-time
+	  get-universal-time *readtable* with-compilation-unit
+	  *compile-file-truename* *compile-file-pathname* *compile-print*
+	  *compile-verbose* compile-file-pathname compile-file
+	  with-standard-io-syntax handler-case restart-case with-simple-restart
+	  find-restart cerror break ignore-errors abort continue muffle-warning
+	  documentation))
 
 
 
