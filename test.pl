@@ -1432,6 +1432,8 @@ make_test ("(loop for (x y . z) = '(0 1 . 2) then nil while x)", "NIL");
 make_test ("(loop for i to 5 summing i)", "15");
 make_test ("(loop for i to 5 sum i into ret finally (return ret))", "15");
 make_test ("(loop for (x . y) in '((0 . 1) (2 . 3)) sum x sum y)", "6");
+make_test ("(loop for i to 10 do (if (= i 5) (loop-finish)) finally (write 'done))", "DONE\nNIL");
+make_test ("(loop for i in '(0 1 2 3 4 5 6) sum i do (if (= i 4) (loop-finish)))", "10");
 make_test ("(defparameter tbl (make-hash-table))", "TBL");
 make_test ("(setf (gethash 1 tbl) 5)", "5");
 make_test ("(setf (gethash 2 tbl) 6)", "6");
