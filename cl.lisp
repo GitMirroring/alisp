@@ -3154,12 +3154,13 @@
 			    ,@initially-forms
 			    (unless ,skip-body-sym
 			      (block ,inner-block-name
-				(tagbody
-				   ,body-tag
-				   ,@do-forms
-				   ,@(if iteration-setup
-					 `((progn ,@(reverse iteration-setup))))
-				   (go ,body-tag))))
+				(macrolet ((loop-finish nil (return-from ,inner-block-name nil)))
+				  (tagbody
+				     ,body-tag
+				     ,@do-forms
+				     ,@(if iteration-setup
+					   `((progn ,@(reverse iteration-setup))))
+				     (go ,body-tag)))))
 			    ,@finally-forms)
 			 ,(if returnvar
 			      `(return-from ,block-name ,returnvar)
@@ -3665,10 +3666,10 @@
 	  force-output with-input-from-string with-output-to-string pprint
 	  yes-or-no-p y-or-n-p do-all-symbols find-all-symbols with-slots
 	  with-accessors with-package-iterator with-hash-table-iterator loop
-	  format formatter encode-universal-time decode-universal-time
-	  get-universal-time *readtable* with-compilation-unit
-	  *compile-file-truename* *compile-file-pathname* *compile-print*
-	  *compile-verbose* compile-file-pathname compile-file
+	  loop-finish format formatter encode-universal-time
+	  decode-universal-time get-universal-time *readtable*
+	  with-compilation-unit *compile-file-truename* *compile-file-pathname*
+	  *compile-print* *compile-verbose* compile-file-pathname compile-file
 	  with-standard-io-syntax handler-case restart-case with-simple-restart
 	  find-restart cerror break ignore-errors abort continue muffle-warning
 	  documentation))
