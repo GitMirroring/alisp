@@ -2598,6 +2598,27 @@
 	    (setq out (cons s out)))))))
 
 
+(defun apropos (str &optional pack)
+  (let ((list (apropos-list str pack)))
+    (dolist (s list)
+      (write s)
+      (terpri))))
+
+
+(defun apropos-list (str &optional pack)
+  (let* ((str (string str))
+	 (pack (find-package pack))
+	 (packs (if pack
+		    (list pack)
+		    (list-all-packages)))
+	 out)
+    (dolist (p packs)
+      (do-symbols (sym p)
+	(if (search str (string sym))
+	    (setq out (cons sym out)))))
+    out))
+
+
 
 (defmacro with-slots (slots inst &rest forms)
   (let ((instsym (gensym)))
@@ -3664,15 +3685,15 @@
 	  with-open-stream read-sequence terpri write-line write-sequence prin1
 	  princ print write-to-string prin1-to-string princ-to-string
 	  force-output with-input-from-string with-output-to-string pprint
-	  yes-or-no-p y-or-n-p do-all-symbols find-all-symbols with-slots
-	  with-accessors with-package-iterator with-hash-table-iterator loop
-	  loop-finish format formatter encode-universal-time
-	  decode-universal-time get-universal-time *readtable*
-	  with-compilation-unit *compile-file-truename* *compile-file-pathname*
-	  *compile-print* *compile-verbose* compile-file-pathname compile-file
-	  with-standard-io-syntax handler-case restart-case with-simple-restart
-	  find-restart cerror break ignore-errors abort continue muffle-warning
-	  documentation))
+	  yes-or-no-p y-or-n-p do-all-symbols find-all-symbols apropos
+	  apropos-list with-slots with-accessors with-package-iterator
+	  with-hash-table-iterator loop loop-finish format formatter
+	  encode-universal-time decode-universal-time get-universal-time
+	  *readtable* with-compilation-unit *compile-file-truename*
+	  *compile-file-pathname* *compile-print* *compile-verbose*
+	  compile-file-pathname compile-file with-standard-io-syntax
+	  handler-case restart-case with-simple-restart find-restart cerror
+	  break ignore-errors abort continue muffle-warning documentation))
 
 
 
