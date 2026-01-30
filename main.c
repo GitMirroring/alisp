@@ -761,6 +761,7 @@ environment
   int debugging_depth;
 
   enum stepping_flags stepping_flags;
+  int continue_till_end_of_function;
   struct object *next_eval, *watched_obj, *obj_field, *new_value, *last_command;
 
   int is_profiling;
@@ -3644,6 +3645,7 @@ main (int argc, char *argv [])
 	  decrement_refcount (obj);
 
 	  env.stepping_flags = 0;
+	  env.continue_till_end_of_function = 0;
 
 	  env.stack_depth = 0;
 
@@ -12945,6 +12947,7 @@ print_stepping_help (void)
   printf ("Debugger help:\n\n"
 	  " h or ?  Print this help\n"
 	  " c       Resume execution\n"
+	  " e       Continue execution and break at the end of current function\n"
 	  " n       Step over next form\n"
 	  " s       Step inside next form\n"
 	  " x       Expand macro\n"
@@ -13122,6 +13125,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		   && (symbol_equals (obj, "H", env)
 		       || symbol_equals (obj, "?", env)
 		       || symbol_equals (obj, "C", env)
+		       || symbol_equals (obj, "E", env)
 		       || symbol_equals (obj, "N", env)
 		       || symbol_equals (obj, "X", env)
 		       || symbol_equals (obj, "S", env)
@@ -13143,6 +13147,11 @@ enter_debugger (struct object *cond, struct environment *env,
 		{
 		  if (symbol_equals (obj, "C", env))
 		    env->stepping_flags = 0;
+		  else if (symbol_equals (obj, "E", env))
+		    {
+		      env->stepping_flags = 0;
+		      env->continue_till_end_of_function = 1;
+		    }
 		  else if (symbol_equals (obj, "N", env))
 		    env->stepping_flags = STEP_OVER_FORM;
 		  else if (symbol_equals (obj, "X", env))
@@ -15905,7 +15914,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
   struct object *ret, *ret2, *args = NULL, *body;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
-    && !(env->stepping_flags & STEPPING_OVER_FORM), onlylex = env->only_lexical;
+    && !(env->stepping_flags & STEPPING_OVER_FORM),
+    continue_till_end_of_function = env->continue_till_end_of_function,
+    onlylex = env->only_lexical;
+
   unsigned isprof = 0;
   clock_t time, evaltime = 0;
 
@@ -15975,7 +15987,10 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  && func->value_ptr.function->name != env->function_sym && ret
 	  && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 	      || (env->stepping_flags
-		  && !(env->stepping_flags & STEPPING_OVER_FORM))))
+		  && !(env->stepping_flags & STEPPING_OVER_FORM))
+	      || (func->type == TYPE_FUNCTION
+		  && env->continue_till_end_of_function
+		  && !continue_till_end_of_function)))
 	{
 	  printf ("builtin ");
 	  print_function_name (func, env);
@@ -15983,6 +15998,13 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+
+	  if (func->type == TYPE_FUNCTION && env->continue_till_end_of_function
+	      && !continue_till_end_of_function)
+	    {
+	      env->continue_till_end_of_function = 0;
+	      env->stepping_flags = STEP_INSIDE_FORM;
+	    }
 	}
 
       if (eval_args)
@@ -16226,13 +16248,21 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
       if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 		  || (env->stepping_flags
-		      && !(env->stepping_flags & STEPPING_OVER_FORM))))
+		      && !(env->stepping_flags & STEPPING_OVER_FORM))
+		  || (env->continue_till_end_of_function
+		      && !continue_till_end_of_function)))
 	{
 	  print_function_name (func, env);
 	  printf (" returned ");
 	  print_object (ret, env, env->c_stdout->value_ptr.stream);
 	  printf ("\n");
 	  env->c_stdout->value_ptr.stream->dirty_line = 0;
+
+	  if (env->continue_till_end_of_function && !continue_till_end_of_function)
+	    {
+	      env->continue_till_end_of_function = 0;
+	      env->stepping_flags = STEP_INSIDE_FORM;
+	    }
 	}
 
       env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
@@ -17437,7 +17467,8 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
   struct object *args, *ret = NULL, *res, *tmp, *margs;
   struct method_list *applm = NULL, *lapplm, *mlist,
     *ml = func->value_ptr.function->methods;
-  int applnum = 0, i, found_primary = 0, isprof = 0, isappl;
+  int applnum = 0, i, found_primary = 0, isprof = 0, isappl,
+    continue_till_end_of_function = env->continue_till_end_of_function;
   clock_t time;
 
   if (eval_args)
@@ -17604,7 +17635,9 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
 
   if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
 	      || (env->stepping_flags
-		  && !(env->stepping_flags & STEPPING_OVER_FORM))))
+		  && !(env->stepping_flags & STEPPING_OVER_FORM))
+	      || (env->continue_till_end_of_function
+		  && !continue_till_end_of_function)))
     {
       printf ("generic function ");
       print_function_name (func, env);
@@ -17612,6 +17645,12 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       print_object (ret, env, env->c_stdout->value_ptr.stream);
       printf ("\n");
       env->c_stdout->value_ptr.stream->dirty_line = 0;
+
+      if (env->continue_till_end_of_function && !continue_till_end_of_function)
+	{
+	  env->continue_till_end_of_function = 0;
+	  env->stepping_flags = STEP_INSIDE_FORM;
+	}
     }
 
   return ret;
