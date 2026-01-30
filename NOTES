@@ -404,6 +404,21 @@ expanded.
 
 
 
+__Error reporting__
+
+When I started writing alisp, the condition system was not in place, so I had to
+devise a simpler scheme for reporting errors: each time the interpreter
+encountered an abnormal situation, it would print an appropriate error message
+and abort to top level.
+This was not terribly useful, since you couldn't really handle those conditions
+nor enter the debugger.
+Then at some point I implemented a decent subset of the condition system, so I
+started replacing the old system of reporting with the one that ANSI requires.
+Many types of error situations now raise proper conditions; the old system is
+used in some places, but I will gradually replace it.
+
+
+
 __Debugging__
 
 Stepping is always available in the debugger, no matter if you enter it with
@@ -419,6 +434,8 @@ BREAK or in any other way.  The following commands are available:
   the macro expansion process, then in the resulting form
 
 - C continues execution at normal speed
+
+- E continues execution until the end of current function
 
 - BT is equivalent to (CL-USER:AL-PRINT-BACKTRACE)
 
