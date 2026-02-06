@@ -778,7 +778,7 @@ environment
   struct method_list *method_list;
 
 
-  struct object *c_stdout;
+  struct object *c_stdin, *c_stdout;
 
 
   struct object *quote_sym, *function_sym, *lambda_sym, *setf_sym;
@@ -798,7 +798,7 @@ environment
   struct object *gensym_counter_sym;
 
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
-    *err_out_sym, *trace_out_sym, *print_escape_sym, *print_readably_sym,
+    *err_out_sym, *trace_out_sym, *debug_io_sym, *print_escape_sym, *print_readably_sym,
     *print_base_sym, *print_radix_sym, *print_array_sym, *print_gensym_sym,
     *print_case_sym, *print_pretty_sym, *print_pprint_dispatch_sym, *read_eval_sym,
     *read_base_sym, *read_suppress_sym, *load_pathname_sym, *load_truename_sym,
@@ -1642,8 +1642,8 @@ void *al_memmem (const void *haystack, size_t haystacklen, const void *needle,
 		 size_t needlelen);
 #endif
 
-char *al_readline (const char prompt []);
-char *read_line_interactively (const char prompt []);
+char *al_readline (FILE *outstr, FILE *instr, const char prompt []);
+char *read_line_interactively (FILE *outstr, FILE *instr, const char prompt []);
 char *generate_prompt (struct environment *env);
 
 enum outcome_type read_object_continued
@@ -1652,16 +1652,17 @@ enum outcome_type read_object_continued
  int ends_with_eof, struct environment *env, struct outcome *outcome,
  const char **obj_begin, const char **obj_end);
 struct object *complete_object_interactively
-(struct object *obj, int is_empty_list, struct environment *env,
- struct outcome *outcome, const char **input_left, size_t *input_left_size,
- char **wholeline);
-struct object *read_object_interactively_continued
-(const char *input, size_t input_size, struct environment *env,
- struct outcome *outcome, const char **input_left, size_t *input_left_size,
- char **wholeline);
-struct object *read_object_interactively
-(struct environment *env, struct outcome *outcome, const char **input_left,
+(struct object *obj, int is_empty_list, struct stream *outstr, struct stream *instr,
+ struct environment *env, struct outcome *outcome, const char **input_left,
  size_t *input_left_size, char **wholeline);
+struct object *read_object_interactively_continued
+(const char *input, size_t input_size, struct stream *outstr, struct stream *instr,
+ struct environment *env, struct outcome *outcome, const char **input_left,
+ size_t *input_left_size, char **wholeline);
+struct object *read_object_interactively
+(struct stream *outstr, struct stream *instr, struct environment *env,
+ struct outcome *outcome, const char **input_left, size_t *input_left_size,
+ char **wholeline);
 
 int next_char (unsigned char *ch, const char **input, size_t *size,
 	       FILE *stream);
@@ -1690,6 +1691,11 @@ void free_object_list_structure (struct object_list *list);
 enum outcome_type read_object
 (struct object **obj, int backts_commas_balance, const char *input, size_t size,
  FILE *stream, int preserve_whitespace, int ends_with_eof,
+ struct environment *env, struct outcome *outcome, const char **obj_begin,
+ const char **obj_end);
+enum outcome_type read_actual_object
+(struct object **obj, int backts_commas_balance, const char *input,
+ size_t size, FILE *stream, int preserve_whitespace, int ends_with_eof,
  struct environment *env, struct outcome *outcome, const char **obj_begin,
  const char **obj_end);
 
@@ -3276,6 +3282,10 @@ struct object *resolve_synonym_stream (struct object *str,
 int is_printer_escaping_enabled (struct environment *env);
 
 int write_to_stream (struct stream *stream, const char *str, size_t size);
+
+#define print_to_stream(stream, string) (write_to_stream (stream, string, \
+							  strlen (string)))
+
 int write_char_to_stream (struct stream *stream, char ch);
 int write_long_to_stream (struct stream *stream, long z);
 
@@ -3537,8 +3547,10 @@ main (int argc, char *argv [])
       free (wholel);
       env.stack_depth = 0;
 
-      obj = read_object_interactively (&env, &eval_out, &input_left,
-				       &input_left_s, &wholel);
+      obj = read_object_interactively (env.c_stdout->value_ptr.stream,
+				       env.c_stdin->value_ptr.stream, &env,
+				       &eval_out, &input_left, &input_left_s,
+				       &wholel);
 
       while (obj)
 	{
@@ -3655,6 +3667,8 @@ main (int argc, char *argv [])
 
 	  if (input_left && input_left_s > 0)
 	    obj = read_object_interactively_continued (input_left, input_left_s,
+						       env.c_stdout->value_ptr.stream,
+						       env.c_stdin->value_ptr.stream,
 						       &env, &eval_out,
 						       &input_left,
 						       &input_left_s, &wholel);
@@ -3870,7 +3884,7 @@ parse_command_line (int argc, char *argv [], int *load_cl, int *quit)
 void
 add_standard_definitions (struct environment *env)
 {
-  struct object *rs, *stdobjsym, *stdobjcl;
+  struct object *rs, *stdobjsym, *stdobjcl, *bidir_str;
   struct package_record *rec;
   struct parameter *lambdal;
 
@@ -4604,10 +4618,10 @@ add_standard_definitions (struct environment *env)
   define_constant_by_name ("INTERNAL-TIME-UNITS-PER-SECOND",
 			   create_integer_from_long (CLOCKS_PER_SEC), env);
 
-  env->std_in_sym = define_variable ("*STANDARD-INPUT*",
-				     create_stream_from_open_file
-				     (CHARACTER_STREAM, INPUT_STREAM, stdin, NULL),
-				     env);
+  env->c_stdin = create_stream_from_open_file (CHARACTER_STREAM, INPUT_STREAM,
+					       stdin, NULL);
+
+  env->std_in_sym = define_variable ("*STANDARD-INPUT*", env->c_stdin, env);
 
   env->c_stdout = create_stream_from_open_file (CHARACTER_STREAM, OUTPUT_STREAM,
 						stdout, NULL);
@@ -4620,10 +4634,14 @@ add_standard_definitions (struct environment *env)
   env->trace_out_sym = define_variable ("*TRACE-OUTPUT*", env->c_stdout, env);
   add_reference (env->trace_out_sym, env->c_stdout, 0);
 
-  define_variable ("*QUERY-IO*",
-		   create_stream_from_open_file (CHARACTER_STREAM,
-						 BIDIRECTIONAL_STREAM, stdin,
-						 stdout), env);
+  bidir_str = create_stream_from_open_file (CHARACTER_STREAM,
+					    BIDIRECTIONAL_STREAM, stdin,
+					    stdout);
+
+  env->debug_io_sym = define_variable ("*DEBUG-IO*", bidir_str, env);
+  add_reference (env->debug_io_sym, bidir_str, 0);
+
+  define_variable ("*QUERY-IO*", bidir_str, env);
 
   env->quote_sym = CREATE_BUILTIN_SYMBOL ("QUOTE");
   env->function_sym = CREATE_BUILTIN_SYMBOL ("FUNCTION");
@@ -4872,15 +4890,15 @@ al_memmem (const void *haystack, size_t haystacklen, const void *needle,
 
 
 char *
-al_readline (const char prompt [])
+al_readline (FILE *outstr, FILE *instr, const char prompt [])
 {
   int sz = 32;
   char *line = malloc_and_check (sz);
   int i = 0, c;
 
-  printf ("%s", prompt);
+  fprintf (outstr, "%s", prompt);
 
-  c = getchar ();
+  c = getc (instr);
 
   while (c && c != '\n')
     {
@@ -4895,7 +4913,7 @@ al_readline (const char prompt [])
 
       line [i++] = c;
 
-      c = getchar ();
+      c = getc (instr);
     }
 
   if (i == sz || i+1 == sz)
@@ -4909,11 +4927,16 @@ al_readline (const char prompt [])
 
 
 char *
-read_line_interactively (const char prompt [])
+read_line_interactively (FILE *outstr, FILE *instr, const char prompt [])
 {
 #ifdef HAVE_LIBREADLINE
-  char *line = readline (prompt);
+  char *line;
   int err;
+
+  rl_outstream = outstr;
+  rl_instream = instr;
+
+  line = readline (prompt);
 
   if (!line)
     exit (0);
@@ -4933,7 +4956,7 @@ read_line_interactively (const char prompt [])
 
   return line;
 #else
-  return al_readline (prompt);
+  return al_readline (outstr, instr, prompt);
 #endif
 }
 
@@ -5133,6 +5156,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
 struct object *
 complete_object_interactively (struct object *obj, int is_empty_list,
+			       struct stream *outstr, struct stream *instr,
 			       struct environment *env,
 			       struct outcome *outcome,
 			       const char **input_left, size_t *input_left_size,
@@ -5143,8 +5167,8 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   const char *begin, *end;
   size_t len;
 
-  fresh_line (env->c_stdout->value_ptr.stream);
-  line = read_line_interactively ("> ");
+  fresh_line (outstr);
+  line = read_line_interactively (outstr->file, instr->file, "> ");
   len = strlen (line);
 
   read_out = read_object_continued (&obj, 0, is_empty_list, line, len, NULL, 0,
@@ -5162,7 +5186,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
       free (line);
       fresh_line (env->c_stdout->value_ptr.stream);
-      line = read_line_interactively ("> ");
+      line = read_line_interactively (outstr->file, instr->file, "> ");
       len = strlen (line);
 
       read_out = read_object_continued (&obj, 0,
@@ -5187,6 +5211,7 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
 struct object *
 read_object_interactively_continued (const char *input, size_t input_size,
+				     struct stream *outstr, struct stream *instr,
 				     struct environment *env,
 				     struct outcome *outcome,
 				     const char **input_left,
@@ -5241,7 +5266,7 @@ read_object_interactively_continued (const char *input, size_t input_size,
 
       ret = complete_object_interactively (obj,
 					   read_out == UNCLOSED_EMPTY_LIST,
-					   env, outcome, input_left,
+					   outstr, instr, env, outcome, input_left,
 					   input_left_size, wholeline);
 
       if (!ret && outcome->type == SKIPPED_OBJECT)
@@ -5260,20 +5285,23 @@ read_object_interactively_continued (const char *input, size_t input_size,
 
 
 struct object *
-read_object_interactively (struct environment *env, struct outcome *outcome,
+read_object_interactively (struct stream *outstr, struct stream *instr,
+			   struct environment *env, struct outcome *outcome,
 			   const char **input_left, size_t *input_left_size,
 			   char **wholeline)
+
 {
   char *pr = generate_prompt (env), *line;
   struct object *ret;
 
-  fresh_line (env->c_stdout->value_ptr.stream);
-  line = read_line_interactively (pr);
+  fresh_line (outstr);
+  line = read_line_interactively (outstr->otherfile ? outstr->otherfile
+				  : outstr->file, instr->file, pr);
   *wholeline = line;
 
-  ret = read_object_interactively_continued (line, strlen (line), env, outcome,
-					     input_left, input_left_size,
-					     wholeline);
+  ret = read_object_interactively_continued (line, strlen (line), outstr, instr,
+					     env, outcome, input_left,
+					     input_left_size, wholeline);
 
   free (pr);
 
@@ -5839,6 +5867,53 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
     last_pref->value_ptr.next = ob;
   else
     *obj = ob;
+
+  return out;
+}
+
+
+enum outcome_type
+read_actual_object (struct object **obj, int backts_commas_balance, const char *input,
+		    size_t size, FILE *stream, int preserve_whitespace,
+		    int ends_with_eof, struct environment *env, struct outcome *outcome,
+		    const char **obj_begin, const char **obj_end)
+{
+  struct object *ret;
+  enum outcome_type out;
+
+  if (input)
+    *obj_end = input;
+
+  do
+    {
+      out = read_object (&ret, 0, input ? *obj_end : NULL,
+			 input ? size-(*obj_end-input) : 0, stream, 0, 1, env,
+			 outcome, obj_begin, obj_end);
+      clear_read_labels (&env->read_labels);
+
+      if (out == SKIPPED_OBJECT)
+	(*obj_end)++;
+    } while (out == SKIPPED_OBJECT);
+
+  if (IS_READ_OR_EVAL_ERROR (out))
+    {
+      CLEAR_READER_STATUS (*outcome);
+    }
+
+  if (IS_INCOMPLETE_OBJECT (out) || out == NO_OBJECT)
+    {
+      CLEAR_READER_STATUS (*outcome);
+
+      if (stream && ferror (stream))
+	out = ERROR_READING_FILE;
+      else if (out == NO_OBJECT)
+	out = GOT_EOF;
+      else
+	out = GOT_EOF_IN_MIDDLE_OF_OBJECT;
+
+      if (stream)
+	clearerr (stream);
+    }
 
   return out;
 }
@@ -13017,11 +13092,13 @@ struct object *
 enter_debugger (struct object *cond, struct environment *env,
 		struct outcome *outcome)
 {
-  struct object *obj, *result, *fun, *slash;
+  struct object *obj, *result, *fun, *slash,
+    *str = inspect_variable (env->debug_io_sym, env);
+  struct stream *s = str->value_ptr.stream;
   struct object_list *vals;
   struct restart_binding *r = env->restarts;
   int end_repl = 0, restnum = 1, restind;
-  const char *input_left;
+  const char *input_left, *objbeg, *objend;
   char *wholel = NULL;
   size_t input_left_s;
 
@@ -13037,53 +13114,54 @@ enter_debugger (struct object *cond, struct environment *env,
   if (env->debugging_depth > 1)
     restnum++;
 
-  fresh_line (env->c_stdout->value_ptr.stream);
+  fresh_line (str->value_ptr.stream);
 
   if (cond)
     {
-      printf ("\nentered debugger with condition ");
-      print_object (cond, env, env->c_stdout->value_ptr.stream);
-      printf ("\nof fields ");
-      print_fields (cond, env, env->c_stdout);
-      printf ("\n(condition object bound to CL-USER:*AL-DEBUGGING-CONDITION*)\n\n");
+      print_to_stream (str->value_ptr.stream, "\nentered debugger with condition ");
+      print_object (cond, env, str->value_ptr.stream);
+      print_to_stream (str->value_ptr.stream, "\nof fields ");
+      print_fields (cond, env, str);
+      print_to_stream (str->value_ptr.stream,
+		       "\n(condition object bound to CL-USER:*AL-DEBUGGING-CONDITION*)\n\n");
 
-      print_available_restarts (env, 1, env->c_stdout);
-      printf ("\n");
+      print_available_restarts (env, 1, str);
+      print_to_stream (str->value_ptr.stream, "\n");
     }
   else if (env->watched_obj)
     {
       if (env->watched_obj->type == TYPE_STANDARD_OBJECT)
 	{
-	  printf ("standard object ");
-	  print_object (env->watched_obj, env, env->c_stdout->value_ptr.stream);
-	  printf (" changing field ");
-	  print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
-	  printf (" to ");
-	  print_object (env->new_value, env, env->c_stdout->value_ptr.stream);
-	  printf ("\n\n");
+	  print_to_stream (str->value_ptr.stream, "standard object ");
+	  print_object (env->watched_obj, env, str->value_ptr.stream);
+	  print_to_stream (str->value_ptr.stream, " changing field ");
+	  print_object (env->obj_field, env, str->value_ptr.stream);
+	  print_to_stream (str->value_ptr.stream, " to ");
+	  print_object (env->new_value, env, str->value_ptr.stream);
+	  print_to_stream (str->value_ptr.stream, "\n\n");
 	}
       else if (env->watched_obj->type == TYPE_HASHTABLE)
 	{
-	  printf ("hash table ");
-	  print_object (env->watched_obj, env, env->c_stdout->value_ptr.stream);
+	  print_to_stream (str->value_ptr.stream, "hash table ");
+	  print_object (env->watched_obj, env, str->value_ptr.stream);
 
 	  if (env->obj_field && env->new_value)
 	    {
-	      printf (" setting key ");
-	      print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
-	      printf (" to ");
-	      print_object (env->new_value, env, env->c_stdout->value_ptr.stream);
-	      printf ("\n\n");
+	      print_to_stream (str->value_ptr.stream, " setting key ");
+	      print_object (env->obj_field, env, str->value_ptr.stream);
+	      print_to_stream (str->value_ptr.stream, " to ");
+	      print_object (env->new_value, env, str->value_ptr.stream);
+	      print_to_stream (str->value_ptr.stream, "\n\n");
 	    }
 	  else if (env->obj_field)
 	    {
-	      printf (" clearing key ");
-	      print_object (env->obj_field, env, env->c_stdout->value_ptr.stream);
-	      printf ("\n\n");
+	      print_to_stream (str->value_ptr.stream, " clearing key ");
+	      print_object (env->obj_field, env, str->value_ptr.stream);
+	      print_to_stream (str->value_ptr.stream, "\n\n");
 	    }
 	  else
 	    {
-	      printf (" clearing completely\n\n");
+	      print_to_stream (str->value_ptr.stream, " clearing completely\n\n");
 	    }
 	}
 
@@ -13091,20 +13169,20 @@ enter_debugger (struct object *cond, struct environment *env,
     }
   else if (env->stepping_flags)
     {
-      printf ("\n");
-      print_object (env->next_eval, env, env->c_stdout->value_ptr.stream);
+      print_to_stream (str->value_ptr.stream, "\n");
+      print_object (env->next_eval, env, str->value_ptr.stream);
 
       if (env->next_eval->type == TYPE_CONS_PAIR
 	  && IS_SYMBOL (CAR (env->next_eval))
 	  && is_macro (SYMBOL (CAR (env->next_eval)), env))
 	{
-	  printf (" (macro)\n");
+	  print_to_stream (str->value_ptr.stream, " (macro)\n");
 	}
       else
-	printf ("\n");
+	print_to_stream (str->value_ptr.stream, "\n");
     }
 
-  env->c_stdout->value_ptr.stream->dirty_line = 0;
+  str->value_ptr.stream->dirty_line = 0;
 
 
   if (cond)
@@ -13118,8 +13196,21 @@ enter_debugger (struct object *cond, struct environment *env,
     {
       free (wholel);
       env->stack_depth = 0;
-      obj = read_object_interactively (env, outcome, &input_left, &input_left_s,
-				       &wholel);
+
+
+      if (s->type == STRING_STREAM)
+	{
+	  outcome->type = read_actual_object (&obj, 0, s->string->value_ptr.string->value,
+					      s->string->value_ptr.string->used_size,
+					      NULL, 0, 1, env, outcome, &objbeg, &objend);
+
+	  if (IS_READ_OR_EVAL_ERROR (outcome->type))
+	    return NULL;
+	}
+      else
+	obj = read_object_interactively (str->value_ptr.stream, str->value_ptr.stream,
+					 env, outcome, &input_left, &input_left_s,
+					 &wholel);
 
       if (!obj && !IS_READ_OR_EVAL_ERROR (outcome->type))
 	{
@@ -13362,8 +13453,10 @@ enter_debugger (struct object *cond, struct environment *env,
 
 	  env->stack_depth = 0;
 
-	  if (input_left && input_left_s > 0)
+	  if (s->type == FILE_STREAM && input_left && input_left_s > 0)
 	    obj = read_object_interactively_continued (input_left, input_left_s,
+						       str->value_ptr.stream,
+						       str->value_ptr.stream,
 						       env, outcome, &input_left,
 						       &input_left_s, &wholel);
 	  else
