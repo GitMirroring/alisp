@@ -2577,6 +2577,9 @@
     (not (null (string-equal answ "y")))))
 
 
+(defparameter *terminal-io* *query-io*)
+
+
 
 (defmacro do-all-symbols (varres &body body)
   (let ((packsym (gensym)))
@@ -3685,8 +3688,8 @@
 	  with-open-stream read-sequence terpri write-line write-sequence prin1
 	  princ print write-to-string prin1-to-string princ-to-string
 	  force-output with-input-from-string with-output-to-string pprint
-	  yes-or-no-p y-or-n-p do-all-symbols find-all-symbols apropos
-	  apropos-list with-slots with-accessors with-package-iterator
+	  yes-or-no-p y-or-n-p *terminal-io* do-all-symbols find-all-symbols
+	  apropos apropos-list with-slots with-accessors with-package-iterator
 	  with-hash-table-iterator loop loop-finish format formatter
 	  encode-universal-time decode-universal-time get-universal-time
 	  *readtable* with-compilation-unit *compile-file-truename*
