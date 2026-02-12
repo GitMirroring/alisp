@@ -3117,9 +3117,9 @@ struct object *builtin_slot_makunbound
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_ensure_generic_function
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defmethod
+struct object *builtin_al_create_method
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_add_method
+struct object *builtin_al_add_method
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_find_method
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4212,9 +4212,6 @@ add_standard_definitions (struct environment *env)
 		    TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("ENSURE-GENERIC-FUNCTION", env,
 		    builtin_ensure_generic_function, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DEFMETHOD", env, evaluate_defmethod, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("ADD-METHOD", env, builtin_add_method, TYPE_FUNCTION, NULL,
-		    0);
   add_builtin_form ("FIND-METHOD", env, builtin_find_method, TYPE_FUNCTION, NULL,
 		    0);
   add_builtin_form ("REMOVE-METHOD", env, builtin_remove_method, TYPE_FUNCTION,
@@ -4762,6 +4759,11 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-STRING-INPUT-STREAM-STRING", env,
 		    builtin_al_string_input_stream_string, TYPE_FUNCTION, NULL,
 		    0);
+
+  add_builtin_form ("AL-ADD-METHOD", env, builtin_al_add_method, TYPE_FUNCTION,
+		    NULL, 0);
+  add_builtin_form ("AL-CREATE-METHOD", env, builtin_al_create_method,
+		    TYPE_FUNCTION, NULL, 0);
 
   add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
 		    TYPE_FUNCTION, builtin_setf_al_function_name, 0);
@@ -13726,6 +13728,7 @@ define_generic_function (char *name, struct environment *env,
   m->qualifier = PRIMARY_METHOD;
   m->lambda_list = copy_lambda_list (lambda_list, 1);
   m->builtin_method = default_method;
+  m->is_compiled = 1;
   m->body = NULL;
 
   ml = malloc_and_check (sizeof (*ml));
@@ -35111,12 +35114,11 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 
 
 struct object *
-evaluate_defmethod (struct object *list, struct environment *env,
-		    struct outcome *outcome)
+builtin_al_create_method (struct object *list, struct environment *env,
+			  struct outcome *outcome)
 {
   struct object *fun, *meth, *lambdal, *sym;
   struct method *m;
-  struct method_list *ml;
   enum method_qualifier q = PRIMARY_METHOD;
 
   if (list_length (list) < 2)
@@ -35172,6 +35174,7 @@ evaluate_defmethod (struct object *list, struct environment *env,
   m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
   m->generic_func = NULL;
   m->qualifier = q;
+  m->is_compiled = 0;
   m->body = NULL;
 
   outcome->type = EVAL_OK;
@@ -35237,29 +35240,13 @@ evaluate_defmethod (struct object *list, struct environment *env,
   m->generic_func = fun;
   add_reference (meth, fun, 0);
 
-  if (fun->value_ptr.function->flags & COMPILED_FUNCTION)
-    {
-      if (!compile_body (m->body, 0, env, outcome))
-	return NULL;
-
-      m->is_compiled = 1;
-    }
-
-  ml = malloc_and_check (sizeof (*ml));
-  ml->reference_strength_factor = 1;
-  ml->meth = meth;
-  ml->next = fun->value_ptr.function->methods;
-
-  fun->value_ptr.function->methods = ml;
-  INC_WEAK_REFCOUNT (meth);
-
   return meth;
 }
 
 
 struct object *
-builtin_add_method (struct object *list, struct environment *env,
-		    struct outcome *outcome)
+builtin_al_add_method (struct object *list, struct environment *env,
+		       struct outcome *outcome)
 {
   struct object *meth;
   struct method_list *ml;
@@ -35291,22 +35278,13 @@ builtin_add_method (struct object *list, struct environment *env,
       ml->meth = CAR (CDR (list));
       ml->next = CAR (list)->value_ptr.function->methods;
       CAR (list)->value_ptr.function->methods = ml;
-      add_reference (CAR (list), ml->meth, 0);
+      add_reference (CAR (list), ml->meth, 6);
     }
   else
     {
       delete_reference (CAR (list), ml->meth, 6+ind*8);
       ml->meth = CAR (CDR (list));
       add_reference (CAR (list), ml->meth, 6+ind*8);
-    }
-
-  if (CAR (list)->value_ptr.function->flags & COMPILED_FUNCTION
-      && !ml->meth->value_ptr.method->is_compiled)
-    {
-      if (!compile_body (ml->meth->value_ptr.method->body, 0, env, outcome))
-	return NULL;
-
-      ml->meth->value_ptr.method->is_compiled = 1;
     }
 
   increment_refcount (CAR (list));

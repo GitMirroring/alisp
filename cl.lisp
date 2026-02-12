@@ -56,6 +56,21 @@
   `(ensure-generic-function ',name :lambda-list ',lambdal))
 
 
+(defun add-method (genfun meth)
+  (when (and cl-user:*al-compile-when-defining*
+	     (not (typep meth 'cl-user:al-compiled-method)))
+    (setf (cl-user:al-function-body meth)
+	  (macroexpand-body (cl-user:al-function-body meth)))
+    (setf (cl-user:al-function-attributes meth) '(:compiled)))
+  (cl-user:al-add-method genfun meth))
+
+
+(defmacro defmethod (&rest args)
+  `(let ((meth (apply 'cl-user:al-create-method ',args)))
+     (add-method #',(car args) meth)
+     meth))
+
+
 
 (defun machine-instance nil)
 (defun machine-type nil)
@@ -3353,20 +3368,32 @@
 
 
 
+(defun macroexpand-cdr (form)
+  (let ((cdr (macroexpand-body (cdr form))))
+    (if (eq cdr (cdr form))
+	form
+	(cons (car form) cdr))))
+
+
 (defun macroexpand-form-deeply (form)
   (setq form (macroexpand form))
   (cond
     ((atom form) form)
-    ((member (car form) '(if progn block tagbody multiple-value-call and or catch throw progv unwind-protect) :test #'eq)
-     (let ((body (macroexpand-body (cdr form))))
-       (if (eq body (cdr form))
-	   form
-	   (cons (car form) body))))
-    ((member (car form) '(let let* dotimes dolist handler-bind restart-bind) :test #'eq)
+    ((member (car form) '(go) :test #'eq)
+     form)
+    ((member (car form) '(if progn block tagbody multiple-value-call multiple-value-prog1 and or catch throw progv
+			  unwind-protect function locally) :test #'eq)
+     (macroexpand-cdr form))
+    ((member (car form) '(let let* flet labels macrolet symbol-macrolet lambda dotimes dolist handler-bind restart-bind
+			  return-from eval-when the) :test #'eq)
      (let ((body (macroexpand-body (cddr form))))
        (if (eq body (cddr form))
 	   form
-	   (list* (car form) (cadr form) body))))))
+	   (list* (car form) (cadr form) body))))
+    ((member (car form) '(setq setf) :test #'eq)
+     form)
+    (t
+     (macroexpand-cdr form))))
 
 
 (defun macroexpand-body (body)
@@ -3635,9 +3662,9 @@
 
 
 (export '(*features* *default-pathname-defaults* defmacro defun defgeneric
-	  machine-instance machine-type machine-version short-site-name
-	  long-site-name *modules* provide require describe describe-object
-	  inspect lambda-parameters-limit call-arguments-limit
+	  add-method defmethod machine-instance machine-type machine-version
+	  short-site-name long-site-name *modules* provide require describe
+	  describe-object inspect lambda-parameters-limit call-arguments-limit
 	  multiple-values-limit array-rank-limit array-dimension-limit
 	  array-total-size-limit char-code-limit lambda-list-keywords identity
 	  constantly *read-default-float-format* pi 1+ 1- minusp plusp abs zerop
