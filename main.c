@@ -12838,7 +12838,7 @@ print_tracing_message (struct object *obj, struct object *args, int argsnum,
 
       print_method_description (obj, str, env);
       write_to_stream (str->value_ptr.stream, " of ", strlen (" of "));
-      print_function_name (obj, str, env);
+      print_function_name (obj->value_ptr.method->generic_func, str, env);
     }
   else
     {
