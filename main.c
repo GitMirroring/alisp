@@ -1840,7 +1840,7 @@ void capture_lexical_environment (struct binding **lex_vars,
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
 				struct outcome *outcome, int is_macro,
-				int allow_destructuring);
+				int allow_destructuring, int capture_lexenv);
 
 struct object *create_empty_generic_function (struct object *name, int is_setf,
 					      struct environment *env);
@@ -8949,7 +8949,7 @@ capture_lexical_environment (struct binding **lex_vars,
 struct object *
 create_function (struct object *lambda_list, struct object *body,
 		 struct environment *env, struct outcome *outcome, int is_macro,
-		 int allow_destructuring)
+		 int allow_destructuring, int capture_lexenv)
 {
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
@@ -8970,9 +8970,10 @@ create_function (struct object *lambda_list, struct object *body,
   if (found_amp_key)
     f->flags |= FOUND_AMP_KEY;
 
-  capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
-			       env->lex_env_vars_boundary, env->funcs,
-			       env->lex_env_funcs_boundary);
+  if (capture_lexenv)
+    capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
+				 env->lex_env_vars_boundary, env->funcs,
+				 env->lex_env_funcs_boundary);
 
   f->encl_blocks = env->blocks ? env->blocks->frame : NULL;
 
@@ -8997,7 +8998,7 @@ create_empty_generic_function (struct object *name, int is_setf,
 {
   struct outcome out;
   struct object *fun = create_function (&nil_object, &nil_object, env, &out, 0,
-					0);
+					0, 1);
   fun->value_ptr.function->flags |= GENERIC_FUNCTION;
   fun->value_ptr.function->is_setf_func = is_setf;
 
@@ -28809,12 +28810,22 @@ builtin_coerce (struct object *list, struct environment *env,
     }
   else if (is_subtype_by_char_vector (CAR (CDR (list)), "FUNCTION", env) > 0)
     {
-      if (!IS_SYMBOL (CAR (list)))
+      if (IS_SYMBOL (CAR (list)))
 	{
-	  return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+	  return get_function (CAR (list), env, 1, 0, 1, 1);
 	}
-
-      return get_function (CAR (list), env, 1, 0, 1, 1);
+      else if (CAR (list)->type == TYPE_CONS_PAIR
+	       && SYMBOL (CAR (CAR (list))) == env->lambda_sym
+	       && list_length (CAR (list)) >= 2)
+	{
+	  return create_function (CAR (CDR (CAR (list))), CDR (CDR (CAR (list))),
+				  env, outcome, 0, 0, 0);
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
     }
   else
     {
@@ -32065,7 +32076,7 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	}
 
       fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome,
-			     type == TYPE_MACRO, 0);
+			     type == TYPE_MACRO, 0, 1);
 
       if (!fun)
 	return NULL;
@@ -33194,7 +33205,7 @@ builtin_al_defmacro (struct object *list, struct environment *env,
       return NULL;
     }
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1);
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1, 1);
 
   if (!mac)
     return NULL;
@@ -33547,7 +33558,7 @@ evaluate_lambda (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (list), CDR (list), env, outcome, 0, 0);
+  fun = create_function (CAR (list), CDR (list), env, outcome, 0, 0, 1);
 
   if (!fun)
     return NULL;
@@ -33808,7 +33819,7 @@ evaluate_destructuring_bind (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
-  fun = create_function (CAR (list), CDR (CDR (list)), env, outcome, 0, 1);
+  fun = create_function (CAR (list), CDR (CDR (list)), env, outcome, 0, 1, 1);
 
   if (!fun)
     return NULL;
@@ -33857,7 +33868,7 @@ evaluate_deftype (struct object *list, struct environment *env,
       return NULL;
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0, 1);
 
   if (!fun)
     return NULL;
@@ -33896,7 +33907,7 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
       return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0, 1);
 
   if (!fun)
     return NULL;
@@ -35052,7 +35063,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
   if (!fun)
     {
       fun = create_function (lambdal ? lambdal : &nil_object, &nil_object, env,
-			     outcome, 0, 0);
+			     outcome, 0, 0, 1);
 
       if (!fun)
 	return NULL;
@@ -35191,7 +35202,7 @@ builtin_al_create_method (struct object *list, struct environment *env,
 
   if (!fun)
     {
-      fun = create_function (&nil_object, &nil_object, env, outcome, 0, 0);
+      fun = create_function (&nil_object, &nil_object, env, outcome, 0, 0, 1);
 
       if (!fun)
 	return NULL;
@@ -36543,7 +36554,7 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
     : SYMBOL (CAR (CDR (CAR (list))));
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1);
+  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1, 1);
 
   if (!mac)
     return NULL;
