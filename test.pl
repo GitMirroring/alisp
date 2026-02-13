@@ -699,6 +699,7 @@ make_test ("(coerce 3 'complex)", "3");
 make_test ("(coerce 3.0 'complex)", "#C(3.0 0.0)");
 make_test ("(coerce 1/2 'float)", "0.5");
 make_test ("(coerce 'car 'function)", "#<FUNCTION BUILTIN CAR>");
+make_test ("(coerce '(lambda nil 0) 'function)", "#<FUNCTION ?>");
 make_test ("(deftype not-integer () `(not integer))", "NOT-INTEGER");
 make_test ("(typep 0 'not-integer)", "NIL");
 make_test ("(typep \"\" 'not-integer)", "T");
