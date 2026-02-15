@@ -1301,6 +1301,8 @@ make_test ("(compile 'testmac)", "TESTMAC\nNIL\nNIL");
 make_test ("(testmac)", "012345\nNIL");
 make_test ("(defmacro testmac2 nil '(loop for i to 5 do (write i)))", "TESTMAC2");
 make_test ("(defun testfun2 nil (testmac2))", "TESTFUN2");
+make_test ("(setf (macro-function 'testmac3) (lambda (form env) 0))", "#<FUNCTION ?>");
+make_test ("(compile 'testmac3)", "TESTMAC3\nNIL\nNIL");
 make_test ("(compile 'testfun2)", "TESTFUN2\nNIL\nNIL");
 make_test ("(testfun2)", "012345\nNIL");
 make_test ("(defun testfun3 nil)", "TESTFUN3");
