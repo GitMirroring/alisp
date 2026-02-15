@@ -36777,11 +36777,10 @@ builtin_invoke_debugger (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type != TYPE_STANDARD_OBJECT
-      && !CAR (list)->value_ptr.standard_object->class->
+      || !CAR (list)->value_ptr.standard_object->class->
       value_ptr.standard_class->is_condition_class)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:CONDITION", env, outcome);
     }
 
   return enter_debugger (CAR (list), env, outcome);
