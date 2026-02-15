@@ -11257,6 +11257,12 @@ compile_function (struct object *fun, struct environment *env,
 	  ml = ml->next;
 	}
     }
+  else if (fun->value_ptr.function->macro_function)
+    {
+      if (!compile_body (fun->value_ptr.function->macro_function->
+			 value_ptr.function->body, 0, env, outcome))
+	return NULL;
+    }
   else if (!compile_body (fun->value_ptr.function->body, 0, env, outcome))
     return NULL;
 
