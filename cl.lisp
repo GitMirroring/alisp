@@ -33,12 +33,16 @@
 
 
 
-(cl-user:al-defmacro 'defmacro '(name lambdal &body body)
-		     '`(progn
-			 (apply 'cl-user:al-defmacro ',name ',lambdal ',body)
-			 (if cl-user:*al-compile-when-defining*
-			     (compile ',name))
-			 ',name))
+(setf (macro-function 'defmacro)
+      (lambda (defmacroform defmacroenv)
+	`(progn
+	   (setf (macro-function ',(nth 1 defmacroform))
+		 (lambda (form env)
+		   (cl-user:al-with-macro-arguments ,(nth 2 defmacroform)
+						    form
+						    . ,(nthcdr 3 defmacroform))))
+	   ',(nth 1 defmacroform))))
+
 
 
 (defmacro defun (name lambdal &body body)

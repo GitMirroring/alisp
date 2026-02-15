@@ -3039,6 +3039,8 @@ struct object *evaluate_defvar
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_defmacro
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *evaluate_al_with_macro_arguments
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_setq
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_psetq
@@ -4750,6 +4752,8 @@ add_standard_definitions (struct environment *env)
   env->package_sym->value_ptr.symbol->value_cell = env->cluser_package;
 
   add_builtin_form ("AL-DEFMACRO", env, builtin_al_defmacro, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-WITH-MACRO-ARGUMENTS", env, evaluate_al_with_macro_arguments,
+		    TYPE_MACRO, NULL, 0);
 
   add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
 		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
@@ -33232,6 +33236,44 @@ builtin_al_defmacro (struct object *list, struct environment *env,
 
   increment_refcount (sym);
   return sym;
+}
+
+
+struct object *
+evaluate_al_with_macro_arguments (struct object *list, struct environment *env,
+				  struct outcome *outcome)
+{
+  struct object *fun, *ret, *args;
+
+  if (list_length (list) < 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
+    }
+
+  fun = create_function (CAR (list), CDR (CDR (list)), env, outcome, 1, 1, 1);
+
+  if (!fun)
+    return NULL;
+
+  args = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!args)
+    return NULL;
+
+  if (!IS_LIST (args))
+    {
+      decrement_refcount (fun);
+      decrement_refcount (args);
+      return raise_type_error (args, "CL:LIST", env, outcome);
+    }
+
+  ret = call_function (fun, args, 0, 1, 1, 0, 0, env, outcome);
+
+  decrement_refcount (fun);
+  decrement_refcount (args);
+
+  return ret;
 }
 
 
