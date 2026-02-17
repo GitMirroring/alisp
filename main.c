@@ -233,6 +233,10 @@ typedef long fixnum;
 
 
 
+#define STRING_COMMA_LEN(str) (str), strlen (str)
+
+
+
 #define IS_LOWEST_BYTE_IN_UTF8(ch) (((ch) & 0xc0) != 0x80)
 
 
@@ -32060,7 +32064,8 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 			       struct outcome *outcome,
 			       enum object_type type)
 {
-  struct object *sym, *fun;
+  struct object *sym, *fun, *macfun, *lambdal, *body;
+  const char *objb, *obje;
 
   if (form->type == TYPE_CONS_PAIR)
     {
@@ -32085,16 +32090,50 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	  return NULL;
 	}
 
-      fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome,
-			     type == TYPE_MACRO, 0, 1);
+      if (type == TYPE_MACRO)
+	{
+	  fun = create_function (&nil_object, NULL, env, outcome, 1, 1, 0);
 
-      if (!fun)
-	return NULL;
+	  lambdal = NULL;
+	  read_object (&lambdal, 0, STRING_COMMA_LEN ("(cl::form cl::env)"), NULL,
+		       0, 0, env, outcome, &objb, &obje);
 
-      fun->type = type;
-      fun->value_ptr.function->is_setf_func = CAR (form)->type == TYPE_CONS_PAIR;
-      fun->value_ptr.function->name = sym;
-      add_reference (fun, sym, 0);
+	  body = NULL;
+	  read_object (&body, 0,
+		       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil cl::form))"),
+		       NULL, 0, 0, env, outcome, &objb, &obje);
+
+	  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->car = CAR (CDR (form));
+	  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr,
+			 CAR (CDR (form)), 0);
+
+	  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = CDR (CDR (form));
+	  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->
+			 cdr->value_ptr.cons_pair->cdr, CAR (CDR (form)), 1);
+
+	  macfun = create_function (lambdal, body, env, outcome, 0, 0, 0);
+	  decrement_refcount (lambdal);
+	  decrement_refcount (body);
+
+	  fun->type = TYPE_MACRO;
+	  fun->value_ptr.macro->macro_function = macfun;
+	}
+      else
+	{
+	  fun = create_function (CAR (CDR (form)), CDR (CDR (form)), env, outcome,
+				 0, 0, 1);
+
+	  if (!fun)
+	    return NULL;
+
+	  fun->type = TYPE_FUNCTION;
+	  fun->value_ptr.function->is_setf_func
+	    = CAR (form)->type == TYPE_CONS_PAIR;
+	  fun->value_ptr.function->name = sym;
+	  add_reference (fun, sym, 0);
+	}
     }
   else
     {
