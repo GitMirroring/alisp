@@ -29672,7 +29672,7 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list)))
-      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 0, 0))
+      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 1, 0))
       && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
     {
       if (mac->value_ptr.macro->macro_function)
