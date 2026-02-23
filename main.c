@@ -389,6 +389,7 @@ binding
   struct object *obj;
 
   int is_symbol_macro;
+  int is_macro;
 
   int prev_special;
 
@@ -887,6 +888,7 @@ symbol
   int is_symbol_macro;
 
   int function_dyn_bins_num;
+  int is_macro;
   struct object *function_cell;
 
   struct object *plist;
@@ -970,6 +972,7 @@ function
 {
   struct object *name;
   int is_setf_func;
+
   int is_special_operator;
 
   struct parameter *lambda_list;
@@ -1010,12 +1013,6 @@ function
 
   struct object *condition_reader_class_name;
   struct object *condition_reader_field;
-
-
-  struct object *function_macro;
-
-
-  struct object *macro_function;
 };
 
 
@@ -1488,7 +1485,6 @@ object_type
     TYPE_CONDITION_CLASS,
     TYPE_CONDITION,
     TYPE_FUNCTION,
-    TYPE_MACRO,
     TYPE_METHOD,
     TYPE_SHARP_MACRO_CALL
   };
@@ -1528,7 +1524,6 @@ object_ptr_union
   struct condition_class *condition_class;
   struct condition *condition;
   struct function *function;
-  struct function *macro;
   struct method *method;
   struct sharp_macro_call *sharp_macro_call;
 };
@@ -1966,8 +1961,6 @@ struct object *load_file (const char *filename, int print_filename,
 
 struct object *compile_function (struct object *fun, struct environment *env,
 				 struct outcome *outcome);
-struct object *compile_form (struct object *form, int backt_comma_bal,
-			     struct environment *env, struct outcome *outcome);
 int compile_body (struct object *body, int backt_comma_bal,
 		  struct environment *env, struct outcome *outcome);
 
@@ -2113,7 +2106,7 @@ struct object *add_builtin_form (char *name, struct environment *env,
 				 struct object *(*builtin_form)
 				 (struct object *list, struct environment *env,
 				  struct outcome *outcome),
-				 enum object_type type,
+				 int is_macro,
 				  struct object *(*builtin_setf_func)
 				 (struct object *list, struct environment *env,
 				  struct outcome *outcome),
@@ -2232,10 +2225,10 @@ void restore_lexical_environment (struct environment *env, struct binding *vars,
 				  struct binding *funcs, int *num_vars);
 
 struct object *call_function (struct object *func, struct object *arglist,
-			      int eval_args, int also_pass_name,
-			      int create_new_lex_env, int expand_and_eval,
-			      int is_typespec, struct environment *env,
-			      struct outcome *outcome);
+			      int eval_args, int pass_form_and_env,
+			      int also_pass_name, int create_new_lex_env,
+			      int expand_and_eval, int is_typespec,
+			      struct environment *env, struct outcome *outcome);
 struct object *call_structure_constructor (struct object *class_name,
 					   struct object *args,
 					   struct environment *env,
@@ -2990,7 +2983,7 @@ struct object *evaluate_locally
 
 struct binding *create_binding_from_flet_form
 (struct object *form, struct environment *env, struct outcome *outcome,
- enum object_type type);
+ int is_macro);
 struct object *evaluate_flet
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_labels
@@ -3001,7 +2994,7 @@ struct object *evaluate_macrolet
 struct object *get_dynamic_value (struct object *sym, struct environment *env);
 struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions, int setf_func, int only_globals,
-			     int increment_refc);
+			     int increment_refc, int *is_macro);
 int is_macro (struct object *sym, struct environment *env);
 
 struct object *inspect_variable_by_c_string (char *var,
@@ -3040,8 +3033,6 @@ struct object *builtin_constantp
 struct object *evaluate_defparameter
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_defvar
-(struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_al_defmacro
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_al_with_macro_arguments
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3959,417 +3950,417 @@ add_standard_definitions (struct environment *env)
   env->random_state_sym->value_ptr.symbol->value_cell = rs;
 
 
-  add_builtin_form ("CAR", env, builtin_car, TYPE_FUNCTION, builtin_setf_car, 0);
-  add_builtin_form ("CDR", env, builtin_cdr, TYPE_FUNCTION, builtin_setf_cdr, 0);
-  add_builtin_form ("RPLACA", env, builtin_rplaca, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("RPLACD", env, builtin_rplacd, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CONS", env, builtin_cons, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LIST", env, builtin_list, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LIST*", env, builtin_list_star, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("APPEND", env, builtin_append, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NCONC", env, builtin_nconc, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NTH", env, builtin_nth, TYPE_FUNCTION, builtin_setf_nth, 0);
-  add_builtin_form ("NTHCDR", env, builtin_nthcdr, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NTH-VALUE", env, builtin_nth_value, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("ELT", env, builtin_elt, TYPE_FUNCTION, builtin_setf_elt, 0);
-  add_builtin_form ("AREF", env, builtin_aref, TYPE_FUNCTION, builtin_setf_aref,
+  add_builtin_form ("CAR", env, builtin_car, 0, builtin_setf_car, 0);
+  add_builtin_form ("CDR", env, builtin_cdr, 0, builtin_setf_cdr, 0);
+  add_builtin_form ("RPLACA", env, builtin_rplaca, 0, NULL, 0);
+  add_builtin_form ("RPLACD", env, builtin_rplacd, 0, NULL, 0);
+  add_builtin_form ("CONS", env, builtin_cons, 0, NULL, 0);
+  add_builtin_form ("LIST", env, builtin_list, 0, NULL, 0);
+  add_builtin_form ("LIST*", env, builtin_list_star, 0, NULL, 0);
+  add_builtin_form ("APPEND", env, builtin_append, 0, NULL, 0);
+  add_builtin_form ("NCONC", env, builtin_nconc, 0, NULL, 0);
+  add_builtin_form ("NTH", env, builtin_nth, 0, builtin_setf_nth, 0);
+  add_builtin_form ("NTHCDR", env, builtin_nthcdr, 0, NULL, 0);
+  add_builtin_form ("NTH-VALUE", env, builtin_nth_value, 1, NULL, 0);
+  add_builtin_form ("ELT", env, builtin_elt, 0, builtin_setf_elt, 0);
+  add_builtin_form ("AREF", env, builtin_aref, 0, builtin_setf_aref,
 		    0);
-  add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, TYPE_FUNCTION,
+  add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, 0,
 		    NULL, 0);
-  add_builtin_form ("COPY-LIST", env, builtin_copy_list, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("COPY-SEQ", env, builtin_copy_seq, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SUBSEQ", env, builtin_subseq, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LIST-LENGTH", env, builtin_list_length, TYPE_FUNCTION, NULL,
+  add_builtin_form ("COPY-LIST", env, builtin_copy_list, 0, NULL, 0);
+  add_builtin_form ("COPY-SEQ", env, builtin_copy_seq, 0, NULL, 0);
+  add_builtin_form ("SUBSEQ", env, builtin_subseq, 0, NULL, 0);
+  add_builtin_form ("LIST-LENGTH", env, builtin_list_length, 0, NULL,
 		    0);
-  add_builtin_form ("LENGTH", env, builtin_length, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FILL-POINTER", env, builtin_fill_pointer, TYPE_FUNCTION,
+  add_builtin_form ("LENGTH", env, builtin_length, 0, NULL, 0);
+  add_builtin_form ("FILL-POINTER", env, builtin_fill_pointer, 0,
 		    builtin_setf_fill_pointer, 0);
-  add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, TYPE_FUNCTION, NULL,
+  add_builtin_form ("MAKE-ARRAY", env, builtin_make_array, 0, NULL,
 		    0);
-  add_builtin_form ("VECTOR", env, builtin_vector, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("VECTOR", env, builtin_vector, 0, NULL, 0);
   add_builtin_form ("ARRAY-HAS-FILL-POINTER-P", env,
-		    builtin_array_has_fill_pointer_p, TYPE_FUNCTION, NULL, 0);
+		    builtin_array_has_fill_pointer_p, 0, NULL, 0);
   add_builtin_form ("ARRAY-DIMENSIONS", env, builtin_array_dimensions,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("ARRAY-ROW-MAJOR-INDEX", env, builtin_array_row_major_index,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("ADJUST-ARRAY", env, builtin_adjust_array, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("ADJUST-ARRAY", env, builtin_adjust_array, 0,
 		    NULL, 0);
-  add_builtin_form ("SXHASH", env, builtin_sxhash, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SXHASH", env, builtin_sxhash, 0, NULL, 0);
   add_builtin_form ("MAKE-HASH-TABLE", env, builtin_make_hash_table,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("HASH-TABLE-SIZE", env, builtin_hash_table_size,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("HASH-TABLE-COUNT", env, builtin_hash_table_count,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("HASH-TABLE-TEST", env, builtin_hash_table_test,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("GETHASH", env, builtin_gethash, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("GETHASH", env, builtin_gethash, 0,
 		    builtin_setf_gethash, 0);
-  add_builtin_form ("REMHASH", env, builtin_remhash, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CLRHASH", env, builtin_clrhash, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAPHASH", env, builtin_maphash, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LAST", env, builtin_last, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("PATHNAME", env, builtin_pathname, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, TYPE_FUNCTION,
+  add_builtin_form ("REMHASH", env, builtin_remhash, 0, NULL, 0);
+  add_builtin_form ("CLRHASH", env, builtin_clrhash, 0, NULL, 0);
+  add_builtin_form ("MAPHASH", env, builtin_maphash, 0, NULL, 0);
+  add_builtin_form ("LAST", env, builtin_last, 0, NULL, 0);
+  add_builtin_form ("PATHNAME", env, builtin_pathname, 0, NULL, 0);
+  add_builtin_form ("MAKE-PATHNAME", env, builtin_make_pathname, 0,
 		    NULL, 0);
-  add_builtin_form ("NAMESTRING", env, builtin_namestring, TYPE_FUNCTION, NULL,
+  add_builtin_form ("NAMESTRING", env, builtin_namestring, 0, NULL,
 		    0);
-  add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, TYPE_FUNCTION,
+  add_builtin_form ("PATHNAME-NAME", env, builtin_pathname_name, 0,
 		    NULL, 0);
-  add_builtin_form ("PATHNAME-TYPE", env, builtin_pathname_type, TYPE_FUNCTION,
+  add_builtin_form ("PATHNAME-TYPE", env, builtin_pathname_type, 0,
 		    NULL, 0);
   add_builtin_form ("WILD-PATHNAME-P", env, builtin_wild_pathname_p,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("LOGICAL-PATHNAME", env, builtin_logical_pathname,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("TRANSLATE-LOGICAL-PATHNAME", env,
-		    builtin_translate_logical_pathname, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TRUENAME", env, builtin_truename, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("PROBE-FILE", env, builtin_probe_file, TYPE_FUNCTION, NULL,
+		    builtin_translate_logical_pathname, 0, NULL, 0);
+  add_builtin_form ("TRUENAME", env, builtin_truename, 0, NULL, 0);
+  add_builtin_form ("PROBE-FILE", env, builtin_probe_file, 0, NULL,
 		    0);
   add_builtin_form ("ENSURE-DIRECTORIES-EXIST", env,
-		    builtin_ensure_directories_exist, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FILE-POSITION", env, builtin_file_position, TYPE_FUNCTION,
+		    builtin_ensure_directories_exist, 0, NULL, 0);
+  add_builtin_form ("FILE-POSITION", env, builtin_file_position, 0,
 		    NULL, 0);
-  add_builtin_form ("FILE-LENGTH", env, builtin_file_length, TYPE_FUNCTION, NULL,
+  add_builtin_form ("FILE-LENGTH", env, builtin_file_length, 0, NULL,
 		    0);
-  add_builtin_form ("RENAME-FILE", env, builtin_rename_file, TYPE_FUNCTION, NULL,
+  add_builtin_form ("RENAME-FILE", env, builtin_rename_file, 0, NULL,
 		    0);
-  add_builtin_form ("DELETE-FILE", env, builtin_delete_file, TYPE_FUNCTION, NULL,
+  add_builtin_form ("DELETE-FILE", env, builtin_delete_file, 0, NULL,
 		    0);
-  add_builtin_form ("READ-CHAR", env, builtin_read_char, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("READ-LINE", env, builtin_read_line, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("READ", env, builtin_read, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("READ-CHAR", env, builtin_read_char, 0, NULL, 0);
+  add_builtin_form ("READ-LINE", env, builtin_read_line, 0, NULL, 0);
+  add_builtin_form ("READ", env, builtin_read, 0, NULL, 0);
   add_builtin_form ("READ-PRESERVING-WHITESPACE", env,
-		    builtin_read_preserving_whitespace, TYPE_FUNCTION, NULL, 0);
+		    builtin_read_preserving_whitespace, 0, NULL, 0);
   add_builtin_form ("READ-FROM-STRING", env, builtin_read_from_string,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("PARSE-INTEGER", env, builtin_parse_integer, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("PARSE-INTEGER", env, builtin_parse_integer, 0,
 		    NULL, 0);
-  add_builtin_form ("EVAL", env, builtin_eval, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("COMPILE", env, builtin_compile, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("WRITE", env, builtin_write, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("WRITE-STRING", env, builtin_write_string, TYPE_FUNCTION,
+  add_builtin_form ("EVAL", env, builtin_eval, 0, NULL, 0);
+  add_builtin_form ("COMPILE", env, builtin_compile, 0, NULL, 0);
+  add_builtin_form ("WRITE", env, builtin_write, 0, NULL, 0);
+  add_builtin_form ("WRITE-STRING", env, builtin_write_string, 0,
 		    NULL, 0);
-  add_builtin_form ("WRITE-CHAR", env, builtin_write_char, TYPE_FUNCTION, NULL,
+  add_builtin_form ("WRITE-CHAR", env, builtin_write_char, 0, NULL,
 		    0);
-  add_builtin_form ("WRITE-BYTE", env, builtin_write_byte, TYPE_FUNCTION, NULL,
+  add_builtin_form ("WRITE-BYTE", env, builtin_write_byte, 0, NULL,
 		    0);
-  add_builtin_form ("FRESH-LINE", env, builtin_fresh_line, TYPE_FUNCTION, NULL,
+  add_builtin_form ("FRESH-LINE", env, builtin_fresh_line, 0, NULL,
 		    0);
-  add_builtin_form ("LOAD", env, builtin_load, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("OPEN", env, builtin_open, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CLOSE", env, builtin_close, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p, TYPE_FUNCTION,
+  add_builtin_form ("LOAD", env, builtin_load, 0, NULL, 0);
+  add_builtin_form ("OPEN", env, builtin_open, 0, NULL, 0);
+  add_builtin_form ("CLOSE", env, builtin_close, 0, NULL, 0);
+  add_builtin_form ("OPEN-STREAM-P", env, builtin_open_stream_p, 0,
 		    NULL, 0);
-  add_builtin_form ("INPUT-STREAM-P", env, builtin_input_stream_p, TYPE_FUNCTION,
+  add_builtin_form ("INPUT-STREAM-P", env, builtin_input_stream_p, 0,
 		    NULL, 0);
   add_builtin_form ("OUTPUT-STREAM-P", env, builtin_output_stream_p,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("INTERACTIVE-STREAM-P", env, builtin_interactive_stream_p,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("MAKE-STRING-INPUT-STREAM", env,
-		    builtin_make_string_input_stream, TYPE_FUNCTION, NULL, 0);
+		    builtin_make_string_input_stream, 0, NULL, 0);
   add_builtin_form ("MAKE-STRING-OUTPUT-STREAM", env,
-		    builtin_make_string_output_stream, TYPE_FUNCTION, NULL, 0);
+		    builtin_make_string_output_stream, 0, NULL, 0);
   add_builtin_form ("GET-OUTPUT-STREAM-STRING", env,
-		    builtin_get_output_stream_string, TYPE_FUNCTION, NULL, 0);
+		    builtin_get_output_stream_string, 0, NULL, 0);
   add_builtin_form ("MAKE-SYNONYM-STREAM", env, builtin_make_synonym_stream,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("SYNONYM-STREAM-SYMBOL", env, builtin_synonym_stream_symbol,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("MAKE-BROADCAST-STREAM", env, builtin_make_broadcast_stream,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("BROADCAST-STREAM-STREAMS", env,
-		    builtin_broadcast_stream_streams, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FINISH-OUTPUT", env, builtin_finish_output, TYPE_FUNCTION,
+		    builtin_broadcast_stream_streams, 0, NULL, 0);
+  add_builtin_form ("FINISH-OUTPUT", env, builtin_finish_output, 0,
 		    NULL, 0);
-  add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, TYPE_FUNCTION,
+  add_builtin_form ("UPPER-CASE-P", env, builtin_upper_case_p, 0,
 		    NULL, 0);
-  add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, TYPE_FUNCTION,
+  add_builtin_form ("LOWER-CASE-P", env, builtin_lower_case_p, 0,
 		    NULL, 0);
-  add_builtin_form ("BOTH-CASE-P", env, builtin_both_case_p, TYPE_FUNCTION,
+  add_builtin_form ("BOTH-CASE-P", env, builtin_both_case_p, 0,
 		    NULL, 0);
-  add_builtin_form ("EQ", env, builtin_eq, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("EQL", env, builtin_eql, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("EQUALP", env, builtin_equalp, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NOT", env, builtin_not, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NULL", env, builtin_not, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CONCATENATE", env, builtin_concatenate, TYPE_FUNCTION, NULL,
+  add_builtin_form ("EQ", env, builtin_eq, 0, NULL, 0);
+  add_builtin_form ("EQL", env, builtin_eql, 0, NULL, 0);
+  add_builtin_form ("EQUALP", env, builtin_equalp, 0, NULL, 0);
+  add_builtin_form ("NOT", env, builtin_not, 0, NULL, 0);
+  add_builtin_form ("NULL", env, builtin_not, 0, NULL, 0);
+  add_builtin_form ("CONCATENATE", env, builtin_concatenate, 0, NULL,
 		    0);
-  add_builtin_form ("DO", env, builtin_do, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DO*", env, builtin_do_star, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DOTIMES", env, builtin_dotimes, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DOLIST", env, builtin_dolist, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("MAPCAR", env, builtin_mapcar, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAP", env, builtin_map, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("REMOVE-IF", env, builtin_remove_if, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("REVERSE", env, builtin_reverse, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("+", env, builtin_plus, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("-", env, builtin_minus, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("*", env, builtin_multiply, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("/", env, builtin_divide, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FLOOR", env, builtin_floor, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FFLOOR", env, builtin_ffloor, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CEILING", env, builtin_ceiling, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FCEILING", env, builtin_fceiling, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TRUNCATE", env, builtin_truncate, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FTRUNCATE", env, builtin_ftruncate, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("ROUND", env, builtin_round, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FROUND", env, builtin_fround, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("NUMERATOR", env, builtin_numerator, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DENOMINATOR", env, builtin_denominator, TYPE_FUNCTION, NULL,
+  add_builtin_form ("DO", env, builtin_do, 1, NULL, 0);
+  add_builtin_form ("DO*", env, builtin_do_star, 1, NULL, 0);
+  add_builtin_form ("DOTIMES", env, builtin_dotimes, 1, NULL, 0);
+  add_builtin_form ("DOLIST", env, builtin_dolist, 1, NULL, 0);
+  add_builtin_form ("MAPCAR", env, builtin_mapcar, 0, NULL, 0);
+  add_builtin_form ("MAP", env, builtin_map, 0, NULL, 0);
+  add_builtin_form ("REMOVE-IF", env, builtin_remove_if, 0, NULL, 0);
+  add_builtin_form ("REVERSE", env, builtin_reverse, 0, NULL, 0);
+  add_builtin_form ("+", env, builtin_plus, 0, NULL, 0);
+  add_builtin_form ("-", env, builtin_minus, 0, NULL, 0);
+  add_builtin_form ("*", env, builtin_multiply, 0, NULL, 0);
+  add_builtin_form ("/", env, builtin_divide, 0, NULL, 0);
+  add_builtin_form ("FLOOR", env, builtin_floor, 0, NULL, 0);
+  add_builtin_form ("FFLOOR", env, builtin_ffloor, 0, NULL, 0);
+  add_builtin_form ("CEILING", env, builtin_ceiling, 0, NULL, 0);
+  add_builtin_form ("FCEILING", env, builtin_fceiling, 0, NULL, 0);
+  add_builtin_form ("TRUNCATE", env, builtin_truncate, 0, NULL, 0);
+  add_builtin_form ("FTRUNCATE", env, builtin_ftruncate, 0, NULL, 0);
+  add_builtin_form ("ROUND", env, builtin_round, 0, NULL, 0);
+  add_builtin_form ("FROUND", env, builtin_fround, 0, NULL, 0);
+  add_builtin_form ("NUMERATOR", env, builtin_numerator, 0, NULL, 0);
+  add_builtin_form ("DENOMINATOR", env, builtin_denominator, 0, NULL,
 		    0);
-  add_builtin_form ("RATIONAL", env, builtin_rational, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FLOAT", env, builtin_float, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SQRT", env, builtin_sqrt, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("COMPLEX", env, builtin_complex, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("REALPART", env, builtin_realpart, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("IMAGPART", env, builtin_imagpart, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("=", env, builtin_numbers_equal, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("/=", env, builtin_numbers_different, TYPE_FUNCTION, NULL,
+  add_builtin_form ("RATIONAL", env, builtin_rational, 0, NULL, 0);
+  add_builtin_form ("FLOAT", env, builtin_float, 0, NULL, 0);
+  add_builtin_form ("SQRT", env, builtin_sqrt, 0, NULL, 0);
+  add_builtin_form ("COMPLEX", env, builtin_complex, 0, NULL, 0);
+  add_builtin_form ("REALPART", env, builtin_realpart, 0, NULL, 0);
+  add_builtin_form ("IMAGPART", env, builtin_imagpart, 0, NULL, 0);
+  add_builtin_form ("=", env, builtin_numbers_equal, 0, NULL, 0);
+  add_builtin_form ("/=", env, builtin_numbers_different, 0, NULL,
 		    0);
-  add_builtin_form ("<", env, builtin_numbers_less_than, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("<=", env, builtin_numbers_less_than_or_equal,TYPE_FUNCTION,
+  add_builtin_form ("<", env, builtin_numbers_less_than, 0, NULL, 0);
+  add_builtin_form ("<=", env, builtin_numbers_less_than_or_equal,0,
 		    NULL, 0);
-  add_builtin_form (">", env, builtin_numbers_more_than, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form (">=", env, builtin_numbers_more_than_or_equal, TYPE_FUNCTION,
+  add_builtin_form (">", env, builtin_numbers_more_than, 0, NULL, 0);
+  add_builtin_form (">=", env, builtin_numbers_more_than_or_equal, 0,
 		    NULL, 0);
-  add_builtin_form ("MIN", env, builtin_min, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAX", env, builtin_max, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SIN", env, builtin_sin, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("COS", env, builtin_cos, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TAN", env, builtin_tan, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SINH", env, builtin_sinh, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("COSH", env, builtin_cosh, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TANH", env, builtin_tanh, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("EXP", env, builtin_exp, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("EXPT", env, builtin_expt, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LOG", env, builtin_log, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LOGNOT", env, builtin_lognot, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("LOGIOR", env, builtin_logior, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("QUOTE", env, evaluate_quote, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("LET", env, evaluate_let, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("LET*", env, evaluate_let_star, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("PROGV", env, evaluate_progv, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("LOCALLY", env, evaluate_locally, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("FLET", env, evaluate_flet, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("LABELS", env, evaluate_labels, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("MACROLET", env, evaluate_macrolet, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("IF", env, evaluate_if, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("PROGN", env, evaluate_progn, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("VALUES", env, evaluate_values, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("VALUES-LIST", env, evaluate_values_list, TYPE_FUNCTION,
+  add_builtin_form ("MIN", env, builtin_min, 0, NULL, 0);
+  add_builtin_form ("MAX", env, builtin_max, 0, NULL, 0);
+  add_builtin_form ("SIN", env, builtin_sin, 0, NULL, 0);
+  add_builtin_form ("COS", env, builtin_cos, 0, NULL, 0);
+  add_builtin_form ("TAN", env, builtin_tan, 0, NULL, 0);
+  add_builtin_form ("SINH", env, builtin_sinh, 0, NULL, 0);
+  add_builtin_form ("COSH", env, builtin_cosh, 0, NULL, 0);
+  add_builtin_form ("TANH", env, builtin_tanh, 0, NULL, 0);
+  add_builtin_form ("EXP", env, builtin_exp, 0, NULL, 0);
+  add_builtin_form ("EXPT", env, builtin_expt, 0, NULL, 0);
+  add_builtin_form ("LOG", env, builtin_log, 0, NULL, 0);
+  add_builtin_form ("LOGNOT", env, builtin_lognot, 0, NULL, 0);
+  add_builtin_form ("LOGIOR", env, builtin_logior, 0, NULL, 0);
+  add_builtin_form ("QUOTE", env, evaluate_quote, 1, NULL, 1);
+  add_builtin_form ("LET", env, evaluate_let, 1, NULL, 1);
+  add_builtin_form ("LET*", env, evaluate_let_star, 1, NULL, 1);
+  add_builtin_form ("PROGV", env, evaluate_progv, 1, NULL, 1);
+  add_builtin_form ("LOCALLY", env, evaluate_locally, 1, NULL, 1);
+  add_builtin_form ("FLET", env, evaluate_flet, 1, NULL, 1);
+  add_builtin_form ("LABELS", env, evaluate_labels, 1, NULL, 1);
+  add_builtin_form ("MACROLET", env, evaluate_macrolet, 1, NULL, 1);
+  add_builtin_form ("IF", env, evaluate_if, 1, NULL, 1);
+  add_builtin_form ("PROGN", env, evaluate_progn, 1, NULL, 1);
+  add_builtin_form ("VALUES", env, evaluate_values, 0, NULL, 0);
+  add_builtin_form ("VALUES-LIST", env, evaluate_values_list, 0,
 		    NULL, 0);
   add_builtin_form ("MULTIPLE-VALUE-LIST", env, evaluate_multiple_value_list,
-		    TYPE_MACRO, NULL, 0);
+		    1, NULL, 0);
   add_builtin_form ("MULTIPLE-VALUE-CALL", env, evaluate_multiple_value_call,
-		    TYPE_MACRO, NULL, 1);
-  add_builtin_form ("EVAL-WHEN", env, evaluate_eval_when, TYPE_MACRO, NULL,
+		    1, NULL, 1);
+  add_builtin_form ("EVAL-WHEN", env, evaluate_eval_when, 1, NULL,
 		    1);
-  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, TYPE_MACRO, NULL,
+  add_builtin_form ("DEFCONSTANT", env, evaluate_defconstant, 1, NULL,
 		    0);
-  add_builtin_form ("CONSTANTP", env, builtin_constantp, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, TYPE_MACRO, NULL,
+  add_builtin_form ("CONSTANTP", env, builtin_constantp, 0, NULL, 0);
+  add_builtin_form ("DEFPARAMETER", env, evaluate_defparameter, 1, NULL,
 		    0);
-  add_builtin_form ("DEFVAR", env, evaluate_defvar, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("SETQ", env, evaluate_setq, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("PSETQ", env, evaluate_psetq, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("SETF", env, evaluate_setf, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("PSETF", env, evaluate_psetf, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("FUNCTION", env, evaluate_function, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("LAMBDA", env, evaluate_lambda, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("APPLY", env, evaluate_apply, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FUNCALL", env, evaluate_funcall, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DECLARE", env, evaluate_declare, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("THE", env, evaluate_the, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("AND", env, evaluate_and, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("OR", env, evaluate_or, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("PROG1", env, evaluate_prog1, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("PROG2", env, evaluate_prog2, TYPE_MACRO, NULL, 0);
+  add_builtin_form ("DEFVAR", env, evaluate_defvar, 1, NULL, 0);
+  add_builtin_form ("SETQ", env, evaluate_setq, 1, NULL, 1);
+  add_builtin_form ("PSETQ", env, evaluate_psetq, 1, NULL, 0);
+  add_builtin_form ("SETF", env, evaluate_setf, 1, NULL, 0);
+  add_builtin_form ("PSETF", env, evaluate_psetf, 1, NULL, 0);
+  add_builtin_form ("FUNCTION", env, evaluate_function, 1, NULL, 1);
+  add_builtin_form ("LAMBDA", env, evaluate_lambda, 1, NULL, 0);
+  add_builtin_form ("APPLY", env, evaluate_apply, 0, NULL, 0);
+  add_builtin_form ("FUNCALL", env, evaluate_funcall, 0, NULL, 0);
+  add_builtin_form ("DECLARE", env, evaluate_declare, 1, NULL, 0);
+  add_builtin_form ("THE", env, evaluate_the, 1, NULL, 1);
+  add_builtin_form ("AND", env, evaluate_and, 1, NULL, 0);
+  add_builtin_form ("OR", env, evaluate_or, 1, NULL, 0);
+  add_builtin_form ("PROG1", env, evaluate_prog1, 1, NULL, 0);
+  add_builtin_form ("PROG2", env, evaluate_prog2, 1, NULL, 0);
   add_builtin_form ("DESTRUCTURING-BIND", env, evaluate_destructuring_bind,
-		    TYPE_MACRO, NULL, 0);
-  add_builtin_form ("DEFTYPE", env, evaluate_deftype, TYPE_MACRO, NULL, 0);
+		    1, NULL, 0);
+  add_builtin_form ("DEFTYPE", env, evaluate_deftype, 1, NULL, 0);
   add_builtin_form ("DEFINE-SETF-EXPANDER", env, evaluate_define_setf_expander,
-		    TYPE_MACRO, NULL, 0);
+		    1, NULL, 0);
   add_builtin_form ("GET-SETF-EXPANSION", env, builtin_get_setf_expansion,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("DEFINE-SYMBOL-MACRO", env, evaluate_define_symbol_macro,
-		    TYPE_MACRO, NULL, 0);
-  add_builtin_form ("SYMBOL-MACROLET", env, evaluate_symbol_macrolet, TYPE_MACRO,
+		    1, NULL, 0);
+  add_builtin_form ("SYMBOL-MACROLET", env, evaluate_symbol_macrolet, 1,
 		    NULL, 1);
-  add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("COPY-STRUCTURE", env, builtin_copy_structure, TYPE_FUNCTION,
+  add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, 1, NULL, 0);
+  add_builtin_form ("COPY-STRUCTURE", env, builtin_copy_structure, 0,
 		    NULL, 0);
-  add_builtin_form ("DEFCLASS", env, evaluate_defclass, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("FIND-CLASS", env, builtin_find_class, TYPE_FUNCTION, NULL,
+  add_builtin_form ("DEFCLASS", env, evaluate_defclass, 1, NULL, 0);
+  add_builtin_form ("FIND-CLASS", env, builtin_find_class, 0, NULL,
 		    0);
-  add_builtin_form ("CLASS-OF", env, builtin_class_of, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CLASS-NAME", env, builtin_class_name, TYPE_FUNCTION, NULL,
+  add_builtin_form ("CLASS-OF", env, builtin_class_of, 0, NULL, 0);
+  add_builtin_form ("CLASS-NAME", env, builtin_class_name, 0, NULL,
 		    0);
-  add_builtin_form ("SLOT-EXISTS-P", env, builtin_slot_exists_p, TYPE_FUNCTION,
+  add_builtin_form ("SLOT-EXISTS-P", env, builtin_slot_exists_p, 0,
 		    NULL, 0);
-  add_builtin_form ("SLOT-BOUNDP", env, builtin_slot_boundp, TYPE_FUNCTION, NULL,
+  add_builtin_form ("SLOT-BOUNDP", env, builtin_slot_boundp, 0, NULL,
 		    0);
-  add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, TYPE_FUNCTION,
+  add_builtin_form ("SLOT-VALUE", env, builtin_slot_value, 0,
 		    builtin_setf_slot_value, 0);
   add_builtin_form ("SLOT-MAKUNBOUND", env, builtin_slot_makunbound,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("ENSURE-GENERIC-FUNCTION", env,
-		    builtin_ensure_generic_function, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FIND-METHOD", env, builtin_find_method, TYPE_FUNCTION, NULL,
+		    builtin_ensure_generic_function, 0, NULL, 0);
+  add_builtin_form ("FIND-METHOD", env, builtin_find_method, 0, NULL,
 		    0);
-  add_builtin_form ("REMOVE-METHOD", env, builtin_remove_method, TYPE_FUNCTION,
+  add_builtin_form ("REMOVE-METHOD", env, builtin_remove_method, 0,
 		    NULL, 0);
-  add_builtin_form ("NEXT-METHOD-P", env, builtin_next_method_p, TYPE_FUNCTION,
+  add_builtin_form ("NEXT-METHOD-P", env, builtin_next_method_p, 0,
 		    NULL, 0);
   add_builtin_form ("CALL-NEXT-METHOD", env, evaluate_call_next_method,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("NO-NEXT-METHOD", env, evaluate_no_next_method,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("FUNCTION-LAMBDA-EXPRESSION", env,
-		    builtin_function_lambda_expression, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DECLAIM", env, evaluate_declaim, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("PROCLAIM", env, builtin_proclaim, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TAGBODY", env, evaluate_tagbody, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("GO", env, evaluate_go, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("BLOCK", env, evaluate_block, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("RETURN-FROM", env, evaluate_return_from, TYPE_MACRO, NULL,
+		    builtin_function_lambda_expression, 0, NULL, 0);
+  add_builtin_form ("DECLAIM", env, evaluate_declaim, 1, NULL, 0);
+  add_builtin_form ("PROCLAIM", env, builtin_proclaim, 0, NULL, 0);
+  add_builtin_form ("TAGBODY", env, evaluate_tagbody, 1, NULL, 1);
+  add_builtin_form ("GO", env, evaluate_go, 1, NULL, 1);
+  add_builtin_form ("BLOCK", env, evaluate_block, 1, NULL, 1);
+  add_builtin_form ("RETURN-FROM", env, evaluate_return_from, 1, NULL,
 		    1);
-  add_builtin_form ("CATCH", env, evaluate_catch, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("THROW", env, evaluate_throw, TYPE_MACRO, NULL, 1);
-  add_builtin_form ("HANDLER-BIND", env, evaluate_handler_bind, TYPE_MACRO, NULL,
+  add_builtin_form ("CATCH", env, evaluate_catch, 1, NULL, 1);
+  add_builtin_form ("THROW", env, evaluate_throw, 1, NULL, 1);
+  add_builtin_form ("HANDLER-BIND", env, evaluate_handler_bind, 1, NULL,
 		    0);
-  add_builtin_form ("RESTART-BIND", env, evaluate_restart_bind, TYPE_MACRO, NULL,
+  add_builtin_form ("RESTART-BIND", env, evaluate_restart_bind, 1, NULL,
 		    0);
   add_builtin_form ("COMPUTE-RESTARTS", env, builtin_compute_restarts,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("INVOKE-RESTART", env, builtin_invoke_restart, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("INVOKE-RESTART", env, builtin_invoke_restart, 0,
 		    NULL, 0);
-  add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, TYPE_MACRO,
+  add_builtin_form ("UNWIND-PROTECT", env, evaluate_unwind_protect, 1,
 		    NULL, 1);
-  add_builtin_form ("SIGNAL", env, builtin_signal, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("ERROR", env, builtin_error, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("WARN", env, builtin_warn, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SIGNAL", env, builtin_signal, 0, NULL, 0);
+  add_builtin_form ("ERROR", env, builtin_error, 0, NULL, 0);
+  add_builtin_form ("WARN", env, builtin_warn, 0, NULL, 0);
   add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
-		    TYPE_MACRO, NULL, 0);
-  add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, TYPE_FUNCTION,
+		    1, NULL, 0);
+  add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, 0,
 		    NULL, 0);
   add_builtin_form ("DEFINE-COMPILER-MACRO", env, evaluate_define_compiler_macro,
-		    TYPE_MACRO, NULL, 0);
-  add_builtin_form ("ROOM", env, builtin_room, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TRACE", env, builtin_trace, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("UNTRACE", env, builtin_untrace, TYPE_MACRO, NULL, 0);
+		    1, NULL, 0);
+  add_builtin_form ("ROOM", env, builtin_room, 0, NULL, 0);
+  add_builtin_form ("TRACE", env, builtin_trace, 1, NULL, 0);
+  add_builtin_form ("UNTRACE", env, builtin_untrace, 1, NULL, 0);
   add_builtin_form ("INVOKE-DEBUGGER", env, builtin_invoke_debugger,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("STEP", env, builtin_step, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("TYPEP", env, builtin_typep, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("TYPE-OF", env, builtin_type_of, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SUBTYPEP", env, builtin_subtypep, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("COERCE", env, builtin_coerce, TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
+  add_builtin_form ("STEP", env, builtin_step, 1, NULL, 0);
+  add_builtin_form ("TYPEP", env, builtin_typep, 0, NULL, 0);
+  add_builtin_form ("TYPE-OF", env, builtin_type_of, 0, NULL, 0);
+  add_builtin_form ("SUBTYPEP", env, builtin_subtypep, 0, NULL, 0);
+  add_builtin_form ("COERCE", env, builtin_coerce, 0, NULL, 0);
   add_builtin_form ("MAKE-RANDOM-STATE", env, builtin_make_random_state,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("RANDOM", env, builtin_random, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("BYTE", env, builtin_byte, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("BYTE-SIZE", env, builtin_byte_size, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("BYTE-POSITION", env, builtin_byte_position, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("RANDOM", env, builtin_random, 0, NULL, 0);
+  add_builtin_form ("BYTE", env, builtin_byte, 0, NULL, 0);
+  add_builtin_form ("BYTE-SIZE", env, builtin_byte_size, 0, NULL, 0);
+  add_builtin_form ("BYTE-POSITION", env, builtin_byte_position, 0,
 		    NULL, 0);
-  add_builtin_form ("MAKE-STRING", env, builtin_make_string, TYPE_FUNCTION, NULL,
+  add_builtin_form ("MAKE-STRING", env, builtin_make_string, 0, NULL,
 		    0);
-  add_builtin_form ("INTERN", env, builtin_intern, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FIND-SYMBOL", env, builtin_find_symbol, TYPE_FUNCTION, NULL,
+  add_builtin_form ("INTERN", env, builtin_intern, 0, NULL, 0);
+  add_builtin_form ("FIND-SYMBOL", env, builtin_find_symbol, 0, NULL,
 		    0);
-  add_builtin_form ("UNINTERN", env, builtin_unintern, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, TYPE_FUNCTION, NULL,
+  add_builtin_form ("UNINTERN", env, builtin_unintern, 0, NULL, 0);
+  add_builtin_form ("MAKE-SYMBOL", env, builtin_make_symbol, 0, NULL,
 		    0);
-  add_builtin_form ("COPY-SYMBOL", env, builtin_copy_symbol, TYPE_FUNCTION, NULL,
+  add_builtin_form ("COPY-SYMBOL", env, builtin_copy_symbol, 0, NULL,
 		    0);
-  add_builtin_form ("BOUNDP", env, builtin_boundp, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, TYPE_FUNCTION,
+  add_builtin_form ("BOUNDP", env, builtin_boundp, 0, NULL, 0);
+  add_builtin_form ("SYMBOL-VALUE", env, builtin_symbol_value, 0,
 		    NULL, 0);
-  add_builtin_form ("SET", env, builtin_set, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FBOUNDP", env, builtin_fboundp, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SET", env, builtin_set, 0, NULL, 0);
+  add_builtin_form ("FBOUNDP", env, builtin_fboundp, 0, NULL, 0);
   add_builtin_form ("SYMBOL-FUNCTION", env, builtin_symbol_function,
-		    TYPE_FUNCTION, builtin_setf_symbol_function, 0);
-  add_builtin_form ("FDEFINITION", env, builtin_fdefinition, TYPE_FUNCTION,
+		    0, builtin_setf_symbol_function, 0);
+  add_builtin_form ("FDEFINITION", env, builtin_fdefinition, 0,
 		    builtin_setf_fdefinition, 0);
-  add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, TYPE_FUNCTION, NULL,
+  add_builtin_form ("SYMBOL-NAME", env, builtin_symbol_name, 0, NULL,
 		    0);
-  add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, TYPE_FUNCTION,
+  add_builtin_form ("SYMBOL-PACKAGE", env, builtin_symbol_package, 0,
 		    NULL, 0);
-  add_builtin_form ("SYMBOL-PLIST", env, builtin_symbol_plist, TYPE_FUNCTION,
+  add_builtin_form ("SYMBOL-PLIST", env, builtin_symbol_plist, 0,
 		    builtin_setf_symbol_plist, 0);
   add_builtin_form ("SPECIAL-OPERATOR-P", env, builtin_special_operator_p,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAKUNBOUND", env, builtin_makunbound, TYPE_FUNCTION, NULL,
+		    0, NULL, 0);
+  add_builtin_form ("MAKUNBOUND", env, builtin_makunbound, 0, NULL,
 		    0);
-  add_builtin_form ("FMAKUNBOUND", env, builtin_fmakunbound, TYPE_FUNCTION, NULL,
+  add_builtin_form ("FMAKUNBOUND", env, builtin_fmakunbound, 0, NULL,
 		    0);
-  add_builtin_form ("GENSYM", env, builtin_gensym, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, TYPE_FUNCTION,
+  add_builtin_form ("GENSYM", env, builtin_gensym, 0, NULL, 0);
+  add_builtin_form ("MACROEXPAND-1", env, builtin_macroexpand_1, 0,
 		    NULL, 0);
-  add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, TYPE_FUNCTION,
+  add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, 0,
 		    builtin_setf_macro_function, 0);
   add_builtin_form ("COMPILER-MACRO-FUNCTION", env,
-		    builtin_compiler_macro_function, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("STRING", env, builtin_string, TYPE_FUNCTION, NULL, 0);
-  /*add_builtin_form ("STRING=", env, builtin_string_eq, TYPE_FUNCTION, NULL, 0);*/
-  add_builtin_form ("CHAR=", env, builtin_char_eq, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CHAR-UPCASE", env, builtin_char_upcase, TYPE_FUNCTION, NULL,
+		    builtin_compiler_macro_function, 0, NULL, 0);
+  add_builtin_form ("STRING", env, builtin_string, 0, NULL, 0);
+  /*add_builtin_form ("STRING=", env, builtin_string_eq, 0, NULL, 0);*/
+  add_builtin_form ("CHAR=", env, builtin_char_eq, 0, NULL, 0);
+  add_builtin_form ("CHAR-UPCASE", env, builtin_char_upcase, 0, NULL,
 		    0);
-  add_builtin_form ("CHAR-DOWNCASE", env, builtin_char_downcase, TYPE_FUNCTION,
+  add_builtin_form ("CHAR-DOWNCASE", env, builtin_char_downcase, 0,
 		    NULL, 0);
-  add_builtin_form ("ALPHA-CHAR-P", env, builtin_alpha_char_p, TYPE_FUNCTION,
+  add_builtin_form ("ALPHA-CHAR-P", env, builtin_alpha_char_p, 0,
 		    NULL, 0);
-  add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, TYPE_FUNCTION,
+  add_builtin_form ("ALPHANUMERICP", env, builtin_alphanumericp, 0,
 		    NULL, 0);
-  add_builtin_form ("CHAR-CODE", env, builtin_char_code, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("CODE-CHAR", env, builtin_code_char, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("FIND-PACKAGE", env, builtin_find_package, TYPE_FUNCTION,
+  add_builtin_form ("CHAR-CODE", env, builtin_char_code, 0, NULL, 0);
+  add_builtin_form ("CODE-CHAR", env, builtin_code_char, 0, NULL, 0);
+  add_builtin_form ("FIND-PACKAGE", env, builtin_find_package, 0,
 		    NULL, 0);
-  add_builtin_form ("PACKAGE-NAME", env, builtin_package_name, TYPE_FUNCTION,
+  add_builtin_form ("PACKAGE-NAME", env, builtin_package_name, 0,
 		    NULL, 0);
   add_builtin_form ("PACKAGE-NICKNAMES", env, builtin_package_nicknames,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("RENAME-PACKAGE", env, builtin_rename_package, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("RENAME-PACKAGE", env, builtin_rename_package, 0,
 		    NULL, 0);
   add_builtin_form ("PACKAGE-USE-LIST", env, builtin_package_use_list,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("PACKAGE-USED-BY-LIST", env, builtin_package_used_by_list,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("LIST-ALL-PACKAGES", env, builtin_list_all_packages,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("MAKE-PACKAGE", env, builtin_make_package, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("MAKE-PACKAGE", env, builtin_make_package, 0,
 		    NULL, 0);
-  add_builtin_form ("IN-PACKAGE", env, builtin_in_package, TYPE_MACRO, NULL,
+  add_builtin_form ("IN-PACKAGE", env, builtin_in_package, 1, NULL,
 		    0);
-  add_builtin_form ("IMPORT", env, builtin_import, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("EXPORT", env, builtin_export, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("UNEXPORT", env, builtin_unexport, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("USE-PACKAGE", env, builtin_use_package, TYPE_FUNCTION, NULL,
+  add_builtin_form ("IMPORT", env, builtin_import, 0, NULL, 0);
+  add_builtin_form ("EXPORT", env, builtin_export, 0, NULL, 0);
+  add_builtin_form ("UNEXPORT", env, builtin_unexport, 0, NULL, 0);
+  add_builtin_form ("USE-PACKAGE", env, builtin_use_package, 0, NULL,
 		    0);
-  add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, TYPE_FUNCTION,
+  add_builtin_form ("UNUSE-PACKAGE", env, builtin_unuse_package, 0,
 		    NULL, 0);
-  add_builtin_form ("SHADOW", env, builtin_shadow, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("SHADOW", env, builtin_shadow, 0, NULL, 0);
   add_builtin_form ("PACKAGE-SHADOWING-SYMBOLS", env,
-		    builtin_package_shadowing_symbols, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, TYPE_MACRO, NULL, 0);
+		    builtin_package_shadowing_symbols, 0, NULL, 0);
+  add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, 1, NULL, 0);
   add_builtin_form ("DO-EXTERNAL-SYMBOLS", env, builtin_do_external_symbols,
-		    TYPE_MACRO, NULL, 0);
-  add_builtin_form ("TIME", env, builtin_time, TYPE_MACRO, NULL, 0);
+		    1, NULL, 0);
+  add_builtin_form ("TIME", env, builtin_time, 1, NULL, 0);
   add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("GET-DECODED-TIME", env, builtin_get_decoded_time,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-TYPE", env,
-		    builtin_lisp_implementation_type, TYPE_FUNCTION, NULL, 0);
+		    builtin_lisp_implementation_type, 0, NULL, 0);
   add_builtin_form ("LISP-IMPLEMENTATION-VERSION", env,
-		    builtin_lisp_implementation_version, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("SOFTWARE-TYPE", env, builtin_software_type, TYPE_FUNCTION,
+		    builtin_lisp_implementation_version, 0, NULL, 0);
+  add_builtin_form ("SOFTWARE-TYPE", env, builtin_software_type, 0,
 		    NULL, 0);
   add_builtin_form ("SOFTWARE-VERSION", env, builtin_software_version,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
 
   add_builtin_type ("T", env, type_t, 1, (char *)NULL);
   add_builtin_type ("NIL", env, type_nil, 1, (char *)NULL);
@@ -4755,87 +4746,86 @@ add_standard_definitions (struct environment *env)
 
   env->package_sym->value_ptr.symbol->value_cell = env->cluser_package;
 
-  add_builtin_form ("AL-DEFMACRO", env, builtin_al_defmacro, TYPE_FUNCTION, NULL, 0);
   add_builtin_form ("AL-WITH-MACRO-ARGUMENTS", env, evaluate_al_with_macro_arguments,
-		    TYPE_MACRO, NULL, 0);
+		    1, NULL, 0);
 
   add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
-		    evaluate_al_loopy_destructuring_bind, TYPE_MACRO, NULL, 0);
-  add_builtin_form ("AL-LOOPY-SETQ", env, evaluate_al_loopy_setq, TYPE_MACRO,
+		    evaluate_al_loopy_destructuring_bind, 1, NULL, 0);
+  add_builtin_form ("AL-LOOPY-SETQ", env, evaluate_al_loopy_setq, 1,
 		    NULL, 0);
 
   add_builtin_form ("AL-STRING-INPUT-STREAM-STRING", env,
-		    builtin_al_string_input_stream_string, TYPE_FUNCTION, NULL,
+		    builtin_al_string_input_stream_string, 0, NULL,
 		    0);
 
-  add_builtin_form ("AL-ADD-METHOD", env, builtin_al_add_method, TYPE_FUNCTION,
+  add_builtin_form ("AL-ADD-METHOD", env, builtin_al_add_method, 0,
 		    NULL, 0);
   add_builtin_form ("AL-CREATE-METHOD", env, builtin_al_create_method,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
 
   add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
-		    TYPE_FUNCTION, builtin_setf_al_function_name, 0);
+		    0, builtin_setf_al_function_name, 0);
   add_builtin_form ("AL-FUNCTION-BODY", env, builtin_al_function_body,
-		    TYPE_FUNCTION, builtin_setf_al_function_body, 0);
+		    0, builtin_setf_al_function_body, 0);
   add_builtin_form ("AL-FUNCTION-ATTRIBUTES", env, builtin_al_function_attributes,
-		    TYPE_FUNCTION, builtin_setf_al_function_attributes, 0);
+		    0, builtin_setf_al_function_attributes, 0);
 
   add_builtin_form ("AL-PRINT-RESTARTS", env, builtin_al_print_restarts,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
 
   add_builtin_form ("AL-DUMP-BINDINGS", env, builtin_al_dump_bindings,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-DUMP-FUNCTION-BINDINGS", env,
-		    builtin_al_dump_function_bindings, TYPE_FUNCTION, NULL, 0);
+		    builtin_al_dump_function_bindings, 0, NULL, 0);
   add_builtin_form ("AL-DUMP-CAPTURED-ENV", env, builtin_al_dump_captured_env,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-DUMP-METHODS", env, builtin_al_dump_methods,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AL-DUMP-FIELDS", env, builtin_al_dump_fields, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("AL-DUMP-FIELDS", env, builtin_al_dump_fields, 0,
 		    NULL, 0);
   add_builtin_form ("AL-CLASS-PRECEDENCE-LIST", env,
-		    builtin_al_class_precedence_list, TYPE_FUNCTION, NULL, 0);
+		    builtin_al_class_precedence_list, 0, NULL, 0);
 
   add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-STOP-PROFILING", env, builtin_al_stop_profiling,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-CLEAR-PROFILING", env, builtin_al_clear_profiling,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-REPORT-PROFILING", env, builtin_al_report_profiling,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
 
   add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-LIST-BACKTRACE", env, builtin_al_list_backtrace,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
 
-  add_builtin_form ("AL-WATCH", env, builtin_al_watch, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AL-UNWATCH", env, builtin_al_unwatch, TYPE_FUNCTION, NULL,
+  add_builtin_form ("AL-WATCH", env, builtin_al_watch, 0, NULL, 0);
+  add_builtin_form ("AL-UNWATCH", env, builtin_al_unwatch, 0, NULL,
 		    0);
 
-  add_builtin_form ("AL-NEXT", env, builtin_al_next, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-NEXT", env, builtin_al_next, 0, NULL, 0);
 
   add_builtin_form ("AL-COMPILE-FORM", env, builtin_al_compile_form,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
-		    builtin_al_print_terms_and_conditions, TYPE_FUNCTION, NULL,
+		    builtin_al_print_terms_and_conditions, 0, NULL,
 		    0);
 
   add_builtin_form ("AL-PATHNAME-DIRECTORY", env, builtin_al_pathname_directory,
-		    TYPE_FUNCTION, NULL, 0);
+		    0, NULL, 0);
   add_builtin_form ("AL-LIST-DIRECTORY", env, builtin_al_list_directory,
-		    TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AL-DIRECTORYP", env, builtin_al_directoryp, TYPE_FUNCTION,
+		    0, NULL, 0);
+  add_builtin_form ("AL-DIRECTORYP", env, builtin_al_directoryp, 0,
 		    NULL, 0);
-  add_builtin_form ("AL-GETCWD", env, builtin_al_getcwd, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-GETCWD", env, builtin_al_getcwd, 0, NULL, 0);
 
-  add_builtin_form ("AL-GETENV", env, builtin_al_getenv, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AL-SYSTEM", env, builtin_al_system, TYPE_FUNCTION, NULL, 0);
-  add_builtin_form ("AL-EXIT", env, builtin_al_exit, TYPE_FUNCTION, NULL, 0);
+  add_builtin_form ("AL-GETENV", env, builtin_al_getenv, 0, NULL, 0);
+  add_builtin_form ("AL-SYSTEM", env, builtin_al_system, 0, NULL, 0);
+  add_builtin_form ("AL-EXIT", env, builtin_al_exit, 0, NULL, 0);
 
   env->al_compile_when_defining_sym =
     define_variable ("*AL-COMPILE-WHEN-DEFINING*", &nil_object, env);
@@ -8042,8 +8032,6 @@ alloc_function (void)
   fun->struct_predicate_class_name = NULL;
   fun->struct_copyier_class_name = NULL;
   fun->condition_reader_class_name = NULL;
-  fun->function_macro = NULL;
-  fun->macro_function = NULL;
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
@@ -9566,6 +9554,7 @@ clear_symbol (struct symbol *sym)
   sym->value_cell = NULL;
   sym->is_symbol_macro = 0;
   sym->function_dyn_bins_num = 0;
+  sym->is_macro = 0;
   sym->function_cell = NULL;
   sym->plist = &nil_object;
   sym->setf_expander = NULL;
@@ -10481,7 +10470,7 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	  reader = SYMBOL (CAR (CDR (fieldform)));
 	  fun = reader->value_ptr.symbol->function_cell;
 
-	  if (fun && (fun->type == TYPE_MACRO
+	  if (fun && (reader->value_ptr.symbol->is_macro
 		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
 	    {
 	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
@@ -10540,7 +10529,7 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	    ? funcname->value_ptr.symbol->setf_func_cell
 	    : funcname->value_ptr.symbol->function_cell;
 
-	  if (fun && (fun->type == TYPE_MACRO
+	  if (fun && (funcname->value_ptr.symbol->is_macro
 		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
 	    {
 	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
@@ -10598,7 +10587,7 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	  accessor = SYMBOL (CAR (CDR (fieldform)));
 	  fun = accessor->value_ptr.symbol->function_cell;
 
-	  if (fun && (fun->type == TYPE_MACRO
+	  if (fun && (accessor->value_ptr.symbol->is_macro
 		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
 	    {
 	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
@@ -10638,7 +10627,7 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 
 	  fun = accessor->value_ptr.symbol->setf_func_cell;
 
-	  if (fun && (fun->type == TYPE_MACRO
+	  if (fun && (accessor->value_ptr.symbol->is_macro
 		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
 	    {
 	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
@@ -11265,12 +11254,6 @@ compile_function (struct object *fun, struct environment *env,
 	  ml = ml->next;
 	}
     }
-  else if (fun->value_ptr.function->macro_function)
-    {
-      if (!compile_body (fun->value_ptr.function->macro_function->
-			 value_ptr.function->body, 0, env, outcome))
-	return NULL;
-    }
   else if (!compile_body (fun->value_ptr.function->body, 0, env, outcome))
     return NULL;
 
@@ -11280,237 +11263,10 @@ compile_function (struct object *fun, struct environment *env,
 }
 
 
-struct object *
-compile_form (struct object *form, int backt_comma_bal, struct environment *env,
-	      struct outcome *outcome)
-{
-  struct object *prevform = NULL, *mac, *args, *fun, *cons, *val;
-  int expanded = 0;
-
-  while (!backt_comma_bal && form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form))
-	 && (mac = get_function (CAR (form), env, 0, 0, 0, 0))
-	 && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
-    {
-      expanded = 1;
-
-      if (mac->value_ptr.macro->macro_function)
-	{
-	  args = alloc_empty_list (2);
-	  args->value_ptr.cons_pair->car = form;
-	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
-
-	  form = call_function (mac->value_ptr.macro->macro_function, args,
-				0, 0, 0, 0, 0, env, outcome);
-	  free_list_structure (args);
-	}
-      else
-	{
-	  form = call_function (mac, form, 0, 1, 1, 0, 0, env, outcome);
-	}
-
-      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-      decrement_refcount (prevform);
-      prevform = form;
-
-      if (!form)
-	return NULL;
-    }
-
-  if (!expanded)
-    {
-      increment_refcount (form);
-    }
-
-  if (backt_comma_bal && form->type == TYPE_CONS_PAIR)
-    {
-      if (!compile_body (form, backt_comma_bal, env, outcome))
-	return NULL;
-    }
-  else if (form->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (form)))
-    {
-      if (!(fun = get_function (CAR (form), env, 0, 0, 0, 0))
-	  || fun->type == TYPE_FUNCTION)
-	{
-	  if (!compile_body (CDR (form), backt_comma_bal, env, outcome))
-	    return NULL;
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("IF")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("PROGN")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("BLOCK")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("TAGBODY")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MULTIPLE-VALUE-CALL")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AND")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("OR"))
-	{
-	  if (!compile_body (CDR (form), backt_comma_bal, env, outcome))
-	    return NULL;
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LET*")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("HANDLER-BIND")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("RESTART-BIND"))
-	{
-	  cons = CAR (CDR (form));
-
-	  while (cons->type == TYPE_CONS_PAIR)
-	    {
-	      if (CAR (cons)->type == TYPE_CONS_PAIR
-		  && !compile_body (CDR (CAR (cons)), backt_comma_bal, env,
-				    outcome))
-		{
-		  return NULL;
-		}
-
-	      cons = CDR (cons);
-	    }
-
-	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
-	    return NULL;
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LAMBDA")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOLIST")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DOTIMES")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO-SYMBOLS")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO-EXTERNAL-SYMBOLS")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DESTRUCTURING-BIND")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AL-LOOPY-DESTRUCTURING-BIND")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("RETURN-FROM"))
-	{
-	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
-	    return NULL;
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("FUNCTION"))
-	{
-	  if (CAR (CDR (form))->type == TYPE_CONS_PAIR
-	      && SYMBOL (CAR (CAR (CDR (form)))) == BUILTIN_SYMBOL ("LAMBDA"))
-	    {
-	      if (!compile_body (CDR (CDR (CAR (CDR (form)))), backt_comma_bal,
-				 env, outcome))
-		return NULL;
-	    }
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("FLET")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("LABELS")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("MACROLET"))
-	{
-	  cons = CAR (CDR (form));
-
-	  while (cons->type == TYPE_CONS_PAIR)
-	    {
-	      if (!compile_body (CDR (CDR (CAR (cons))), backt_comma_bal, env,
-				 outcome))
-		return NULL;
-
-	      cons = CDR (cons);
-	    }
-
-	  if (!compile_body (CDR (CDR (form)), backt_comma_bal, env, outcome))
-	    return NULL;
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DO*")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DEFUN")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("DEFMACRO"))
-	{
-	  if (!compile_body (CDR (CDR (CDR (form))), backt_comma_bal, env,
-			     outcome))
-	    return NULL;
-	}
-      else if (SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETQ")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("SETF")
-	       || SYMBOL (CAR (form)) == BUILTIN_SYMBOL ("AL-LOOPY-SETQ"))
-	{
-	  cons = CDR (form);
-
-	  while (SYMBOL (cons) != &nil_object)
-	    {
-	      cons = CDR (cons);
-
-	      if (SYMBOL (cons) == &nil_object)
-		break;
-
-	      val = compile_form (CAR (cons), backt_comma_bal, env, outcome);
-
-	      if (!val)
-		return NULL;
-
-	      delete_reference (cons, CAR (cons), 0);
-	      cons->value_ptr.cons_pair->car = val;
-	      add_reference (cons, CAR (cons), 0);
-	      decrement_refcount (val);
-
-	      cons = CDR (cons);
-	    }
-	}
-    }
-
-  if (form->type == TYPE_BACKQUOTE)
-    {
-      if (!compile_form (form->value_ptr.next, backt_comma_bal+1, env, outcome))
-	return NULL;
-    }
-  else if (form->type == TYPE_COMMA)
-    {
-      val = compile_form (form->value_ptr.next, backt_comma_bal-1, env, outcome);
-
-      if (!val)
-	return NULL;
-
-      if (backt_comma_bal == 1 && form->value_ptr.next->type != TYPE_AT
-	  && form->value_ptr.next->type != TYPE_DOT)
-	{
-	  delete_reference (form, form->value_ptr.next, 0);
-	  form->value_ptr.next = val;
-	  add_reference (form, val, 0);
-	  decrement_refcount (val);
-	}
-    }
-  else if (form->type == TYPE_AT || form->type == TYPE_DOT)
-    {
-      val = compile_form (form->value_ptr.next, backt_comma_bal, env, outcome);
-
-      if (!val)
-	return NULL;
-
-      if (!backt_comma_bal)
-	{
-	  delete_reference (form, form->value_ptr.next, 0);
-	  form->value_ptr.next = val;
-	  add_reference (form, val, 0);
-	  decrement_refcount (val);
-	}
-    }
-
-
-  return form;
-}
-
-
 int
 compile_body (struct object *body, int backt_comma_bal, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *car;
-
-  if (SYMBOL (body) == &nil_object)
-    return 1;
-
-  while (body->type == TYPE_CONS_PAIR)
-    {
-      car = compile_form (CAR (body), backt_comma_bal, env, outcome);
-
-      if (!car)
-	return 0;
-
-      delete_reference (body, CAR (body), 0);
-      body->value_ptr.cons_pair->car = car;
-      add_reference (body, CAR (body), 0);
-      decrement_refcount (car);
-
-      body = CDR (body);
-    }
-
   return 1;
 }
 
@@ -12273,7 +12029,7 @@ handle_condition (struct object *cond, struct environment *env,
 	  f = env->handlers;
 	  env->handlers = env->handlers->next;
 
-	  hret = call_function (b->handler, arg, 1, 0, 1, 0, 0, env, outcome);
+	  hret = call_function (b->handler, arg, 1, 0, 0, 1, 0, 0, env, outcome);
 
 	  env->handlers = f;
 
@@ -12960,8 +12716,7 @@ print_backtrace (struct environment *env, int be_verbose)
 
   while (f)
     {
-      if (!be_verbose && f->funcobj->type == TYPE_MACRO
-	  && f->funcobj->value_ptr.macro->builtin_form)
+      if (!be_verbose && f->funcobj->value_ptr.function->builtin_form)
 	{
 	  f = f->next;
 	  continue;
@@ -12969,7 +12724,7 @@ print_backtrace (struct environment *env, int be_verbose)
 
       printf ("%d: ", i);
 
-      if (f->funcobj->type == TYPE_FUNCTION || f->funcobj->type == TYPE_MACRO)
+      if (f->funcobj->type == TYPE_FUNCTION)
 	{
 	  print_function_name (f->funcobj, env->c_stdout, env);
 	  printf (" ");
@@ -13031,8 +12786,7 @@ list_backtrace (struct environment *env, int be_verbose)
 
   while (f)
     {
-      if (!be_verbose && f->funcobj->type == TYPE_MACRO
-	  && f->funcobj->value_ptr.macro->builtin_form)
+      if (!be_verbose && f->funcobj->value_ptr.function->builtin_form)
 	{
 	  f = f->next;
 	  continue;
@@ -13114,7 +12868,7 @@ enter_debugger (struct object *cond, struct environment *env,
   struct stream *s = str->value_ptr.stream;
   struct object_list *vals;
   struct restart_binding *r = env->restarts;
-  int end_repl = 0, restnum = 1, restind;
+  int end_repl = 0, restnum = 1, restind, ismac;
   const char *input_left, *objbeg, *objend;
   char *wholel = NULL;
   size_t input_left_s;
@@ -13283,7 +13037,7 @@ enter_debugger (struct object *cond, struct environment *env,
 		      restind--;
 		    }
 
-		  result = call_function (r->restart, &nil_object, 0, 0, 1, 0, 0,
+		  result = call_function (r->restart, &nil_object, 0, 0, 0, 1, 0, 0,
 					  env, outcome);
 		}
 	    }
@@ -13326,9 +13080,9 @@ enter_debugger (struct object *cond, struct environment *env,
 			  && env->next_eval->type == TYPE_CONS_PAIR
 			  && IS_SYMBOL (CAR (env->next_eval))
 			  && (fun = get_function (SYMBOL (CAR (env->next_eval)),
-						  env, 0, 0, 0, 0))
-			  && fun->type == TYPE_MACRO
-			  && !fun->value_ptr.macro->builtin_form)
+						  env, 0, 0, 0, 0, &ismac))
+			  && ismac
+			  && !fun->value_ptr.function->builtin_form)
 			{
 			  env->stepping_flags = STEP_OVER_EXPANSION;
 			}
@@ -13670,10 +13424,12 @@ struct object *
 add_builtin_form (char *name, struct environment *env,
 		  struct object *(*builtin_form)
 		  (struct object *list, struct environment *env,
-		   struct outcome *outcome), enum object_type type,
+		   struct outcome *outcome),
+		  int is_macro,
 		  struct object *(*builtin_setf_func)
 		  (struct object *list, struct environment *env,
-		   struct outcome *outcome), int is_special_operator)
+		   struct outcome *outcome),
+		  int is_special_operator)
 {
   struct object *pack = inspect_variable (env->package_sym, env);
   struct object *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
@@ -13682,8 +13438,7 @@ add_builtin_form (char *name, struct environment *env,
   struct object *fun = alloc_function ();
   struct function *f = fun->value_ptr.function;
 
-  fun->type = type;
-
+  sym->value_ptr.symbol->is_macro = is_macro;
   sym->value_ptr.symbol->function_cell = fun;
 
   f->name = sym;
@@ -16073,9 +15828,11 @@ restore_lexical_environment (struct environment *env, struct binding *vars,
 
 
 struct object *
-call_function (struct object *func, struct object *arglist, int eval_args,
-	       int also_pass_name, int create_new_lex_env, int expand_and_eval,
-	       int is_typespec, struct environment *env, struct outcome *outcome)
+call_function (struct object *func, struct object *arglist,
+	       int eval_args, int pass_form_and_env,
+	       int also_pass_name, int create_new_lex_env,
+	       int expand_and_eval, int is_typespec,
+	       struct environment *env, struct outcome *outcome)
 {
   struct binding *bins;
   struct block_frame *f;
@@ -16271,39 +16028,6 @@ call_function (struct object *func, struct object *arglist, int eval_args,
       env->stack_depth--;
       return ret;
     }
-  else if (func->value_ptr.function->function_macro)
-    {
-      if (list_length (arglist) != 2)
-	{
-	  outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-	  return NULL;
-	}
-
-      if (!IS_LIST (CAR (arglist)))
-	{
-	  return raise_type_error (CAR (arglist), "CL:LIST", env, outcome);
-	}
-
-      ret = call_function (func->value_ptr.function->function_macro,
-			   CAR (arglist), 0, 1, 1, 0, 0, env, outcome);
-
-      env->stack_depth--;
-      return ret;
-    }
-  else if (func->value_ptr.function->macro_function)
-    {
-      args = alloc_empty_list (2);
-      args->value_ptr.cons_pair->car = arglist;
-      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
-
-      ret = call_function (func->value_ptr.macro->macro_function, args, 0, 0, 0,
-			   1, 0, env, outcome);
-
-      free_list_structure (args);
-
-      env->stack_depth--;
-      return ret;
-    }
 
 
   if (func->value_ptr.function->flags & GENERIC_FUNCTION)
@@ -16312,6 +16036,16 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 					    outcome);
       env->stack_depth--;
       return ret;
+    }
+
+
+  if (pass_form_and_env)
+    {
+      args = alloc_empty_list (2);
+      args->value_ptr.cons_pair->car = arglist;
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+      arglist = args;
+      also_pass_name = 0;
     }
 
 
@@ -16425,6 +16159,11 @@ call_function (struct object *func, struct object *arglist, int eval_args,
 
 
   env->only_lexical = onlylex;
+
+
+  if (pass_form_and_env)
+    free_list_structure (args);
+
 
   if (ret && expand_and_eval)
     {
@@ -17774,7 +17513,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	    struct outcome *outcome)
 {
   struct object *args, *sym, *res, *fun, *cons;
-  int ret;
+  int ret, ismac;
 
   if ((typespec->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (typespec)))
       && !IS_SYMBOL (typespec) && typespec->type != TYPE_STANDARD_CLASS
@@ -17879,7 +17618,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	    }
 
 	  if (!IS_SYMBOL (CAR (args)) ||
-	      !(fun = get_function (SYMBOL (CAR (args)), env, 1, 0, 1, 0)))
+	      !(fun = get_function (SYMBOL (CAR (args)), env, 1, 0, 1, 0, &ismac)))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return -1;
@@ -17890,7 +17629,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	  increment_refcount (obj);
 	  cons->value_ptr.cons_pair->cdr = &nil_object;
 
-	  res = call_function (fun, cons, 0, 0, 1, 0, 0, env, outcome);
+	  res = call_function (fun, cons, 0, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  free_cons_pair (cons);
@@ -17936,7 +17675,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	}
       else if (sym->value_ptr.symbol->is_type)
 	{
-	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, 0, 0,
+	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, 0, 0, 0,
 			       1, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
@@ -18061,7 +17800,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
     {
       first = call_function (firstsym->value_ptr.symbol->typespec,
 			     firstsp->type == TYPE_CONS_PAIR ? CDR (firstsp)
-			     : &nil_object, 0, 0, 0, 0, 1, env, outcome);
+			     : &nil_object, 0, 0, 0, 0, 0, 1, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!first)
@@ -18078,7 +17817,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
     {
       second = call_function (secondsym->value_ptr.symbol->typespec,
 			      secondsp->type == TYPE_CONS_PAIR ? CDR (secondsp)
-			      : &nil_object, 0, 0, 0, 0, 1, env, outcome);
+			      : &nil_object, 0, 0, 0, 0, 0, 1, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!second)
@@ -18874,6 +18613,7 @@ evaluate_list (struct object *list, struct environment *env,
 	       struct outcome *outcome)
 {
   struct object *sym = NULL, *fun, *ret;
+  int ismac = 0;
 
   if (is_dotted_list (list))
     {
@@ -18885,7 +18625,7 @@ evaluate_list (struct object *list, struct environment *env,
   if (IS_SYMBOL (CAR (list)))
     {
       sym = SYMBOL (CAR (list));
-      fun = get_function (sym, env, 0, 0, 0, 0);
+      fun = get_function (sym, env, 0, 0, 0, 0, &ismac);
 
       if (!fun)
 	return raise_undefined_function (sym, env, outcome);
@@ -18904,12 +18644,12 @@ evaluate_list (struct object *list, struct environment *env,
     }
 
 
-  if (fun->type == TYPE_FUNCTION)
-    ret = call_function (fun, CDR (list), 1, 0, 1, 0, 0, env, outcome);
-  else if (fun->value_ptr.macro->builtin_form)
-    ret = call_function (fun, CDR (list), 0, 0, 0, 0, 0, env, outcome);
+  if (!ismac)
+    ret = call_function (fun, CDR (list), 1, 0, 0, 1, 0, 0, env, outcome);
+  else if (fun->value_ptr.function->builtin_form)
+    ret = call_function (fun, CDR (list), 0, 0, 0, 0, 0, 0, env, outcome);
   else
-    ret = call_function (fun, list, 0, 1, 0, 1, 0, env, outcome);
+    ret = call_function (fun, list, 0, 1, 1, 0, 1, 0, env, outcome);
 
   if (!sym)
     decrement_refcount (fun);
@@ -21215,7 +20955,7 @@ builtin_make_hash_table (struct object *list, struct environment *env,
   struct object *ret, *allow_other_keys = NULL, *fun, *name;
   struct hashtable *ht;
   enum hashtable_type type = HT_NONE;
-  int found_unknown_key = 0;
+  int found_unknown_key = 0, ismac;
 
   while (SYMBOL (list) != &nil_object)
     {
@@ -21230,7 +20970,8 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 
 	  if (IS_SYMBOL (CAR (CDR (list))))
 	    {
-	      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 1, 0);
+	      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 1, 0,
+				  &ismac);
 
 	      if (!fun)
 		{
@@ -21540,6 +21281,7 @@ builtin_maphash (struct object *list, struct environment *env,
   struct object *fun, *args, *ret;
   size_t i;
   struct hashtable_record *r;
+  int ismac;
 
   if (list_length (list) != 2)
     {
@@ -21548,7 +21290,7 @@ builtin_maphash (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -21581,7 +21323,7 @@ builtin_maphash (struct object *list, struct environment *env,
 	  args->value_ptr.cons_pair->car = r->key;
 	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = r->value;
 
-	  ret = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
+	  ret = call_function (fun, args, 0, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!ret)
@@ -23407,7 +23149,7 @@ struct object *
 builtin_compile (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  int l = list_length (list);
+  int l = list_length (list), ismac;
   struct object *fun = NULL;
 
   if (!l || l > 2)
@@ -23428,7 +23170,7 @@ builtin_compile (struct object *list, struct environment *env,
 
   if (l == 1)
     {
-      if (!(fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 0, 0)))
+      if (!(fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 0, 0, &ismac)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -25384,7 +25126,7 @@ struct object *
 builtin_mapcar (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  int i, l = list_length (list), finished = 0;
+  int i, l = list_length (list), finished = 0, ismac;
   struct object *fun, *cdrlist, *cdrlistcons, *args, *argscons, *ret, *retcons,
     *val;
 
@@ -25395,7 +25137,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -25448,7 +25190,7 @@ builtin_mapcar (struct object *list, struct environment *env,
 	  cdrlistcons = CDR (cdrlistcons);
 	}
 
-      val = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
+      val = call_function (fun, args, 0, 0, 0, 1, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!val)
@@ -25495,7 +25237,7 @@ struct object *
 builtin_map (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
-  int i, l = list_length (list), j, min = -1;
+  int i, l = list_length (list), j, min = -1, ismac;
   struct object *fun, *args, *argscons, *ret, *val;
 
   if (l < 3)
@@ -25512,7 +25254,7 @@ builtin_map (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (CAR (CDR (list))))
     {
-      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 1, 0);
+      fun = get_function (SYMBOL (CAR (CDR (list))), env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -25570,7 +25312,7 @@ builtin_map (struct object *list, struct environment *env,
 	  argscons = CDR (argscons);
 	}
 
-      val = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
+      val = call_function (fun, args, 0, 0, 0, 1, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 
@@ -25626,6 +25368,7 @@ builtin_remove_if (struct object *list, struct environment *env,
   struct object *fun, *seq, *ret, *cons, *arg, *res;
   fixnum sz, off, i, j;
   char *s, *out;
+  int ismac;
 
   if (list_length (list) != 2)
     {
@@ -25634,7 +25377,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
   if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -25672,7 +25415,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 	{
 	  arg->value_ptr.cons_pair->car = CAR (seq);
 
-	  res = call_function (fun, arg, 0, 0, 1, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -25715,7 +25458,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 
 	  arg->value_ptr.cons_pair->car = create_character_from_utf8 (s, sz);
 
-	  res = call_function (fun, arg, 0, 0, 1, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -25748,7 +25491,7 @@ builtin_remove_if (struct object *list, struct environment *env,
 	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
 	  increment_refcount (CAR (arg));
 
-	  res = call_function (fun, arg, 0, 0, 1, 0, 0, env, outcome);
+	  res = call_function (fun, arg, 0, 0, 0, 1, 0, 0, env, outcome);
 	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
 	  if (!res)
@@ -26384,6 +26127,7 @@ builtin_setf_symbol_function (struct object *list, struct environment *env,
     }
 
   sym->value_ptr.symbol->function_cell = CAR (list);
+  sym->value_ptr.symbol->is_macro = 0;
   add_reference (sym, CAR (list), 1);
 
   increment_refcount (CAR (list));
@@ -26424,6 +26168,7 @@ builtin_setf_fdefinition (struct object *list, struct environment *env,
 	}
 
       sym->value_ptr.symbol->function_cell = CAR (list);
+      sym->value_ptr.symbol->is_macro = 0;
       add_reference (sym, CAR (list), 1);
     }
   else
@@ -26473,14 +26218,9 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
       delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
     }
 
-  sym->value_ptr.symbol->function_cell = alloc_function ();
-  sym->value_ptr.symbol->function_cell->type = TYPE_MACRO;
+  sym->value_ptr.symbol->is_macro = 1;
+  sym->value_ptr.symbol->function_cell = newval;
   add_reference (sym, sym->value_ptr.symbol->function_cell, 1);
-  decrement_refcount (sym->value_ptr.symbol->function_cell);
-
-  sym->value_ptr.symbol->function_cell->value_ptr.function->macro_function =
-    newval;
-  increment_refcount (newval);
 
   increment_refcount (newval);
   return newval;
@@ -28728,7 +28468,7 @@ struct object *
 builtin_coerce (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
-  int res, i, l;
+  int res, i, l, ismac;
   struct object *ret, *el;
 
   if (list_length (list) != 2)
@@ -28826,7 +28566,7 @@ builtin_coerce (struct object *list, struct environment *env,
     {
       if (IS_SYMBOL (CAR (list)))
 	{
-	  return get_function (CAR (list), env, 1, 0, 1, 1);
+	  return get_function (CAR (list), env, 1, 0, 1, 1, &ismac);
 	}
       else if (CAR (list)->type == TYPE_CONS_PAIR
 	       && SYMBOL (CAR (CAR (list))) == env->lambda_sym
@@ -29367,6 +29107,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
   struct object *s, *ret;
+  int ismac;
 
   if (list_length (list) != 1)
     {
@@ -29380,7 +29121,7 @@ builtin_symbol_function (struct object *list, struct environment *env,
       return raise_type_error (s, "CL:SYMBOL", env, outcome);
     }
 
-  ret = get_function (SYMBOL (s), env, 0, 0, 1, 1);
+  ret = get_function (SYMBOL (s), env, 0, 0, 1, 1, &ismac);
 
   if (!ret)
     {
@@ -29396,6 +29137,7 @@ builtin_fdefinition (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
   struct object *s, *ret;
+  int ismac;
 
   if (list_length (list) != 1)
     {
@@ -29412,7 +29154,7 @@ builtin_fdefinition (struct object *list, struct environment *env,
     }
 
   ret = get_function (IS_SYMBOL (s) ? SYMBOL (s) : SYMBOL (CAR (CDR (s))), env,
-		      0, s->type == TYPE_CONS_PAIR, 1, 1);
+		      0, s->type == TYPE_CONS_PAIR, 1, 1, &ismac);
 
   if (!ret)
     {
@@ -29665,6 +29407,7 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   struct object *ret, *ret2, *mac, *args;
+  int ismac;
 
   if (list_length (list) != 1)
     {
@@ -29672,31 +29415,23 @@ builtin_macroexpand_1 (struct object *list, struct environment *env,
     }
 
   if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list)))
-      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 1, 0))
-      && mac->type == TYPE_MACRO && !mac->value_ptr.function->builtin_form)
+      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 1, 0, &ismac))
+      && ismac && !mac->value_ptr.function->builtin_form)
     {
-      if (mac->value_ptr.macro->macro_function)
-	{
-	  args = alloc_empty_list (2);
-	  args->value_ptr.cons_pair->car = CAR (list);
-	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+      args = alloc_empty_list (2);
+      args->value_ptr.cons_pair->car = CAR (list);
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
 
-	  ret = call_function (mac->value_ptr.macro->macro_function, args,
-			       0, 0, 0, 0, 0, env, outcome);
+      ret = call_function (mac, args, 0, 0, 0, 0, 0, 0, env, outcome);
 
-	  free_list_structure (args);
-	}
-      else
-	{
-	  ret = call_function (mac, CAR (list), 0, 1, 1, 0, 0, env, outcome);
-	}
+      free_list_structure (args);
 
       if (!ret)
 	return NULL;
 
       ret2 = &t_object;
     }
-  else if (IS_SYMBOL (CAR (list))
+ else if (IS_SYMBOL (CAR (list))
 	   && SYMBOL (CAR (list))->value_ptr.symbol->is_symbol_macro)
     {
       increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->value_cell);
@@ -29738,26 +29473,15 @@ builtin_macro_function (struct object *list, struct environment *env,
   sym = SYMBOL (CAR (list));
 
   if (!sym->value_ptr.symbol->function_cell
-      || sym->value_ptr.symbol->function_cell->type != TYPE_MACRO
+      || !sym->value_ptr.symbol->is_macro
       || sym->value_ptr.symbol->function_cell->value_ptr.function->builtin_form)
     {
       return &nil_object;
     }
 
-  if (sym->value_ptr.symbol->function_cell->value_ptr.function->macro_function)
-    {
-      ret = sym->value_ptr.symbol->function_cell->value_ptr.function->
-	macro_function;
+  ret = sym->value_ptr.symbol->function_cell;
 
-      increment_refcount (ret);
-    }
-  else
-    {
-      ret = alloc_function ();
-
-      ret->value_ptr.function->function_macro =
-	sym->value_ptr.symbol->function_cell;
-    }
+  increment_refcount (ret);
 
   return ret;
 }
@@ -29767,7 +29491,7 @@ struct object *
 builtin_compiler_macro_function (struct object *list, struct environment *env,
 				 struct outcome *outcome)
 {
-  struct object *sym, *ret;
+  struct object *sym;
   struct compiler_macro *cm;
 
   if (list_length (list) != 1)
@@ -29802,11 +29526,8 @@ builtin_compiler_macro_function (struct object *list, struct environment *env,
   if (!cm)
     return &nil_object;
 
-  ret = alloc_function ();
-
-  ret->value_ptr.function->function_macro = cm->macro;
-
-  return ret;
+  increment_refcount (cm->macro);
+  return cm->macro;
 }
 
 
@@ -32061,17 +31782,17 @@ evaluate_locally (struct object *list, struct environment *env,
 
 struct binding *
 create_binding_from_flet_form (struct object *form, struct environment *env,
-			       struct outcome *outcome,
-			       enum object_type type)
+			       struct outcome *outcome, int is_macro)
 {
   struct object *sym, *fun, *macfun, *lambdal, *body;
   const char *objb, *obje;
+  struct binding *bin;
 
   if (form->type == TYPE_CONS_PAIR)
     {
       if (list_length (form) < 2
 	  || (!IS_SYMBOL (CAR (form))
-	      && (type == TYPE_MACRO
+	      && (is_macro
 		  || !(CAR (form)->type == TYPE_CONS_PAIR
 		       && list_length (CAR (form)) == 2
 		       && SYMBOL (CAR (CAR (form))) == env->setf_sym
@@ -32090,10 +31811,8 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	  return NULL;
 	}
 
-      if (type == TYPE_MACRO)
+      if (is_macro)
 	{
-	  fun = create_function (&nil_object, NULL, env, outcome, 1, 1, 0);
-
 	  lambdal = NULL;
 	  read_object (&lambdal, 0, STRING_COMMA_LEN ("(cl::form cl::env)"), NULL,
 		       0, 0, env, outcome, &objb, &obje);
@@ -32111,14 +31830,13 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 	  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
 	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = CDR (CDR (form));
 	  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->
-			 cdr->value_ptr.cons_pair->cdr, CAR (CDR (form)), 1);
+			 cdr->value_ptr.cons_pair->cdr, CDR (CDR (form)), 1);
 
 	  macfun = create_function (lambdal, body, env, outcome, 0, 0, 0);
 	  decrement_refcount (lambdal);
 	  decrement_refcount (body);
 
-	  fun->type = TYPE_MACRO;
-	  fun->value_ptr.macro->macro_function = macfun;
+	  fun = macfun;
 	}
       else
 	{
@@ -32142,7 +31860,11 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
     }
 
   increment_refcount (sym);
-  return create_binding (sym, fun, LEXICAL_BINDING, 0);
+
+  bin = create_binding (sym, fun, LEXICAL_BINDING, 0);
+  bin->is_macro = is_macro;
+
+  return bin;
 }
 
 
@@ -32166,8 +31888,7 @@ evaluate_flet (struct object *list, struct environment *env,
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
-      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
-					   TYPE_FUNCTION);
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome, 0);
 
       if (!bin)
 	return NULL;
@@ -32212,8 +31933,7 @@ evaluate_labels (struct object *list, struct environment *env,
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
-      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
-					   TYPE_FUNCTION);
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome, 0);
 
       if (!bin)
 	return NULL;
@@ -32254,8 +31974,7 @@ evaluate_macrolet (struct object *list, struct environment *env,
 
   while (SYMBOL (bind_forms) != &nil_object)
     {
-      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome,
-					   TYPE_MACRO);
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome, 1);
 
       if (!bin)
 	return NULL;
@@ -32312,9 +32031,9 @@ get_dynamic_value (struct object *sym, struct environment *env)
 }
 
 
-struct object *
-get_function (struct object *sym, struct environment *env, int only_functions,
-	      int setf_func, int only_globals, int increment_refc)
+struct object *get_function (struct object *sym, struct environment *env,
+			     int only_functions, int setf_func, int only_globals,
+			     int increment_refc, int *is_macro)
 {
   struct object *f;
   struct binding *b = env->funcs;
@@ -32326,7 +32045,10 @@ get_function (struct object *sym, struct environment *env, int only_functions,
 	{
 	  if (SYMBOL (sym) == b->sym
 	      && !setf_func == !b->obj->value_ptr.function->is_setf_func)
-	    break;
+	    {
+	      *is_macro = b->is_macro;
+	      break;
+	    }
 
 	  b = b->next;
 	  lexb--;
@@ -32340,6 +32062,7 @@ get_function (struct object *sym, struct environment *env, int only_functions,
     {
       f = !setf_func ? SYMBOL (sym)->value_ptr.symbol->function_cell
 	: SYMBOL (sym)->value_ptr.symbol->setf_func_cell;
+      *is_macro = SYMBOL (sym)->value_ptr.symbol->is_macro;
     }
   else
     f = b->obj;
@@ -32357,9 +32080,10 @@ get_function (struct object *sym, struct environment *env, int only_functions,
 int
 is_macro (struct object *sym, struct environment *env)
 {
-  struct object *fun = get_function (sym, env, 0, 0, 0, 0);
+  int ismac;
+  struct object *fun = get_function (sym, env, 0, 0, 0, 0, &ismac);
 
-  return fun && fun->type == TYPE_MACRO && !fun->value_ptr.macro->builtin_form;
+  return fun && ismac && !fun->value_ptr.function->builtin_form;
 }
 
 
@@ -32592,7 +32316,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 {
   struct object *exp, *cons1, *cons2, *res, *val, *args, *fun;
   struct object_list *expvals, *l;
-  int binsnum = 0;
+  int binsnum = 0, ismac;
 
 
   if (IS_SYMBOL (form))
@@ -32610,7 +32334,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
       if (SYMBOL (CAR (form))->value_ptr.symbol->setf_expander)
 	{
 	  exp = call_function (SYMBOL (CAR (form))->value_ptr.symbol->
-			       setf_expander, CDR (form), 0, 0, 0, 0, 0, env,
+			       setf_expander, CDR (form), 0, 0, 0, 0, 0, 0, env,
 			       outcome);
 
 	  if (!exp)
@@ -32765,7 +32489,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 		return NULL;
 	    }
 
-	  fun = get_function (SYMBOL (CAR (form)), env, 1, 1, 0, 0);
+	  fun = get_function (SYMBOL (CAR (form)), env, 1, 1, 0, 0, &ismac);
 
 	  if (!fun)
 	    {
@@ -32781,7 +32505,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	  add_reference (cons1, args, 1);
 	  decrement_refcount (args);
 
-	  val = call_function (fun, cons1, 0, 0, 0, 0, 0, env, outcome);
+	  val = call_function (fun, cons1, 0, 0, 0, 0, 0, 0, env, outcome);
 
 	  if (!val)
 	    return NULL;
@@ -32941,6 +32665,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 {
   struct object *fun, *args = &nil_object, *cons, *res, *ret;
   struct object_list *l;
+  int ismac;
 
   if (!list_length (list))
     {
@@ -32955,7 +32680,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
 
   if (IS_SYMBOL (fun))
     {
-      fun = get_function (SYMBOL (fun), env, 1, 0, 1, 0);
+      fun = get_function (SYMBOL (fun), env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -33019,7 +32744,7 @@ evaluate_multiple_value_call (struct object *list, struct environment *env,
   if (args != &nil_object)
     cons->value_ptr.cons_pair->cdr = &nil_object;
 
-  ret = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 0, 1, 0, 0, env, outcome);
 
   decrement_refcount (args);
   decrement_refcount (fun);
@@ -33128,7 +32853,7 @@ builtin_constantp (struct object *list, struct environment *env,
       || CAR (list)->type == TYPE_STANDARD_OBJECT
       || CAR (list)->type == TYPE_CONDITION_CLASS
       || CAR (list)->type == TYPE_CONDITION
-      || CAR (list)->type == TYPE_FUNCTION || CAR (list)->type == TYPE_MACRO
+      || CAR (list)->type == TYPE_FUNCTION
       || CAR (list)->type == TYPE_METHOD)
     return &t_object;
 
@@ -33232,53 +32957,6 @@ evaluate_defvar (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_al_defmacro (struct object *list, struct environment *env,
-		     struct outcome *outcome)
-{
-  struct object *mac, *sym;
-
-  if (list_length (list) < 2 || !IS_SYMBOL (CAR (list))
-      || (!IS_LIST (CAR (CDR (list)))))
-    {
-      outcome->type = INCORRECT_SYNTAX_IN_DEFMACRO;
-      return NULL;
-    }
-
-  sym = SYMBOL (CAR (list));
-
-  if (sym->value_ptr.symbol->function_cell
-      && sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
-      && sym->value_ptr.symbol->function_cell->value_ptr.macro->is_special_operator)
-    {
-      outcome->type = CANT_REDEFINE_SPECIAL_OPERATOR;
-      return NULL;
-    }
-
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1, 1);
-
-  if (!mac)
-    return NULL;
-
-  mac->type = TYPE_MACRO;
-
-  if (sym->value_ptr.symbol->function_cell)
-    {
-      delete_reference (sym, sym->value_ptr.symbol->function_cell, 1);
-    }
-
-  sym->value_ptr.symbol->function_cell = mac;
-  add_reference (sym, mac, 1);
-  decrement_refcount (mac);
-
-  mac->value_ptr.function->name = sym;
-  add_reference (mac, sym, 0);
-
-  increment_refcount (sym);
-  return sym;
-}
-
-
-struct object *
 evaluate_al_with_macro_arguments (struct object *list, struct environment *env,
 				  struct outcome *outcome)
 {
@@ -33307,7 +32985,7 @@ evaluate_al_with_macro_arguments (struct object *list, struct environment *env,
       return raise_type_error (args, "CL:LIST", env, outcome);
     }
 
-  ret = call_function (fun, args, 0, 1, 1, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 1, 1, 0, 0, env, outcome);
 
   decrement_refcount (fun);
   decrement_refcount (args);
@@ -33592,6 +33270,7 @@ evaluate_function (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
   struct object *f;
+  int ismac;
 
   if (list_length (list) != 1)
     {
@@ -33614,7 +33293,7 @@ evaluate_function (struct object *list, struct environment *env,
     {
       f = get_function (IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
 			: SYMBOL (CAR (CDR (CAR (list)))), env, 1,
-			CAR (list)->type == TYPE_CONS_PAIR, 0, 1);
+			CAR (list)->type == TYPE_CONS_PAIR, 0, 1, &ismac);
 
       if (!f)
 	{
@@ -33659,7 +33338,7 @@ evaluate_apply (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
   struct object *s, *fun, *last, *l, *args, *ret;
-  int length = list_length (list);
+  int length = list_length (list), ismac;
 
   if (length < 2)
     {
@@ -33677,7 +33356,7 @@ evaluate_apply (struct object *list, struct environment *env,
     {
       s = SYMBOL (CAR (list));
 
-      fun = get_function (s, env, 1, 0, 1, 0);
+      fun = get_function (s, env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -33705,7 +33384,7 @@ evaluate_apply (struct object *list, struct environment *env,
       add_reference (l, last, 1);
     }
 
-  ret = call_function (fun, args, 0, 0, 1, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 0, 1, 0, 0, env, outcome);
 
   if (length != 1)
     decrement_refcount (args);
@@ -33719,6 +33398,7 @@ evaluate_funcall (struct object *list, struct environment *env,
 		  struct outcome *outcome)
 {
   struct object *fun;
+  int ismac;
 
   if (CAR (list)->type == TYPE_FUNCTION)
     {
@@ -33726,7 +33406,7 @@ evaluate_funcall (struct object *list, struct environment *env,
     }
   else if (IS_SYMBOL (CAR (list)))
     {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0);
+      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0, &ismac);
 
       if (!fun)
 	{
@@ -33739,7 +33419,7 @@ evaluate_funcall (struct object *list, struct environment *env,
 			       outcome);
     }
 
-  return call_function (fun, CDR (list), 0, 0, 1, 0, 0, env, outcome);
+  return call_function (fun, CDR (list), 0, 0, 0, 1, 0, 0, env, outcome);
 }
 
 
@@ -33924,7 +33604,7 @@ evaluate_destructuring_bind (struct object *list, struct environment *env,
       return raise_type_error (args, "CL:LIST", env, outcome);
     }
 
-  ret = call_function (fun, args, 0, 0, 0, 0, 0, env, outcome);
+  ret = call_function (fun, args, 0, 0, 0, 0, 0, 0, env, outcome);
 
   decrement_refcount (fun);
   decrement_refcount (args);
@@ -34056,7 +33736,7 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
       if (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->setf_expander)
 	{
 	  return call_function (SYMBOL (CAR (CAR (list)))->value_ptr.symbol->
-				setf_expander, CDR (CAR (list)), 0, 0, 0, 0, 0,
+				setf_expander, CDR (CAR (list)), 0, 0, 0, 0, 0, 0,
 				env, outcome);
 	}
 
@@ -35069,7 +34749,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
     : SYMBOL (CAR (CDR (CAR (list))));
 
   if ((IS_SYMBOL (CAR (list)) && sym->value_ptr.symbol->function_cell
-      && (sym->value_ptr.symbol->function_cell->type == TYPE_MACRO
+      && (sym->value_ptr.symbol->is_macro
 	  || !(sym->value_ptr.symbol->function_cell->value_ptr.function->
 	       flags & GENERIC_FUNCTION)))
       || (!IS_SYMBOL (CAR (list)) && sym->value_ptr.symbol->setf_func_cell
@@ -35218,6 +34898,7 @@ builtin_al_create_method (struct object *list, struct environment *env,
   struct object *fun, *meth, *lambdal, *sym;
   struct method *m;
   enum method_qualifier q = PRIMARY_METHOD;
+  int ismac;
 
   if (list_length (list) < 2)
     {
@@ -35239,9 +34920,10 @@ builtin_al_create_method (struct object *list, struct environment *env,
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
     : SYMBOL (CAR (CDR (CAR (list))));
 
-  fun = get_function (sym, env, 0, CAR (list)->type == TYPE_CONS_PAIR, 1, 0);
+  fun = get_function (sym, env, 0, CAR (list)->type == TYPE_CONS_PAIR, 1, 0,
+		      &ismac);
 
-  if (fun && (fun->type == TYPE_MACRO
+  if (fun && (ismac
 	      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
     {
       outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
@@ -35583,7 +35265,7 @@ struct object *
 builtin_function_lambda_expression (struct object *list, struct environment *env,
 				    struct outcome *outcome)
 {
-  struct object *ret, *cons, *mac;
+  struct object *ret, *cons;
 
   if (list_length (list) != 1)
     {
@@ -35607,50 +35289,28 @@ builtin_function_lambda_expression (struct object *list, struct environment *env
 	? CAR (list)->value_ptr.function->body : &nil_object;
       add_reference (cons, CDR (cons), 1);
 
-      if (CAR (list)->value_ptr.function->function_macro)
+      if (CAR (list)->value_ptr.function->is_setf_func)
 	{
-	  mac = alloc_empty_cons_pair ();
+	  cons = alloc_empty_cons_pair ();
 
-	  mac->value_ptr.cons_pair->car = env->lambda_sym;
-	  add_reference (mac, CAR (mac), 0);
+	  increment_refcount (env->setf_sym);
+	  cons->value_ptr.cons_pair->car = env->setf_sym;
 
-	  mac->value_ptr.cons_pair->cdr = cons = alloc_empty_cons_pair ();
-	  cons->value_ptr.cons_pair->car
-	    = list_lambda_list (CAR (list)->value_ptr.function->function_macro
-				->value_ptr.macro->lambda_list,
-				CAR (list)->value_ptr.function->function_macro
-				->value_ptr.macro->allow_other_keys, env);
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
 
-	  cons->value_ptr.cons_pair->cdr = CAR (list)->value_ptr.function->
-	    function_macro->value_ptr.function->body;
-	  add_reference (cons, CDR (cons), 1);
-	  prepend_object_to_obj_list (mac, &outcome->other_values);
+	  increment_refcount (CAR (list)->value_ptr.function->name);
+	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	    = CAR (list)->value_ptr.function->name;
+
+	  prepend_object_to_obj_list (cons, &outcome->other_values);
 	}
       else
 	{
-	  if (CAR (list)->value_ptr.function->is_setf_func)
-	    {
-	      cons = alloc_empty_cons_pair ();
-
-	      increment_refcount (env->setf_sym);
-	      cons->value_ptr.cons_pair->car = env->setf_sym;
-
-	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
-
-	      increment_refcount (CAR (list)->value_ptr.function->name);
-	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
-		= CAR (list)->value_ptr.function->name;
-
-	      prepend_object_to_obj_list (cons, &outcome->other_values);
-	    }
-	  else
-	    {
-	      prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
-					  CAR (list)->value_ptr.function->name :
-					  &nil_object, &outcome->other_values);
-	      increment_refcount (outcome->other_values->obj);
-	    }
+	  prepend_object_to_obj_list (CAR (list)->value_ptr.function->name ?
+				      CAR (list)->value_ptr.function->name :
+				      &nil_object, &outcome->other_values);
+	  increment_refcount (outcome->other_values->obj);
 	}
 
       prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
@@ -36013,7 +35673,7 @@ evaluate_handler_bind (struct object *list, struct environment *env,
 	  if (does_condition_include_outcome_type (b->condition, outcome->type,
 						   env))
 	    {
-	      hret = call_function (b->handler, arg, 1, 0, 1, 0, 0, env, outcome);
+	      hret = call_function (b->handler, arg, 1, 0, 0, 1, 0, 0, env, outcome);
 
 	      if (!hret)
 		goto cleanup_and_leave;
@@ -36214,7 +35874,7 @@ builtin_invoke_restart (struct object *list, struct environment *env,
       return NULL;
     }
 
-  return call_function (fun, CDR (list), 0, 0, 1, 0, 0, env, outcome);
+  return call_function (fun, CDR (list), 0, 0, 0, 1, 0, 0, env, outcome);
 }
 
 
@@ -36619,8 +36279,9 @@ struct object *
 evaluate_define_compiler_macro (struct object *list, struct environment *env,
 				struct outcome *outcome)
 {
-  struct object *mac, *sym, *ret;
+  struct object *mac, *sym, *ret, *lambdal, *body;
   struct compiler_macro *cm;
+  const char *objb, *obje;
 
   if (list_length (list) < 2)
     {
@@ -36641,12 +36302,29 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
     : SYMBOL (CAR (CDR (CAR (list))));
 
-  mac = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1, 1);
+  lambdal = NULL;
+  read_object (&lambdal, 0, STRING_COMMA_LEN ("(cl::form cl::env)"), NULL,
+	       0, 0, env, outcome, &objb, &obje);
 
-  if (!mac)
-    return NULL;
+  body = NULL;
+  read_object (&body, 0,
+	       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil cl::form))"),
+	       NULL, 0, 0, env, outcome, &objb, &obje);
 
-  mac->type = TYPE_MACRO;
+  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+    value_ptr.cons_pair->car = CAR (CDR (list));
+  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr,
+		 CAR (CDR (list)), 0);
+
+  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = CDR (CDR (list));
+  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->
+		 cdr->value_ptr.cons_pair->cdr, CDR (CDR (list)), 1);
+
+  mac = create_function (lambdal, body, env, outcome, 0, 0, 0);
+  decrement_refcount (lambdal);
+  decrement_refcount (body);
+
 
   cm = env->compiler_macros;
 
@@ -36736,6 +36414,7 @@ builtin_trace (struct object *list, struct environment *env,
 {
   struct object *ret = &nil_object, *cons, *fun;
   struct object_list *l;
+  int ismac;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -36765,7 +36444,7 @@ builtin_trace (struct object *list, struct environment *env,
 	  || !(fun = get_function (CAR (list)->type == TYPE_CONS_PAIR
 				   ? SYMBOL (CAR (CDR (CAR (list))))
 				   : SYMBOL (CAR (list)), env, 1,
-				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0)))
+				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0, &ismac)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -36794,6 +36473,7 @@ builtin_untrace (struct object *list, struct environment *env,
 {
   struct object *fun;
   struct object_list *l, *prev = NULL;
+  int ismac;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -36817,7 +36497,7 @@ builtin_untrace (struct object *list, struct environment *env,
 	  || !(fun = get_function (CAR (list)->type == TYPE_CONS_PAIR
 				   ? SYMBOL (CAR (CDR (CAR (list))))
 				   : SYMBOL (CAR (list)), env, 1,
-				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0)))
+				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0, &ismac)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -37474,7 +37154,8 @@ builtin_al_compile_form (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  return compile_form (CAR (list), 0, env, outcome);
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
@@ -39382,34 +39063,8 @@ print_function_or_macro (const struct object *obj, struct environment *env,
       else
 	return write_to_stream (str, ">", 1);
     }
-  else
-    {
-      if (obj->value_ptr.macro->is_special_operator)
-	{
-	  if (write_to_stream (str, "#<SPECIAL OPERATOR ",
-			       strlen ("#<SPECIAL OPERATOR ")) < 0)
-	    return -1;
-	}
-      else
-	{
-	  if (write_to_stream (str, "#<MACRO ", strlen ("#<MACRO ")) < 0)
-	    return -1;
 
-	  if (obj->value_ptr.function->builtin_form
-	      && write_to_stream (str, "BUILTIN ", strlen ("BUILTIN ")) < 0)
-	    return -1;
-	}
-
-      if (obj->value_ptr.macro->name)
-	{
-	  if (print_symbol (obj->value_ptr.macro->name, env, str) < 0)
-	    return -1;
-	}
-      else if (write_to_stream (str, "?", 1) < 0)
-	return -1;
-
-      return write_to_stream (str, ">", 1);
-    }
+  return 1;
 }
 
 
@@ -39640,7 +39295,7 @@ print_object (const struct object *obj, struct environment *env,
 
 	  return 0;
 	}
-      else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+      else if (obj->type == TYPE_FUNCTION)
 	return print_function_or_macro (obj, env, str);
       else if (obj->type == TYPE_METHOD)
 	return print_method (obj, env, str);
@@ -39808,7 +39463,7 @@ print_object_nicely (struct object *obj, struct environment *env,
       args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = obj;
       add_reference (CDR (args), obj, 0);
 
-      res = call_function (func, args, 0, 0, 1, 0, 0, env, outcome);
+      res = call_function (func, args, 0, 0, 0, 1, 0, 0, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       decrement_refcount (args);
@@ -40417,7 +40072,7 @@ mark_as_constant (struct object *obj)
       mark_as_constant (obj->value_ptr.complex->real);
       mark_as_constant (obj->value_ptr.complex->imag);
     }
-  else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+  else if (obj->type == TYPE_FUNCTION)
     {
       mark_as_constant (obj->value_ptr.function->name);
 
@@ -40533,7 +40188,7 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
       return !(r->reference_strength_factor & (1 << (ind / LISP_HASHTABLE_SIZE)))
 	!= !STRENGTH_FACTOR_OF_OBJECT (dest);
     }
-  else if (src->type == TYPE_FUNCTION || src->type == TYPE_MACRO)
+  else if (src->type == TYPE_FUNCTION)
     {
       if (ind <= 1)
 	{
@@ -40632,7 +40287,7 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
 	| ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest))
 	   << (1 << (ind / LISP_HASHTABLE_SIZE)));
     }
-  else if (src->type == TYPE_FUNCTION || src->type == TYPE_MACRO)
+  else if (src->type == TYPE_FUNCTION)
     {
       if (ind <= 1)
 	{
@@ -40970,7 +40625,7 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 	    }
 	}
     }
-  else if (node->type == TYPE_FUNCTION || node->type == TYPE_MACRO)
+  else if (node->type == TYPE_FUNCTION)
     {
       rest_inv_at_edge (node->value_ptr.function->name, 0);
 
@@ -41093,7 +40748,7 @@ free_object (struct object *obj)
     free_condition_class (obj);
   else if (obj->type == TYPE_CONDITION)
     free_condition (obj);
-  else if (obj->type == TYPE_FUNCTION || obj->type == TYPE_MACRO)
+  else if (obj->type == TYPE_FUNCTION)
     free_function_or_macro (obj);
   else if (obj->type == TYPE_METHOD)
     free_method (obj);
