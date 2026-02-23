@@ -568,6 +568,9 @@ make_test ("(macroexpand-1 '(foo var))", "(INCF VAR)\nT");
 make_test ("(let ((i 0)) (foo i) i)", "1");
 make_test ("(defmacro mac (&whole wh) wh)", "MAC");
 make_test ("(funcall (macro-function 'mac) nil nil)", "NIL");
+make_test ("(defmacro macfun nil '(+ 1 2))", "MACFUN");
+make_test ("(setf (macro-function 'macfun2) (macro-function 'macfun))", "#<FUNCTION ?>");
+make_test ("(macfun2)", "3");
 
 make_test ("(defparameter x 0)", "X");
 make_test ("(defun fun nil (let ((x 1)) x))", "FUN");
