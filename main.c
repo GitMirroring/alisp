@@ -1959,11 +1959,6 @@ struct object *load_file (const char *filename, int print_filename,
 			  int print_each_form, struct environment *env,
 			  struct outcome *outcome);
 
-struct object *compile_function (struct object *fun, struct environment *env,
-				 struct outcome *outcome);
-int compile_body (struct object *body, int backt_comma_bal,
-		  struct environment *env, struct outcome *outcome);
-
 struct object *intern_symbol_by_char_vector (char *name, size_t len,
 					     int do_copy,
 					     enum package_record_flags vis,
@@ -2573,8 +2568,6 @@ struct object *builtin_read_from_string
 struct object *builtin_parse_integer
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_eval
-(struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_compile
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_write
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -3232,9 +3225,6 @@ struct object *builtin_al_unwatch
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_next
-(struct object *list, struct environment *env, struct outcome *outcome);
-
-struct object *builtin_al_compile_form
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_al_print_no_warranty
@@ -4039,7 +4029,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PARSE-INTEGER", env, builtin_parse_integer, 0,
 		    NULL, 0);
   add_builtin_form ("EVAL", env, builtin_eval, 0, NULL, 0);
-  add_builtin_form ("COMPILE", env, builtin_compile, 0, NULL, 0);
   add_builtin_form ("WRITE", env, builtin_write, 0, NULL, 0);
   add_builtin_form ("WRITE-STRING", env, builtin_write_string, 0,
 		    NULL, 0);
@@ -4805,9 +4794,6 @@ add_standard_definitions (struct environment *env)
 		    0);
 
   add_builtin_form ("AL-NEXT", env, builtin_al_next, 0, NULL, 0);
-
-  add_builtin_form ("AL-COMPILE-FORM", env, builtin_al_compile_form,
-		    0, NULL, 0);
 
   add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    0, NULL, 0);
@@ -11228,46 +11214,6 @@ load_file (const char *filename, int print_filename, int print_each_form,
   env->vars = remove_bindings (env->vars, 2, 1);
 
   return ret;
-}
-
-
-struct object *
-compile_function (struct object *fun, struct environment *env,
-		  struct outcome *outcome)
-{
-  struct method_list *ml;
-
-  if (fun->value_ptr.function->flags & COMPILED_FUNCTION)
-    return fun;
-
-  if (fun->value_ptr.function->flags & GENERIC_FUNCTION)
-    {
-      ml = fun->value_ptr.function->methods;
-
-      while (ml)
-	{
-	  if (!compile_body (ml->meth->value_ptr.method->body, 0, env, outcome))
-	    return NULL;
-
-	  ml->meth->value_ptr.method->is_compiled = 1;
-
-	  ml = ml->next;
-	}
-    }
-  else if (!compile_body (fun->value_ptr.function->body, 0, env, outcome))
-    return NULL;
-
-  fun->value_ptr.function->flags |= COMPILED_FUNCTION;
-
-  return fun;
-}
-
-
-int
-compile_body (struct object *body, int backt_comma_bal, struct environment *env,
-	      struct outcome *outcome)
-{
-  return 1;
 }
 
 
@@ -23147,74 +23093,6 @@ builtin_eval (struct object *list, struct environment *env,
   env->lex_env_funcs_boundary = lex_funcs;
 
   return ret;
-}
-
-
-struct object *
-builtin_compile (struct object *list, struct environment *env,
-		 struct outcome *outcome)
-{
-  int l = list_length (list), ismac;
-  struct object *fun = NULL;
-
-  if (!l || l > 2)
-    {
-      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
-    }
-
-  if (!IS_SYMBOL (CAR (list)))
-    {
-      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
-    }
-
-  if (SYMBOL (CAR (list)) == &nil_object && l == 1)
-    {
-      outcome->type = WRONG_NUMBER_OF_ARGUMENTS;
-      return NULL;
-    }
-
-  if (l == 1)
-    {
-      if (!(fun = get_function (SYMBOL (CAR (list)), env, 0, 0, 0, 0, &ismac)))
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-    }
-  else
-    {
-      fun = CAR (CDR (list));
-
-      if (fun->type != TYPE_FUNCTION)
-	{
-	  return raise_type_error (CAR (CDR (list)), "CL:FUNCTION", env, outcome);
-	}
-    }
-
-  fun = compile_function (fun, env, outcome);
-
-  if (!fun)
-    return NULL;
-
-  if (l == 2 && SYMBOL (CAR (list)) != &nil_object)
-    {
-      delete_reference (SYMBOL (CAR (list)),
-			SYMBOL (CAR (list))->value_ptr.symbol->function_cell, 1);
-      SYMBOL (CAR (list))->value_ptr.symbol->function_cell = fun;
-      add_reference (SYMBOL (CAR (list)), fun, 1);
-    }
-
-  prepend_object_to_obj_list (&nil_object, &outcome->other_values);
-  prepend_object_to_obj_list (&nil_object, &outcome->other_values);
-
-  if (SYMBOL (CAR (list)) == &nil_object)
-    {
-      increment_refcount (fun);
-      return fun;
-    }
-
-  increment_refcount (SYMBOL (CAR (list)));
-  return SYMBOL (CAR (list));
 }
 
 
@@ -37195,20 +37073,6 @@ builtin_al_next (struct object *list, struct environment *env,
 
   outcome->type = WRONG_TYPE_OF_ARGUMENT;
   return NULL;
-}
-
-
-struct object *
-builtin_al_compile_form (struct object *list, struct environment *env,
-			 struct outcome *outcome)
-{
-  if (list_length (list) != 1)
-    {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-    }
-
-  increment_refcount (CAR (list));
-  return CAR (list);
 }
 
 

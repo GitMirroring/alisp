@@ -17,10 +17,6 @@
 
 
 
-(setq cl-user:*al-compile-when-defining* t)
-
-
-
 (in-package cl)
 
 
@@ -3408,8 +3404,10 @@
 	   (list* (car form) (cadr form) body))))
     ((member (car form) '(setq setf) :test #'eq)
      form)
+    ((not (special-operator-p (car form)))
+     (macroexpand-cdr form))
     (t
-     (macroexpand-cdr form))))
+     form)))
 
 
 (defun macroexpand-body (body)
@@ -3535,7 +3533,7 @@
 		     (format t "Compiling ")
 		     (write obj)
 		     (terpri))
-		   (setq obj (cl-user:al-compile-form obj))
+		   (setq obj (macroexpand-form-deeply obj))
 		   (parse-toplevel-form-at-compile-time obj)
 		   (if print
 		       (terpri))
@@ -3544,6 +3542,32 @@
 		   (terpri outstr))))))
       (setq *readtable* old-readtable)
       (setq *package* old-package))))
+
+
+(defun compile (name &optional definition)
+  (if definition
+      (setq definition (coerce definition 'function))
+      (setq definition (if (symbolp name)
+			   (or (macro-function name) (fdefinition name))
+			   (fdefinition name))))
+  (unless (typep definition 'compiled-function)
+    (if (typep definition 'generic-function)
+	(dolist (meth (cl-user:al-dump-methods definition))
+	  (unless (typep meth 'cl-user:al-compiled-method)
+	    (setf (cl-user:al-function-body meth)
+		  (macroexpand-body (cl-user:al-function-body meth)))
+	    (setf (cl-user:al-function-attributes meth) '(:compiled))))
+	(setf (cl-user:al-function-body definition)
+	      (macroexpand-body (cl-user:al-function-body definition))))
+    (setf (cl-user:al-function-attributes definition) '(:compiled)))
+  (if name
+      (progn
+	(if (and (symbolp name)
+		 (macro-function name))
+	    (setf (macro-function name) definition)
+	    (setf (fdefinition name) definition))
+	(values name nil nil))
+      (values definition nil nil)))
 
 
 
@@ -3677,7 +3701,8 @@
 
 
 
-(export '(*features* *default-pathname-defaults* defmacro defun defgeneric
+(dolist (sym
+         '(*features* *default-pathname-defaults* defmacro defun defgeneric
 	  add-method defmethod machine-instance machine-type machine-version
 	  short-site-name long-site-name *modules* provide require describe
 	  describe-object inspect lambda-parameters-limit call-arguments-limit
@@ -3737,14 +3762,14 @@
 	  encode-universal-time decode-universal-time get-universal-time
 	  *readtable* with-compilation-unit *compile-file-truename*
 	  *compile-file-pathname* *compile-print* *compile-verbose*
-	  compile-file-pathname compile-file with-standard-io-syntax
+	  compile-file-pathname compile-file compile with-standard-io-syntax
 	  handler-case restart-case with-simple-restart find-restart cerror
 	  break ignore-errors abort continue muffle-warning documentation))
+
+  (export sym)
+  (if (fboundp sym)
+      (compile sym)))
 
 
 
 (in-package cl-user)
-
-
-
-(setq cl-user:*al-compile-when-defining* nil)
