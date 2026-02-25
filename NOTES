@@ -42,18 +42,20 @@ interpreter will print an error message and abort to top level.
 
 __Builtin functions and macros__
 
-Builtin macros are like special operators in al: they are treated specially by
-the interpreter (which is allowed by ANSI), but an alternate implementation of
-the macro in lisp is not provided (which is requested by ANSI instead).
-Currently, al is non-conforming in this area.
+Some standard macros are implemented as special operators in al, i.e. they are
+executed directly by the interpreter instead of being expanded; this is allowed
+by ANSI, but the standard also requires a true macro implementation that is not
+provided currently.  Note that SPECIAL-OPERATOR-P returns T for these special
+operators.
+
+al also provides additional non-standard special operators.  I think that this
+is forbidden by the standard, understandably so that code walkers can rely on a
+full knowledge of the language.  Such special operators will be removed in due
+time.
 
 You can freely redefine standard functions and macros.  If you redefine a
 builtin with your lisp code though, there's no way to get the C definition back.
 Be careful, you can easily make your image unusable this way.
-
-Also note that the compiler has special knowledge of many builtin macros, so if
-you change those to something completely different, you probably want to change
-COMPILE too.
 
 
 
@@ -64,15 +66,15 @@ package.  There are also some non-standard extensions of standard functions.
 
 - *AL-ARGC* (an integer) and *AL-ARGV* (a vector of strings) let you access argc
   and argv of C, respectively, so they contain the number and value of
-  command-line arguments passed to the interpreter
+  command-line arguments passed to the interpreter respectively
 
 - AL-GETENV takes a string and returns the value of the environment variable
   with that name, or NIL if such does not exist
 
 - AL-SYSTEM takes a string or NIL; in the first case it tries executing that
   command, in the second it tells whether an execution environment is actually
-  available.  AL-SYSTEM uses system from C, so the precise working depends on
-  your C library
+  available.  AL-SYSTEM uses the 'system' function from C, so the precise
+  working depends on your C environment
 
 - the AL-EXIT function takes an optional integer (defaulting to 0) and exits the
   interpreter with that return value
@@ -134,7 +136,8 @@ package.  There are also some non-standard extensions of standard functions.
 
 - the function AL-LIST-BACKTRACE takes an optional argument and returns a list
   with the argument lists of each call in the backtrace, in the same order as
-  AL-PRINT-BACKTRACE.  The argument has the same effect as AL-PRINT-BACKTRACE
+  AL-PRINT-BACKTRACE.  The argument has the same effect as that of
+  AL-PRINT-BACKTRACE
 
 - the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
   the non-global live variable bindings, starting with the most recently
