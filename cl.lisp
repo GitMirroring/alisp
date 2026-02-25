@@ -2067,8 +2067,20 @@
 
 
 (defmacro assert (test &optional places (conddat "Assertion does not hold") &rest condargs)
-  `(unless ,test
-     (apply 'error ,conddat ,condargs)))
+  (let ((conddatsym (gensym))
+	(condargssym (gensym)))
+    `(unless ,test
+       (let ((,conddatsym ,conddat))
+	     ;(,condargssym (list ,@condargs)))
+	 (cond
+	   ((symbolp ,conddatsym)
+	    (error ,conddatsym ,@condargs))
+	   ((stringp ,conddatsym)
+	    (error (apply #'make-condition 'error
+			  :format-control ,conddatsym
+			  :format-arguments (list ,@condargs))))
+	   ((typep ,conddatsym 'condition)
+	    (error ,conddatsym)))))))
 
 
 
