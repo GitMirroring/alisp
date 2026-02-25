@@ -32062,7 +32062,7 @@ struct object *get_function (struct object *sym, struct environment *env,
     {
       f = !setf_func ? SYMBOL (sym)->value_ptr.symbol->function_cell
 	: SYMBOL (sym)->value_ptr.symbol->setf_func_cell;
-      *is_macro = SYMBOL (sym)->value_ptr.symbol->is_macro;
+      *is_macro = !setf_func && SYMBOL (sym)->value_ptr.symbol->is_macro;
     }
   else
     f = b->obj;
