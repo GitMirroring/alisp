@@ -1,3 +1,25 @@
+v1.3 (25-Feb-2026):
+
+The bigger improvements are:
+
+- Previously, al stored macros in two different ways internally.  Although this
+  distinction was invisible to lisp code, it caused unneeded complexity in the C
+  core (plus unknown potential bugs and memory leaks).  Now all macros are
+  stored as macro functions internally.
+
+- The compiler is still minimal, but its implementation has been entirely moved
+  to lisp code.  This new compiler is slightly slower, but it's much easier to
+  maintain and expand; moreover compiling wrong code won't cause a crash
+  anymore, and a true bytecode compiler has become a closer goal.
+
+Other improvements are: better handling of function objects, implementation of
+defining forms (DEFMACRO, DEFUN, DEFGENERIC and DEFMETHOD) moved to lisp code,
+more reader variables and printer configuration options, a new stepping command
+to continue execution till the end of current function, and finally many
+bugfixes and closed leaks as usual.
+
+
+
 v1.2 (28-Oct-2025):
 
 Now al has better file compilation, better ASDF support, more standard
