@@ -773,6 +773,7 @@ make_test ("foo", "0");
 make_test ("(let ((b 11)) (set 'b 12) b)", "12");
 make_test ("(fboundp 'b)", "NIL");
 make_test ("(fboundp 'g3)", "T");
+make_test ("(flet ((localfunc nil)) (fboundp 'localfunc))", "NIL");
 make_test ("(symbol-function 'fun)", "#<FUNCTION FUN>");
 make_test ("(symbol-function 'defparameter)", "(:SPECIAL-OPERATOR DEFPARAMETER)");
 make_test ("(symbol-function 'if)", "(:SPECIAL-OPERATOR IF)");
