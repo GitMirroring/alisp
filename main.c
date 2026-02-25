@@ -15837,7 +15837,7 @@ call_function (struct object *func, struct object *arglist,
   struct binding *bins;
   struct block_frame *f;
   struct go_tag_frame *prevf;
-  struct object *ret, *ret2, *args = NULL, *body;
+  struct object *ret, *ret2, *args = NULL, *body, *funcbody;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
     && !(env->stepping_flags & STEPPING_OVER_FORM),
@@ -16075,7 +16075,10 @@ call_function (struct object *func, struct object *arglist,
 	  time = clock ();
 	}
 
-      if (!parse_declarations (func->value_ptr.function->body, env,
+      funcbody = func->value_ptr.function->body;
+      increment_refcount (funcbody);
+
+      if (!parse_declarations (funcbody, env,
 			       argsnum+closnum, 1, outcome, &body))
 	{
 	  ret = NULL;
@@ -16125,7 +16128,9 @@ call_function (struct object *func, struct object *arglist,
 	  env->blocks = f;
 	}
 
-      undo_special_declarations (func->value_ptr.function->body, env);
+      undo_special_declarations (funcbody, env);
+
+      decrement_refcount (funcbody);
 
       if (isprof)
 	{
