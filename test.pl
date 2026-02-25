@@ -815,6 +815,7 @@ make_test ("(symbol-plist 'foo)", "(:A 0 :C 11 :B 3 :D 12)");
 make_test ("(special-operator-p 'if)", "T");
 make_test ("(special-operator-p 'car)", "NIL");
 make_test ("(special-operator-p 'aaa)", "NIL");
+make_test ("(special-operator-p 'dolist)", "T");
 make_test ("(let ((varb 0)) (declare (special varb)) (makunbound 'varb) (boundp 'varb))", "NIL");
 make_test ("(defparameter ha 0)", "HA");
 make_test ("(boundp 'ha)", "T");
