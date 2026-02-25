@@ -723,6 +723,7 @@ make_test ("(typep 0 'odd-integer)", "NIL");
 make_test ("(typep 1 'odd-integer)", "T");
 make_test ("(let ((i 0)) (check-type i integer))", "NIL");
 make_test ("(assert (= 1 1))", "NIL");
+make_test ("(block nil (handler-bind ((simple-error (lambda (e) (return 0)))) (assert (= 0 1) nil 'simple-error :format-control \"hello ~a\" :format-arguments (list \"world\"))))", 0);
 make_test ("(defun (setf foo2) (a1 a2) (list a1 a2))", "(SETF FOO2)");
 make_test ("#'(setf foo2)", "#<FUNCTION (SETF FOO2)>");
 make_test ("(fboundp '(setf foo2))", "T");
