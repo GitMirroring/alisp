@@ -29248,8 +29248,8 @@ builtin_special_operator_p (struct object *list, struct environment *env,
 
   s = SYMBOL (CAR (list))->value_ptr.symbol;
 
-  if (s->function_cell && s->function_cell->value_ptr.function->
-      is_special_operator)
+  if (s->function_cell && s->is_macro
+      && s->function_cell->value_ptr.function->builtin_form)
     return &t_object;
 
   return &nil_object;
