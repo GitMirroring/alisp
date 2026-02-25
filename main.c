@@ -29111,7 +29111,7 @@ struct object *
 builtin_symbol_function (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct object *s, *ret;
+  struct object *s, *ret, *lst;
   int ismac;
 
   if (list_length (list) != 1)
@@ -29133,6 +29133,30 @@ builtin_symbol_function (struct object *list, struct environment *env,
       return raise_undefined_function (SYMBOL (s), env, outcome);
     }
 
+  if (ismac && ret->value_ptr.function->builtin_form)
+    {
+      lst = alloc_empty_list (2);
+      lst->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= ret->value_ptr.function->name;
+      add_reference (CDR (lst), CAR (CDR (lst)), 0);
+      lst->value_ptr.cons_pair->car = KEYWORD (":SPECIAL-OPERATOR");
+      add_reference (lst, CAR (lst), 0);
+
+      decrement_refcount (ret);
+      return lst;
+     }
+  else if (ismac)
+    {
+      lst = alloc_empty_list (2);
+      lst->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = ret;
+      add_reference (CDR (lst), CAR (CDR (lst)), 0);
+      lst->value_ptr.cons_pair->car = KEYWORD (":MACRO");
+      add_reference (lst, CAR (lst), 0);
+
+      decrement_refcount (ret);
+      return lst;
+    }
+
   return ret;
 }
 
@@ -29141,7 +29165,7 @@ struct object *
 builtin_fdefinition (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
-  struct object *s, *ret;
+  struct object *s, *ret, *lst;
   int ismac;
 
   if (list_length (list) != 1)
@@ -29165,6 +29189,30 @@ builtin_fdefinition (struct object *list, struct environment *env,
     {
       return raise_undefined_function (IS_SYMBOL (s) ? SYMBOL (s) : s, env,
 				       outcome);
+    }
+
+  if (ismac && ret->value_ptr.function->builtin_form)
+    {
+      lst = alloc_empty_list (2);
+      lst->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= ret->value_ptr.function->name;
+      add_reference (CDR (lst), CAR (CDR (lst)), 0);
+      lst->value_ptr.cons_pair->car = KEYWORD (":SPECIAL-OPERATOR");
+      add_reference (lst, CAR (lst), 0);
+
+      decrement_refcount (ret);
+      return lst;
+     }
+  else if (ismac)
+    {
+      lst = alloc_empty_list (2);
+      lst->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = ret;
+      add_reference (CDR (lst), CAR (CDR (lst)), 0);
+      lst->value_ptr.cons_pair->car = KEYWORD (":MACRO");
+      add_reference (lst, CAR (lst), 0);
+
+      decrement_refcount (ret);
+      return lst;
     }
 
   return ret;
