@@ -31,13 +31,14 @@
 
 (setf (macro-function 'defmacro)
       (lambda (defmacroform defmacroenv)
-	`(progn
-	   (setf (macro-function ',(nth 1 defmacroform))
-		 (lambda (form env)
-		   (cl-user:al-with-macro-arguments ,(nth 2 defmacroform)
-						    form
-						    . ,(nthcdr 3 defmacroform))))
-	   ',(nth 1 defmacroform))))
+	`(eval-when (:compile-toplevel :load-toplevel :execute)
+	   (progn
+	     (setf (macro-function ',(nth 1 defmacroform))
+		   (lambda (form env)
+		     (cl-user:al-with-macro-arguments ,(nth 2 defmacroform)
+						      form
+						      . ,(nthcdr 3 defmacroform))))
+	     ',(nth 1 defmacroform)))))
 
 
 
@@ -3500,7 +3501,7 @@
 	((eq (car form) 'progn)
 	 (dolist (f (cdr form))
 	   (parse-toplevel-form-at-compile-time f)))
-	((member (car form) '(in-package defmacro) :test #'eq)
+	((member (car form) '(in-package) :test #'eq)
 	 (eval form))
 	((and
 	  (eq (car form) 'eval-when)
