@@ -1,0 +1,128 @@
+v1.2 (28-Oct-2025):
+
+Now al has better file compilation, better ASDF support, more standard
+conditions raised when appropriate, better support for time and date, a better
+command line interface, a true installation procedure and a lot of bug fixes.
+
+
+
+v1.1 (19-Mar-2025):
+
+Now al has improvements in LOOP, a better function compiler and a limited file
+compiler, better support for pathnames and for querying the filesystem, various
+improvements to the profiler and the stepper, initial support for watchpoints
+and tons of bugfixes as usual.
+
+Perhaps more important, now alisp ships with asdf.lisp and is capable of loading
+systems!
+
+
+
+v1.0 (08-Nov-2024):
+
+Now al has a basic pretty printer, better LOOP, handling of compiler macros,
+much better CLOS, better inspection tools including a backtrace printer, more
+complete handling of pathnames, a better minimal compiler, more reader macros,
+support for symbol macros, a much better debugging and stepping experience.  As
+usual, tons of bugfixes and closed leaks complete the picture.
+
+
+
+v0.999 (18-May-2024):
+
+Now al has more sharp macros and many improvements in all kinds of arrays,
+filenames, fill pointers, minimal compilation, generic functions, streams, LOOP,
+FORMAT; it also has ROOM, TRACE and stepping in the debugger, that almost no
+free CL implementation has; last but not least, tons of bug fixes and closed
+leaks make al much more stable and efficient.
+
+
+
+v0.99 (09-Mar-2024):
+
+Now al has better support for UTF-8, fill pointers, macro functions, generic
+functions, standard objects, pathnames and file operations, restarts; we also
+have minimal compilation and a basic debugger and profiler; finally a lot of bug
+fixes and closed leaks.
+
+
+
+V0.98 (02-Feb-2024):
+
+Now we have better support for complex numbers, more type stuff, some bit
+arrays, many more clauses in LOOP, more correct lexical closures and conditions,
+better hash tables, some adjustable arrays, plus tens of bugfixes and closed
+leaks.
+
+As a nice milestone, al is now capable of loading the asdf source file up to an
+error message from asdf itself.
+
+
+
+v0.97 (21-Nov-2023):
+
+Now al has plists, bitwise operators, random functions, auxiliary variables,
+more math functions, restarts, basic support for classes and generic functions.
+We can now say that al has limited support for each and every aspect of ANSI CL,
+and that half of the standard symbols are implemented.
+
+
+
+v0.96 (30-Sep-2023):
+
+Now al has SETF expanders, basic conditions, structures and destructuring binds,
+better support for types, many bugfixes and improvements.
+
+
+
+v0.95 (29-Jul-2023):
+
+This is a major step forward.
+
+Now we have better support for macros, packages, symbols, we have a basic LOOP
+and some declarations, also a lot of bugfixes.
+
+
+
+v0.94 (23-May-2023):
+
+I settled on a cyclic reference counting algorithm (by Pepels, van Eekelen,
+Plasmeijer) for garbage collection; the algorithm is pretty fast and has no
+annoying garbage collection pause.
+
+Moreover, the reader is now fully accessible in lisp-land with READ, package
+support is more complete, there are DO and DO* as the most general loop
+constructs, plus a lot of new functions, macros and bug fixes.
+
+
+
+v0.93 (28-Mar-2023):
+
+Now we have more package functions, some hash table support, some input
+features, a lot of bugfixes and more than 320 symbols from ANSI.
+
+
+
+v0.92 (14-Mar-2023):
+
+Now we have more output functionality, some package infrastructure, more than
+300 symbols from ANSI.
+
+
+
+v0.91 (06-Mar-2023):
+
+Now we have arrays of any dimension, a basic FORMAT and more than 260 symbols
+from ANSI CL.
+
+
+
+v0.9 (20-Feb-2023)
+
+v0.8 (4-Jan-2023)
+
+v0.7 (16-Dec-2022)
+
+v0.6 (22-Nov-2022)
+
+v0.4 (16-Aug-2022)
