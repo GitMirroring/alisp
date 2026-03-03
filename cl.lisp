@@ -1131,24 +1131,62 @@
   (count-if (complement pred) seq :from-end from-end :start start :end end :key key))
 
 
-(defun remove (obj seq)
-  (remove-if (lambda (ob) (eql ob obj)) seq))
+(defun remove (obj &rest args)
+  (apply 'remove-if (lambda (ob) (eql ob obj)) args))
 
 
-(defun remove-if-not (pred seq)
-  (remove-if (complement pred) seq))
+(defun remove-if (pred seq &key from-end (start 0) end count key)
+  (unless end
+    (setq end (length seq)))
+  (unless key
+    (setq key #'identity))
+  (if (and count
+	   (< count 0))
+      (setq count 0))
+  (let ((out (copy-seq seq)))
+    (if from-end
+	(let ((i (1- end))
+	      (outind (1- end)))
+	  (while (<= start i)
+	    (if (and
+		 (or (not count) (< 0 count))
+		 (funcall pred (funcall key (elt seq i))))
+		(if count
+		    (decf count))
+		(progn
+		  (setf (elt out outind) (elt seq i))
+		  (decf outind)))
+	    (decf i))
+	  (subseq out (1+ outind)))
+	(let ((i start)
+	      (outind start))
+	  (while (< i end)
+	    (if (and
+		 (or (not count) (< 0 count))
+		 (funcall pred (funcall key (elt seq i))))
+		(if count
+		    (decf count))
+		(progn
+		  (setf (elt out outind) (elt seq i))
+		  (incf outind)))
+	    (incf i))
+	  (subseq out 0 outind)))))
 
 
-(defun delete (obj seq)
-  (remove-if (lambda (ob) (eql ob obj)) seq))
+(defun remove-if-not (pred &rest args)
+  (apply 'remove-if (complement pred) args))
 
 
-(defun delete-if (pred seq)
-  (remove-if pred seq))
+(defun delete (obj &rest args)
+  (apply 'remove-if (lambda (ob) (eql ob obj)) seq args))
 
 
-(defun delete-if-not (pred seq)
-  (remove-if (complement pred) seq))
+(defun delete-if (&rest args)
+  (apply 'remove-if args))
+
+
+(defun delete-if-not (pred &rest args)
+  (apply 'remove-if (complement pred) args))
 
 
 (defun remove-duplicates (seq &key from-end test test-not (start 0) end key)
@@ -3727,11 +3765,11 @@
            notevery member member-if member-if-not find find-if find-if-not
            assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not position
            position-if position-if-not count count-if count-if-not remove
-           remove-if-not delete delete-if delete-if-not remove-duplicates
-           delete-duplicates substitute substitute-if substitute-if-not
-           nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
-           subst-if-not nsubst nsubst-if nsubst-if-not nreverse revappend
-           nreconc adjoin fill replace push pushnew pop set-difference
+           remove-if remove-if-not delete delete-if delete-if-not
+           remove-duplicates delete-duplicates substitute substitute-if
+           substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
+           subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse
+           revappend nreconc adjoin fill replace push pushnew pop set-difference
            nset-difference union nunion intersection nintersection
            set-exclusive-or nset-exclusive-or subsetp mismatch search sort
            stable-sort array-rank array-dimension array-total-size

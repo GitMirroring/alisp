@@ -2637,8 +2637,6 @@ struct object *builtin_mapcar
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_map
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *builtin_remove_if
-(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_reverse
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -4084,7 +4082,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DOLIST", env, builtin_dolist, 1, NULL, 0);
   add_builtin_form ("MAPCAR", env, builtin_mapcar, 0, NULL, 0);
   add_builtin_form ("MAP", env, builtin_map, 0, NULL, 0);
-  add_builtin_form ("REMOVE-IF", env, builtin_remove_if, 0, NULL, 0);
   add_builtin_form ("REVERSE", env, builtin_reverse, 0, NULL, 0);
   add_builtin_form ("+", env, builtin_plus, 0, NULL, 0);
   add_builtin_form ("-", env, builtin_minus, 0, NULL, 0);
@@ -25239,164 +25236,6 @@ builtin_map (struct object *list, struct environment *env,
     ret->value_ptr.string->used_size = min;
 
   free_list_structure (args);
-
-  return ret;
-}
-
-
-struct object *
-builtin_remove_if (struct object *list, struct environment *env,
-		   struct outcome *outcome)
-{
-  struct object *fun, *seq, *ret, *cons, *arg, *res;
-  fixnum sz, off, i, j;
-  char *s, *out;
-  int ismac;
-
-  if (list_length (list) != 2)
-    {
-      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
-    }
-
-  if (CAR (list)->type == TYPE_SYMBOL_NAME || CAR (list)->type == TYPE_SYMBOL)
-    {
-      fun = get_function (SYMBOL (CAR (list)), env, 1, 0, 1, 0, &ismac);
-
-      if (!fun)
-	{
-	  return raise_undefined_function (SYMBOL (CAR (list)), env, outcome);
-	}
-    }
-  else if (CAR (list)->type == TYPE_FUNCTION)
-    {
-      fun = CAR (list);
-    }
-  else
-    {
-      return raise_type_error (CAR (list), "(CL:OR CL:SYMBOL CL:FUNCTION)", env,
-			       outcome);
-    }
-
-  if (!IS_SEQUENCE (CAR (CDR (list))))
-    {
-      return raise_type_error (CAR (CDR (list)), "CL:SEQUENCE", env, outcome);
-    }
-
-  seq = CAR (CDR (list));
-
-  if (SYMBOL (seq) == &nil_object)
-    return &nil_object;
-
-  arg = alloc_empty_cons_pair ();
-  arg->value_ptr.cons_pair->cdr = &nil_object;
-
-  if (seq->type == TYPE_CONS_PAIR)
-    {
-      ret = &nil_object;
-
-      while (SYMBOL (seq) != &nil_object)
-	{
-	  arg->value_ptr.cons_pair->car = CAR (seq);
-
-	  res = call_function (fun, arg, 0, 0, 0, 1, 0, 0, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  if (!res)
-	    return NULL;
-
-	  if (SYMBOL (res) == &nil_object)
-	    {
-	      if (SYMBOL (ret) == &nil_object)
-		ret = cons = alloc_empty_cons_pair ();
-	      else
-		cons = cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-
-	      cons->value_ptr.cons_pair->car = CAR (seq);
-	      add_reference (cons, CAR (cons), 0);
-	    }
-
-	  decrement_refcount (res);
-
-	  seq = CDR (seq);
-	}
-
-      if (SYMBOL (ret) != &nil_object)
-	cons->value_ptr.cons_pair->cdr = &nil_object;
-    }
-  else if (seq->type == TYPE_STRING)
-    {
-      sz = ACTUAL_STRING_LENGTH (seq);
-
-      ret = alloc_string (sz);
-
-      out = ret->value_ptr.string->value;
-
-      s = seq->value_ptr.string->value;
-      off = 0;
-
-      do
-	{
-	  s += off;
-	  sz -= off;
-
-	  arg->value_ptr.cons_pair->car = create_character_from_utf8 (s, sz);
-
-	  res = call_function (fun, arg, 0, 0, 0, 1, 0, 0, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  if (!res)
-	    return NULL;
-
-	  if (SYMBOL (res) == &nil_object)
-	    {
-	      strcpy (out, CAR (arg)->value_ptr.character);
-
-	      out += strlen (CAR (arg)->value_ptr.character);
-
-	      ret->value_ptr.string->used_size +=
-		strlen (CAR (arg)->value_ptr.character);
-	    }
-
-	  decrement_refcount (CAR (arg));
-
-	  decrement_refcount (res);
-
-	} while ((off = next_utf8_char (s, sz)));
-    }
-  else if (seq->type == TYPE_ARRAY)
-    {
-      ret = alloc_vector (seq->value_ptr.array->alloc_size->size, 0, 0);
-
-      j = 0;
-
-      for (i = 0; i < ACTUAL_VECTOR_LENGTH (seq); i++)
-	{
-	  arg->value_ptr.cons_pair->car = seq->value_ptr.array->value [i];
-	  increment_refcount (CAR (arg));
-
-	  res = call_function (fun, arg, 0, 0, 0, 1, 0, 0, env, outcome);
-	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	  if (!res)
-	    return NULL;
-
-	  if (SYMBOL (res) == &nil_object)
-	    {
-	      ret->value_ptr.array->value [j++] = CAR (arg);
-	      add_reference (ret, ret->value_ptr.array->value [j-1], j-1);
-	    }
-
-	  decrement_refcount (CAR (arg));
-	  decrement_refcount (res);
-	}
-
-      resize_vector (ret, j);
-    }
-
-  free (arg->value_ptr.cons_pair);
-  free (arg);
-  num_conses--;
-  num_objects--;
 
   return ret;
 }
