@@ -3702,71 +3702,72 @@
 
 
 
-(dolist (sym
-         '(*features* *default-pathname-defaults* defmacro defun defgeneric
-	  add-method defmethod machine-instance machine-type machine-version
-	  short-site-name long-site-name *modules* provide require describe
-	  describe-object inspect lambda-parameters-limit call-arguments-limit
-	  multiple-values-limit array-rank-limit array-dimension-limit
-	  array-total-size-limit char-code-limit lambda-list-keywords identity
-	  constantly *read-default-float-format* pi 1+ 1- minusp plusp abs zerop
-	  signum mod rem evenp oddp rationalize gcd lcm isqrt conjugate cis
-	  upgraded-complex-part-type logand logandc1 logandc2 logeqv lognand
-	  lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1 boole-andc2
-	  boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior boole-nand
-	  boole-nor boole-orc1 boole-orc2 boole-set boole-xor boole
-	  *gensym-counter* gensym gentemp first second third fourth fifth sixth
-	  seventh eighth ninth tenth rest caar cadr cdar cddr caaar caadr cadar
-	  caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar
-	  cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
-	  cddddr make-list copy-alist copy-tree tree-equal sublis nsublis endp
-	  butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
-	  define-modify-macro incf decf cond otherwise case ccase ecase typecase
-	  ctypecase etypecase return multiple-value-bind multiple-value-setq
-	  prog prog* multiple-value-prog1 every some notany notevery member
-	  member-if member-if-not find find-if find-if-not assoc assoc-if
-	  assoc-if-not rassoc rassoc-if rassoc-if-not position position-if
-	  position-if-not count count-if count-if-not remove remove-if-not
-	  delete delete-if delete-if-not remove-duplicates delete-duplicates
-	  substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
-	  nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
-	  nsubst-if-not nreverse revappend nreconc adjoin fill replace push
-	  pushnew pop set-difference nset-difference union nunion intersection
-	  nintersection set-exclusive-or nset-exclusive-or subsetp mismatch
-	  search sort stable-sort array-rank array-dimension array-total-size
-	  array-in-bounds-p array-element-type upgraded-array-element-type
-	  adjustable-array-p get get-properties remprop getf char schar bit sbit
-	  svref vector-pop vector-push vector-push-extend string= string/=
-	  string< string<= string> string>= string-equal string-not-equal
-	  string-lessp string-not-greaterp string-greaterp string-not-lessp
-	  char/= char< char<= char> char>= char-equal char-not-equal char-lessp
-	  char-not-greaterp char-greaterp char-not-lessp digit-char digit-char-p
-	  char-int string-upcase string-downcase string-capitalize
-	  nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-	  string-right-trim string-trim defpackage signed-byte unsigned-byte
-	  extended-char consp listp symbolp keywordp compiled-function-p
-	  functionp packagep integerp rationalp floatp complexp random-state-p
-	  characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-	  stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-	  pathnamep streamp realp numberp check-type assert macroexpand equal
-	  complement mapc mapcan maplist mapl mapcon map-into reduce merge
-	  pathname-directory pathname-host pathname-device pathname-version
-	  file-namestring directory-namestring host-namestring enough-namestring
-	  merge-pathnames file-author file-write-date user-homedir-pathname
-	  pathname-match-p directory translate-pathname with-open-file
-	  with-open-stream read-sequence terpri write-line write-sequence prin1
-	  princ print write-to-string prin1-to-string princ-to-string
-	  force-output with-input-from-string with-output-to-string pprint
-	  yes-or-no-p y-or-n-p *terminal-io* do-all-symbols find-all-symbols
-	  apropos apropos-list with-slots with-accessors with-package-iterator
-	  with-hash-table-iterator loop loop-finish format formatter
-	  encode-universal-time decode-universal-time get-universal-time
-	  *readtable* with-compilation-unit *compile-file-truename*
-	  *compile-file-pathname* *compile-print* *compile-verbose*
-	  compile-file-pathname compile-file compile with-standard-io-syntax
-	  handler-case restart-case with-simple-restart find-restart cerror
-	  break ignore-errors abort continue muffle-warning documentation))
-
+(dolist
+    (sym '(*features* *default-pathname-defaults* defmacro defun defgeneric
+           add-method defmethod machine-instance machine-type machine-version
+           short-site-name long-site-name *modules* provide require describe
+           describe-object inspect lambda-parameters-limit call-arguments-limit
+           multiple-values-limit array-rank-limit array-dimension-limit
+           array-total-size-limit char-code-limit lambda-list-keywords identity
+           constantly *read-default-float-format* pi 1+ 1- minusp plusp abs
+           zerop signum mod rem evenp oddp rationalize gcd lcm isqrt conjugate
+           cis upgraded-complex-part-type logand logandc1 logandc2 logeqv
+           lognand lognor logorc1 logorc2 logxor boole-1 boole-2 boole-andc1
+           boole-andc2 boole-and boole-c1 boole-c2 boole-clr boole-eqv boole-ior
+           boole-nand boole-nor boole-orc1 boole-orc2 boole-set boole-xor boole
+           *gensym-counter* gensym gentemp first second third fourth fifth sixth
+           seventh eighth ninth tenth rest caar cadr cdar cddr caaar caadr cadar
+           caddr cdaar cdadr cddar cdddr caaaar caaadr caadar caaddr cadaar
+           cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
+           cddddr make-list copy-alist copy-tree tree-equal sublis nsublis endp
+           butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
+           define-modify-macro incf decf cond otherwise case ccase ecase
+           typecase ctypecase etypecase return multiple-value-bind
+           multiple-value-setq prog prog* multiple-value-prog1 every some notany
+           notevery member member-if member-if-not find find-if find-if-not
+           assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not position
+           position-if position-if-not count count-if count-if-not remove
+           remove-if-not delete delete-if delete-if-not remove-duplicates
+           delete-duplicates substitute substitute-if substitute-if-not
+           nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
+           subst-if-not nsubst nsubst-if nsubst-if-not nreverse revappend
+           nreconc adjoin fill replace push pushnew pop set-difference
+           nset-difference union nunion intersection nintersection
+           set-exclusive-or nset-exclusive-or subsetp mismatch search sort
+           stable-sort array-rank array-dimension array-total-size
+           array-in-bounds-p array-element-type upgraded-array-element-type
+           adjustable-array-p get get-properties remprop getf char schar bit
+           sbit svref vector-pop vector-push vector-push-extend string= string/=
+           string< string<= string> string>= string-equal string-not-equal
+           string-lessp string-not-greaterp string-greaterp string-not-lessp
+           char/= char< char<= char> char>= char-equal char-not-equal char-lessp
+           char-not-greaterp char-greaterp char-not-lessp digit-char
+           digit-char-p char-int string-upcase string-downcase string-capitalize
+           nstring-upcase nstring-downcase nstring-capitalize string-left-trim
+           string-right-trim string-trim defpackage signed-byte unsigned-byte
+           extended-char consp listp symbolp keywordp compiled-function-p
+           functionp packagep integerp rationalp floatp complexp random-state-p
+           characterp standard-char-p vectorp simple-vector-p arrayp sequencep
+           stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
+           pathnamep streamp realp numberp check-type assert macroexpand equal
+           complement mapc mapcan maplist mapl mapcon map-into reduce merge
+           pathname-directory pathname-host pathname-device pathname-version
+           file-namestring directory-namestring host-namestring
+           enough-namestring merge-pathnames file-author file-write-date
+           user-homedir-pathname pathname-match-p directory translate-pathname
+           with-open-file with-open-stream read-sequence terpri write-line
+           write-sequence prin1 princ print write-to-string prin1-to-string
+           princ-to-string force-output with-input-from-string
+           with-output-to-string pprint yes-or-no-p y-or-n-p *terminal-io*
+           do-all-symbols find-all-symbols apropos apropos-list with-slots
+           with-accessors with-package-iterator with-hash-table-iterator loop
+           loop-finish format formatter encode-universal-time
+           decode-universal-time get-universal-time *readtable*
+           with-compilation-unit *compile-file-truename* *compile-file-pathname*
+           *compile-print* *compile-verbose* compile-file-pathname compile-file
+           compile with-standard-io-syntax handler-case restart-case
+           with-simple-restart find-restart cerror break ignore-errors abort
+           continue muffle-warning documentation))
   (export sym)
   (if (fboundp sym)
       (compile sym)))
