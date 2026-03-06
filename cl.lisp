@@ -36,7 +36,7 @@
 	     (setf (macro-function ',(nth 1 defmacroform))
 		   (lambda (form env)
 		     (cl-user:al-with-macro-arguments ,(nth 2 defmacroform)
-						      form
+						      env form
 						      . ,(nthcdr 3 defmacroform))))
 	     ',(nth 1 defmacroform)))))
 

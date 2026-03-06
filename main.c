@@ -31781,7 +31781,8 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 
 	  body = NULL;
 	  read_object (&body, 0,
-		       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil cl::form))"),
+		       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil "
+					 "cl::env cl::form))"),
 		       NULL, 0, 0, env, outcome, &objb, &obje);
 
 	  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
@@ -31790,9 +31791,11 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 			 CAR (CDR (form)), 0);
 
 	  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
-	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = CDR (CDR (form));
+	    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
+	    value_ptr.cons_pair->cdr = CDR (CDR (form));
 	  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->
-			 cdr->value_ptr.cons_pair->cdr, CDR (CDR (form)), 1);
+			 cdr->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr,
+			 CDR (CDR (form)), 1);
 
 	  macfun = create_function (lambdal, body, env, outcome, 0, 0, 0);
 	  decrement_refcount (lambdal);
@@ -32922,19 +32925,25 @@ struct object *
 evaluate_al_with_macro_arguments (struct object *list, struct environment *env,
 				  struct outcome *outcome)
 {
-  struct object *fun, *ret, *args;
+  struct object *fun, *ret, *envobj, *args;
 
   if (list_length (list) < 2)
     {
       return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
-  fun = create_function (CAR (list), CDR (CDR (list)), env, outcome, 1, 1, 1);
+  fun = create_function (CAR (list), CDR (CDR (CDR (list))), env, outcome, 1, 1, 1);
 
   if (!fun)
     return NULL;
 
-  args = evaluate_object (CAR (CDR (list)), env, outcome);
+  envobj = evaluate_object (CAR (CDR (list)), env, outcome);
+  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+  if (!envobj)
+    return NULL;
+
+  args = evaluate_object (CAR (CDR (CDR (list))), env, outcome);
   CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   if (!args)
@@ -32947,8 +32956,23 @@ evaluate_al_with_macro_arguments (struct object *list, struct environment *env,
       return raise_type_error (args, "CL:LIST", env, outcome);
     }
 
-  ret = call_function (fun, args, 0, 0, 1, 1, 0, 0, env, outcome);
+  if (fun->value_ptr.function->env_var)
+    {
+      increment_refcount (envobj);
+      env->vars = bind_variable (fun->value_ptr.function->env_var, envobj, 1,
+				 env->vars);
+      env->lex_env_vars_boundary++;
+    }
 
+  ret = call_function (fun, args, 0, 0, 1, 0, 0, 0, env, outcome);
+
+  if (fun->value_ptr.function->env_var)
+    {
+      env->lex_env_vars_boundary--;
+      env->vars = remove_bindings (env->vars, 1, 1);
+    }
+
+  decrement_refcount (envobj);
   decrement_refcount (fun);
   decrement_refcount (args);
 
@@ -36271,7 +36295,8 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
 
   body = NULL;
   read_object (&body, 0,
-	       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil cl::form))"),
+	       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil cl::env "
+				 "cl::form))"),
 	       NULL, 0, 0, env, outcome, &objb, &obje);
 
   body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
@@ -36280,9 +36305,11 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
 		 CAR (CDR (list)), 0);
 
   body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
-    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = CDR (CDR (list));
+    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr
+    = CDR (CDR (list));
   add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->
-		 cdr->value_ptr.cons_pair->cdr, CDR (CDR (list)), 1);
+		 cdr->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr,
+		 CDR (CDR (list)), 1);
 
   mac = create_function (lambdal, body, env, outcome, 0, 0, 0);
   decrement_refcount (lambdal);
