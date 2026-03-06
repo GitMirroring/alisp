@@ -794,7 +794,7 @@ environment
     *dynamic_extent_sym;
 
   struct object *amp_optional_sym, *amp_rest_sym, *amp_body_sym, *amp_key_sym,
-    *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym,
+    *amp_allow_other_keys_sym, *amp_aux_sym, *amp_whole_sym, *amp_environment_sym,
     *key_allow_other_keys_sym;
 
   struct object *not_sym, *and_sym, *or_sym, *eql_sym, *member_sym,
@@ -979,6 +979,7 @@ function
   int allow_other_keys;
   /*int min_args;
     int max_args;*/
+  struct object *env_var;
 
   struct binding *lex_vars;
   struct binding *lex_funcs;
@@ -2172,7 +2173,8 @@ struct parameter *parse_required_parameters (struct object *obj,
 					     int allow_destructuring,
 					     int is_specialized,
 					     struct environment *env,
-					     struct outcome *outcome);
+					     struct outcome *outcome,
+					     struct object **envsym);
 struct parameter *parse_optional_parameters
 (struct object *obj, struct parameter **last, struct object **next,
  struct environment *env, struct outcome *outcome);
@@ -2182,7 +2184,7 @@ struct parameter *parse_keyword_parameters
 struct parameter *parse_lambda_list (struct object *obj, int allow_destructuring,
 				     int is_specialized, struct environment *env,
 				     struct outcome *outcome, int *found_amp_key,
-				     int *allow_other_keys);
+				     int *allow_other_keys, struct object **envsym);
 
 struct parameter *create_lambda_list (struct environment *env, ...);
 struct parameter *copy_lambda_list (struct parameter *list,
@@ -4523,6 +4525,10 @@ add_standard_definitions (struct environment *env)
 						     strlen ("&WHOLE"), 1,
 						     EXTERNAL_VISIBILITY, 1,
 						     env->cl_package, 0, 0);
+  env->amp_environment_sym = intern_symbol_by_char_vector ("&ENVIRONMENT",
+							   strlen ("&ENVIRONMENT"), 1,
+							   EXTERNAL_VISIBILITY, 1,
+							   env->cl_package, 0, 0);
   env->key_allow_other_keys_sym =
     intern_symbol_by_char_vector ("ALLOW-OTHER-KEYS",
 				  strlen ("ALLOW-OTHER-KEYS"), 1,
@@ -8939,7 +8945,7 @@ create_function (struct object *lambda_list, struct object *body,
   outcome->type = EVAL_OK;
   f->lambda_list = parse_lambda_list (lambda_list, allow_destructuring, 0, env,
 				      outcome, &found_amp_key,
-				      &f->allow_other_keys);
+				      &f->allow_other_keys, &f->env_var);
 
   if (outcome->type != EVAL_OK)
     {
@@ -14088,7 +14094,7 @@ struct parameter *
 parse_required_parameters (struct object *obj, struct parameter **last,
 			   struct object **rest, int allow_destructuring,
 			   int is_specialized, struct environment *env,
-			   struct outcome *outcome)
+			   struct outcome *outcome, struct object **envsym)
 {
   struct object *car, *eqlobj, *eqlts;
   struct parameter *first = NULL;
@@ -14111,7 +14117,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 							&(*last)->
 							sub_found_amp_key,
 							&(*last)->
-							sub_allow_other_keys);
+							sub_allow_other_keys,
+							envsym);
 
 	  if (outcome->type != EVAL_OK)
 	    return NULL;
@@ -14195,7 +14202,8 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 
 	  if (car == env->amp_optional_sym || car == env->amp_rest_sym
 	      || car == env->amp_body_sym || car == env->amp_key_sym
-	      || car == env->amp_allow_other_keys_sym || car == env->amp_aux_sym)
+	      || car == env->amp_allow_other_keys_sym || car == env->amp_aux_sym
+	      || car == env->amp_environment_sym)
 	    {
 	      break;
 	    }
@@ -14240,7 +14248,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 	  && (car == env->amp_optional_sym || car == env->amp_rest_sym
 	      || car == env->amp_body_sym || car == env->amp_key_sym
 	      || car == env->amp_allow_other_keys_sym
-	      || car == env->amp_aux_sym))
+	      || car == env->amp_aux_sym || car == env->amp_environment_sym))
 	{
 	  break;
 	}
@@ -14354,7 +14362,8 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
       if (IS_SYMBOL (car) && (car = SYMBOL (car))
 	  && (car == env->amp_optional_sym || car == env->amp_rest_sym
-	      || car == env->amp_body_sym || car == env->amp_key_sym))
+	      || car == env->amp_body_sym || car == env->amp_key_sym
+	      || car == env->amp_environment_sym))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14512,13 +14521,16 @@ struct parameter *
 parse_lambda_list (struct object *obj, int allow_destructuring,
 		   int is_specialized, struct environment *env,
 		   struct outcome *outcome, int *found_amp_key,
-		   int *allow_other_keys)
+		   int *allow_other_keys, struct object **envsym)
 {
   struct parameter *first = NULL, *last = NULL, *p, *ls;
   struct object *car, *restsym, *wholesym;
   int dotted_ok = 0, l;
 
   *found_amp_key = 0, *allow_other_keys = 0;
+
+  if (envsym)
+    *envsym = NULL;
 
   if (SYMBOL (obj) == &nil_object)
     {
@@ -14556,8 +14568,22 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       obj = CDR (CDR (obj));
     }
 
+  if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_environment_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *envsym = SYMBOL (CAR (CDR (obj)));
+
+      obj = CDR (CDR (obj));
+    }
+
   if ((p = parse_required_parameters (obj, &ls, &obj, allow_destructuring,
-				      is_specialized, env, outcome)))
+				      is_specialized, env, outcome, envsym)))
     {
       if (first)
 	last->next = p;
@@ -14569,6 +14595,20 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 
   if (outcome->type != EVAL_OK)
     return NULL;
+
+  if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_environment_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *envsym = SYMBOL (CAR (CDR (obj)));
+
+      obj = CDR (CDR (obj));
+    }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_optional_sym)
@@ -14585,6 +14625,20 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 
       if (outcome->type != EVAL_OK)
 	return NULL;
+    }
+
+  if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_environment_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *envsym = SYMBOL (CAR (CDR (obj)));
+
+      obj = CDR (CDR (obj));
     }
 
   if (obj && ((obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
@@ -14622,7 +14676,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 						     &last->
 						     sub_found_amp_key,
 						     &last->
-						     sub_allow_other_keys);
+						     sub_allow_other_keys, envsym);
 
 	  if (outcome->type != EVAL_OK)
 	    return NULL;
@@ -14653,6 +14707,20 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 	  else
 	    dotted_ok = 1;
 	}
+    }
+
+  if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_environment_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *envsym = SYMBOL (CAR (CDR (obj)));
+
+      obj = CDR (CDR (obj));
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
@@ -14686,6 +14754,20 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
       *allow_other_keys = 1;
 
       obj = CDR (obj);
+    }
+
+  if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_environment_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *envsym = SYMBOL (CAR (CDR (obj)));
+
+      obj = CDR (CDR (obj));
     }
 
   if (obj && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
@@ -14763,6 +14845,20 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
 
 	  obj = CDR (obj);
 	}
+    }
+
+  if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
+      && SYMBOL (car) == env->amp_environment_sym)
+    {
+      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+	{
+	  outcome->type = INVALID_LAMBDA_LIST;
+	  return NULL;
+	}
+
+      *envsym = SYMBOL (CAR (CDR (obj)));
+
+      obj = CDR (CDR (obj));
     }
 
   if (SYMBOL (obj) != &nil_object && !dotted_ok)
@@ -34717,7 +34813,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
       outcome->type = EVAL_OK;
       ll = parse_lambda_list (lambdal ? lambdal : &nil_object, 0, 1, env,
 			      outcome, &found_amp_key,
-			      &fun->value_ptr.function->allow_other_keys);
+			      &fun->value_ptr.function->allow_other_keys, NULL);
 
       if (outcome->type != EVAL_OK)
 	return NULL;
@@ -34826,7 +34922,8 @@ builtin_al_create_method (struct object *list, struct environment *env,
   outcome->type = EVAL_OK;
   m->lambda_list = NULL;
   m->lambda_list = parse_lambda_list (lambdal, 0, 1, env, outcome,
-				      &m->found_amp_key, &m->allow_other_keys);
+				      &m->found_amp_key, &m->allow_other_keys,
+				      NULL);
 
   if (outcome->type != EVAL_OK)
     {
