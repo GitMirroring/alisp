@@ -29368,41 +29368,117 @@ struct object *
 builtin_macroexpand_1 (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *ret, *ret2, *mac, *args;
-  int ismac;
+  struct object *ret, *ret2, *mac = NULL, *args, *envobj = NULL, *cons;
+  int ismac, l;
 
-  if (list_length (list) != 1)
+  if ((l = list_length (list)) < 1 || l > 2)
     {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list)))
-      && (mac = get_function (CAR (CAR (list)), env, 0, 0, 1, 0, &ismac))
-      && ismac && !mac->value_ptr.function->builtin_form)
+  if (l == 2 && SYMBOL (CAR (CDR (list))) != &nil_object)
     {
-      args = alloc_empty_list (2);
-      args->value_ptr.cons_pair->car = CAR (list);
-      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+      envobj = CAR (CDR (list));
 
-      ret = call_function (mac, args, 0, 0, 0, 0, 0, 0, env, outcome);
-
-      free_list_structure (args);
-
-      if (!ret)
-	return NULL;
-
-      ret2 = &t_object;
+      if (envobj->type != TYPE_CONS_PAIR || list_length (envobj) != 2
+	  || !IS_LIST (CAR (envobj)) || !IS_LIST (CAR (CDR (envobj))))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
     }
- else if (IS_SYMBOL (CAR (list))
-	   && SYMBOL (CAR (list))->value_ptr.symbol->is_symbol_macro)
+
+  if (CAR (list)->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (CAR (list))))
     {
-      increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->value_cell);
-      ret = SYMBOL (CAR (list))->value_ptr.symbol->value_cell;
+      if (envobj)
+	{
+	  cons = CAR (envobj);
 
-      if (!ret)
-	return NULL;
+	  while (SYMBOL (cons) != &nil_object)
+	    {
+	      if (CAR (cons)->type == TYPE_CONS_PAIR
+		  && SYMBOL (CAR (CAR (cons))) == SYMBOL (CAR (CAR (list))))
+		{
+		  mac = CAR (CDR (CAR (cons)));
+		  break;
+		}
 
-      ret2 = &t_object;
+	      cons = CDR (cons);
+	    }
+	}
+
+      if (!mac)
+	{
+	  mac = get_function (CAR (CAR (list)), env, 0, 0, 1, 0, &ismac);
+
+	  if (!ismac || mac->value_ptr.function->builtin_form)
+	    mac = NULL;
+	}
+
+      if (mac)
+	{
+	  args = alloc_empty_list (2);
+	  args->value_ptr.cons_pair->car = CAR (list);
+	  add_reference (args, CAR (args), 0);
+
+	  args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	    = envobj ? envobj : &nil_object;
+	  add_reference (CDR (args), CAR (CDR (args)), 0);
+
+	  ret = call_function (mac, args, 0, 0, 0, 0, 0, 0, env, outcome);
+
+	  decrement_refcount (args);
+
+	  if (!ret)
+	    return NULL;
+
+	  ret2 = &t_object;
+	}
+      else
+	{
+	  increment_refcount (CAR (list));
+	  ret = CAR (list);
+	  ret2 = &nil_object;
+	}
+    }
+  else if (IS_SYMBOL (CAR (list)))
+    {
+      if (envobj)
+	{
+	  cons = CAR (CDR (envobj));
+
+	  while (SYMBOL (cons) != &nil_object)
+	    {
+	      if (CAR (cons)->type == TYPE_CONS_PAIR
+		  && SYMBOL (CAR (CAR (cons))) == SYMBOL (CAR (list)))
+		{
+		  mac = CAR (cons);
+		  break;
+		}
+
+	      cons = CDR (cons);
+	    }
+	}
+
+      if (!mac
+	  && SYMBOL (CAR (list))->value_ptr.symbol->is_symbol_macro)
+	{
+	  increment_refcount (SYMBOL (CAR (list))->value_ptr.symbol->value_cell);
+	  ret = SYMBOL (CAR (list))->value_ptr.symbol->value_cell;
+	  ret2 = &t_object;
+	}
+      else if (mac && list_length (mac) == 2)
+	{
+	  increment_refcount (CAR (CDR (mac)));
+	  ret = CAR (CDR (mac));
+	  ret2 = &t_object;
+	}
+      else
+	{
+	  increment_refcount (CAR (list));
+	  ret = CAR (list);
+	  ret2 = &nil_object;
+	}
     }
   else
     {

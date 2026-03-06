@@ -2119,11 +2119,11 @@
 
 
 
-(defun macroexpand (form)
+(defun macroexpand (form &optional env)
   (do ((ret (list form t))
        expp)
       ((not (cadr ret)) (values (car ret) expp))
-    (setq ret (multiple-value-list (macroexpand-1 (car ret))))
+    (setq ret (multiple-value-list (macroexpand-1 (car ret) env)))
     (if (and (not expp) (cadr ret))
 	(setq expp t))))
 
