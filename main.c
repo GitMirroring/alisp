@@ -2219,6 +2219,8 @@ int destructure_tree (struct object *template, struct object *vals,
 void restore_lexical_environment (struct environment *env, struct binding *vars,
 				  struct binding *funcs, int *num_vars);
 
+struct object *build_environment_object (struct environment *env);
+
 struct object *call_function (struct object *func, struct object *arglist,
 			      int eval_args, int pass_form_and_env,
 			      int also_pass_name, int create_new_lex_env,
@@ -15771,6 +15773,96 @@ restore_lexical_environment (struct environment *env, struct binding *vars,
 
 
 struct object *
+build_environment_object (struct environment *env)
+{
+  struct object *cons, *last_cons, *ret;
+  struct binding *b, *bin;
+  int lex_vars = env->lex_env_vars_boundary,
+    lex_funcs = env->lex_env_funcs_boundary;
+
+  ret = alloc_empty_list (2);
+
+  b = env->funcs;
+  ret->value_ptr.cons_pair->car = &nil_object;
+
+  while (b && lex_funcs)
+    {
+      if (b->is_macro)
+	{
+	  cons = alloc_empty_list (2);
+
+	  cons->value_ptr.cons_pair->car = b->sym;
+	  add_reference (cons, CAR (cons), 0);
+
+	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = b->obj;
+	  add_reference (CDR (cons), CAR (CDR (cons)), 0);
+
+	  if (ret->value_ptr.cons_pair->car == &nil_object)
+	    ret->value_ptr.cons_pair->car = last_cons = alloc_empty_cons_pair ();
+	  else
+	    {
+	      last_cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      last_cons = CDR (last_cons);
+	    }
+
+	  last_cons->value_ptr.cons_pair->car = cons;
+	}
+
+      lex_funcs--;
+      b = b->next;
+    }
+
+  if (ret->value_ptr.cons_pair->car != &nil_object)
+    last_cons->value_ptr.cons_pair->cdr = &nil_object;
+
+
+  b = env->vars;
+  ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+
+  while (b && lex_vars)
+    {
+      if (b->type == LEXICAL_BINDING)
+	{
+	  if (!b->sym)
+	    bin = b->closure_bin;
+	  else
+	    bin = b;
+
+	  cons = alloc_empty_list (1 + !!bin->is_symbol_macro);
+
+	  cons->value_ptr.cons_pair->car = bin->sym;
+	  add_reference (cons, CAR (cons), 0);
+
+	  if (bin->is_symbol_macro)
+	    {
+	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
+	      add_reference (CDR (cons), CAR (CDR (cons)), 0);
+	    }
+
+	  if (ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car == &nil_object)
+	    ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	      = last_cons = alloc_empty_cons_pair ();
+	  else
+	    {
+	      last_cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      last_cons = CDR (last_cons);
+	    }
+
+	  last_cons->value_ptr.cons_pair->car = cons;
+	}
+
+      lex_vars--;
+      b = b->next;
+    }
+
+  if (ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car != &nil_object)
+  last_cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
 call_function (struct object *func, struct object *arglist,
 	       int eval_args, int pass_form_and_env,
 	       int also_pass_name, int create_new_lex_env,
@@ -15986,7 +16078,11 @@ call_function (struct object *func, struct object *arglist,
     {
       args = alloc_empty_list (2);
       args->value_ptr.cons_pair->car = arglist;
-      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = &nil_object;
+      add_reference (args, CAR (args), 0);
+
+      args->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	= build_environment_object (env);
+
       arglist = args;
       also_pass_name = 0;
     }
@@ -16110,7 +16206,7 @@ call_function (struct object *func, struct object *arglist,
 
 
   if (pass_form_and_env)
-    free_list_structure (args);
+    decrement_refcount (args);
 
 
   if (ret && expand_and_eval)
