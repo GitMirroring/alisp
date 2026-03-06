@@ -571,6 +571,9 @@ make_test ("(funcall (macro-function 'mac) nil nil)", "NIL");
 make_test ("(defmacro macfun nil '(+ 1 2))", "MACFUN");
 make_test ("(setf (macro-function 'macfun2) (macro-function 'macfun))", "#<FUNCTION ?>");
 make_test ("(macfun2)", "3");
+make_test ("(defmacro macroexpand-with-env (form &environment env) `(macroexpand ',form ',env))", "MACROEXPAND-WITH-ENV");
+make_test ("(macrolet ((localmac nil '(+ 1 2))) (macroexpand-with-env (localmac)))", "(+ 1 2)\nT");
+make_test ("(symbol-macrolet ((localsymmac (+ 3 4))) (macroexpand-with-env localsymmac))", "(+ 3 4)\nT");
 
 make_test ("(defparameter x 0)", "X");
 make_test ("(defun fun nil (let ((x 1)) x))", "FUN");
