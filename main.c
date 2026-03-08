@@ -2444,6 +2444,9 @@ int type_condition (const struct object *obj, const struct object *typespec,
 int type_restart (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome);
 
+int type_al_function_name (const struct object *obj, const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
+
 int type_al_backquote (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct outcome *outcome);
 int type_al_comma (const struct object *obj, const struct object *typespec,
@@ -2991,6 +2994,10 @@ struct object *get_function (struct object *sym, struct environment *env,
 			     int only_functions, int setf_func, int only_globals,
 			     int increment_refc, int *is_macro);
 int is_macro (struct object *sym, struct environment *env);
+struct object *inspect_function_by_function_name (struct object *name,
+						  int only_globals,
+						  struct environment *env,
+						  struct outcome *outcome);
 
 struct object *inspect_variable_by_c_string (char *var,
 					     struct environment *env);
@@ -4828,6 +4835,9 @@ add_standard_definitions (struct environment *env)
   env->al_print_always_two_colons =
     define_variable ("*AL-PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
 
+
+  add_builtin_type ("AL-FUNCTION-NAME", env, type_al_function_name, 1,
+		    (char *)NULL);
 
   add_builtin_type ("AL-COMPILED-METHOD", env, type_al_compiled_method, 1,
 		    "METHOD", (char *)NULL);
@@ -10509,7 +10519,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 
 	  if (!IS_FUNCTION_NAME (CAR (CDR (fieldform))))
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      raise_type_error (CAR (CDR (fieldform)),
+				"CL-USER:AL-FUNCTION-NAME", env, outcome);
 	      return NULL;
 	    }
 
@@ -19377,6 +19388,14 @@ type_restart (const struct object *obj, const struct object *typespec,
 
 
 int
+type_al_function_name (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return IS_FUNCTION_NAME (obj);
+}
+
+
+int
 type_al_backquote (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct outcome *outcome)
 {
@@ -26067,8 +26086,8 @@ builtin_setf_fdefinition (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (CDR (list))))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "CL-USER:AL-FUNCTION-NAME", env,
+			       outcome);
     }
 
   sym = IS_SYMBOL (CAR (CDR (list))) ? SYMBOL (CAR (CDR (list)))
@@ -26154,8 +26173,7 @@ builtin_setf_al_function_name (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env, outcome);
     }
 
   newval = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
@@ -28994,13 +29012,9 @@ builtin_fboundp (struct object *list, struct environment *env,
 
   s = CAR (list);
 
-  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL
-      && !(CAR (list)->type == TYPE_CONS_PAIR && list_length (CAR (list)) == 2
-	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
+  if (!IS_FUNCTION_NAME (s))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (s, "CL-USER:AL-FUNCTION-NAME", env, outcome);
     }
 
   if ((CAR (list)->type == TYPE_CONS_PAIR
@@ -29084,11 +29098,9 @@ builtin_fdefinition (struct object *list, struct environment *env,
 
   s = CAR (list);
 
-  if (s->type != TYPE_SYMBOL_NAME && s->type != TYPE_SYMBOL
-      && !(s->type == TYPE_CONS_PAIR && list_length (s) == 2
-	   && SYMBOL (CAR (s)) == env->setf_sym && IS_SYMBOL (CAR (CDR (s)))))
+  if (!IS_FUNCTION_NAME (s))
     {
-      return raise_type_error (s, "CL:SYMBOL", env, outcome);
+      return raise_type_error (s, "CL-USER:AL-FUNCTION-NAME", env, outcome);
     }
 
   ret = get_function (IS_SYMBOL (s) ? SYMBOL (s) : SYMBOL (CAR (CDR (s))), env,
@@ -29266,13 +29278,10 @@ builtin_fmakunbound (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (!IS_SYMBOL (CAR (list))
-      && !(CAR (list)->type == TYPE_CONS_PAIR && list_length (CAR (list)) == 2
-	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
+  if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+			       outcome);
     }
 
   sym = CAR (list)->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (CAR (list))))
@@ -29537,14 +29546,10 @@ builtin_compiler_macro_function (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (!IS_SYMBOL (CAR (list))
-      && !(CAR (list)->type == TYPE_CONS_PAIR
-	   && list_length (CAR (list)) == 2
-	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
+  if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+			       outcome);
     }
 
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
@@ -32125,6 +32130,28 @@ is_macro (struct object *sym, struct environment *env)
   struct object *fun = get_function (sym, env, 0, 0, 0, 0, &ismac);
 
   return fun && ismac && !fun->value_ptr.function->builtin_form;
+}
+
+
+struct object *
+inspect_function_by_function_name (struct object *name, int only_globals,
+				   struct environment *env,
+				   struct outcome *outcome)
+{
+  struct object *fun;
+  int ismac;
+
+  if (!IS_FUNCTION_NAME (name))
+    return raise_type_error (name, "CL-USER:AL-FUNCTION-NAME", env, outcome);
+
+  fun = get_function (name->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (name)))
+		      : SYMBOL (name), env, 1, name->type == TYPE_CONS_PAIR,
+		      only_globals, 0, &ismac);
+
+  if (!fun)
+    return raise_undefined_function (name, env, outcome);
+
+  return fun;
 }
 
 
@@ -34797,14 +34824,10 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
-  if (!IS_SYMBOL (CAR (list))
-      && !(CAR (list)->type == TYPE_CONS_PAIR
-	   && list_length (CAR (list)) == 2
-	   && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	   && IS_SYMBOL (CAR (CDR (CAR (list))))))
+  if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+			       outcome);
     }
 
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
@@ -34967,16 +34990,17 @@ builtin_al_create_method (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
-  if ((!IS_SYMBOL (CAR (list))
-       && !(CAR (list)->type == TYPE_CONS_PAIR
-	    && list_length (CAR (list)) == 2
-	    && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	    && IS_SYMBOL (CAR (CDR (CAR (list))))))
-      || (!IS_SYMBOL (CAR (CDR (list)))
-	  && CAR (CDR (list))->type != TYPE_CONS_PAIR))
+  if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+			       outcome);
+    }
+
+  if (!IS_SYMBOL (CAR (CDR (list)))
+      && CAR (CDR (list))->type != TYPE_CONS_PAIR)
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:SYMBOL CL:CONS)", env,
+			       outcome);
     }
 
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
@@ -36351,15 +36375,15 @@ evaluate_define_compiler_macro (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
-  if ((!IS_SYMBOL (CAR (list))
-       && !(CAR (list)->type == TYPE_CONS_PAIR
-	    && list_length (CAR (list)) == 2
-	    && SYMBOL (CAR (CAR (list))) == env->setf_sym
-	    && IS_SYMBOL (CAR (CDR (CAR (list))))))
-      || !IS_LIST (CAR (CDR (list))))
+  if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+			       outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
     }
 
   sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
@@ -36480,7 +36504,6 @@ builtin_trace (struct object *list, struct environment *env,
 {
   struct object *ret = &nil_object, *cons, *fun;
   struct object_list *l;
-  int ismac;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -36503,18 +36526,8 @@ builtin_trace (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if ((!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
-					&& list_length (CAR (list)) == 2
-					&& SYMBOL (CAR (CAR (list))) == env->setf_sym
-					&& IS_SYMBOL (CAR (CDR (CAR (list))))))
-	  || !(fun = get_function (CAR (list)->type == TYPE_CONS_PAIR
-				   ? SYMBOL (CAR (CDR (CAR (list))))
-				   : SYMBOL (CAR (list)), env, 1,
-				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0, &ismac)))
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
+      if (!(fun = inspect_function_by_function_name (CAR (list), 0, env, outcome)))
+	return NULL;
 
       if (!(fun->value_ptr.function->flags & TRACED_FUNCTION))
 	{
@@ -36539,7 +36552,6 @@ builtin_untrace (struct object *list, struct environment *env,
 {
   struct object *fun;
   struct object_list *l, *prev = NULL;
-  int ismac;
 
   if (SYMBOL (list) == &nil_object)
     {
@@ -36556,18 +36568,8 @@ builtin_untrace (struct object *list, struct environment *env,
 
   while (SYMBOL (list) != &nil_object)
     {
-      if ((!IS_SYMBOL (CAR (list)) && !(CAR (list)->type == TYPE_CONS_PAIR
-					&& list_length (CAR (list)) == 2
-					&& SYMBOL (CAR (CAR (list))) == env->setf_sym
-					&& IS_SYMBOL (CAR (CDR (CAR (list))))))
-	  || !(fun = get_function (CAR (list)->type == TYPE_CONS_PAIR
-				   ? SYMBOL (CAR (CDR (CAR (list))))
-				   : SYMBOL (CAR (list)), env, 1,
-				   CAR (list)->type == TYPE_CONS_PAIR, 0, 0, &ismac)))
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
+      if (!(fun = inspect_function_by_function_name (CAR (list), 0, env, outcome)))
+	return NULL;
 
       if (fun->value_ptr.function->flags & TRACED_FUNCTION)
 	{
