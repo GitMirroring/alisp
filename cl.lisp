@@ -3413,6 +3413,34 @@
 
 
 
+(defparameter cl-user::*al-expand-compiler-macros* t)
+(export 'cl-user::*al-expand-compiler-macros* 'cl-user)
+
+
+(defparameter cl-user::*al-compiler-macro-registry* (make-hash-table :test 'equal))
+(export 'cl-user::*al-compiler-macro-registry* 'cl-user)
+
+
+(defun compiler-macro-function (name)
+  (values (gethash name cl-user:*al-compiler-macro-registry*)))
+
+
+(defun (setf compiler-macro-function) (newval name)
+  (setf (gethash name cl-user:*al-compiler-macro-registry*) newval))
+
+
+(defmacro define-compiler-macro (name lambdal &body body)
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (progn
+       (setf (compiler-macro-function ',name)
+	     (lambda (form env)
+	       (cl-user:al-with-macro-arguments ,lambdal
+						env form
+						. ,body)))
+       ',name)))
+
+
+
 (defmacro with-compilation-unit (opts &rest forms)
   `(progn
      ,@forms))
@@ -3427,6 +3455,13 @@
 
 
 (defun macroexpand-form-deeply (form)
+  (if (and
+       cl-user:*al-expand-compiler-macros*
+       (consp form)
+       (symbolp (car form)))
+      (let ((compmac (compiler-macro-function (car form))))
+	(if compmac
+	    (setq form (funcall compmac form nil)))))
   (setq form (macroexpand form))
   (cond
     ((atom form) form)
@@ -3801,11 +3836,12 @@
            with-accessors with-package-iterator with-hash-table-iterator loop
            loop-finish format formatter encode-universal-time
            decode-universal-time get-universal-time *readtable*
-           with-compilation-unit *compile-file-truename* *compile-file-pathname*
-           *compile-print* *compile-verbose* compile-file-pathname compile-file
-           compile with-standard-io-syntax handler-case restart-case
-           with-simple-restart find-restart cerror break ignore-errors abort
-           continue muffle-warning documentation))
+           compiler-macro-function define-compiler-macro with-compilation-unit
+           *compile-file-truename* *compile-file-pathname* *compile-print*
+           *compile-verbose* compile-file-pathname compile-file compile
+           with-standard-io-syntax handler-case restart-case with-simple-restart
+           find-restart cerror break ignore-errors abort continue muffle-warning
+           documentation))
   (export sym)
   (if (fboundp sym)
       (compile sym)))

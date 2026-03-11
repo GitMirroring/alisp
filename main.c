@@ -666,19 +666,6 @@ string
 };
 
 
-struct
-compiler_macro
-{
-  struct object *name;
-
-  struct object *macro;
-
-  int is_setf;
-
-  struct compiler_macro *next;
-};
-
-
 enum
 stepping_flags
   {
@@ -754,8 +741,6 @@ environment
   struct handler_binding_frame *handlers;
 
   struct restart_binding *restarts;
-
-  struct compiler_macro *compiler_macros;
 
 
   int stack_depth;
@@ -2872,9 +2857,6 @@ struct object *builtin_macroexpand_1 (struct object *list,
 struct object *builtin_macro_function (struct object *list,
 				       struct environment *env,
 				       struct outcome *outcome);
-struct object *builtin_compiler_macro_function (struct object *list,
-						struct environment *env,
-						struct outcome *outcome);
 struct object *builtin_string (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 /*struct object *builtin_string_eq (struct object *list, struct environment *env,
@@ -3172,9 +3154,6 @@ struct object *builtin_warn
 struct object *evaluate_define_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_condition
-(struct object *list, struct environment *env, struct outcome *outcome);
-
-struct object *evaluate_define_compiler_macro
 (struct object *list, struct environment *env, struct outcome *outcome);
 
 struct object *builtin_room
@@ -4244,8 +4223,6 @@ add_standard_definitions (struct environment *env)
 		    1, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, 0,
 		    NULL, 0);
-  add_builtin_form ("DEFINE-COMPILER-MACRO", env, evaluate_define_compiler_macro,
-		    1, NULL, 0);
   add_builtin_form ("ROOM", env, builtin_room, 0, NULL, 0);
   add_builtin_form ("TRACE", env, builtin_trace, 1, NULL, 0);
   add_builtin_form ("UNTRACE", env, builtin_untrace, 1, NULL, 0);
@@ -4299,8 +4276,6 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("MACRO-FUNCTION", env, builtin_macro_function, 0,
 		    builtin_setf_macro_function, 0);
-  add_builtin_form ("COMPILER-MACRO-FUNCTION", env,
-		    builtin_compiler_macro_function, 0, NULL, 0);
   add_builtin_form ("STRING", env, builtin_string, 0, NULL, 0);
   /*add_builtin_form ("STRING=", env, builtin_string_eq, 0, NULL, 0);*/
   add_builtin_form ("CHAR=", env, builtin_char_eq, 0, NULL, 0);
@@ -29535,46 +29510,6 @@ builtin_macro_function (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_compiler_macro_function (struct object *list, struct environment *env,
-				 struct outcome *outcome)
-{
-  struct object *sym;
-  struct compiler_macro *cm;
-
-  if (list_length (list) != 1)
-    {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-    }
-
-  if (!IS_FUNCTION_NAME (CAR (list)))
-    {
-      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
-			       outcome);
-    }
-
-  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
-    : SYMBOL (CAR (CDR (CAR (list))));
-
-
-  cm = env->compiler_macros;
-
-  while (cm)
-    {
-      if (cm->name == sym && cm->is_setf == (CAR (list)->type == TYPE_CONS_PAIR))
-	break;
-
-      cm = cm->next;
-    }
-
-  if (!cm)
-    return &nil_object;
-
-  increment_refcount (cm->macro);
-  return cm->macro;
-}
-
-
-struct object *
 builtin_string (struct object *list, struct environment *env,
 		struct outcome *outcome)
 {
@@ -36359,104 +36294,6 @@ builtin_make_condition (struct object *list, struct environment *env,
   allocate_object_fields (ret, class);
 
   return fill_object_fields (ret, class, CDR (list), env, outcome);
-}
-
-
-struct object *
-evaluate_define_compiler_macro (struct object *list, struct environment *env,
-				struct outcome *outcome)
-{
-  struct object *mac, *sym, *ret, *lambdal, *body;
-  struct compiler_macro *cm;
-  const char *objb, *obje;
-
-  if (list_length (list) < 2)
-    {
-      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
-    }
-
-  if (!IS_FUNCTION_NAME (CAR (list)))
-    {
-      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
-			       outcome);
-    }
-
-  if (!IS_LIST (CAR (CDR (list))))
-    {
-      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
-    }
-
-  sym = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
-    : SYMBOL (CAR (CDR (CAR (list))));
-
-  lambdal = NULL;
-  read_object (&lambdal, 0, STRING_COMMA_LEN ("(cl::form cl::env)"), NULL,
-	       0, 0, env, outcome, &objb, &obje);
-
-  body = NULL;
-  read_object (&body, 0,
-	       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil cl::env "
-				 "cl::form))"),
-	       NULL, 0, 0, env, outcome, &objb, &obje);
-
-  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
-    value_ptr.cons_pair->car = CAR (CDR (list));
-  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr,
-		 CAR (CDR (list)), 0);
-
-  body->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
-    value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr
-    = CDR (CDR (list));
-  add_reference (body->value_ptr.cons_pair->car->value_ptr.cons_pair->
-		 cdr->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr,
-		 CDR (CDR (list)), 1);
-
-  mac = create_function (lambdal, body, env, outcome, 0, 0, 0);
-  decrement_refcount (lambdal);
-  decrement_refcount (body);
-
-
-  cm = env->compiler_macros;
-
-  while (cm)
-    {
-      if (cm->name == sym && cm->is_setf == (CAR (list)->type == TYPE_CONS_PAIR))
-	break;
-
-      cm = cm->next;
-    }
-
-  if (!cm)
-    {
-      cm = malloc_and_check (sizeof (*cm));
-      cm->name = sym;
-      cm->is_setf = CAR (list)->type == TYPE_CONS_PAIR;
-      cm->next = env->compiler_macros;
-      env->compiler_macros = cm;
-    }
-  else
-    decrement_refcount (cm->macro);
-
-  cm->macro = mac;
-
-  if (CAR (list)->type == TYPE_CONS_PAIR)
-    {
-      ret = alloc_empty_cons_pair ();
-
-      ret->value_ptr.cons_pair->car = env->setf_sym;
-      add_reference (ret, CAR (ret), 0);
-
-      ret->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr = &nil_object;
-
-      ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = sym;
-      add_reference (CDR (ret), CAR (CDR (ret)), 0);
-
-      return ret;
-    }
-
-  increment_refcount (sym);
-  return sym;
 }
 
 
