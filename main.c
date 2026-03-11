@@ -10404,6 +10404,11 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 									outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
 
 	  if (initform)
 	    {
@@ -10421,6 +10426,11 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 		(env, outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
 
 	  l = malloc_and_check (sizeof (*l));
 	  l->obj = CAR (CDR (fieldform));
@@ -10434,6 +10444,11 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	    {
 	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
 		(env, outcome);
+	      return NULL;
+	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
 	      return NULL;
 	    }
 
@@ -10491,6 +10506,12 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 		(env, outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
 
 	  if (!IS_FUNCTION_NAME (CAR (CDR (fieldform))))
 	    {
@@ -10554,6 +10575,12 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 		(env, outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
 
 	  if (!IS_SYMBOL (CAR (CDR (fieldform))))
 	    {
@@ -10649,6 +10676,12 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 		(env, outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
 
 	  if (alloctype != UNKNOWN_ALLOCATION)
 	    {
@@ -10674,6 +10707,12 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 		(env, outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
 
 	  if (CAR (CDR (fieldform))->type != TYPE_STRING)
 	    {
@@ -10689,6 +10728,12 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 		(env, outcome);
 	      return NULL;
 	    }
+	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
+	    {
+	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
 	}
       else
 	{
@@ -10697,6 +10742,12 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	}
 
       fieldform = CDR (CDR (fieldform));
+
+      if (!IS_LIST (fieldform))
+	{
+	  raise_type_error (fieldform, "CL:LIST", env, outcome);
+	  return NULL;
+	}
     }
 
   ret = malloc_and_check (sizeof (*ret));
@@ -10773,7 +10824,7 @@ define_class (struct object *name, struct object *form, int is_condition_class,
   sc->parents = NULL;
   cons = CAR (form);
 
-  while (SYMBOL (cons) != &nil_object)
+  while (cons->type == TYPE_CONS_PAIR)
     {
       if (!IS_SYMBOL (CAR (cons)) || SYMBOL (CAR (cons)) == &nil_object)
 	{
@@ -10790,6 +10841,9 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 
       cons = CDR (cons);
     }
+
+  if (SYMBOL (cons) != &nil_object)
+    return raise_type_error (cons, "CL:LIST", env, outcome);
 
   if (sc->parents)
     {
@@ -10808,7 +10862,7 @@ define_class (struct object *name, struct object *form, int is_condition_class,
   sc->fields = NULL;
   form = CAR (CDR (form));
 
-  while (SYMBOL (form) != &nil_object)
+  while (form->type == TYPE_CONS_PAIR)
     {
       f = create_class_field_decl (class, CAR (form), env, outcome);
 
@@ -10822,6 +10876,9 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 
       form = CDR (form);
     }
+
+  if (SYMBOL (form) != &nil_object)
+    return raise_type_error (form, "CL:LIST", env, outcome);
 
   return class;
 }
@@ -10936,7 +10993,7 @@ fill_object_fields_by_initargs (struct object *stdobj, struct object *class,
       f = f->next;
     }
 
-  while (SYMBOL (initargs) != &nil_object)
+  while (initargs->type == TYPE_CONS_PAIR)
     {
       if (!(f = find_object_field_by_initarg (stdobj, CAR (initargs))))
 	{
@@ -10948,6 +11005,11 @@ fill_object_fields_by_initargs (struct object *stdobj, struct object *class,
 	{
 	  raise_al_odd_number_of_arguments_in_keyword_part_of_form
 	    (env, outcome);
+	  return NULL;
+	}
+      else if (CDR (initargs)->type != TYPE_CONS_PAIR)
+	{
+	  raise_type_error (CDR (initargs), "CL:CONS", env, outcome);
 	  return NULL;
 	}
 
@@ -10970,6 +11032,9 @@ fill_object_fields_by_initargs (struct object *stdobj, struct object *class,
       f->found_key = 1;
       initargs = CDR (CDR (initargs));
     }
+
+  if (SYMBOL (initargs) != &nil_object)
+    return raise_type_error (initargs, "CL:LIST", env, outcome);
 
   return stdobj;
 }
@@ -11632,7 +11697,7 @@ collect_go_tags (struct object *body, struct go_tag_frame *stack,
 
   *found_tags = 0;
 
-  while (SYMBOL (body) != &nil_object)
+  while (body->type == TYPE_CONS_PAIR)
     {
       car = CAR (body);
 
@@ -14984,7 +15049,7 @@ parse_declaration_specifier (struct object *spec, int is_local,
     {
       sym = BUILTIN_SYMBOL ("FUNCTION");
 
-      while (SYMBOL (form) != &nil_object)
+      while (form->type == TYPE_CONS_PAIR)
 	{
 	  if (!IS_SYMBOL (CAR (form))
 	      && (CAR (form)->type != TYPE_CONS_PAIR
@@ -14997,13 +15062,19 @@ parse_declaration_specifier (struct object *spec, int is_local,
 	    }
 
 	  form = CDR (form);
+	}
+
+      if (SYMBOL (form) != &nil_object)
+	{
+	  raise_type_error (form, "CL:LIST", env, outcome);
+	  return 0;
 	}
     }
   else if (declid == env->inline_sym || declid == env->notinline_sym)
     {
       sym = BUILTIN_SYMBOL ("SETF");
 
-      while (SYMBOL (form) != &nil_object)
+      while (form->type == TYPE_CONS_PAIR)
 	{
 	  if (!IS_SYMBOL (CAR (form))
 	      && (CAR (form)->type != TYPE_CONS_PAIR
@@ -15017,10 +15088,16 @@ parse_declaration_specifier (struct object *spec, int is_local,
 
 	  form = CDR (form);
 	}
+
+      if (SYMBOL (form) != &nil_object)
+	{
+	  raise_type_error (form, "CL:LIST", env, outcome);
+	  return 0;
+	}
     }
   else if (declid == env->optimize_sym)
     {
-      while (SYMBOL (form) != &nil_object)
+      while (form->type == TYPE_CONS_PAIR)
 	{
 	  if (IS_SYMBOL (CAR (form)))
 	    {
@@ -15061,10 +15138,16 @@ parse_declaration_specifier (struct object *spec, int is_local,
 
 	  form = CDR (form);
 	}
+
+      if (SYMBOL (form) != &nil_object)
+	{
+	  raise_type_error (form, "CL:LIST", env, outcome);
+	  return 0;
+	}
     }
   else if (declid == env->special_sym)
     {
-      while (SYMBOL (form) != &nil_object)
+      while (form->type == TYPE_CONS_PAIR)
 	{
 	  if (!IS_SYMBOL (CAR (form)))
 	    {
@@ -15103,12 +15186,18 @@ parse_declaration_specifier (struct object *spec, int is_local,
 
 	  form = CDR (form);
 	}
+
+      if (SYMBOL (form) != &nil_object)
+	{
+	  raise_type_error (form, "CL:LIST", env, outcome);
+	  return 0;
+	}
     }
   else if (declid == env->type_sym)
     {
       form = CDR (form);
 
-      while (SYMBOL (form) != &nil_object)
+      while (form->type == TYPE_CONS_PAIR)
 	{
 	  if (!IS_SYMBOL (CAR (form)))
 	    {
@@ -15118,12 +15207,18 @@ parse_declaration_specifier (struct object *spec, int is_local,
 
 	  form = CDR (form);
 	}
+
+      if (SYMBOL (form) != &nil_object)
+	{
+	  raise_type_error (form, "CL:LIST", env, outcome);
+	  return 0;
+	}
     }
   else if (declid == env->ftype_sym)
     {
       form = CDR (form);
 
-      while (SYMBOL (form) != &nil_object)
+      while (form->type == TYPE_CONS_PAIR)
 	{
 	  if (!IS_SYMBOL (CAR (form)))
 	    {
@@ -15132,6 +15227,12 @@ parse_declaration_specifier (struct object *spec, int is_local,
 	    }
 
 	  form = CDR (form);
+	}
+
+      if (SYMBOL (form) != &nil_object)
+	{
+	  raise_type_error (form, "CL:LIST", env, outcome);
+	  return 0;
 	}
     }
   else if (declid != env->dynamic_extent_sym)
@@ -15153,7 +15254,7 @@ parse_declarations (struct object *body, struct environment *env, int bin_num,
 
   *next = body;
 
-  while (SYMBOL (*next) != &nil_object)
+  while ((*next)->type == TYPE_CONS_PAIR)
     {
       if (allow_docstring && CAR (*next)->type == TYPE_STRING
 	  && SYMBOL (CDR (*next)) != &nil_object)
@@ -15180,6 +15281,12 @@ parse_declarations (struct object *body, struct environment *env, int bin_num,
 	  forms = CDR (forms);
 	}
 
+      if (SYMBOL (forms) != &nil_object)
+	{
+	  raise_type_error (forms, "CL:LIST", env, outcome);
+	  return 0;
+	}
+
       *next = CDR (*next);
     }
 
@@ -15193,7 +15300,7 @@ undo_special_declarations (struct object *decl, struct environment *env)
   struct object *forms, *vars;
   int found_string = 0;
 
-  while (SYMBOL (decl) != &nil_object
+  while (decl->type == TYPE_CONS_PAIR
 	 && ((CAR (decl)->type == TYPE_CONS_PAIR
 	      && SYMBOL (CAR (CAR (decl))) == env->declare_sym)
 	     || (!found_string && CAR (decl)->type == TYPE_STRING)))
@@ -15213,7 +15320,7 @@ undo_special_declarations (struct object *decl, struct environment *env)
 	    {
 	      vars = CDR (CAR (forms));
 
-	      while (SYMBOL (vars) != &nil_object)
+	      while (vars->type == TYPE_CONS_PAIR)
 		{
 		  SYMBOL (CAR (vars))->value_ptr.symbol->is_special--;
 
@@ -15251,7 +15358,7 @@ evaluate_body (struct object *body, int parse_decls, int is_tagbody,
   if (block_name)
     env->blocks = add_block (block_name, env->blocks);
 
-  while (SYMBOL (body) != &nil_object)
+  while (body->type == TYPE_CONS_PAIR)
     {
       decrement_refcount (res);
       res = &nil_object;
@@ -15308,6 +15415,12 @@ evaluate_body (struct object *body, int parse_decls, int is_tagbody,
       else
 	body = CDR (body);
 
+    }
+
+  if (SYMBOL (body) != &nil_object)
+    {
+      raise_type_error (body, "CL:LIST", env, outcome);
+      res = NULL;
     }
 
  cleanup_and_leave:
