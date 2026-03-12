@@ -11,6 +11,37 @@ Some notes on design choices, portability and ANSI conformance of alisp.
 
 
 
+__Index__
+
+- Floating point arithmetic
+- Type checking
+- Stack overflows
+- Builtin functions and macros
+- alisp extensions
+- Literal objects
+- Setting an undefined variable
+- Arrays
+- Structures
+- Pathnames
+- File operations
+- Streams
+- Language of implementation
+- Loading cl.lisp
+- Using ASDF
+- Number bases
+- Character encoding
+- Garbage collection
+- The ROOM function
+- Profiling
+- Compilation
+- Compiler macros
+- Error reporting
+- Debugging
+- Watchpoints
+- Minor details
+
+
+
 __Floating point arithmetic__
 
 The four floating-point types of ANSI CL are all the same type and map to native
