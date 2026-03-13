@@ -14291,7 +14291,7 @@ parse_optional_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && SYMBOL (obj) != &nil_object)
+  while (obj && obj->type == TYPE_CONS_PAIR)
     {
       car = CAR (obj);
 
@@ -14407,7 +14407,7 @@ parse_keyword_parameters (struct object *obj, struct parameter **last,
 
   *last = NULL;
 
-  while (obj && SYMBOL (obj) != &nil_object)
+  while (obj && obj->type == TYPE_CONS_PAIR)
     {
       car = CAR (obj);
 
@@ -14597,7 +14597,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && (car = CAR (obj))
       && SYMBOL (car) == env->amp_whole_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14622,7 +14622,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_environment_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14650,7 +14650,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_environment_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14681,7 +14681,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_environment_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14763,7 +14763,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_environment_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14810,7 +14810,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_environment_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -14826,7 +14826,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
     {
       obj = CDR (obj);
 
-      while (obj && SYMBOL (obj) != &nil_object)
+      while (obj && obj->type == TYPE_CONS_PAIR)
 	{
 	  car = CAR (obj);
 
@@ -14901,7 +14901,7 @@ parse_lambda_list (struct object *obj, int allow_destructuring,
   if (allow_destructuring && obj->type == TYPE_CONS_PAIR && (car = CAR (obj))
       && SYMBOL (car) == env->amp_environment_sym)
     {
-      if ((SYMBOL (CDR (obj)) == &nil_object || !IS_SYMBOL (CAR (CDR (obj)))))
+      if (CDR (obj)->type != TYPE_CONS_PAIR || !IS_SYMBOL (CAR (CDR (obj))))
 	{
 	  outcome->type = INVALID_LAMBDA_LIST;
 	  return NULL;
@@ -15465,10 +15465,17 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       par = par->next;
     }
 
+  if (!IS_LIST (arglist))
+    {
+      remove_bindings (*bins, *argsnum, 0);
+      raise_type_error (arglist, "CL:LIST", env, outcome);
+      return 0;
+    }
+
   if (also_pass_name && SYMBOL (arglist) != &nil_object)
     arglist = CDR (arglist);
 
-  while (SYMBOL (arglist) != &nil_object && par
+  while (arglist->type == TYPE_CONS_PAIR && par
 	 && (par->type == REQUIRED_PARAM || par->type == OPTIONAL_PARAM))
     {
       if (par->type == REQUIRED_PARAM)
@@ -15530,6 +15537,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
       par = par->next;
 
       arglist = CDR (arglist);
+    }
+
+  if (!IS_LIST (arglist))
+    {
+      remove_bindings (*bins, *argsnum, 0);
+      raise_type_error (arglist, "CL:LIST", env, outcome);
+      return 0;
     }
 
   if ((par && par->type == REQUIRED_PARAM)
@@ -15625,7 +15639,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	  findk = findk->next;
 	}
 
-      while (SYMBOL (as) != &nil_object)
+      while (as->type == TYPE_CONS_PAIR)
 	{
 	  findk = par;
 
@@ -15639,6 +15653,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!findk || findk->type != KEYWORD_PARAM)
 	    {
+	      if (!IS_LIST (CDR (as)))
+		{
+		  remove_bindings (*bins, *argsnum, 0);
+		  raise_type_error (CDR (as), "CL:CONS", env, outcome);
+		  return 0;
+		}
+
 	      if (SYMBOL (CDR (as)) == &nil_object)
 		{
 		  remove_bindings (*bins, *argsnum, 0);
@@ -15660,6 +15681,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	    }
 
 	  as = CDR (as);
+
+	  if (!IS_LIST (as))
+	    {
+	      remove_bindings (*bins, *argsnum, 0);
+	      raise_type_error (as, "CL:CONS", env, outcome);
+	      return 0;
+	    }
 
 	  if (SYMBOL (as) == &nil_object)
 	    {
@@ -15686,6 +15714,13 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  as = CDR (as);
 	}
+    }
+
+  if (!IS_LIST (arglist))
+    {
+      remove_bindings (*bins, *argsnum, 0);
+      raise_type_error (arglist, "CL:LIST", env, outcome);
+      return 0;
     }
 
   if (args && !rest_found)
@@ -18903,7 +18938,7 @@ evaluate_through_list (struct object *list, struct environment *env,
 {
   struct object *args = NULL, *cons, *last_cons, *obj;
 
-  while (SYMBOL (list) != &nil_object)
+  while (list->type == TYPE_CONS_PAIR)
     {
       obj = evaluate_object (CAR (list), env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
@@ -18933,7 +18968,8 @@ evaluate_through_list (struct object *list, struct environment *env,
   if (!args)
     return &nil_object;
 
-  last_cons->value_ptr.cons_pair->cdr = &nil_object;
+  last_cons->value_ptr.cons_pair->cdr = list;
+  add_reference (last_cons, list, 1);
 
   return args;
 }
