@@ -33,20 +33,22 @@ __Index__
 - Garbage collection
 - The ROOM function
 - Profiling
+- Environment objects
 - Compilation
 - Compiler macros
 - Error reporting
 - Debugging
 - Watchpoints
+- Known bugs and limitations
 - Minor details
 
 
 
 __Floating point arithmetic__
 
-The four floating-point types of ANSI CL are all the same type and map to native
-C double.  This is allowed by ANSI and was done as a quick implementation
-strategy.  Of course, it may change in the future.
+The four floating-point types of ANSI CL are all the same type in alisp and map
+to native C double.  This is allowed by ANSI and was done as a quick
+implementation strategy.  Of course, it may change in the future.
 
 
 
@@ -67,7 +69,7 @@ __Stack overflows__
 
 As a protection against stack overflows in lisp code, al has a limit on stack
 depth set by the LISP_STACK_SIZE macro in C.  If that limit is reached, the
-interpreter will print an error message and abort to top level.
+interpreter will signal a condition.
 
 
 
@@ -92,8 +94,9 @@ Be careful, you can easily make your image unusable this way.
 
 __alisp extensions__
 
-al has a small number of non-standard builtins; they are interned in the CL-USER
-package.  There are also some non-standard extensions of standard functions.
+al has many non-standard builtins and variables; their names are interned in the
+CL-USER package.  There are also some non-standard extensions of standard
+functions.
 
 - *AL-ARGC* (an integer) and *AL-ARGV* (a vector of strings) let you access argc
   and argv of C, respectively, so they contain the number and value of
@@ -129,10 +132,6 @@ package.  There are also some non-standard extensions of standard functions.
 - the standard function MAKE-STRING-OUTPUT-STREAM takes an optional string
   argument; if provided, writing operations append to the string, also
   respecting the fill pointer if present
-
-- the types AL-BACKQUOTE, AL-COMMA, AL-AT and AL-DOT represent the respective
-  elements in backquote notation.  You can call the AL-NEXT function to reach
-  the next element when traversing them
 
 - the variable *AL-COMPILE-WHEN-DEFINING* is described in "Compilation"
 
@@ -220,6 +219,39 @@ package.  There are also some non-standard extensions of standard functions.
 
 - the functions AL-START-PROFILING, AL-STOP-PROFILING, AL-CLEAR-PROFILING and
   AL-REPORT-PROFILING govern the profiler, see "Profiling".
+
+
+alisp has the following non-standard types:
+
+- AL-FUNCTION-NAME is a function name as defined by ANSI, that is a symbol or a
+  list made by CL:SETF and a symbol
+
+- AL-COMPILED-METHOD is a subtype of METHOD and represents a compiled method
+
+- the types AL-BACKQUOTE, AL-COMMA, AL-AT and AL-DOT represent the respective
+  elements in backquote notation.  You can call the AL-NEXT function to reach
+  the next element when traversing them
+
+
+alisp defines these non-standard conditions:
+
+- AL-MAXIMUM-STACK-DEPTH-EXCEEDED derives from PROGRAM-ERROR and is raised when
+  the stack depth of lisp code exceeds the limit.  The MAX-DEPTH slot holds that
+  limit
+
+- AL-WRONG-NUMBER-OF-ARGUMENTS derives from PROGRAM-ERROR and is raised when a
+  function gets the wrong number of arguments.  The minimum and maximum number
+  of accepted arguments are in the slots MIN-ARGS and MAX-ARGS respectively
+
+- AL-UNKNOWN-KEYWORD-ARGUMENT derives from PROGRAM-ERROR and is raised when a
+  function gets an unknown keyword argument
+
+- AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM derives from PROGRAM-ERROR
+  and is raised when a function with keyword arguments receives an odd number of
+  arguments in the keyword part of the form
+
+- AL-INVALID-FORM derives from PROGRAM-ERROR and is raised when you attempt
+  evaluating an invalid form; the form itself is stored in the FORM slot
 
 
 
@@ -404,9 +436,17 @@ Keep in mind that, when a function calls itself directly or indirectly, the time
 spent in the inner invocation is counted twice, so the last number is often more
 useful than the second one.
 
-The profiler has a few limitations: structure constructor and accessors,
-condition readers, functions obtained as macro functions and macros defined with
-macro functions are not tracked.
+The profiler has a few limitations: structure constructor and accessors, and
+condition readers, are not tracked.
+
+
+
+__Environment objects__
+
+In alisp, environment objects are a list with a particular structure.  Since
+environments are not used often and mostly at compile time, I didn't feel the
+need for a more specialized and efficient representation.  As an added benefit,
+using a list makes these objects very easy to inspect and modify.
 
 
 
@@ -428,8 +468,11 @@ the function macro-expanded.
 
 __Compiler macros__
 
-Definitions of compiler macros are registered, but compiler macros are never
-expanded.
+Definitions of compiler macros are stored in
+CL-USER:*AL-COMPILER-MACRO-REGISTRY*, an EQUAL hash table indexed by macro name.
+
+Compiler macros are expanded when compiling, only if
+CL-USER:*AL-EXPAND-COMPILER-MACROS* is non-nil.
 
 
 
@@ -487,6 +530,16 @@ AL-UNWATCH untoggles watching on its argument.
 
 When a watched object is modified in any field or a watched hash table has an
 object added or removed or is cleared, the debugger is entered.
+
+
+
+__Known bugs and limitations__
+
+- Common Lisp requires CLOS objects to update their slots according to various
+  rules when their class is redefined.  This is not yet implemented in al, so
+  CLOS objects will just stick to their original definition
+
+- Definition and changing of reader macros is not yet implemented
 
 
 
