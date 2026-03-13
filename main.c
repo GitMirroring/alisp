@@ -2124,6 +2124,7 @@ struct object *nth (unsigned int ind, struct object *list);
 struct object *nthcdr (unsigned int ind, struct object *list);
 fixnum list_length (const struct object *list);
 struct object *last_cons_pair (struct object *list);
+struct object *last_cdr (struct object *list);
 int is_dotted_list (const struct object *list);
 int is_circular_list (struct object *list);
 int is_dotted_or_circular_list (struct object *list, int *is_circular);
@@ -2275,16 +2276,16 @@ int check_type (struct object *obj, struct object *typespec,
 int check_type_by_char_vector (struct object *obj, char *type,
 			       struct environment *env, struct outcome *outcome);
 int type_starts_with (const struct object *typespec, const struct object *sym);
-int is_subtype_by_char_vector (const struct object *first, char *second,
+int is_subtype_by_char_vector (struct object *first, char *second,
 			       struct environment *env);
-int is_descendant (const struct object *first, const struct object_list *parents,
-		   const struct object *second, const struct object *prev,
+int is_descendant (struct object *first, const struct object_list *parents,
+		   struct object *second, struct object *prev,
 		   struct environment *env);
-int is_subtype (const struct object *firstsp, const struct object *secondsp,
-		const struct object *prev, struct environment *env,
+int is_subtype (struct object *firstsp, struct object *secondsp,
+		struct object *prev, struct environment *env,
 		struct outcome *outcome);
 
-int evaluate_feature_test (const struct object *feat_test,
+int evaluate_feature_test (struct object *feat_test,
 			   struct environment *env, struct outcome *outcome);
 
 struct object *evaluate_object
@@ -13789,6 +13790,16 @@ last_cons_pair (struct object *list)
 }
 
 
+struct object *
+last_cdr (struct object *list)
+{
+  while (list->type == TYPE_CONS_PAIR)
+    list = CDR (list);
+
+  return list;
+}
+
+
 int
 is_dotted_list (const struct object *list)
 {
@@ -16102,7 +16113,7 @@ call_function (struct object *func, struct object *arglist,
   struct binding *bins;
   struct block_frame *f;
   struct go_tag_frame *prevf;
-  struct object *ret, *ret2, *args = NULL, *body, *funcbody;
+  struct object *ret, *ret2, *args = NULL, *body, *funcbody, *lastcdr;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
     && !(env->stepping_flags & STEPPING_OVER_FORM),
@@ -16126,6 +16137,11 @@ call_function (struct object *func, struct object *arglist,
 
   if (func->value_ptr.function->builtin_form)
     {
+      lastcdr = last_cdr (arglist);
+
+      if (SYMBOL (lastcdr) != &nil_object)
+	return raise_type_error (lastcdr, "CL:LIST", env, outcome);
+
       if (eval_args)
 	{
 	  args = evaluate_through_list (arglist, env, outcome);
@@ -16523,7 +16539,7 @@ call_structure_constructor (struct object *class_name, struct object *args,
     f->next = NULL;
 
 
-  while (SYMBOL (args) != &nil_object)
+  while (args->type == TYPE_CONS_PAIR)
     {
       f = s->fields;
 
@@ -16536,6 +16552,12 @@ call_structure_constructor (struct object *class_name, struct object *args,
 		     IS_SYMBOL (CAR (args))
 		     ? SYMBOL (CAR (args))->value_ptr.symbol->name_len : 0))
 	    {
+	      if (!IS_LIST (CDR (args)))
+		{
+		  raise_type_error (CDR (args), "CL:CONS", env, outcome);
+		  return NULL;
+		}
+
 	      if (SYMBOL (CDR (args)) == &nil_object)
 		{
 		  raise_al_odd_number_of_arguments_in_keyword_part_of_form
@@ -16557,6 +16579,12 @@ call_structure_constructor (struct object *class_name, struct object *args,
 
       if (SYMBOL (CAR (args)) == env->key_allow_other_keys_sym)
 	{
+	  if (!IS_LIST (CDR (args)))
+	    {
+	      raise_type_error (CDR (args), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
 	  if (SYMBOL (CDR (args)) == &nil_object)
 	    {
 	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
@@ -16573,6 +16601,12 @@ call_structure_constructor (struct object *class_name, struct object *args,
 	  found_unknown_key = 1;
 	}
 
+      if (!IS_LIST (CDR (args)))
+	{
+	  raise_type_error (CDR (args), "CL:CONS", env, outcome);
+	  return NULL;
+	}
+
       if (SYMBOL (CDR (args)) == &nil_object)
 	{
 	  raise_al_odd_number_of_arguments_in_keyword_part_of_form
@@ -16582,6 +16616,9 @@ call_structure_constructor (struct object *class_name, struct object *args,
 
       args = CDR (CDR (args));
     }
+
+  if (SYMBOL (args) != &nil_object)
+    return raise_type_error (args, "CL:LIST", env, outcome);
 
   if (found_unknown_key && (!allow_other_keys
 			    || SYMBOL (allow_other_keys) == &nil_object))
@@ -17832,7 +17869,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	}
       else if (sym == env->and_sym)
 	{
-	  while (SYMBOL (args) != &nil_object)
+	  while (args->type == TYPE_CONS_PAIR)
 	    {
 	      ret = check_type (obj, CAR (args), env, outcome);
 
@@ -17842,11 +17879,17 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	      args = CDR (args);
 	    }
 
+	  if (SYMBOL (args) != &nil_object)
+	    {
+	      raise_type_error (args, "CL:LIST", env, outcome);
+	      return -1;
+	    }
+
 	  return 1;
 	}
       else if (sym == env->or_sym)
 	{
-	  while (SYMBOL (args) != &nil_object)
+	  while (args->type == TYPE_CONS_PAIR)
 	    {
 	      ret = check_type (obj, CAR (args), env, outcome);
 
@@ -17856,11 +17899,17 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	      args = CDR (args);
 	    }
 
+	  if (SYMBOL (args) != &nil_object)
+	    {
+	      raise_type_error (args, "CL:LIST", env, outcome);
+	      return -1;
+	    }
+
 	  return 0;
 	}
       else if (sym == env->eql_sym)
 	{
-	  if (list_length (args) != 1)
+	  if (args->type != TYPE_CONS_PAIR || SYMBOL (CDR (args)) != &nil_object)
 	    {
 	      outcome->type = INVALID_TYPE_SPECIFIER;
 	      return -1;
@@ -17873,7 +17922,7 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	}
       else if (sym == env->member_sym)
 	{
-	  while (SYMBOL (args) != &nil_object)
+	  while (args->type == TYPE_CONS_PAIR)
 	    {
 	      if (eql_objects (CAR (args), obj) == &t_object)
 		return 1;
@@ -17881,11 +17930,17 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 	      args = CDR (args);
 	    }
 
+	  if (SYMBOL (args) != &nil_object)
+	    {
+	      raise_type_error (args, "CL:LIST", env, outcome);
+	      return -1;
+	    }
+
 	  return 0;
 	}
       else if (sym == env->satisfies_sym)
 	{
-	  if (list_length (args) != 1)
+	  if (args->type != TYPE_CONS_PAIR || SYMBOL (CDR (args)) != &nil_object)
 	    {
 	      outcome->type = INVALID_TYPE_SPECIFIER;
 	      return -1;
@@ -17997,7 +18052,7 @@ type_starts_with (const struct object *typespec, const struct object *sym)
 
 
 int
-is_subtype_by_char_vector (const struct object *first, char *second,
+is_subtype_by_char_vector (struct object *first, char *second,
 			   struct environment *env)
 {
   return is_subtype (first,
@@ -18009,8 +18064,8 @@ is_subtype_by_char_vector (const struct object *first, char *second,
 
 
 int
-is_descendant (const struct object *first, const struct object_list *parents,
-	       const struct object *second, const struct object *prev,
+is_descendant (struct object *first, const struct object_list *parents,
+	       struct object *second, struct object *prev,
 	       struct environment *env)
 {
   const struct object_list *p = parents;
@@ -18048,12 +18103,12 @@ is_descendant (const struct object *first, const struct object_list *parents,
 
 
 int
-is_subtype (const struct object *firstsp, const struct object *secondsp,
-	    const struct object *prev, struct environment *env,
+is_subtype (struct object *firstsp, struct object *secondsp,
+	    struct object *prev, struct environment *env,
 	    struct outcome *outcome)
 {
   struct object_list *p;
-  const struct object *firstsym, *secondsym, *first, *second;
+  struct object *firstsym, *secondsym, *first, *second;
   int ret;
 
   if (firstsp->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (firstsp)))
@@ -18151,7 +18206,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 	{
 	  first = CDR (first);
 
-	  while (SYMBOL (first) != &nil_object)
+	  while (first->type == TYPE_CONS_PAIR)
 	    {
 	      ret = is_subtype (CAR (first), second, NULL, env, outcome);
 
@@ -18161,6 +18216,12 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 	      first = CDR (first);
 	    }
 
+	  if (SYMBOL (first) != &nil_object)
+	    {
+	      raise_type_error (first, "CL:LIST", env, outcome);
+	      return -1;
+	    }
+
 	  return 1;
 	}
 
@@ -18168,7 +18229,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 	{
 	  first = CDR (first);
 
-	  while (SYMBOL (first) != &nil_object)
+	  while (first->type == TYPE_CONS_PAIR)
 	    {
 	      ret = is_subtype (CAR (first), second, NULL, env, outcome);
 
@@ -18176,6 +18237,12 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 		return ret;
 
 	      first = CDR (first);
+	    }
+
+	  if (SYMBOL (first) != &nil_object)
+	    {
+	      raise_type_error (first, "CL:LIST", env, outcome);
+	      return -1;
 	    }
 
 	  return -1;
@@ -18188,7 +18255,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 	{
 	  first = CDR (second);
 
-	  while (SYMBOL (second) != &nil_object)
+	  while (second->type == TYPE_CONS_PAIR)
 	    {
 	      ret = is_subtype (first, CAR (second), NULL, env, outcome);
 
@@ -18198,6 +18265,12 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 	      second = CDR (second);
 	    }
 
+	  if (SYMBOL (second) != &nil_object)
+	    {
+	      raise_type_error (second, "CL:LIST", env, outcome);
+	      return -1;
+	    }
+
 	  return -1;
 	}
 
@@ -18205,7 +18278,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 	{
 	  second = CDR (second);
 
-	  while (SYMBOL (second) != &nil_object)
+	  while (second->type == TYPE_CONS_PAIR)
 	    {
 	      ret = is_subtype (first, CAR (second), NULL, env, outcome);
 
@@ -18213,6 +18286,12 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 		return ret;
 
 	      second = CDR (second);
+	    }
+
+	  if (SYMBOL (second) != &nil_object)
+	    {
+	      raise_type_error (second, "CL:LIST", env, outcome);
+	      return -1;
 	    }
 
 	  return 1;
@@ -18224,7 +18303,7 @@ is_subtype (const struct object *firstsp, const struct object *secondsp,
 
 
 int
-evaluate_feature_test (const struct object *feat_test,
+evaluate_feature_test (struct object *feat_test,
 		       struct environment *env, struct outcome *outcome)
 {
   struct object *feat_list;
@@ -18234,12 +18313,18 @@ evaluate_feature_test (const struct object *feat_test,
     {
       feat_list = inspect_variable_by_c_string ("*FEATURES*", env);
 
-      while (SYMBOL (feat_list) != &nil_object)
+      while (feat_list->type == TYPE_CONS_PAIR)
 	{
 	  if (SYMBOL (CAR (feat_list)) == SYMBOL (feat_test))
 	    return 1;
 
 	  feat_list = CDR (feat_list);
+	}
+
+      if (SYMBOL (feat_list) != &nil_object)
+	{
+	  raise_type_error (feat_list, "CL:LIST", env, outcome);
+	  return -1;
 	}
 
       return 0;
@@ -18262,7 +18347,7 @@ evaluate_feature_test (const struct object *feat_test,
 	{
 	  feat_test = CDR (feat_test);
 
-	  while (SYMBOL (feat_test) != &nil_object)
+	  while (feat_test->type == TYPE_CONS_PAIR)
 	    {
 	      ret = evaluate_feature_test (CAR (feat_test), env, outcome);
 
@@ -18275,13 +18360,19 @@ evaluate_feature_test (const struct object *feat_test,
 	      feat_test = CDR (feat_test);
 	    }
 
+	  if (SYMBOL (feat_test) != &nil_object)
+	    {
+	      raise_type_error (feat_test, "CL:LIST", env, outcome);
+	      return -1;
+	    }
+
 	  return 1;
 	}
       else if (symbol_equals (CAR (feat_test), "OR", env))
 	{
 	  feat_test = CDR (feat_test);
 
-	  while (SYMBOL (feat_test) != &nil_object)
+	  while (feat_test->type == TYPE_CONS_PAIR)
 	    {
 	      ret = evaluate_feature_test (CAR (feat_test), env, outcome);
 
@@ -18292,6 +18383,12 @@ evaluate_feature_test (const struct object *feat_test,
 		return 1;
 
 	      feat_test = CDR (feat_test);
+	    }
+
+	  if (SYMBOL (feat_test) != &nil_object)
+	    {
+	      raise_type_error (feat_test, "CL:LIST", env, outcome);
+	      return -1;
 	    }
 
 	  return 0;
@@ -18888,13 +18985,6 @@ evaluate_list (struct object *list, struct environment *env,
 {
   struct object *sym = NULL, *fun, *ret;
   int ismac = 0;
-
-  if (is_dotted_list (list))
-    {
-      outcome->type = DOTTED_LIST_NOT_ALLOWED_HERE;
-
-      return NULL;
-    }
 
   if (IS_SYMBOL (CAR (list)))
     {
