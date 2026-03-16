@@ -1963,6 +1963,7 @@ struct binding *add_binding (struct binding *bin, struct binding *env);
 struct binding *chain_bindings (struct binding *bin, struct binding *env,
 				int increment_dyn_bin_count, int *num,
 				struct binding **last_bin);
+struct binding *remove_function_bindings (struct binding *env, int num);
 struct binding *remove_bindings (struct binding *env, int num,
 				 int decrement_dyn_bin_count);
 struct binding *find_binding (struct symbol *sym, struct binding *bins,
@@ -2204,8 +2205,10 @@ int destructure_tree (struct object *template, struct object *vals,
 		      struct binding **bins, int *binnum,
 		      struct outcome *outcome);
 
-void restore_lexical_environment (struct environment *env, struct binding *vars,
-				  struct binding *funcs, int *num_vars);
+void restore_lexical_variables (struct environment *env, struct binding *vars,
+				int *num_vars);
+void restore_lexical_functions (struct environment *env, struct binding *funcs,
+				int *num_funcs);
 
 struct object *build_environment_object (struct environment *env);
 
@@ -8847,8 +8850,11 @@ capture_lexical_environment (struct binding **lex_vars,
 {
   struct binding *bin, *b;
 
-  *lex_vars = NULL;
-  *lex_funcs = NULL;
+  if (lex_vars)
+    *lex_vars = NULL;
+
+  if (lex_funcs)
+    *lex_funcs = NULL;
 
   while (vars && var_num)
     {
@@ -11586,6 +11592,40 @@ chain_bindings (struct binding *bin, struct binding *env,
     *last_bin = last;
 
   return bin;
+}
+
+
+struct binding *
+remove_function_bindings (struct binding *env, int num)
+{
+  struct binding *b;
+
+  if (!num)
+    return env;
+
+  b = env->next;
+
+  env->refcount--;
+
+  if (!env->refcount)
+    {
+      if (env->sym)
+	{
+	  decrement_refcount (env->sym);
+	  decrement_refcount (env->obj);
+	}
+      else
+	{
+	  env->closure_bin->refcount--;
+	}
+
+      free (env);
+    }
+
+  if (num == 1)
+    return b;
+  else
+    return remove_function_bindings (b, num-1);
 }
 
 
@@ -15746,7 +15786,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
     }
 
 
-  restore_lexical_environment (env, lex_vars, NULL, closnum);
+  restore_lexical_variables (env, lex_vars, closnum);
   binsnum = *argsnum + *closnum;
 
   env->vars = chain_bindings (*bins, env->vars, 1, NULL, &lastbin);
@@ -15982,8 +16022,8 @@ destructure_tree (struct object *template, struct object *vals,
 
 
 void
-restore_lexical_environment (struct environment *env, struct binding *vars,
-			     struct binding *funcs, int *num_vars)
+restore_lexical_variables (struct environment *env, struct binding *vars,
+			   int *num_vars)
 {
   struct binding *b;
 
@@ -16013,6 +16053,35 @@ restore_lexical_environment (struct environment *env, struct binding *vars,
 }
 
 
+void
+restore_lexical_functions (struct environment *env, struct binding *funcs,
+			   int *num_funcs)
+{
+  struct binding *b;
+
+  *num_funcs = 0;
+
+  while (funcs)
+    {
+      b = malloc_and_check (sizeof (*b));
+
+      b->type = LEXICAL_BINDING;
+      b->refcount = 1;
+      b->sym = NULL;
+      b->obj = NULL;
+      b->closure_bin = funcs->closure_bin;
+      b->next = env->funcs;
+      b->closure_bin->refcount++;
+
+      env->funcs = b;
+
+      (*num_funcs)++;
+
+      funcs = funcs->next;
+    }
+}
+
+
 struct object *
 build_environment_object (struct environment *env)
 {
@@ -16028,14 +16097,19 @@ build_environment_object (struct environment *env)
 
   while (b && lex_funcs)
     {
-      if (b->is_macro)
+      if (!b->sym)
+	bin = b->closure_bin;
+      else
+	bin = b;
+
+      if (bin->is_macro)
 	{
 	  cons = alloc_empty_list (2);
 
-	  cons->value_ptr.cons_pair->car = b->sym;
+	  cons->value_ptr.cons_pair->car = bin->sym;
 	  add_reference (cons, CAR (cons), 0);
 
-	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = b->obj;
+	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
 	  add_reference (CDR (cons), CAR (CDR (cons)), 0);
 
 	  if (ret->value_ptr.cons_pair->car == &nil_object)
@@ -16114,7 +16188,8 @@ call_function (struct object *func, struct object *arglist,
   struct block_frame *f;
   struct go_tag_frame *prevf;
   struct object *ret, *ret2, *args = NULL, *body, *funcbody, *lastcdr;
-  int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary,
+  int argsnum, closnum, funcsnum, prev_lex_bin_num = env->lex_env_vars_boundary,
+    prev_lex_funcs_num = env->lex_env_funcs_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
     && !(env->stepping_flags & STEPPING_OVER_FORM),
     continue_till_end_of_function = env->continue_till_end_of_function,
@@ -16344,6 +16419,10 @@ call_function (struct object *func, struct object *arglist,
 			   create_new_lex_env, env, outcome, &bins, &argsnum,
 			   &closnum))
     {
+      restore_lexical_functions (env, func->value_ptr.function->lex_funcs,
+				 &funcsnum);
+      env->lex_env_funcs_boundary = funcsnum;
+
       if (func->value_ptr.function->flags & TRACED_FUNCTION
 	  || (env->stepping_flags &&
 	      !(env->stepping_flags & STEPPING_OVER_FORM)))
@@ -16438,6 +16517,9 @@ call_function (struct object *func, struct object *arglist,
 	      env->stepping_flags = STEP_INSIDE_FORM;
 	    }
 	}
+
+      env->funcs = remove_function_bindings (env->funcs, funcsnum);
+      env->lex_env_funcs_boundary = prev_lex_funcs_num;
 
       env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
       env->lex_env_vars_boundary = prev_lex_bin_num;
@@ -32263,8 +32345,14 @@ struct object *get_function (struct object *sym, struct environment *env,
     {
       while (b && lexb)
 	{
-	  if (SYMBOL (sym) == b->sym
-	      && !setf_func == !b->obj->value_ptr.function->is_setf_func)
+	  if (!b->sym && b->closure_bin->sym == SYMBOL (sym)
+	      && !setf_func == !b->closure_bin->obj->value_ptr.function->is_setf_func)
+	    {
+	      *is_macro = b->closure_bin->is_macro;
+	      break;
+	    }
+	  else if (b->sym && SYMBOL (sym) == b->sym
+		   && !setf_func == !b->obj->value_ptr.function->is_setf_func)
 	    {
 	      *is_macro = b->is_macro;
 	      break;
@@ -32285,7 +32373,12 @@ struct object *get_function (struct object *sym, struct environment *env,
       *is_macro = !setf_func && SYMBOL (sym)->value_ptr.symbol->is_macro;
     }
   else
-    f = b->obj;
+    {
+      if (!b->sym)
+	b = b->closure_bin;
+
+      f = b->obj;
+    }
 
   if (f && f->type != TYPE_FUNCTION && only_functions)
     return NULL;
