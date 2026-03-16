@@ -314,6 +314,8 @@ make_test ("(flet ((a () (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(let ((i 0)) (flet ((fun () (setq i 1))) (fun)) i)", "1");
 make_test ("(flet (((setf foo) (x y z) (list x y z))) (setf (foo 0 1) 2))", "(2 0 1)");
 make_test ("(flet ((foo (x y) 10) ((setf foo) (x y) 11)) (foo 0 1))", "10");
+make_test ("(flet ((extfunc nil 11)) (defun intfunc nil (extfunc)))", "INTFUNC");
+make_test ("(intfunc)", "11");
 make_test ("(labels ((a NIL (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels ((a () (b)) (b () (write \"\"))) (a))", "\"\"\n\"\"");
 make_test ("(labels (((setf foo) (x y z) (list x y z))) (setf (foo 0 1) 2))", "(2 0 1)");
