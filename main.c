@@ -32176,51 +32176,6 @@ evaluate_flet (struct object *list, struct environment *env,
 {
   struct object *res, *bind_forms, *body;
   int bin_num = 0;
-  struct binding *bins = NULL, *bin;
-
-  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
-			      && SYMBOL (CAR (list)) != &nil_object))
-    {
-      outcome->type = INCORRECT_SYNTAX_IN_FLET;
-      return NULL;
-    }
-
-  bind_forms = CAR (list);
-  body = CDR (list);
-
-  while (SYMBOL (bind_forms) != &nil_object)
-    {
-      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome, 0);
-
-      if (!bin)
-	return NULL;
-
-      bins = add_binding (bin, bins);
-      bin_num++;
-
-      bind_forms = CDR (bind_forms);
-    }
-
-  env->funcs = chain_bindings (bins, env->funcs, 0, NULL, NULL);
-
-  env->lex_env_funcs_boundary += bin_num;
-
-  res = evaluate_body (body, 0, 0, 0, NULL, env, outcome);
-
-  env->funcs = remove_bindings (env->funcs, bin_num, 0);
-
-  env->lex_env_funcs_boundary -= bin_num;
-
-  return res;
-}
-
-
-struct object *
-evaluate_labels (struct object *list, struct environment *env,
-		 struct outcome *outcome)
-{
-  struct object *res, *bind_forms, *body;
-  int bin_num = 0;
   struct binding *bin;
 
   if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
@@ -32248,7 +32203,58 @@ evaluate_labels (struct object *list, struct environment *env,
 
   res = evaluate_body (body, 0, 0, 0, NULL, env, outcome);
 
-  env->funcs = remove_bindings (env->funcs, bin_num, 0);
+  env->funcs = remove_function_bindings (env->funcs, bin_num);
+
+  env->lex_env_funcs_boundary -= bin_num;
+
+  return res;
+}
+
+
+struct object *
+evaluate_labels (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  struct object *res, *bind_forms, *body;
+  int bin_num = 0, i;
+  struct binding *bin;
+
+  if (!list_length (list) || (CAR (list)->type != TYPE_CONS_PAIR
+			      && SYMBOL (CAR (list)) != &nil_object))
+    {
+      outcome->type = INCORRECT_SYNTAX_IN_FLET;
+      return NULL;
+    }
+
+  bind_forms = CAR (list);
+  body = CDR (list);
+
+  while (SYMBOL (bind_forms) != &nil_object)
+    {
+      bin = create_binding_from_flet_form (CAR (bind_forms), env, outcome, 0);
+
+      if (!bin)
+	return NULL;
+
+      env->funcs = add_binding (bin, env->funcs);
+      env->lex_env_funcs_boundary++, bin_num++;
+
+      bind_forms = CDR (bind_forms);
+    }
+
+  bin = env->funcs;
+
+  for (i = 0; i < bin_num; i++)
+    {
+      capture_lexical_environment (NULL, &bin->obj->value_ptr.function->lex_funcs,
+				   NULL, 0, env->funcs, bin_num);
+
+      bin = bin->next;
+    }
+
+  res = evaluate_body (body, 0, 0, 0, NULL, env, outcome);
+
+  env->funcs = remove_function_bindings (env->funcs, bin_num);
 
   env->lex_env_funcs_boundary -= bin_num;
 
