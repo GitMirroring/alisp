@@ -699,6 +699,8 @@ call_frame
 {
   struct object *funcobj;
 
+  int is_macro;
+
   struct object *arglist;
 
   struct binding *args;
@@ -2070,9 +2072,9 @@ struct object *enter_debugger (struct object *cond, struct environment *env,
 void add_profiling_data (struct profiling_record **data, struct object *name,
 			 int is_setf, clock_t time, clock_t evaltime);
 
-struct call_frame *add_call_frame (struct object *funcobj, struct object *args,
-				   struct environment *env, int argsnum,
-				   struct call_frame *stack);
+struct call_frame *add_call_frame (struct object *funcobj, int is_macro,
+				   struct object *args, struct environment *env,
+				   int argsnum, struct call_frame *stack);
 struct call_frame *remove_call_frame (struct call_frame *stack);
 
 struct read_label *add_read_label (int label, struct object *value,
@@ -12759,7 +12761,8 @@ print_backtrace (struct environment *env, int be_verbose)
 
   while (f)
     {
-      if (!be_verbose && f->funcobj->value_ptr.function->builtin_form)
+      if (!be_verbose && f->is_macro
+	  && f->funcobj->value_ptr.function->builtin_form)
 	{
 	  f = f->next;
 	  continue;
@@ -12829,7 +12832,8 @@ list_backtrace (struct environment *env, int be_verbose)
 
   while (f)
     {
-      if (!be_verbose && f->funcobj->value_ptr.function->builtin_form)
+      if (!be_verbose && f->is_macro
+	  && f->funcobj->value_ptr.function->builtin_form)
 	{
 	  f = f->next;
 	  continue;
@@ -13319,7 +13323,7 @@ add_profiling_data (struct profiling_record **data, struct object *name,
 
 
 struct call_frame *
-add_call_frame (struct object *funcobj, struct object *args,
+add_call_frame (struct object *funcobj, int is_macro, struct object *args,
 		struct environment *env, int argsnum, struct call_frame *stack)
 {
   struct call_frame *ret = malloc_and_check (sizeof (*ret));
@@ -13327,6 +13331,7 @@ add_call_frame (struct object *funcobj, struct object *args,
 
   increment_refcount (funcobj);
   ret->funcobj = funcobj;
+  ret->is_macro = is_macro;
   ret->argsnum = argsnum;
   ret->next = stack;
 
@@ -16239,7 +16244,8 @@ call_function (struct object *func, struct object *arglist,
 	  print_tracing_message (func, args, -1, NULL, env);
 	}
 
-      env->call_stack = add_call_frame (func, args, env, -1, env->call_stack);
+      env->call_stack = add_call_frame (func, !eval_args, args, env, -1,
+					env->call_stack);
 
       if (env->is_profiling && func->value_ptr.function->name)
 	{
@@ -16430,7 +16436,7 @@ call_function (struct object *func, struct object *arglist,
 	  print_tracing_message (func, NULL, argsnum, NULL, env);
 	}
 
-      env->call_stack = add_call_frame (func, arglist, env, argsnum,
+      env->call_stack = add_call_frame (func, 0, arglist, env, argsnum,
 					env->call_stack);
 
       if (env->is_profiling && func->value_ptr.function->name)
@@ -16901,7 +16907,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	      print_tracing_message (methlist->meth, arglist, -1, NULL, env);
 	    }
 
-	  env->call_stack = add_call_frame (methlist->meth, arglist, env, -1,
+	  env->call_stack = add_call_frame (methlist->meth, 0, arglist, env, -1,
 					    env->call_stack);
 
 	  ret = methlist->meth->value_ptr.method->builtin_method (arglist, env,
@@ -17141,7 +17147,7 @@ call_method (struct method_list *methlist, struct object *arglist,
 	  print_tracing_message (methlist->meth, NULL, argsnum, NULL, env);
 	}
 
-      env->call_stack = add_call_frame (methlist->meth, arglist, env, argsnum,
+      env->call_stack = add_call_frame (methlist->meth, 0, arglist, env, argsnum,
 					env->call_stack);
 
       if (!parse_declarations (methlist->meth->value_ptr.method->body, env,
