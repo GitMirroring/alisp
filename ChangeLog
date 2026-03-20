@@ -1,3 +1,31 @@
+v1.4 (20-Mar-2026):
+
+Here are the improvements:
+
+- The function REMOVE-IF now accepts all the arguments required by ANSI.  Its
+  implementation has been moved to lisp code
+
+- Environment objects have been introduced (see NOTES) and are passed to macro
+  functions and accepted by MACROEXPAND-1.  Also the &ENVIRONMENT keyword is
+  supported in macro lambda lists
+
+- Function names (whether correct or erroneous) are now handled consistently in
+  alisp, raising conditions when appropriate
+
+- Compiler macros, previously registered but unused, now are actually expanded
+  when compiling, see NOTES
+
+- Unexpected dotted lists are handled correctly (without a hard crash) in many
+  more places
+
+- Lexical functions now are correctly captured in closures.  As a related fix,
+  the difference in behavior between FLET and LABELS, that is the different
+  scope of the defined functions, now is implemented
+
+- Printing the backtrace has been fixed
+
+
+
 v1.3 (25-Feb-2026):
 
 The bigger improvements are:
