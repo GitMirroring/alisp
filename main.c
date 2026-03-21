@@ -3076,7 +3076,7 @@ struct object *evaluate_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_copy_structure
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defclass
+struct object *builtin_al_defclass
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_find_class
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4175,7 +4175,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, 1, NULL, 0);
   add_builtin_form ("COPY-STRUCTURE", env, builtin_copy_structure, 0,
 		    NULL, 0);
-  add_builtin_form ("DEFCLASS", env, evaluate_defclass, 1, NULL, 0);
   add_builtin_form ("FIND-CLASS", env, builtin_find_class, 0, NULL,
 		    0);
   add_builtin_form ("CLASS-OF", env, builtin_class_of, 0, NULL, 0);
@@ -4744,6 +4743,8 @@ add_standard_definitions (struct environment *env)
 		    NULL, 0);
   add_builtin_form ("AL-CREATE-METHOD", env, builtin_al_create_method,
 		    0, NULL, 0);
+
+  add_builtin_form ("AL-DEFCLASS", env, builtin_al_defclass, 0, NULL, 0);
 
   add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
 		    0, builtin_setf_al_function_name, 0);
@@ -34508,7 +34509,7 @@ builtin_copy_structure (struct object *list, struct environment *env,
 
 
 struct object *
-evaluate_defclass (struct object *list, struct environment *env,
+builtin_al_defclass (struct object *list, struct environment *env,
 		   struct outcome *outcome)
 {
   struct object *name;

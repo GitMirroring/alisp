@@ -800,6 +800,47 @@
 
 
 
+(defmacro defclass (name supclasses slotcls &rest classopts)
+  (let (readers writers slots slotname sl funcdefs)
+    (dolist (slcl slotcls)
+      (if (symbolp slcl)
+	  (setq sl slcl)
+	  (progn
+	    (setq sl (list (car slcl)) slotname (car slcl))
+	    (setq slcl (cdr slcl))
+	    (while slcl
+	      (cond
+		((eq (car slcl) :reader)
+		 (setq readers (cons (cons slotname (cadr slcl)) readers)))
+		((eq (car slcl) :writer)
+		 (setq writers (cons (cons slotname (cadr slcl)) writers)))
+		((eq (car slcl) :accessor)
+		 (setq readers (cons (cons slotname (cadr slcl)) readers))
+		 (setq writers (cons (cons slotname (list 'setf (cadr slcl))) writers)))
+		(t
+		 (setq sl (list* (cadr slcl) (car slcl) sl))))
+	      (setq slcl (cddr slcl)))))
+      (setq slots (cons
+		   (if (symbolp sl)
+		       sl
+		       (reverse sl)) slots)))
+    (dolist (rd readers)
+      (setq funcdefs (cons
+		      `(defmethod ,(cdr rd) (obj)
+			 (slot-value obj ',(car rd)))
+		      funcdefs)))
+    (dolist (wr writers)
+      (setq funcdefs (cons
+		      `(defmethod ,(cdr wr) (newval obj)
+			 (setf (slot-value obj ',(car wr)) newval))
+		      funcdefs)))
+    `(progn
+       (cl-user:al-defclass ',name ',supclasses ',slots)
+       ,@funcdefs
+       (find-class ',name))))
+
+
+
 (defmacro case (keyf &rest clauses)
   (let ((keysym (gensym))
 	outsym)
@@ -3794,8 +3835,8 @@
            cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
            cddddr make-list copy-alist copy-tree tree-equal sublis nsublis endp
            butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
-           define-modify-macro incf decf cond otherwise case ccase ecase
-           typecase ctypecase etypecase return multiple-value-bind
+           define-modify-macro incf decf defclass cond otherwise case ccase
+           ecase typecase ctypecase etypecase return multiple-value-bind
            multiple-value-setq prog prog* multiple-value-prog1 every some notany
            notevery member member-if member-if-not find find-if find-if-not
            assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not position
