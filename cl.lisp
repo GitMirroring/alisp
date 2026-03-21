@@ -800,6 +800,33 @@
 
 
 
+(defmacro defstruct (name-and-opts &rest slotcls)
+  (let (name opt readers writers slots slotname sl funcdefs copier pred)
+    (if (symbolp name-and-opts)
+	(setq name name-and-opts)
+	(progn
+	  (setq name (car name-and-opts))
+	  (setq name-and-opts (cdr name-and-opts))
+	  (while name-and-opts
+	    (let ((opt (car name-and-opts)))
+	      (cond
+		((eq (car opt) :copier)
+		 (setq copier (cadr opt)))
+		((eq (car opt) :predicate)
+		 (setq pred (cadr opt))))
+	      (setq name-and-opts (cdr name-and-opts))))))
+    (if (stringp (car slotcls))
+	(setq slotcls (cdr slotcls)))
+    `(progn
+       (apply 'cl-user:al-defstruct ',name ',slotcls)
+       (defun ,copier (struct)
+	 (copy-structure struct))
+       (defun ,pred (struct)
+	 (typep struct ',name))
+       ',name)))
+
+
+
 (defmacro defclass (name supclasses slotcls &rest classopts)
   (let (readers writers slots slotname sl funcdefs)
     (dolist (slcl slotcls)
@@ -3835,8 +3862,8 @@
            cadadr caddar cadddr cdaaar cdaadr cdadar cdaddr cddaar cddadr cdddar
            cddddr make-list copy-alist copy-tree tree-equal sublis nsublis endp
            butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
-           define-modify-macro incf decf defclass cond otherwise case ccase
-           ecase typecase ctypecase etypecase return multiple-value-bind
+           define-modify-macro incf decf defstruct defclass cond otherwise case
+           ccase ecase typecase ctypecase etypecase return multiple-value-bind
            multiple-value-setq prog prog* multiple-value-prog1 every some notany
            notevery member member-if member-if-not find find-if find-if-not
            assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not position

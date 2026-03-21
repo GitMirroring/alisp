@@ -3072,7 +3072,7 @@ struct object *evaluate_define_symbol_macro
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_symbol_macrolet
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_defstruct
+struct object *builtin_al_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_copy_structure
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4172,7 +4172,6 @@ add_standard_definitions (struct environment *env)
 		    1, NULL, 0);
   add_builtin_form ("SYMBOL-MACROLET", env, evaluate_symbol_macrolet, 1,
 		    NULL, 1);
-  add_builtin_form ("DEFSTRUCT", env, evaluate_defstruct, 1, NULL, 0);
   add_builtin_form ("COPY-STRUCTURE", env, builtin_copy_structure, 0,
 		    NULL, 0);
   add_builtin_form ("FIND-CLASS", env, builtin_find_class, 0, NULL,
@@ -4744,6 +4743,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AL-CREATE-METHOD", env, builtin_al_create_method,
 		    0, NULL, 0);
 
+  add_builtin_form ("AL-DEFSTRUCT", env, builtin_al_defstruct, 0, NULL, 0);
   add_builtin_form ("AL-DEFCLASS", env, builtin_al_defclass, 0, NULL, 0);
 
   add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
@@ -34255,8 +34255,8 @@ evaluate_symbol_macrolet (struct object *list, struct environment *env,
 
 
 struct object *
-evaluate_defstruct (struct object *list, struct environment *env,
-		    struct outcome *outcome)
+builtin_al_defstruct (struct object *list, struct environment *env,
+		      struct outcome *outcome)
 {
   struct object *name, *strcl, *funcname, *cons, *opt, *predname = NULL,
     *copiername = NULL, *pack = inspect_variable (env->package_sym, env);
