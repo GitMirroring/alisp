@@ -4410,12 +4410,14 @@ add_standard_definitions (struct environment *env)
 		    "GENERIC-FUNCTION", (char *)NULL);
   add_builtin_type ("GENERIC-FUNCTION", env, type_generic_function, 1,
 		    "FUNCTION", (char *)NULL);
+  add_builtin_type ("STANDARD-METHOD", env, type_method, 1, "METHOD",
+		    "STANDARD-OBJECT", (char *)NULL);
   add_builtin_type ("METHOD", env, type_method, 1, (char *)NULL);
-  add_builtin_type ("CLASS", env, type_class, 1, (char *)NULL);
+  add_builtin_type ("CLASS", env, type_class, 1, "STANDARD-OBJECT", (char *)NULL);
   add_builtin_type ("STRUCTURE-CLASS", env, type_structure_class, 1,
 		    (char *)NULL);
-  add_builtin_type ("STANDARD-CLASS", env, type_standard_class, 1,
-		    (char *)NULL);
+  add_builtin_type ("STANDARD-CLASS", env, type_standard_class, 1, "CLASS",
+		    "STANDARD-OBJECT", (char *)NULL);
   add_builtin_type ("BUILT-IN-CLASS", env, type_nil, 1, "CLASS", (char *)NULL);
 
 
