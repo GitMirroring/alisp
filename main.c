@@ -18072,12 +18072,15 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
 	{
-	  return obj->type == TYPE_STANDARD_OBJECT
-	    && (obj->value_ptr.standard_object->class->value_ptr.standard_class
-		->name == sym
-		|| is_descendant (NULL, obj->value_ptr.standard_object->
-				  class->value_ptr.standard_class->parents,
-				  sym, NULL, env));
+	  return (sym->value_ptr.symbol->typespec->value_ptr.standard_class->name
+		  == BUILTIN_SYMBOL ("STANDARD-OBJECT")
+		  && (obj->type == TYPE_METHOD || obj->type == TYPE_STANDARD_CLASS))
+	    || (obj->type == TYPE_STANDARD_OBJECT
+		&& (obj->value_ptr.standard_object->class->value_ptr.standard_class
+		    ->name == sym
+		    || is_descendant (NULL, obj->value_ptr.standard_object->
+				      class->value_ptr.standard_class->parents,
+				      sym, NULL, env)));
 	}
       else if (sym->value_ptr.symbol->is_type
 	       && sym->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
