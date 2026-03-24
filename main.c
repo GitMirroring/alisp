@@ -3157,8 +3157,6 @@ struct object *builtin_error
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_warn
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_define_condition
-(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_make_condition
 (struct object *list, struct environment *env, struct outcome *outcome);
 
@@ -4223,8 +4221,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SIGNAL", env, builtin_signal, 0, NULL, 0);
   add_builtin_form ("ERROR", env, builtin_error, 0, NULL, 0);
   add_builtin_form ("WARN", env, builtin_warn, 0, NULL, 0);
-  add_builtin_form ("DEFINE-CONDITION", env, evaluate_define_condition,
-		    1, NULL, 0);
   add_builtin_form ("MAKE-CONDITION", env, builtin_make_condition, 0,
 		    NULL, 0);
   add_builtin_form ("ROOM", env, builtin_room, 0, NULL, 0);
@@ -36563,40 +36559,6 @@ builtin_warn (struct object *list, struct environment *env,
   decrement_refcount (cond);
 
   return ret;
-}
-
-
-struct object *
-evaluate_define_condition (struct object *list, struct environment *env,
-			   struct outcome *outcome)
-{
-  struct object *condcl;
-
-  if (list_length (list) < 3)
-    {
-      return raise_al_wrong_number_of_arguments (3, -1, env, outcome);
-    }
-
-  if (!IS_SYMBOL (CAR (list)))
-    {
-      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
-    }
-
-  if (!IS_LIST (CAR (CDR (list))))
-    {
-      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
-    }
-
-  if (!IS_LIST (CAR (CDR (CDR (list)))))
-    {
-      return raise_type_error (CAR (CDR (CDR (list))), "CL:LIST", env, outcome);
-    }
-
-  condcl = define_class (SYMBOL (CAR (list)), CDR (list), 1, env, outcome);
-  decrement_refcount (condcl);
-
-  increment_refcount (SYMBOL (CAR (list)));
-  return SYMBOL (CAR (list));
 }
 
 
