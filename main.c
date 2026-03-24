@@ -26276,7 +26276,8 @@ struct object *
 builtin_setf_slot_value (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
-  struct class_field *f;
+  struct class_field *cf;
+  struct structure_field *sf;
   struct object *req, *newval;
 
   if (list_length (list) != 3)
@@ -26287,47 +26288,72 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
   newval = CAR (list);
   list = CDR (list);
 
-  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+  if ((CAR (list)->type != TYPE_STANDARD_OBJECT
+       && CAR (list)->type != TYPE_STRUCTURE) || !IS_SYMBOL (CAR (CDR (list))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  f = CAR (list)->value_ptr.standard_object->fields;
   req = SYMBOL (CAR (CDR (list)));
 
-  while (f)
+  if (CAR (list)->type == TYPE_STRUCTURE)
     {
-      if (f->decl->name == req)
+      sf = CAR (list)->value_ptr.structure->fields;
+
+      while (sf)
 	{
-	  increment_refcount (newval);
-
-	  if (IS_WATCHED (CAR (list)))
+	  if (sf->name == req)
 	    {
-	      env->watched_obj = CAR (list);
-	      env->obj_field = f->decl->name;
-	      env->new_value = newval;
+	      increment_refcount (newval);
 
-	      if (!enter_debugger (NULL, env, outcome))
-		return NULL;
+	      decrement_refcount (sf->value);
+	      sf->value = newval;
+
+	      increment_refcount (sf->value);
+	      return sf->value;
 	    }
 
-	  if (f->name)
-	    {
-	      decrement_refcount (f->value);
-	      f->value = newval;
-	    }
-	  else
-	    {
-	      decrement_refcount (f->decl->value);
-	      f->decl->value = newval;
-	    }
-
-	  increment_refcount (newval);
-	  return newval;
+	  sf = sf->next;
 	}
+    }
+  else
+    {
+      cf = CAR (list)->value_ptr.standard_object->fields;
 
-      f = f->next;
+      while (cf)
+	{
+	  if (cf->decl->name == req)
+	    {
+	      increment_refcount (newval);
+
+	      if (IS_WATCHED (CAR (list)))
+		{
+		  env->watched_obj = CAR (list);
+		  env->obj_field = cf->decl->name;
+		  env->new_value = newval;
+
+		  if (!enter_debugger (NULL, env, outcome))
+		    return NULL;
+		}
+
+	      if (cf->name)
+		{
+		  decrement_refcount (cf->value);
+		  cf->value = newval;
+		}
+	      else
+		{
+		  decrement_refcount (cf->decl->value);
+		  cf->decl->value = newval;
+		}
+
+	      increment_refcount (newval);
+	      return newval;
+	    }
+
+	  cf = cf->next;
+	}
     }
 
   outcome->type = SLOT_NOT_FOUND;
@@ -35005,7 +35031,8 @@ struct object *
 builtin_slot_value (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  struct class_field *f;
+  struct class_field *cf;
+  struct structure_field *sf;
   struct object *req;
 
   if (list_length (list) != 2)
@@ -35013,38 +35040,58 @@ builtin_slot_value (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STANDARD_OBJECT || !IS_SYMBOL (CAR (CDR (list))))
+  if ((CAR (list)->type != TYPE_STANDARD_OBJECT
+       && CAR (list)->type != TYPE_STRUCTURE) || !IS_SYMBOL (CAR (CDR (list))))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
     }
 
-  f = CAR (list)->value_ptr.standard_object->fields;
   req = SYMBOL (CAR (CDR (list)));
 
-  while (f)
+  if (CAR (list)->type == TYPE_STRUCTURE)
     {
-      if (f->decl->name == req)
+      sf = CAR (list)->value_ptr.structure->fields;
+
+      while (sf)
 	{
-	  if ((f->name && !f->value) || (!f->name && !f->decl->value))
+	  if (sf->name == req)
 	    {
-	      outcome->type = SLOT_NOT_BOUND;
-	      return NULL;
+	      increment_refcount (sf->value);
+	      return sf->value;
 	    }
 
-	  if (f->name)
-	    {
-	      increment_refcount (f->value);
-	      return f->value;
-	    }
-	  else
-	    {
-	      increment_refcount (f->decl->value);
-	      return f->decl->value;
-	    }
+	  sf = sf->next;
 	}
+    }
+  else
+    {
+      cf = CAR (list)->value_ptr.standard_object->fields;
 
-      f = f->next;
+      while (cf)
+	{
+	  if (cf->decl->name == req)
+	    {
+	      if ((cf->name && !cf->value) || (!cf->name && !cf->decl->value))
+		{
+		  outcome->type = SLOT_NOT_BOUND;
+		  return NULL;
+		}
+
+	      if (cf->name)
+		{
+		  increment_refcount (cf->value);
+		  return cf->value;
+		}
+	      else
+		{
+		  increment_refcount (cf->decl->value);
+		  return cf->decl->value;
+		}
+	    }
+
+	  cf = cf->next;
+	}
     }
 
   outcome->type = SLOT_NOT_FOUND;
