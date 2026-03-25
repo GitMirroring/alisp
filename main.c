@@ -627,8 +627,6 @@ outcome
 
   struct object *catching_tag;
 
-  struct object *condition;
-
   struct object *return_value;
   int return_no_value;
   struct object_list *return_other_values;
@@ -1341,46 +1339,6 @@ standard_object
 
 
 struct
-condition_field_decl
-{
-  struct object *name;
-
-  struct condition_field_decl *next;
-};
-
-
-struct
-condition_class
-{
-  struct object *name;
-
-  struct object_list *parents;
-
-  struct condition_field_decl *fields;
-};
-
-
-struct
-condition_field
-{
-  struct object *name;
-
-  struct object *value;
-
-  struct condition_field *next;
-};
-
-
-struct
-condition
-{
-  struct object *class_name;
-
-  struct condition_field *fields;
-};
-
-
-struct
 sharp_macro_call
 {
   int arg;
@@ -1470,8 +1428,6 @@ object_type
     TYPE_STRUCTURE,
     TYPE_STANDARD_CLASS,
     TYPE_STANDARD_OBJECT,
-    TYPE_CONDITION_CLASS,
-    TYPE_CONDITION,
     TYPE_FUNCTION,
     TYPE_METHOD,
     TYPE_SHARP_MACRO_CALL
@@ -1509,8 +1465,6 @@ object_ptr_union
   struct structure *structure;
   struct standard_class *standard_class;
   struct standard_object *standard_object;
-  struct condition_class *condition_class;
-  struct condition *condition;
   struct function *function;
   struct method *method;
   struct sharp_macro_call *sharp_macro_call;
@@ -1920,9 +1874,6 @@ struct class_field_decl *create_class_field_decl (struct object *class,
 						  struct environment *env,
 						  struct outcome *outcome);
 
-struct condition_field_decl *create_condition_field_decl
-(struct object *fieldform, struct environment *env, struct outcome *outcome);
-
 struct object *define_class (struct object *name, struct object *form,
 			     int is_condition_class, struct environment *env,
 			     struct outcome *outcome);
@@ -1940,8 +1891,6 @@ struct object *fill_object_fields (struct object *stdobj, struct object *class,
 				   struct object *initargs,
 				   struct environment *env,
 				   struct outcome *outcome);
-
-void create_condition_fields (struct object *stdobj, struct object *class);
 
 struct object *load_file (const char *filename, int print_filename,
 			  int print_each_form, struct environment *env,
@@ -3346,8 +3295,6 @@ void free_structure_class (struct object *obj);
 void free_structure (struct object *obj);
 void free_standard_class (struct object *obj);
 void free_standard_object (struct object *obj);
-void free_condition_class (struct object *obj);
-void free_condition (struct object *obj);
 void free_lambda_list_content (struct object *obj, struct parameter *par, int *i,
 			       int is_method);
 void free_lambda_list_structure (struct parameter *par);
@@ -3556,31 +3503,7 @@ main (int argc, char *argv [])
 
 	  if (!result)
 	    {
-	      if (eval_out.condition)
-		{
-		  if (is_subtype_by_char_vector
-		      (eval_out.condition->value_ptr.condition->class_name,
-		       "SIMPLE-CONDITION", &env)
-		      || is_subtype_by_char_vector
-		      (eval_out.condition->value_ptr.condition->class_name,
-		       "TYPE-ERROR", &env))
-		    {
-		      print_object (eval_out.condition->value_ptr.condition->fields->
-				    value, &env, c_stdout->value_ptr.stream);
-		      fresh_line (c_stdout->value_ptr.stream);
-		    }
-		  else
-		    {
-		      printf ("unhandled condition of type ");
-		      print_object (eval_out.condition->value_ptr.condition->
-				    class_name, &env, c_stdout->value_ptr.stream);
-		      fresh_line (c_stdout->value_ptr.stream);
-		    }
-
-		  decrement_refcount (eval_out.condition);
-		  eval_out.condition = NULL;
-		}
-	      else if (eval_out.type != ABORT_TO_TOP_LEVEL)
+	      if (eval_out.type != ABORT_TO_TOP_LEVEL)
 		print_error (&eval_out, &env);
 	    }
 	  else
@@ -10780,32 +10703,6 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 }
 
 
-struct condition_field_decl *
-create_condition_field_decl (struct object *fieldform, struct environment *env,
-			     struct outcome *outcome)
-{
-  struct object *name;
-  struct condition_field_decl *ret;
-
-  if (IS_SYMBOL (fieldform))
-    name = SYMBOL (fieldform);
-  else if (IS_LIST (fieldform) && IS_SYMBOL (CAR (fieldform)))
-    name = SYMBOL (CAR (fieldform));
-  else
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  ret = malloc_and_check (sizeof (*ret));
-
-  ret->name = name;
-  ret->next = NULL;
-
-  return ret;
-}
-
-
 struct object *
 define_class (struct object *name, struct object *form, int is_condition_class,
 	      struct environment *env, struct outcome *outcome)
@@ -11089,34 +10986,6 @@ fill_object_fields (struct object *stdobj, struct object *class,
     }
 
   return stdobj;
-}
-
-
-void
-create_condition_fields (struct object *stdobj, struct object *class)
-{
-  struct condition_field_decl *fd = class->value_ptr.condition_class->fields;
-  struct object_list *p = class->value_ptr.condition_class->parents;
-  struct condition_field *f;
-
-  while (fd)
-    {
-      f = malloc_and_check (sizeof (*f));
-
-      f->name = fd->name;
-      f->value = &nil_object;
-      f->next = stdobj->value_ptr.condition->fields;
-      stdobj->value_ptr.condition->fields = f;
-
-      fd = fd->next;
-    }
-
-  while (p)
-    {
-      create_condition_fields (stdobj, p->obj->value_ptr.symbol->typespec);
-
-      p = p->next;
-    }
 }
 
 
@@ -12067,7 +11936,7 @@ handle_condition (struct object *cond, struct environment *env,
 
   while (b)
     {
-      if (is_subtype (cond->value_ptr.condition->class_name, b->condition, NULL,
+      if (is_subtype (cond->value_ptr.standard_object->class, b->condition, NULL,
 		      env, outcome))
 	{
 	  f = env->handlers;
@@ -13171,33 +13040,7 @@ enter_debugger (struct object *cond, struct environment *env,
 
 	  if (!result)
 	    {
-	      if (outcome->condition)
-		{
-		  if (is_subtype_by_char_vector
-		      (outcome->condition->value_ptr.condition->class_name,
-		       "SIMPLE-CONDITION", env)
-		      || is_subtype_by_char_vector
-		      (outcome->condition->value_ptr.condition->class_name,
-		       "TYPE-ERROR", env))
-		    {
-		      print_object (outcome->condition->value_ptr.condition->
-				    fields->value, env,
-				    env->c_stdout->value_ptr.stream);
-		      fresh_line (env->c_stdout->value_ptr.stream);
-		    }
-		  else
-		    {
-		      printf ("unhandled condition of type ");
-		      print_object (outcome->condition->value_ptr.condition->
-				    class_name, env,
-				    env->c_stdout->value_ptr.stream);
-		      fresh_line (env->c_stdout->value_ptr.stream);
-		    }
-
-		  decrement_refcount (outcome->condition);
-		  outcome->condition = NULL;
-		}
-	      else if (outcome->type == ABORT_TO_TOP_LEVEL)
+	      if (outcome->type == ABORT_TO_TOP_LEVEL)
 		{
 		  env->debugging_depth--;
 		  free (wholel);
@@ -14234,7 +14077,6 @@ parse_required_parameters (struct object *obj, struct parameter **last,
 	  if (list_length (car) != 2 || !IS_SYMBOL (CAR (car))
 	      || (!IS_SYMBOL (CAR (CDR (car)))
 		  && CAR (CDR (car))->type != TYPE_STANDARD_CLASS
-		  && CAR (CDR (car))->type != TYPE_CONDITION_CLASS
 		  && (CAR (CDR (car))->type != TYPE_CONS_PAIR
 		      || list_length (CAR (CDR (car))) != 2
 		      || SYMBOL (CAR (CAR (CDR (car)))) != env->eql_sym)))
@@ -18082,16 +17924,6 @@ check_type (struct object *obj, struct object *typespec, struct environment *env
 				      class->value_ptr.standard_class->parents,
 				      sym, NULL, env)));
 	}
-      else if (sym->value_ptr.symbol->is_type
-	       && sym->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
-	{
-	  return obj->type == TYPE_CONDITION
-	    && (obj->value_ptr.condition->class_name == sym
-		|| is_descendant (NULL, obj->value_ptr.condition->class_name->
-				  value_ptr.symbol->typespec->
-				  value_ptr.condition_class->parents,
-				  sym, NULL, env));
-	}
       else if (sym->value_ptr.symbol->is_type)
 	{
 	  res = call_function (sym->value_ptr.symbol->typespec, args, 0, 0, 0, 0, 0,
@@ -18278,10 +18110,6 @@ is_subtype (struct object *firstsp, struct object *secondsp,
 	: (SYMBOL (first)->value_ptr.symbol->typespec
 	   && SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
 	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.standard_class->
-	parents
-	: (SYMBOL (first)->value_ptr.symbol->typespec
-	   && SYMBOL (first)->value_ptr.symbol->typespec->type == TYPE_CONDITION_CLASS)
-	? SYMBOL (first)->value_ptr.symbol->typespec->value_ptr.condition_class->
 	parents : NULL;
 
       ret = is_descendant (SYMBOL (first), p, SYMBOL (second), prev, env);
@@ -28656,10 +28484,6 @@ builtin_type_of (struct object *list, struct environment *env,
       ret = CAR (list)->value_ptr.standard_object->class->
 	value_ptr.standard_class->name;
     }
-  else if (CAR (list)->type == TYPE_CONDITION)
-    {
-      ret = CAR (list)->value_ptr.condition->class_name;
-    }
   else if (CAR (list)->type == TYPE_BACKQUOTE)
     {
       ret =
@@ -33226,8 +33050,6 @@ builtin_constantp (struct object *list, struct environment *env,
       || CAR (list)->type == TYPE_STRUCTURE
       || CAR (list)->type == TYPE_STANDARD_CLASS
       || CAR (list)->type == TYPE_STANDARD_OBJECT
-      || CAR (list)->type == TYPE_CONDITION_CLASS
-      || CAR (list)->type == TYPE_CONDITION
       || CAR (list)->type == TYPE_FUNCTION
       || CAR (list)->type == TYPE_METHOD)
     return &t_object;
@@ -34906,13 +34728,6 @@ builtin_class_of (struct object *list, struct environment *env,
       return CAR (list)->value_ptr.structure->class_name->value_ptr.symbol->
 	typespec;
     }
-  else if (CAR (list)->type == TYPE_CONDITION)
-    {
-      increment_refcount (CAR (list)->value_ptr.condition->class_name->
-			  value_ptr.symbol->typespec);
-      return CAR (list)->value_ptr.condition->class_name->value_ptr.symbol->
-	typespec;
-    }
   else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -34939,11 +34754,6 @@ builtin_class_name (struct object *list, struct environment *env,
     {
       increment_refcount (CAR (list)->value_ptr.structure_class->name);
       return CAR (list)->value_ptr.structure_class->name;
-    }
-  else if (CAR (list)->type == TYPE_CONDITION_CLASS)
-    {
-      increment_refcount (CAR (list)->value_ptr.condition_class->name);
-      return CAR (list)->value_ptr.condition_class->name;
     }
   else
     {
@@ -37042,7 +36852,6 @@ builtin_al_dump_fields (struct object *list, struct environment *env,
   struct structure_field *sf;
   struct class_field *of;
   struct class_field_decl *cfd;
-  struct condition_field *cf;
 
   if (list_length (list) != 1)
     {
@@ -37090,21 +36899,6 @@ builtin_al_dump_fields (struct object *list, struct environment *env,
 	  ret = cons;
 
 	  of = of->next;
-	}
-    }
-  else if (obj->type == TYPE_CONDITION)
-    {
-      cf = obj->value_ptr.condition->fields;
-
-      while (cf)
-	{
-	  cons = alloc_empty_cons_pair ();
-
-	  cons->value_ptr.cons_pair->car = create_pair (cf->name, cf->value);
-	  cons->value_ptr.cons_pair->cdr = ret;
-	  ret = cons;
-
-	  cf = cf->next;
 	}
     }
   else if (obj->type == TYPE_STANDARD_CLASS)
@@ -39639,26 +39433,6 @@ print_object (const struct object *obj, struct environment *env,
 
 	  return 0;
 	}
-      else if (obj->type == TYPE_CONDITION_CLASS)
-	{
-	  if (write_to_stream (str, "#<CONDITION-CLASS ",
-			       strlen ("#<CONDITION-CLASS ")) < 0
-	      || print_symbol (obj->value_ptr.condition_class->name, env, str)
-	      || write_to_stream (str, ">", 1) < 0)
-	    return -1;
-
-	  return 0;
-	}
-      else if (obj->type == TYPE_CONDITION)
-	{
-	  if (write_to_stream (str, "#<CONDITION OF CLASS ",
-			       strlen ("#<CONDITION OF CLASS ")) < 0
-	      || print_symbol (obj->value_ptr.condition->class_name, env, str)
-	      || write_to_stream (str, ">", 1) < 0)
-	    return -1;
-
-	  return 0;
-	}
       else
 	return write_to_stream (str, "#<print not implemented>",
 				strlen ("#<print not implemented>"));
@@ -40994,10 +40768,6 @@ free_object (struct object *obj)
     free_standard_class (obj);
   else if (obj->type == TYPE_STANDARD_OBJECT)
     free_standard_object (obj);
-  else if (obj->type == TYPE_CONDITION_CLASS)
-    free_condition_class (obj);
-  else if (obj->type == TYPE_CONDITION)
-    free_condition (obj);
   else if (obj->type == TYPE_FUNCTION)
     free_function_or_macro (obj);
   else if (obj->type == TYPE_METHOD)
@@ -41295,51 +41065,6 @@ free_standard_object (struct object *obj)
   decrement_refcount (obj->value_ptr.standard_object->class);
 
   free (obj->value_ptr.standard_object);
-  free (obj);
-}
-
-
-void
-free_condition_class (struct object *obj)
-{
-  struct object_list *p = obj->value_ptr.condition_class->parents, *n;
-  struct condition_field_decl *f = obj->value_ptr.condition_class->fields, *nf;
-
-  while (p)
-    {
-      n = p->next;
-      free (p);
-      p = n;
-    }
-
-  while (f)
-    {
-      nf = f->next;
-      free (f);
-      f = nf;
-    }
-
-  free (obj->value_ptr.condition_class);
-  free (obj);
-}
-
-
-void
-free_condition (struct object *obj)
-{
-  struct condition_field *f = obj->value_ptr.condition->fields, *n;
-
-  while (f)
-    {
-      n = f->next;
-
-      decrement_refcount (f->value);
-      free (f);
-
-      f = n;
-    }
-
-  free (obj->value_ptr.condition);
   free (obj);
 }
 
