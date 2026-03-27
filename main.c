@@ -34034,11 +34034,11 @@ struct object *
 builtin_al_defstruct (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
-  struct object *name, *strcl, *funcname, *cons, *opt, *predname = NULL,
-    *copiername = NULL, *pack = inspect_variable (env->package_sym, env);
+  struct object *name, *strcl, *funcname, *cons,
+    *pack = inspect_variable (env->package_sym, env);
   struct structure_class *sc;
   struct structure_field_decl *f, *prev;
-  char *constr_name, *pred_name, *cop_name, *acc_name;
+  char *constr_name, *acc_name;
 
   if (!list_length (list))
     {
@@ -34061,32 +34061,8 @@ builtin_al_defstruct (struct object *list, struct environment *env,
 
       while (cons->type == TYPE_CONS_PAIR)
 	{
-	  if (IS_SYMBOL (CAR (cons)))
-	    opt = SYMBOL (CAR (cons));
-	  else if (CAR (cons)->type == TYPE_CONS_PAIR
-		   && IS_SYMBOL (CAR (CAR ((cons)))))
-	    opt = SYMBOL (CAR (CAR (cons)));
-	  else
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  if (symbol_equals (opt, ":PREDICATE", env)
-	      && CAR (cons)->type == TYPE_CONS_PAIR
-	      && list_length (CAR (cons)) > 1
-	      && IS_SYMBOL (CAR (CDR (CAR (cons)))))
-	    predname = SYMBOL (CAR (CDR (CAR (cons))));
-	  else if (symbol_equals (opt, ":COPIER", env)
-		   && CAR (cons)->type == TYPE_CONS_PAIR
-		   && list_length (CAR (cons)) > 1
-		   && IS_SYMBOL (CAR (CDR (CAR (cons)))))
-	    copiername = SYMBOL (CAR (CDR (CAR (cons))));
-	  else
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
 
 	  cons = CDR (cons);
 	}
@@ -34157,68 +34133,6 @@ builtin_al_defstruct (struct object *list, struct environment *env,
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
   add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
 
-  if (!predname || SYMBOL (predname) != &nil_object)
-    {
-      if (!predname)
-	{
-	  pred_name =
-	    concatenate_char_vectors (2 + name->value_ptr.symbol->name_len,
-				      name->value_ptr.symbol->name,
-				      name->value_ptr.symbol->name_len, "-P", 2,
-				      (char *)NULL);
-
-	  predname = intern_symbol_by_char_vector (pred_name,
-						   2+name->value_ptr.symbol->name_len,
-						   1, INTERNAL_VISIBILITY, 1,
-						   pack, 0, 0);
-	  free (pred_name);
-	  increment_refcount (predname);
-	}
-
-      delete_reference (predname, predname->value_ptr.symbol->function_cell, 1);
-      predname->value_ptr.symbol->function_cell = alloc_function ();
-      add_reference (predname, predname->value_ptr.symbol->function_cell, 1);
-      decrement_refcount (predname->value_ptr.symbol->function_cell);
-
-      predname->value_ptr.symbol->function_cell->value_ptr.function->
-	struct_predicate_class_name = name;
-
-      predname->value_ptr.symbol->function_cell->value_ptr.function->name
-	= predname;
-      add_reference (predname->value_ptr.symbol->function_cell, predname, 0);
-    }
-
-  if (!copiername || SYMBOL (copiername) != &nil_object)
-    {
-      if (!copiername)
-	{
-	  cop_name =
-	    concatenate_char_vectors (5 + name->value_ptr.symbol->name_len, "COPY-",
-				      5, name->value_ptr.symbol->name,
-				      name->value_ptr.symbol->name_len,
-				      (char *)NULL);
-
-	  copiername =
-	    intern_symbol_by_char_vector (cop_name,
-					  5+name->value_ptr.symbol->name_len, 1,
-					  INTERNAL_VISIBILITY, 1, pack, 0, 0);
-	  free (cop_name);
-	  increment_refcount (copiername);
-	}
-
-      delete_reference (copiername, copiername->value_ptr.symbol->function_cell,
-			1);
-      copiername->value_ptr.symbol->function_cell = alloc_function ();
-      add_reference (copiername, copiername->value_ptr.symbol->function_cell, 1);
-      decrement_refcount (copiername->value_ptr.symbol->function_cell);
-
-      copiername->value_ptr.symbol->function_cell->value_ptr.function->
-	struct_copyier_class_name = name;
-
-      copiername->value_ptr.symbol->function_cell->value_ptr.function->name =
-	copiername;
-      add_reference (copiername->value_ptr.symbol->function_cell, copiername, 0);
-    }
 
   f = sc->fields;
 

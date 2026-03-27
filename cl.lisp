@@ -801,7 +801,7 @@
 
 
 (defmacro defstruct (name-and-opts &rest slotcls)
-  (let (name opt readers writers slots slotname sl funcdefs copier pred)
+  (let (name opt copier pred)
     (if (symbolp name-and-opts)
 	(setq name name-and-opts)
 	(progn
@@ -815,6 +815,10 @@
 		((eq (car opt) :predicate)
 		 (setq pred (cadr opt))))
 	      (setq name-and-opts (cdr name-and-opts))))))
+    (unless copier
+      (setq copier (intern (concatenate 'string "COPY-" (string name)))))
+    (unless pred
+      (setq pred (intern (concatenate 'string (string name) "-P"))))
     (if (stringp (car slotcls))
 	(setq slotcls (cdr slotcls)))
     `(progn
