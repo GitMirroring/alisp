@@ -982,23 +982,6 @@ function
 
   struct object *(*builtin_form)
     (struct object *list, struct environment *env, struct outcome *outcome);
-
-
-  struct object *struct_constructor_class_name;
-
-
-  struct object *struct_accessor_class_name;
-  struct object *struct_accessor_field;
-
-
-  struct object *struct_predicate_class_name;
-
-
-  struct object *struct_copyier_class_name;
-
-
-  struct object *condition_reader_class_name;
-  struct object *condition_reader_field;
 };
 
 
@@ -1029,15 +1012,6 @@ method
 
   int is_compiled;
   struct object *body;
-
-  struct object *object_reader_class;
-  struct object *object_reader_field;
-
-  struct object *object_writer_class;
-  struct object *object_writer_field;
-
-  struct object *object_accessor_class;
-  struct object *object_accessor_field;
 };
 
 
@@ -7918,11 +7892,6 @@ alloc_function (void)
   fun->flags = 0;
   fun->methods = NULL;
   fun->builtin_form = NULL;
-  fun->struct_constructor_class_name = NULL;
-  fun->struct_accessor_class_name = NULL;
-  fun->struct_predicate_class_name = NULL;
-  fun->struct_copyier_class_name = NULL;
-  fun->condition_reader_class_name = NULL;
 
   obj->type = TYPE_FUNCTION;
   obj->value_ptr.function = fun;
@@ -7945,9 +7914,6 @@ alloc_method (void)
   m->is_compiled = 0;
   m->body = NULL;
   m->builtin_method = NULL;
-  m->object_reader_class = NULL;
-  m->object_writer_class = NULL;
-  m->object_accessor_class = NULL;
   m->generic_func = NULL;
 
   return meth;
@@ -10291,13 +10257,10 @@ struct class_field_decl *
 create_class_field_decl (struct object *class, struct object *fieldform,
 			 struct environment *env, struct outcome *outcome)
 {
-  struct object *name, *initform = NULL, *reader = NULL, *writer = NULL,
-    *accessor = NULL, *fun, *meth, *funcname,
-    *classname = class->value_ptr.standard_class->name;
+  struct object *name, *initform = NULL;
   struct object_list *initargs = NULL, *l;
   enum field_allocation_type alloctype = UNKNOWN_ALLOCATION;
   struct class_field_decl *ret;
-  struct parameter *lambdal;
 
   if (IS_SYMBOL (fieldform))
     name = SYMBOL (fieldform);
@@ -10355,236 +10318,6 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	  increment_refcount (l->obj);
 	  l->next = initargs;
 	  initargs = l;
-	}
-      else if (symbol_equals (CAR (fieldform), ":READER", env))
-	{
-	  if (SYMBOL (CDR (fieldform)) == &nil_object)
-	    {
-	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
-		(env, outcome);
-	      return NULL;
-	    }
-	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
-	    {
-	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
-	      return NULL;
-	    }
-
-	  if (!IS_SYMBOL (CAR (CDR (fieldform))))
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  reader = SYMBOL (CAR (CDR (fieldform)));
-	  fun = reader->value_ptr.symbol->function_cell;
-
-	  if (fun && (reader->value_ptr.symbol->is_macro
-		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	    {
-	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	      return NULL;
-	    }
-
-	  lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
-	  lambdal->typespec = classname;
-	  increment_refcount (classname);
-
-	  if (!fun)
-	    {
-	      fun = create_empty_generic_function (reader, 0, env);
-	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal,
-								       0);
-	      decrement_refcount (fun);
-	    }
-	  else
-	    {
-	      if (!are_lambda_lists_congruent (lambdal, 0,
-					       fun->value_ptr.function->lambda_list,
-					       fun->value_ptr.function->flags
-					       & FOUND_AMP_KEY))
-		{
-		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-		  return NULL;
-		}
-	    }
-
-	  meth = alloc_method ();
-	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_reader_class = class;
-	  meth->value_ptr.method->object_reader_field = name;
-	  add_method (fun, meth);
-	  decrement_refcount (meth);
-	}
-      else if (symbol_equals (CAR (fieldform), ":WRITER", env))
-	{
-	  if (SYMBOL (CDR (fieldform)) == &nil_object)
-	    {
-	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
-		(env, outcome);
-	      return NULL;
-	    }
-	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
-	    {
-	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
-	      return NULL;
-	    }
-
-
-	  if (!IS_FUNCTION_NAME (CAR (CDR (fieldform))))
-	    {
-	      raise_type_error (CAR (CDR (fieldform)),
-				"CL-USER:AL-FUNCTION-NAME", env, outcome);
-	      return NULL;
-	    }
-
-	  writer = CAR (CDR (fieldform));
-	  funcname = writer->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (writer)))
-	    : SYMBOL (writer);
-	  fun = writer->type == TYPE_CONS_PAIR
-	    ? funcname->value_ptr.symbol->setf_func_cell
-	    : funcname->value_ptr.symbol->function_cell;
-
-	  if (fun && (funcname->value_ptr.symbol->is_macro
-		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	    {
-	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	      return NULL;
-	    }
-
-	  lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
-	  lambdal->typespec = &t_object;
-	  lambdal->next->typespec = classname;
-	  increment_refcount (classname);
-
-	  if (!fun)
-	    {
-	      fun = create_empty_generic_function (funcname,
-						   writer->type == TYPE_CONS_PAIR,
-						   env);
-	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal,
-								       0);
-	      decrement_refcount (fun);
-	    }
-	  else
-	    {
-	      if (!are_lambda_lists_congruent (lambdal, 0,
-					       fun->value_ptr.function->lambda_list,
-					       fun->value_ptr.function->flags
-					       & FOUND_AMP_KEY))
-		{
-		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-		  return NULL;
-		}
-	    }
-
-	  meth = alloc_method ();
-	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_writer_class = class;
-	  meth->value_ptr.method->object_writer_field = name;
-	  add_method (fun, meth);
-	  decrement_refcount (meth);
-	}
-      else if (symbol_equals (CAR (fieldform), ":ACCESSOR", env))
-	{
-	  if (SYMBOL (CDR (fieldform)) == &nil_object)
-	    {
-	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
-		(env, outcome);
-	      return NULL;
-	    }
-	  else if (CDR (fieldform)->type != TYPE_CONS_PAIR)
-	    {
-	      raise_type_error (CDR (fieldform), "CL:CONS", env, outcome);
-	      return NULL;
-	    }
-
-
-	  if (!IS_SYMBOL (CAR (CDR (fieldform))))
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  accessor = SYMBOL (CAR (CDR (fieldform)));
-	  fun = accessor->value_ptr.symbol->function_cell;
-
-	  if (fun && (accessor->value_ptr.symbol->is_macro
-		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	    {
-	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	      return NULL;
-	    }
-
-	  lambdal = create_lambda_list (env, "OBJ", (char *)NULL);
-	  lambdal->typespec = classname;
-	  increment_refcount (classname);
-
-	  if (!fun)
-	    {
-	      fun = create_empty_generic_function (accessor, 0, env);
-	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal,
-								       0);
-	      decrement_refcount (fun);
-	    }
-	  else
-	    {
-	      if (!are_lambda_lists_congruent (lambdal, 0,
-					       fun->value_ptr.function->lambda_list,
-					       fun->value_ptr.function->flags
-					       & FOUND_AMP_KEY))
-		{
-		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-		  return NULL;
-		}
-	    }
-
-	  meth = alloc_method ();
-	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_accessor_class = class;
-	  meth->value_ptr.method->object_accessor_field = name;
-	  add_method (fun, meth);
-	  decrement_refcount (meth);
-
-
-	  fun = accessor->value_ptr.symbol->setf_func_cell;
-
-	  if (fun && (accessor->value_ptr.symbol->is_macro
-		      || !(fun->value_ptr.function->flags & GENERIC_FUNCTION)))
-	    {
-	      outcome->type = CANT_REDEFINE_AS_GENERIC_FUNCTION;
-	      return NULL;
-	    }
-
-	  lambdal = create_lambda_list (env, "NEWVAL", "OBJ", (char *)NULL);
-	  lambdal->typespec = &t_object;
-	  lambdal->next->typespec = classname;
-	  increment_refcount (classname);
-
-	  if (!fun)
-	    {
-	      fun = create_empty_generic_function (accessor, 1, env);
-	      fun->value_ptr.function->lambda_list = copy_lambda_list (lambdal, 0);
-	      decrement_refcount (fun);
-	    }
-	  else
-	    {
-	      if (!are_lambda_lists_congruent (lambdal, 0,
-					       fun->value_ptr.function->lambda_list,
-					       fun->value_ptr.function->flags
-					       & FOUND_AMP_KEY))
-		{
-		  outcome->type = LAMBDA_LISTS_NOT_CONGRUENT;
-		  return NULL;
-		}
-	    }
-
-	  meth = alloc_method ();
-	  meth->value_ptr.method->lambda_list = lambdal;
-	  meth->value_ptr.method->object_accessor_class = class;
-	  meth->value_ptr.method->object_accessor_field = name;
-	  add_method (fun, meth);
-	  decrement_refcount (meth);
 	}
       else if (symbol_equals (CAR (fieldform), ":ALLOCATION", env))
 	{
@@ -11819,11 +11552,11 @@ void
 add_condition_class (char *name, struct environment *env, int is_standard, ...)
 {
   va_list valist;
-  char *s, *rn;
+  char *s;
   struct object *condcl, *pack = inspect_variable (env->package_sym, env),
     *sym = intern_symbol_by_char_vector (name, strlen (name), 1,
 					 EXTERNAL_VISIBILITY, 1, pack, 0, 0),
-    *par, *rs;
+    *par;
   struct object_list *l;
   struct standard_class *cc;
   struct class_field_decl *f, *prev;
@@ -11870,30 +11603,12 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
       increment_refcount (l->obj);
       l->next = NULL;
       f->initargs = l;
+      f->initform = &nil_object;
 
       if (cc->fields)
 	prev = prev->next = f;
       else
 	cc->fields = prev = f;
-
-      rn = concatenate_char_vectors (sym->value_ptr.symbol->name_len + 1
-				     + par->value_ptr.symbol->name_len,
-				     sym->value_ptr.symbol->name,
-				     sym->value_ptr.symbol->name_len, "-", 1,
-				     par->value_ptr.symbol->name,
-				     par->value_ptr.symbol->name_len,
-				     (char *)NULL);
-
-      rs = intern_symbol_by_char_vector (rn, sym->value_ptr.symbol->name_len+1+
-					 par->value_ptr.symbol->name_len, 0,
-					 EXTERNAL_VISIBILITY, 1, pack, 0, 0);
-      increment_refcount (rs);
-      rs->value_ptr.symbol->function_cell = alloc_function ();
-      rs->value_ptr.symbol->function_cell->value_ptr.function->
-	condition_reader_class_name = sym;
-      rs->value_ptr.symbol->function_cell->value_ptr.function->
-	condition_reader_field = par;
-      rs->value_ptr.symbol->function_cell->value_ptr.function->name = rs;
     }
 
   sym->value_ptr.symbol->typespec = condcl;
@@ -16120,104 +15835,6 @@ call_function (struct object *func, struct object *arglist,
 
       return ret;
     }
-  else if (func->value_ptr.function->struct_constructor_class_name)
-    {
-      args = evaluate_through_list (arglist, env, outcome);
-
-      if (!args)
-	{
-	  env->stack_depth--;
-	  return NULL;
-	}
-
-      ret = call_structure_constructor (func->value_ptr.function->
-					struct_constructor_class_name, args, env,
-					outcome);
-
-      decrement_refcount (args);
-
-      env->stack_depth--;
-      return ret;
-    }
-  else if (func->value_ptr.function->struct_predicate_class_name)
-    {
-      args = evaluate_through_list (arglist, env, outcome);
-
-      if (!args)
-	{
-	  env->stack_depth--;
-	  return NULL;
-	}
-
-      ret = call_structure_predicate (func->value_ptr.function->
-				      struct_predicate_class_name, args, env,
-				      outcome);
-
-      decrement_refcount (args);
-
-      env->stack_depth--;
-      return ret;
-    }
-  else if (func->value_ptr.function->struct_copyier_class_name)
-    {
-      args = evaluate_through_list (arglist, env, outcome);
-
-      if (!args)
-	{
-	  env->stack_depth--;
-	  return NULL;
-	}
-
-      ret = call_structure_copyier (func->value_ptr.function->
-				    struct_copyier_class_name, args, env,
-				    outcome);
-
-      decrement_refcount (args);
-
-      env->stack_depth--;
-      return ret;
-    }
-  else if (func->value_ptr.function->struct_accessor_class_name)
-    {
-      args = evaluate_through_list (arglist, env, outcome);
-
-      if (!args)
-	{
-	  env->stack_depth--;
-	  return NULL;
-	}
-
-      ret = call_structure_accessor (func->value_ptr.function->
-				     struct_accessor_class_name,
-				     func->value_ptr.function->
-				     struct_accessor_field, args, NULL, env,
-				     outcome);
-
-      decrement_refcount (args);
-
-      env->stack_depth--;
-      return ret;
-    }
-  else if (func->value_ptr.function->condition_reader_class_name)
-    {
-      args = evaluate_through_list (arglist, env, outcome);
-
-      if (!args)
-	{
-	  env->stack_depth--;
-	  return NULL;
-	}
-
-      ret = call_condition_reader (func->value_ptr.function->
-				   condition_reader_class_name,
-				   func->value_ptr.function->
-				   condition_reader_field, args, env, outcome);
-
-      decrement_refcount (args);
-
-      env->stack_depth--;
-      return ret;
-    }
 
 
   if (func->value_ptr.function->flags & GENERIC_FUNCTION)
@@ -16721,7 +16338,6 @@ call_method (struct method_list *methlist, struct object *arglist,
   struct object *ret, *func = methlist->meth->value_ptr.method->generic_func,
     *body;
   struct method_list *methl;
-  struct class_field *f;
   int argsnum, closnum, prev_lex_bin_num = env->lex_env_vars_boundary;
 
   if (!methlist->meth->value_ptr.method->body)
@@ -16751,210 +16367,6 @@ call_method (struct method_list *methlist, struct object *arglist,
 	    }
 
 	  return ret;
-	}
-      else if (methlist->meth->value_ptr.method->object_reader_class)
-	{
-	  if (list_length (arglist) != 1)
-	    {
-	      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-	    }
-
-	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
-	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class,
-			      methlist->meth->value_ptr.method->
-			      object_reader_class, NULL, env, outcome))
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  f = CAR (arglist)->value_ptr.standard_object->fields;
-
-	  while (f)
-	    {
-	      if (f->decl->name
-		  == methlist->meth->value_ptr.method->object_reader_field)
-		{
-		  if ((f->name && !f->value) || (!f->name && !f->decl->value))
-		    {
-		      outcome->type = SLOT_NOT_BOUND;
-		      return NULL;
-		    }
-
-		  if (f->name)
-		    {
-		      increment_refcount (f->value);
-		      return f->value;
-		    }
-		  else
-		    {
-		      increment_refcount (f->decl->value);
-		      return f->decl->value;
-		    }
-		}
-
-	      f = f->next;
-	    }
-
-	  return NULL;
-	}
-      else if (methlist->meth->value_ptr.method->object_writer_class)
-	{
-	  if (list_length (arglist) != 2)
-	    {
-	      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
-	    }
-
-	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
-	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
-			      class,
-			      methlist->meth->value_ptr.method->
-			      object_writer_class, NULL, env, outcome))
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  f = CAR (CDR (arglist))->value_ptr.standard_object->fields;
-
-	  while (f)
-	    {
-	      if (f->decl->name
-		  == methlist->meth->value_ptr.method->object_writer_field)
-		{
-		  if (IS_WATCHED (CAR (CDR (arglist))))
-		    {
-		      env->watched_obj = CAR (CDR (arglist));
-		      env->obj_field = f->decl->name;
-		      env->new_value = CAR (arglist);
-
-		      if (!enter_debugger (NULL, env, outcome))
-			return NULL;
-		    }
-
-		  if (f->name)
-		    {
-		      decrement_refcount (f->value);
-		      f->value = CAR (arglist);
-		    }
-		  else
-		    {
-		      decrement_refcount (f->decl->value);
-		      f->decl->value = CAR (arglist);
-		    }
-
-		  increment_refcount (CAR (arglist));
-		  increment_refcount (CAR (arglist));
-		  return CAR (arglist);
-		}
-
-	      f = f->next;
-	    }
-
-	  return NULL;
-	}
-      else if (methlist->meth->value_ptr.method->object_accessor_class
-	       && !methlist->meth->value_ptr.method->generic_func->
-	       value_ptr.function->is_setf_func)
-	{
-	  if (list_length (arglist) != 1)
-	    {
-	      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-	    }
-
-	  if (CAR (arglist)->type != TYPE_STANDARD_OBJECT
-	      || !is_subtype (CAR (arglist)->value_ptr.standard_object->class,
-			      methlist->meth->value_ptr.method->
-			      object_accessor_class, NULL, env, outcome))
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  f = CAR (arglist)->value_ptr.standard_object->fields;
-
-	  while (f)
-	    {
-	      if (f->decl->name
-		  == methlist->meth->value_ptr.method->object_accessor_field)
-		{
-		  if ((f->name && !f->value) || (!f->name && !f->decl->value))
-		    {
-		      outcome->type = SLOT_NOT_BOUND;
-		      return NULL;
-		    }
-
-		  if (f->name)
-		    {
-		      increment_refcount (f->value);
-		      return f->value;
-		    }
-		  else
-		    {
-		      increment_refcount (f->decl->value);
-		      return f->decl->value;
-		    }
-		}
-
-	      f = f->next;
-	    }
-
-	  return NULL;
-	}
-      else if (methlist->meth->value_ptr.method->object_accessor_class)
-	{
-	  if (list_length (arglist) != 2)
-	    {
-	      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
-	    }
-
-	  if (CAR (CDR (arglist))->type != TYPE_STANDARD_OBJECT
-	      || !is_subtype (CAR (CDR (arglist))->value_ptr.standard_object->
-			      class,
-			      methlist->meth->value_ptr.method->
-			      object_accessor_class, NULL, env, outcome))
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  f = CAR (CDR (arglist))->value_ptr.standard_object->fields;
-
-	  while (f)
-	    {
-	      if (f->decl->name
-		  == methlist->meth->value_ptr.method->object_accessor_field)
-		{
-		  if (IS_WATCHED (CAR (CDR (arglist))))
-		    {
-		      env->watched_obj = CAR (CDR (arglist));
-		      env->obj_field = f->decl->name;
-		      env->new_value = CAR (arglist);
-
-		      if (!enter_debugger (NULL, env, outcome))
-			return NULL;
-		    }
-
-		  if (f->name)
-		    {
-		      decrement_refcount (f->value);
-		      f->value = CAR (arglist);
-		    }
-		  else
-		    {
-		      decrement_refcount (f->decl->value);
-		      f->decl->value = CAR (arglist);
-		    }
-
-		  increment_refcount (CAR (arglist));
-		  increment_refcount (CAR (arglist));
-		  return CAR (arglist);
-		}
-
-	      f = f->next;
-	    }
-
-	  return NULL;
 	}
     }
 
@@ -32576,32 +31988,6 @@ setf_value (struct object *form, struct object *value, int eval_value,
 
 	  env->vars = remove_bindings (env->vars, binsnum, 1);
 	  env->lex_env_vars_boundary -= binsnum;
-	}
-      else if ((fun = SYMBOL (CAR (form))->value_ptr.symbol->
-		function_cell)
-	       && fun->value_ptr.function->struct_accessor_class_name)
-	{
-	  args = evaluate_through_list (CDR (form), env, outcome);
-
-	  if (!args)
-	    return NULL;
-
-	  if (eval_value)
-	    {
-	      value = evaluate_object (value, env, outcome);
-	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-	      if (!value)
-		return NULL;
-	    }
-
-	  val = call_structure_accessor (fun->value_ptr.function->
-					 struct_accessor_class_name,
-					 fun->value_ptr.function->
-					 struct_accessor_field, args, value,
-					 env, outcome);
-
-	  decrement_refcount (args);
 	}
       else
 	{

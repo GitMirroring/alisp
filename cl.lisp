@@ -3825,6 +3825,41 @@
 
 
 
+(defun package-error-package (cond)
+  (slot-value cond 'package))
+
+(defun unbound-slot-instance (cond)
+  (slot-value cond 'instance))
+
+(defun cell-error-name (cond)
+  (slot-value cond 'name))
+
+(defun type-error-datum (cond)
+  (slot-value cond 'datum))
+
+(defun type-error-expected-type (cond)
+  (slot-value cond 'expected-type))
+
+(defun file-error-pathname (cond)
+  (slot-value cond 'pathname))
+
+(defun stream-error-stream (cond)
+  (slot-value cond 'stream))
+
+(defun arithmetic-error-operation (cond)
+  (slot-value cond 'operation))
+
+(defun arithmetic-error-operands (cond)
+  (slot-value cond 'operands))
+
+(defun simple-condition-format-control (cond)
+  (slot-value cond 'format-control))
+
+(defun simple-condition-format-arguments (cond)
+  (slot-value cond 'format-arguments))
+
+
+
 (defparameter cl-user::*al-enable-breakpoints* t)
 (export 'cl-user::*al-enable-breakpoints* 'cl-user)
 
@@ -3937,8 +3972,12 @@
            *compile-file-truename* *compile-file-pathname* *compile-print*
            *compile-verbose* compile-file-pathname compile-file compile
            with-standard-io-syntax handler-case restart-case with-simple-restart
-           find-restart cerror break ignore-errors abort continue muffle-warning
-           documentation))
+           find-restart cerror package-error-package unbound-slot-instance
+           cell-error-name type-error-datum type-error-expected-type
+           file-error-pathname stream-error-stream arithmetic-error-operation
+           arithmetic-error-operands simple-condition-format-control
+           simple-condition-format-arguments break ignore-errors abort continue
+           muffle-warning documentation))
   (export sym)
   (if (fboundp sym)
       (compile sym)))
