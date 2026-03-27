@@ -34038,7 +34038,7 @@ builtin_al_defstruct (struct object *list, struct environment *env,
     *pack = inspect_variable (env->package_sym, env);
   struct structure_class *sc;
   struct structure_field_decl *f, *prev;
-  char *constr_name, *acc_name;
+  char *constr_name;
 
   if (!list_length (list))
     {
@@ -34133,45 +34133,6 @@ builtin_al_defstruct (struct object *list, struct environment *env,
   funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
   add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
 
-
-  f = sc->fields;
-
-  while (f)
-    {
-      acc_name = malloc_and_check (name->value_ptr.symbol->name_len + 1 +
-				   f->name->value_ptr.symbol->name_len);
-      memcpy (acc_name, name->value_ptr.symbol->name,
-	      name->value_ptr.symbol->name_len);
-      memcpy (acc_name+name->value_ptr.symbol->name_len, "-", 1);
-      memcpy (acc_name+name->value_ptr.symbol->name_len+1,
-	      f->name->value_ptr.symbol->name,
-	      f->name->value_ptr.symbol->name_len);
-
-      funcname = intern_symbol_by_char_vector (acc_name,
-					       name->value_ptr.symbol->name_len +
-					       1 +
-					       f->name->value_ptr.symbol->name_len,
-					       1, INTERNAL_VISIBILITY, 1, pack,
-					       0, 0);
-      free (acc_name);
-      increment_refcount (funcname);
-
-      delete_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
-      funcname->value_ptr.symbol->function_cell = alloc_function ();
-      add_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
-      decrement_refcount (funcname->value_ptr.symbol->function_cell);
-
-      funcname->value_ptr.symbol->function_cell->value_ptr.function->
-	struct_accessor_class_name = name;
-      funcname->value_ptr.symbol->function_cell->value_ptr.function->
-	struct_accessor_field = f->name;
-
-      funcname->value_ptr.symbol->function_cell->value_ptr.function->name =
-	funcname;
-      add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
-
-      f = f->next;
-    }
 
   increment_refcount (name);
   return name;
