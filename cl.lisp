@@ -801,7 +801,7 @@
 
 
 (defmacro defstruct (name-and-opts &rest slotcls)
-  (let (name opt copier pred slots funcdefs)
+  (let (name opt constr copier pred slots funcdefs)
     (if (symbolp name-and-opts)
 	(setq name name-and-opts)
 	(progn
@@ -815,6 +815,7 @@
 		((eq (car opt) :predicate)
 		 (setq pred (cadr opt))))
 	      (setq name-and-opts (cdr name-and-opts))))))
+    (setq constr (intern (concatenate 'string "MAKE-" (string name))))
     (unless copier
       (setq copier (intern (concatenate 'string "COPY-" (string name)))))
     (unless pred
@@ -835,6 +836,8 @@
     `(progn
        (apply 'cl-user:al-defstruct ',name ',slots)
        ,@funcdefs
+       (defun ,constr (&rest args)
+	 (apply 'cl-user:al-make-structure ',name args))
        (defun ,copier (struct)
 	 (copy-structure struct))
        (defun ,pred (struct)

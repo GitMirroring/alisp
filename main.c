@@ -3006,6 +3006,8 @@ struct object *evaluate_symbol_macrolet
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_defstruct
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_make_structure
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_copy_structure
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_defclass
@@ -4648,6 +4650,8 @@ add_standard_definitions (struct environment *env)
 		    0, NULL, 0);
 
   add_builtin_form ("AL-DEFSTRUCT", env, builtin_al_defstruct, 0, NULL, 0);
+  add_builtin_form ("AL-MAKE-STRUCTURE", env, builtin_al_make_structure, 0, NULL,
+		    0);
   add_builtin_form ("AL-DEFCLASS", env, builtin_al_defclass, 0, NULL, 0);
 
   add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
@@ -34034,11 +34038,9 @@ struct object *
 builtin_al_defstruct (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
-  struct object *name, *strcl, *funcname, *cons,
-    *pack = inspect_variable (env->package_sym, env);
+  struct object *name, *strcl, *cons;
   struct structure_class *sc;
   struct structure_field_decl *f, *prev;
-  char *constr_name;
 
   if (!list_length (list))
     {
@@ -34111,31 +34113,169 @@ builtin_al_defstruct (struct object *list, struct environment *env,
       list = CDR (list);
     }
 
-  constr_name =
-    concatenate_char_vectors (5 + name->value_ptr.symbol->name_len, "MAKE-", 5,
-			      name->value_ptr.symbol->name,
-			      name->value_ptr.symbol->name_len, (char *)NULL);
-
-  funcname = intern_symbol_by_char_vector (constr_name,
-					   5+name->value_ptr.symbol->name_len, 1,
-					   INTERNAL_VISIBILITY, 1, pack, 0, 0);
-  free (constr_name);
-  increment_refcount (funcname);
-
-  delete_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
-  funcname->value_ptr.symbol->function_cell = alloc_function ();
-  add_reference (funcname, funcname->value_ptr.symbol->function_cell, 1);
-  decrement_refcount (funcname->value_ptr.symbol->function_cell);
-
-  funcname->value_ptr.symbol->function_cell->value_ptr.function->
-    struct_constructor_class_name = name;
-
-  funcname->value_ptr.symbol->function_cell->value_ptr.function->name = funcname;
-  add_reference (funcname->value_ptr.symbol->function_cell, funcname, 0);
-
 
   increment_refcount (name);
   return name;
+}
+
+
+struct object *
+builtin_al_make_structure (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  struct object *ret, *class_name, *allow_other_keys = NULL;
+  struct structure *s;
+  struct structure_field *f;
+  struct structure_field_decl *fd;
+  int found_unknown_key = 0;
+
+  if (!list_length (list))
+    {
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+    }
+
+  class_name = SYMBOL (CAR (list));
+
+  if (!class_name->value_ptr.symbol->typespec
+      || class_name->value_ptr.symbol->typespec->type != TYPE_STRUCTURE_CLASS)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  list = CDR (list);
+
+  ret = alloc_object ();
+  ret->type = TYPE_STRUCTURE;
+
+  s = malloc_and_check (sizeof (*s));
+  s->class_name = class_name;
+  s->fields = NULL;
+  ret->value_ptr.structure = s;
+
+  fd = class_name->value_ptr.symbol->typespec->value_ptr.structure_class->fields;
+
+  while (fd)
+    {
+      if (s->fields)
+	f = f->next = malloc_and_check (sizeof (*f));
+      else
+	s->fields = f = malloc_and_check (sizeof (*f));
+
+      f->name = fd->name;
+      f->value = NULL;
+
+      fd = fd->next;
+    }
+
+  if (s->fields)
+    f->next = NULL;
+
+
+  while (list->type == TYPE_CONS_PAIR)
+    {
+      f = s->fields;
+
+      while (f)
+	{
+	  if (eqmem (f->name->value_ptr.symbol->name,
+		     f->name->value_ptr.symbol->name_len,
+		     IS_SYMBOL (CAR (list))
+		     ? SYMBOL (CAR (list))->value_ptr.symbol->name : "",
+		     IS_SYMBOL (CAR (list))
+		     ? SYMBOL (CAR (list))->value_ptr.symbol->name_len : 0))
+	    {
+	      if (!IS_LIST (CDR (list)))
+		{
+		  raise_type_error (CDR (list), "CL:CONS", env, outcome);
+		  return NULL;
+		}
+
+	      if (SYMBOL (CDR (list)) == &nil_object)
+		{
+		  raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		    (env, outcome);
+		  return NULL;
+		}
+
+	      if (!f->value)
+		{
+		  f->value = CAR (CDR (list));
+		  increment_refcount (f->value);
+		}
+
+	      break;
+	    }
+
+	  f = f->next;
+	}
+
+      if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (!IS_LIST (CDR (list)))
+	    {
+	      raise_type_error (CDR (list), "CL:CONS", env, outcome);
+	      return NULL;
+	    }
+
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+	}
+
+      if (!f && SYMBOL (CAR (list)) != env->key_allow_other_keys_sym)
+	{
+	  found_unknown_key = 1;
+	}
+
+      if (!IS_LIST (CDR (list)))
+	{
+	  raise_type_error (CDR (list), "CL:CONS", env, outcome);
+	  return NULL;
+	}
+
+      if (SYMBOL (CDR (list)) == &nil_object)
+	{
+	  raise_al_odd_number_of_arguments_in_keyword_part_of_form
+	    (env, outcome);
+	  return NULL;
+	}
+
+      list = CDR (CDR (list));
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      raise_al_unknown_keyword_argument (env, outcome);
+      return NULL;
+    }
+
+
+  f = s->fields;
+
+  while (f)
+    {
+      if (!f->value)
+	{
+	  f->value = &nil_object;
+	}
+
+      f = f->next;
+    }
+
+  return ret;
 }
 
 
