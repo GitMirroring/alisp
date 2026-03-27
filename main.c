@@ -2364,23 +2364,6 @@ int type_structure_class (const struct object *obj, const struct object *typespe
 int type_standard_class (const struct object *obj, const struct object *typespec,
 			 struct environment *env, struct outcome *outcome);
 
-int type_type_error (const struct object *obj, const struct object *typespec,
-		     struct environment *env, struct outcome *outcome);
-int type_file_error (const struct object *obj, const struct object *typespec,
-		     struct environment *env, struct outcome *outcome);
-int type_division_by_zero (const struct object *obj,
-			   const struct object *typespec,
-			   struct environment *env, struct outcome *outcome);
-int type_arithmetic_error (const struct object *obj,
-			   const struct object *typespec,
-			   struct environment *env, struct outcome *outcome);
-int type_error (const struct object *obj, const struct object *typespec,
-		struct environment *env, struct outcome *outcome);
-int type_serious_condition (const struct object *obj,
-			    const struct object *typespec,
-			    struct environment *env, struct outcome *outcome);
-int type_condition (const struct object *obj, const struct object *typespec,
-		    struct environment *env, struct outcome *outcome);
 int type_restart (const struct object *obj, const struct object *typespec,
 		  struct environment *env, struct outcome *outcome);
 
@@ -19452,62 +19435,6 @@ type_standard_class (const struct object *obj, const struct object *typespec,
 		     struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_STANDARD_CLASS;
-}
-
-
-int
-type_type_error (const struct object *obj, const struct object *typespec,
-		 struct environment *env, struct outcome *outcome)
-{
-  return 0;
-}
-
-
-int
-type_file_error (const struct object *obj, const struct object *typespec,
-		 struct environment *env, struct outcome *outcome)
-{
-  return 0;
-}
-
-
-int
-type_division_by_zero (const struct object *obj, const struct object *typespec,
-		       struct environment *env, struct outcome *outcome)
-{
-  return 0;
-}
-
-
-int
-type_arithmetic_error (const struct object *obj, const struct object *typespec,
-		       struct environment *env, struct outcome *outcome)
-{
-  return 0;
-}
-
-
-int
-type_error (const struct object *obj, const struct object *typespec,
-	    struct environment *env, struct outcome *outcome)
-{
-  return 0;
-}
-
-
-int
-type_serious_condition (const struct object *obj, const struct object *typespec,
-			struct environment *env, struct outcome *outcome)
-{
-  return 0;
-}
-
-
-int
-type_condition (const struct object *obj, const struct object *typespec,
-		struct environment *env, struct outcome *outcome)
-{
-  return 0;
 }
 
 
