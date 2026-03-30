@@ -896,6 +896,12 @@
 
 
 
+(defmethod make-instances-obsolete :around ((classname symbol))
+  (call-next-method (find-class classname))
+  classname)
+
+
+
 (defmacro case (keyf &rest clauses)
   (let ((keysym (gensym))
 	outsym)

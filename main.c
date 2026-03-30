@@ -1279,6 +1279,8 @@ standard_class
 
   int is_condition_class;
 
+  int class_version;
+
   struct object_list *parents;
   struct object_list *descendants;
 
@@ -1307,6 +1309,8 @@ struct
 standard_object
 {
   struct object *class;
+
+  int instance_version;
 
   struct class_field *fields;
 };
@@ -1594,6 +1598,7 @@ struct line_list *append_line_to_list
 
 fixnum object_list_length (struct object_list *list);
 void prepend_object_to_obj_list (struct object *obj, struct object_list **list);
+void remove_object_from_obj_list (struct object *obj, struct object_list **list);
 struct object *prepend_object_to_list (struct object *obj, struct object *list);
 struct object_list *copy_list_to_obj_list (struct object *list);
 struct object *copy_obj_list_to_list (struct object_list *list);
@@ -1865,6 +1870,9 @@ struct object *fill_object_fields (struct object *stdobj, struct object *class,
 				   struct object *initargs,
 				   struct environment *env,
 				   struct outcome *outcome);
+struct object *update_object_fields (struct object *stdobj,
+				     struct environment *env,
+				     struct outcome *outcome);
 
 struct object *load_file (const char *filename, int print_filename,
 			  int print_each_form, struct environment *env,
@@ -2182,6 +2190,7 @@ struct object_list *remove_element_from_obj_list (struct object *el,
 struct precedence_relation *remove_relations_with_given_first
 (struct object *el, struct precedence_relation *rels);
 int compute_class_precedence_list (struct object *class, struct outcome *outcome);
+void increment_class_version (struct object *class);
 
 int is_method_applicable (struct object *meth, struct object *args,
 			  struct environment *env, struct outcome *outcome);
@@ -2995,6 +3004,8 @@ struct object *builtin_method_allocate_instance
 struct object *builtin_method_initialize_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_reinitialize_instance
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_method_make_instances_obsolete
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_change_class
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4308,6 +4319,7 @@ add_standard_definitions (struct environment *env)
   stdobjcl->value_ptr.standard_class =
     malloc_and_check (sizeof (*stdobjcl->value_ptr.standard_class));
   stdobjcl->value_ptr.standard_class->is_condition_class = 0;
+  stdobjcl->value_ptr.standard_class->class_version = 0;
   stdobjcl->value_ptr.standard_class->parents = NULL;
   stdobjcl->value_ptr.standard_class->descendants = NULL;
   stdobjcl->value_ptr.standard_class->fields = NULL;
@@ -4590,6 +4602,10 @@ add_standard_definitions (struct environment *env)
   define_generic_function ("REINITIALIZE-INSTANCE", env,
 			   copy_lambda_list (lambdal, 0),
 			   builtin_method_reinitialize_instance);
+
+  lambdal = create_lambda_list (env, "CLASS", (char *)NULL);
+  define_generic_function ("MAKE-INSTANCES-OBSOLETE", env, lambdal,
+			   builtin_method_make_instances_obsolete);
 
   lambdal = create_lambda_list (env, "INSTANCE", "NEW-CLASS", (char *)NULL);
   lambdal->next->next = alloc_parameter (REST_PARAM, NULL);
@@ -5341,6 +5357,34 @@ prepend_object_to_obj_list (struct object *obj, struct object_list **list)
   l->next = *list;
 
   *list = l;
+}
+
+
+void
+remove_object_from_obj_list (struct object *obj, struct object_list **list)
+{
+  struct object_list *l = *list, *prev = NULL;
+
+  while (l)
+    {
+      if (l->obj == obj)
+	{
+	  if (prev)
+	    {
+	      prev->next = l->next;
+	    }
+	  else
+	    {
+	      *list = l->next;
+	    }
+
+	  free (l);
+	  return;
+	}
+
+      prev = l;
+      l = l->next;
+    }
 }
 
 
@@ -10427,24 +10471,58 @@ struct object *
 define_class (struct object *name, struct object *form, int is_condition_class,
 	      struct environment *env, struct outcome *outcome)
 {
-  struct object *class = alloc_object (), *cons;
-  struct standard_class *sc = malloc_and_check (sizeof (*sc));
+  struct object *class, *cons;
+  struct standard_class *sc;
   struct class_field_decl *f, *prev;
   struct object_list *p;
+  int was_redefined = 0;
 
-  class->type = TYPE_STANDARD_CLASS;
-  class->value_ptr.standard_class = sc;
+  if (name->value_ptr.symbol->typespec
+      && name->value_ptr.symbol->typespec->type == TYPE_STANDARD_CLASS)
+    {
+      class = name->value_ptr.symbol->typespec;
+      sc = class->value_ptr.standard_class;
 
-  increment_refcount (name);
-  sc->name = name;
-  sc->is_condition_class = is_condition_class;
+      if (sc->class_precedence_list)
+	{
+	  p = sc->parents;
 
-  name->value_ptr.symbol->is_type = 1;
+	  while (p)
+	    {
+	      remove_object_from_obj_list (class,
+					   &p->obj->value_ptr.standard_class->
+					   descendants);
+	      p = p->next;
+	    }
+	}
 
-  delete_reference (name, name->value_ptr.symbol->typespec, 4);
-  name->value_ptr.symbol->typespec = class;
-  add_reference (name, class, 4);
+      free_object_list_structure (sc->parents);
 
+      was_redefined = 1;
+    }
+  else
+    {
+      class = alloc_object ();
+
+      class->type = TYPE_STANDARD_CLASS;
+
+      sc = malloc_and_check (sizeof (*sc));
+      class->value_ptr.standard_class = sc;
+
+      increment_refcount (name);
+      sc->name = name;
+      sc->is_condition_class = is_condition_class;
+      sc->class_version = 0;
+      sc->descendants = NULL;
+
+      name->value_ptr.symbol->is_type = 1;
+
+      delete_reference (name, name->value_ptr.symbol->typespec, 4);
+      name->value_ptr.symbol->typespec = class;
+      add_reference (name, class, 4);
+    }
+
+  sc->class_version++;
 
   sc->parents = NULL;
   cons = CAR (form);
@@ -10482,7 +10560,6 @@ define_class (struct object *name, struct object *form, int is_condition_class,
       sc->parents->next = NULL;
     }
 
-  sc->descendants = NULL;
   sc->class_precedence_list = NULL;
   sc->fields = NULL;
   form = CAR (CDR (form));
@@ -10504,6 +10581,14 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 
   if (SYMBOL (form) != &nil_object)
     return raise_type_error (form, "CL:LIST", env, outcome);
+
+  if (was_redefined)
+    {
+      if (!compute_class_precedence_list (class, NULL))
+	return NULL;
+
+      increment_class_version (class);
+    }
 
   return class;
 }
@@ -10703,6 +10788,127 @@ fill_object_fields (struct object *stdobj, struct object *class,
 	}
 
       f = f->next;
+    }
+
+  return stdobj;
+}
+
+
+struct object *
+update_object_fields (struct object *stdobj, struct environment *env,
+		      struct outcome *outcome)
+{
+  struct class_field *prevf = NULL,
+    *f = stdobj->value_ptr.standard_object->fields;
+  struct object_list *p;
+  struct class_field_decl *cf;
+
+  while (f)
+    {
+      p = stdobj->value_ptr.standard_object->class->value_ptr.standard_class
+	->class_precedence_list;
+
+      while (p)
+	{
+	  cf = p->obj->value_ptr.standard_class->fields;
+
+	  while (cf)
+	    {
+	      if (cf->name == f->decl->name)
+		{
+		  break;
+		}
+
+	      cf = cf->next;
+	    }
+
+	  if (cf)
+	    break;
+
+	  p = p->next;
+	}
+
+      if (!p)
+	{
+	  if (!prevf)
+	    stdobj->value_ptr.standard_object->fields = f->next;
+	  else
+	    prevf->next = f->next;
+
+	  free (f);
+
+	  f = prevf ? prevf->next : stdobj->value_ptr.standard_object->fields;
+	}
+      else
+	{
+	  prevf = f;
+	  f = f->next;
+	}
+    }
+
+
+  p = stdobj->value_ptr.standard_object->class->value_ptr.standard_class
+    ->class_precedence_list;
+
+  while (p)
+    {
+      cf = p->obj->value_ptr.standard_class->fields;
+
+      while (cf)
+	{
+	  f = stdobj->value_ptr.standard_object->fields;
+
+	  while (f)
+	    {
+	      if (cf->name == f->decl->name)
+		break;
+
+	      f = f->next;
+	    }
+
+	  if (!f)
+	    {
+	      f = malloc_and_check (sizeof (*f));
+
+	      if (cf->alloc_type == INSTANCE_ALLOCATION)
+		f->name = cf->name;
+	      else
+		f->name = NULL;
+
+	      f->decl = cf;
+
+	      if (!f->name)
+		{
+		  if (f->decl->initform)
+		    {
+		      f->decl->value = evaluate_object (f->decl->initform, env,
+							outcome);
+		      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+		      if (!f->decl->value)
+			return NULL;
+		    }
+		}
+	      else
+		{
+		  if (f->decl->initform)
+		    {
+		      f->value = evaluate_object (f->decl->initform, env, outcome);
+		      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+		      if (!f->value)
+			return NULL;
+		    }
+		}
+
+	      f->next = stdobj->value_ptr.standard_object->fields;
+	      stdobj->value_ptr.standard_object->fields = f;
+	    }
+
+	  cf = cf->next;
+	}
+
+      p = p->next;
     }
 
   return stdobj;
@@ -11505,6 +11711,7 @@ create_condition (struct object *type, struct object *args,
   so = malloc_and_check (sizeof (*so));
   so->class = type;
   increment_refcount (type);
+  so->instance_version = type->value_ptr.standard_class->class_version;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
@@ -11575,6 +11782,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   increment_refcount (sym);
   cc->name = sym;
   cc->is_condition_class = 1;
+  cc->class_version = 0;
   cc->parents = NULL;
   cc->descendants = NULL;
   cc->class_precedence_list = NULL;
@@ -11787,6 +11995,7 @@ create_empty_condition_by_c_string (char *classname, struct environment *env)
   so = malloc_and_check (sizeof (*so));
   so->class = class;
   increment_refcount (class);
+  so->instance_version = class->value_ptr.standard_class->class_version;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
@@ -16727,7 +16936,7 @@ compute_class_precedence_list (struct object *class, struct outcome *outcome)
   int ncd;
   struct precedence_relation *prec = add_precedence_relations (class, NULL,
 							       &ncd);
-  struct object_list *scs, *preclist = NULL, *last = NULL;
+  struct object_list *scs, *preclist = NULL, *last = NULL, *p;
   struct object *nextel;
 
   if (ncd)
@@ -16762,7 +16971,34 @@ compute_class_precedence_list (struct object *class, struct outcome *outcome)
 
   class->value_ptr.standard_class->class_precedence_list = preclist;
 
+
+  p = class->value_ptr.standard_class->parents;
+
+  while (p)
+    {
+      prepend_object_to_obj_list (class, &p->obj->value_ptr.standard_class
+				  ->descendants);
+      increment_refcount (class);
+      p = p->next;
+    }
+
+
   return 1;
+}
+
+
+void
+increment_class_version (struct object *class)
+{
+  struct object_list *d = class->value_ptr.standard_class->descendants;
+
+  class->value_ptr.standard_class->class_version++;
+
+  while (d)
+    {
+      increment_class_version (d->obj);
+      d = d->next;
+    }
 }
 
 
@@ -25490,6 +25726,17 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
     }
   else
     {
+      if (CAR (list)->value_ptr.standard_object->instance_version <
+	  CAR (list)->value_ptr.standard_object->class->
+	  value_ptr.standard_class->class_version)
+	{
+	  update_object_fields (CAR (list), env, outcome);
+
+	  CAR (list)->value_ptr.standard_object->instance_version
+	    = CAR (list)->value_ptr.standard_object->class->
+	    value_ptr.standard_class->class_version;
+	}
+
       cf = CAR (list)->value_ptr.standard_object->fields;
 
       while (cf)
@@ -33802,6 +34049,7 @@ builtin_method_make_instance (struct object *list, struct environment *env,
   so = malloc_and_check (sizeof (*so));
   so->class = class;
   increment_refcount (class);
+  so->instance_version = class->value_ptr.standard_class->class_version;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
@@ -33841,6 +34089,7 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
   so = malloc_and_check (sizeof (*so));
   so->class = CAR (list);
   increment_refcount (CAR (list));
+  so->instance_version = CAR (list)->value_ptr.standard_class->class_version;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
@@ -33891,6 +34140,35 @@ builtin_method_reinitialize_instance (struct object *list,
   return fill_object_fields_by_initargs (CAR (list),
 					 CAR (list)->value_ptr.standard_object->
 					 class, CDR (list), env, outcome);
+}
+
+
+struct object *
+builtin_method_make_instances_obsolete (struct object *list,
+					struct environment *env,
+					struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_CLASS)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (!CAR (list)->value_ptr.standard_class->class_precedence_list
+      && !compute_class_precedence_list (CAR (list), outcome))
+    {
+      return NULL;
+    }
+
+  increment_class_version (CAR (list));
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
@@ -34204,6 +34482,17 @@ builtin_slot_value (struct object *list, struct environment *env,
     }
   else
     {
+      if (CAR (list)->value_ptr.standard_object->instance_version <
+	  CAR (list)->value_ptr.standard_object->class->
+	  value_ptr.standard_class->class_version)
+	{
+	  update_object_fields (CAR (list), env, outcome);
+
+	  CAR (list)->value_ptr.standard_object->instance_version
+	    = CAR (list)->value_ptr.standard_object->class->
+	    value_ptr.standard_class->class_version;
+	}
+
       cf = CAR (list)->value_ptr.standard_object->fields;
 
       while (cf)
@@ -35785,6 +36074,7 @@ builtin_make_condition (struct object *list, struct environment *env,
   so = malloc_and_check (sizeof (*so));
   so->class = class;
   increment_refcount (class);
+  so->instance_version = class->value_ptr.standard_class->class_version;
   so->fields = NULL;
   ret->value_ptr.standard_object = so;
 
