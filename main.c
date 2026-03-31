@@ -1295,6 +1295,8 @@ class_field
 {
   struct object *name;
 
+  enum field_allocation_type alloc_type;
+
   struct object *value;
 
   struct class_field_decl *decl;
@@ -3263,6 +3265,7 @@ void free_float (struct object *obj);
 void free_bytespec (struct object *obj);
 void free_structure_class (struct object *obj);
 void free_structure (struct object *obj);
+void free_standard_class_fields (struct class_field_decl *f);
 void free_standard_class (struct object *obj);
 void free_standard_object (struct object *obj);
 void free_lambda_list_content (struct object *obj, struct parameter *par, int *i,
@@ -10473,7 +10476,7 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 {
   struct object *class, *cons;
   struct standard_class *sc;
-  struct class_field_decl *f, *prev;
+  struct class_field_decl *f, *prev, *prev_decls, *pd;
   struct object_list *p;
   int was_redefined = 0;
 
@@ -10497,8 +10500,10 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 	}
 
       free_object_list_structure (sc->parents);
+      free_object_list_structure (sc->class_precedence_list);
 
       was_redefined = 1;
+      prev_decls = sc->fields;
     }
   else
     {
@@ -10571,6 +10576,24 @@ define_class (struct object *name, struct object *form, int is_condition_class,
       if (!f)
 	return NULL;
 
+      if (was_redefined && f->alloc_type == CLASS_ALLOCATION)
+	{
+	  pd = prev_decls;
+
+	  while (pd)
+	    {
+	      if (pd->name == f->name)
+		{
+		  increment_refcount (pd->value);
+		  f->value = pd->value;
+
+		  break;
+		}
+
+	      pd = pd->next;
+	    }
+	}
+
       if (sc->fields)
 	prev = prev->next = f;
       else
@@ -10584,6 +10607,8 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 
   if (was_redefined)
     {
+      free_standard_class_fields (prev_decls);
+
       if (!compute_class_precedence_list (class, NULL))
 	return NULL;
 
@@ -10612,7 +10637,7 @@ allocate_object_fields (struct object *stdobj, struct object *class)
 
 	  while (f)
 	    {
-	      if (f->decl->name == fd->name)
+	      if (f->name == fd->name)
 		break;
 
 	      f = f->next;
@@ -10626,11 +10651,8 @@ allocate_object_fields (struct object *stdobj, struct object *class)
 
 	  f = malloc_and_check (sizeof (*f));
 
-	  if (fd->alloc_type == INSTANCE_ALLOCATION)
-	    f->name = fd->name;
-	  else
-	    f->name = NULL;
-
+	  f->name = fd->name;
+	  f->alloc_type = fd->alloc_type;
 	  f->value = NULL;
 	  f->decl = fd;
 	  f->next = stdobj->value_ptr.standard_object->fields;
@@ -10670,7 +10692,7 @@ find_object_field_by_initarg (struct object *stdobj, struct object *initarg)
 
 		  while (f)
 		    {
-		      if (f->decl->name == fd->name)
+		      if (f->name == fd->name)
 			return f;
 
 		      f = f->next;
@@ -10725,7 +10747,7 @@ fill_object_fields_by_initargs (struct object *stdobj, struct object *class,
 
       if (!f->found_key)
 	{
-	  if (!f->name)
+	  if (f->alloc_type == CLASS_ALLOCATION)
 	    {
 	      decrement_refcount (f->decl->value);
 	      f->decl->value = CAR (CDR (initargs));
@@ -10764,7 +10786,7 @@ fill_object_fields (struct object *stdobj, struct object *class,
 
   while (f)
     {
-      if (!f->name)
+      if (f->alloc_type == CLASS_ALLOCATION)
 	{
 	  if (!f->decl->value && f->decl->initform)
 	    {
@@ -10814,8 +10836,10 @@ update_object_fields (struct object *stdobj, struct environment *env,
 
 	  while (cf)
 	    {
-	      if (cf->name == f->decl->name)
+	      if (cf->name == f->name)
 		{
+		  f->alloc_type = cf->alloc_type;
+		  f->decl = cf;
 		  break;
 		}
 
@@ -10860,7 +10884,7 @@ update_object_fields (struct object *stdobj, struct environment *env,
 
 	  while (f)
 	    {
-	      if (cf->name == f->decl->name)
+	      if (cf->name == f->name)
 		break;
 
 	      f = f->next;
@@ -10870,14 +10894,12 @@ update_object_fields (struct object *stdobj, struct environment *env,
 	    {
 	      f = malloc_and_check (sizeof (*f));
 
-	      if (cf->alloc_type == INSTANCE_ALLOCATION)
-		f->name = cf->name;
-	      else
-		f->name = NULL;
-
+	      f->name = cf->name;
+	      f->alloc_type = cf->alloc_type;
 	      f->decl = cf;
+	      f->value = NULL;
 
-	      if (!f->name)
+	      if (f->alloc_type == CLASS_ALLOCATION)
 		{
 		  if (f->decl->initform)
 		    {
@@ -25755,7 +25777,7 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
 		    return NULL;
 		}
 
-	      if (cf->name)
+	      if (cf->alloc_type == INSTANCE_ALLOCATION)
 		{
 		  decrement_refcount (cf->value);
 		  cf->value = newval;
@@ -34288,11 +34310,8 @@ builtin_method_change_class (struct object *list, struct environment *env,
 
 	  f = malloc_and_check (sizeof (*f));
 
-	  if (fd->alloc_type == INSTANCE_ALLOCATION)
-	    f->name = fd->name;
-	  else
-	    f->name = NULL;
-
+	  f->name = fd->name;
+	  f->alloc_type = fd->alloc_type;
 	  f->value = NULL;
 	  f->decl = fd;
 	  f->next = obj->value_ptr.standard_object->fields;
@@ -34499,13 +34518,14 @@ builtin_slot_value (struct object *list, struct environment *env,
 	{
 	  if (cf->decl->name == req)
 	    {
-	      if ((cf->name && !cf->value) || (!cf->name && !cf->decl->value))
+	      if ((cf->alloc_type == INSTANCE_ALLOCATION && !cf->value)
+		  || (cf->alloc_type == CLASS_ALLOCATION && !cf->decl->value))
 		{
 		  outcome->type = SLOT_NOT_BOUND;
 		  return NULL;
 		}
 
-	      if (cf->name)
+	      if (cf->alloc_type == INSTANCE_ALLOCATION)
 		{
 		  increment_refcount (cf->value);
 		  return cf->value;
@@ -40622,26 +40642,10 @@ free_structure (struct object *obj)
 
 
 void
-free_standard_class (struct object *obj)
+free_standard_class_fields (struct class_field_decl *f)
 {
-  struct object_list *p = obj->value_ptr.standard_class->parents, *n, *l;
-  struct class_field_decl *f = obj->value_ptr.standard_class->fields, *nf;
-
-  while (p)
-    {
-      n = p->next;
-      free (p);
-      p = n;
-    }
-
-  p = obj->value_ptr.standard_class->class_precedence_list;
-
-  while (p)
-    {
-      n = p->next;
-      free (p);
-      p = n;
-    }
+  struct class_field_decl *nf;
+  struct object_list *n, *l;
 
   while (f)
     {
@@ -40661,6 +40665,31 @@ free_standard_class (struct object *obj)
       free (f);
       f = nf;
     }
+}
+
+
+void
+free_standard_class (struct object *obj)
+{
+  struct object_list *p = obj->value_ptr.standard_class->parents, *n;
+
+  while (p)
+    {
+      n = p->next;
+      free (p);
+      p = n;
+    }
+
+  p = obj->value_ptr.standard_class->class_precedence_list;
+
+  while (p)
+    {
+      n = p->next;
+      free (p);
+      p = n;
+    }
+
+  free_standard_class_fields (obj->value_ptr.standard_class->fields);
 
   free (obj->value_ptr.standard_class);
   free (obj);
