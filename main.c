@@ -10840,8 +10840,40 @@ update_object_fields (struct object *stdobj, struct environment *env,
 	    {
 	      if (cf->name == f->name)
 		{
+		  if (cf->alloc_type == INSTANCE_ALLOCATION
+		      && (f->alloc_type == CLASS_ALLOCATION
+			  || !f->value))
+		    {
+		      if (cf->initform)
+			{
+			  decrement_refcount (f->value);
+			  f->value = evaluate_object (cf->initform, env,
+						      outcome);
+			  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+			  if (!f->value)
+			    return NULL;
+			}
+		    }
+
+		  if (cf->alloc_type == CLASS_ALLOCATION
+		      && f->alloc_type == INSTANCE_ALLOCATION)
+		    {
+		      if (cf->initform)
+			{
+			  decrement_refcount (cf->value);
+			  cf->value = evaluate_object (cf->initform, env,
+						       outcome);
+			  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+			  if (!cf->value)
+			    return NULL;
+			}
+		    }
+
 		  f->alloc_type = cf->alloc_type;
 		  f->decl = cf;
+
 		  break;
 		}
 
