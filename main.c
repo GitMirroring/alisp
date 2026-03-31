@@ -10584,7 +10584,9 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 	    {
 	      if (pd->name == f->name)
 		{
-		  increment_refcount (pd->value);
+		  if (pd->value)
+		    increment_refcount (pd->value);
+
 		  f->value = pd->value;
 
 		  break;
