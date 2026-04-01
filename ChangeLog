@@ -1,3 +1,22 @@
+v1.5 (1-Apr-2026):
+
+Here are the big news:
+
+- The implementation of DEFSTRUCT, DEFCLASS and DEFINE-CONDITION has been moved
+  to lisp code.  This means that completing these macros with all the options
+  will be easier in the future
+
+- Previously, accessors, readers and writers of classes and structures existed
+  as special kinds of functions; this caused unneeded complexity in C code.  Now
+  they are functions defined normally in lisp code
+
+- Redefinition of classes now works correctly and, more importantly, class
+  instances are updated in conformance with ANSI
+
+Also, some subtype relationships have been fixed.
+
+
+
 v1.4 (20-Mar-2026):
 
 Here are the improvements:
