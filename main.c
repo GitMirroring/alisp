@@ -10584,6 +10584,8 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 	    {
 	      if (pd->name == f->name)
 		{
+		  decrement_refcount (f->value);
+
 		  if (pd->value)
 		    increment_refcount (pd->value);
 
@@ -40685,6 +40687,7 @@ free_standard_class_fields (struct class_field_decl *f)
     {
       nf = f->next;
       decrement_refcount (f->initform);
+      decrement_refcount (f->value);
 
       l = f->initargs;
 
