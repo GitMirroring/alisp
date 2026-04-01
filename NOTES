@@ -21,7 +21,8 @@ __Index__
 - Literal objects
 - Setting an undefined variable
 - Arrays
-- Structures
+- Structure objects and classes
+- Condition objects and classes
 - Pathnames
 - File operations
 - Streams
@@ -269,8 +270,8 @@ portability.
 __Setting an undefined variable__
 
 Doing SETQ or SETF on an undefined variable is undefined in ANSI, but it is
-accepted by many implementations.  In al, this causes the variable to be
-proclaimed special, so it is equivalent to a DEFPARAMETER.
+accepted by many implementations.  In al, this causes the variable to be set
+globally and proclaimed special, so it is equivalent to a DEFPARAMETER.
 
 
 
@@ -281,11 +282,18 @@ reason to do otherwise.
 
 
 
-__Structures__
+__Structure objects and classes__
 
-Redefining a structure type works fine, despite being undefined in ANSI.  But if
-you redefine a structure class as something other than a structure, then calling
-the constructor or accessors of the previous definition will cause a crash.
+Redefining a structure type works fine, despite being undefined in ANSI.  If you
+redefine a structure type, the existing structures of that type will stick to
+their original definition.
+
+
+
+__Condition objects and classes__
+
+Condition objects and classes are fully implemented as CLOS objects and classes
+respectively.
 
 
 
@@ -535,11 +543,11 @@ object added or removed or is cleared, the debugger is entered.
 
 __Known bugs and limitations__
 
-- Common Lisp requires CLOS objects to update their slots according to various
-  rules when their class is redefined.  This is not yet implemented in al, so
-  CLOS objects will just stick to their original definition
-
 - Definition and changing of reader macros is not yet implemented
+
+- Package locks and deletion of packages is still missing
+
+- Displaced arrays are not yet implemented
 
 
 
