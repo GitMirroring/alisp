@@ -2156,24 +2156,10 @@ struct object *call_structure_constructor (struct object *class_name,
 					   struct object *args,
 					   struct environment *env,
 					   struct outcome *outcome);
-struct object *call_structure_predicate (struct object *class_name,
-					 struct object *args,
-					 struct environment *env,
-					 struct outcome *outcome);
 struct object *call_structure_copyier (struct object *class_name,
 				       struct object *args,
 				       struct environment *env,
 				       struct outcome *outcome);
-struct object *call_structure_accessor (struct object *class_name,
-					struct object *field,
-					struct object *args,
-					struct object *newval,
-					struct environment *env,
-					struct outcome *outcome);
-struct object *call_condition_reader (struct object *class_name,
-				      struct object *field, struct object *args,
-				      struct environment *env,
-				      struct outcome *outcome);
 struct object *call_method (struct method_list *methlist, struct object *arglist,
 			    struct environment *env, struct outcome *outcome);
 
@@ -16445,23 +16431,6 @@ call_structure_constructor (struct object *class_name, struct object *args,
 
 
 struct object *
-call_structure_predicate (struct object *class_name, struct object *args,
-			  struct environment *env, struct outcome *outcome)
-{
-  if (list_length (args) != 1)
-    {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-    }
-
-  if (CAR (args)->type == TYPE_STRUCTURE
-      && CAR (args)->value_ptr.structure->class_name == class_name)
-    return &t_object;
-
-  return &nil_object;
-}
-
-
-struct object *
 call_structure_copyier (struct object *class_name, struct object *args,
 			struct environment *env, struct outcome *outcome)
 {
@@ -16512,88 +16481,6 @@ call_structure_copyier (struct object *class_name, struct object *args,
     f->next = NULL;
 
   return ret;
-}
-
-
-struct object *
-call_structure_accessor (struct object *class_name, struct object *field,
-			 struct object *args, struct object *newval,
-			 struct environment *env, struct outcome *outcome)
-{
-  struct structure_field *f;
-
-  if (list_length (args) != 1)
-    {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-    }
-
-  if (CAR (args)->type != TYPE_STRUCTURE
-      || CAR (args)->value_ptr.structure->class_name != class_name)
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  f = CAR (args)->value_ptr.structure->fields;
-
-  while (f)
-    {
-      if (f->name == field)
-	{
-	  if (newval)
-	    {
-	      decrement_refcount (f->value);
-	      f->value = newval;
-	    }
-
-	  increment_refcount (f->value);
-	  return f->value;
-	}
-
-      f = f->next;
-    }
-
-  return NULL;
-}
-
-
-struct object *
-call_condition_reader (struct object *class_name, struct object *field,
-		       struct object *args, struct environment *env,
-		       struct outcome *outcome)
-{
-  struct class_field *f;
-
-  if (list_length (args) != 1)
-    {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-    }
-
-  if (CAR (args)->type != TYPE_STANDARD_OBJECT
-      || !is_subtype (CAR (args)->value_ptr.standard_object->class, class_name,
-		      NULL, env, outcome))
-    {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
-    }
-
-  f = CAR (args)->value_ptr.standard_object->fields;
-
-  while (f)
-    {
-      if (f->decl->name == field)
-	{
-	  if (!f->value)
-	    return &nil_object;
-
-	  increment_refcount (f->value);
-	  return f->value;
-	}
-
-      f = f->next;
-    }
-
-  return NULL;
 }
 
 
