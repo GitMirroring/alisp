@@ -4002,7 +4002,7 @@
            file-error-pathname stream-error-stream arithmetic-error-operation
            arithmetic-error-operands simple-condition-format-control
            simple-condition-format-arguments break ignore-errors abort continue
-           muffle-warning documentation))
+           muffle-warning variable structure compiler-macro documentation))
   (export sym)
   (if (fboundp sym)
       (compile sym)))
