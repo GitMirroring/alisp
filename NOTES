@@ -152,7 +152,7 @@ functions.
 
 - when the variable *AL-PRINT-ALWAYS-TWO-COLONS* is non-nil, the printer always
   prefixes symbols with two colons when it prints the package name.  This is
-  used by the compiler
+  used by the file compiler
 
 - the function AL-PRINT-RESTARTS prints the available restarts and returns T
 
@@ -208,8 +208,8 @@ functions.
   is present
 
 - the function AL-CLASS-PRECEDENCE-LIST takes a standard class object (not for a
-  structure class nor a condition class) and returns the class precedence list
-  of that class
+  structure class) and returns the class precedence list of that class, as a
+  list of class objects
 
 - the special operators AL-LOOPY-DESTRUCTURING-BIND and AL-LOOPY-SETQ are
   similar to DESTRUCTURING-BIND and SETQ respectively, but they allow the kind
@@ -444,9 +444,6 @@ Keep in mind that, when a function calls itself directly or indirectly, the time
 spent in the inner invocation is counted twice, so the last number is often more
 useful than the second one.
 
-The profiler has a few limitations: structure constructor and accessors, and
-condition readers, are not tracked.
-
 
 
 __Environment objects__
@@ -460,11 +457,10 @@ using a list makes these objects very easy to inspect and modify.
 
 __Compilation__
 
-If the variable CL-USER:*AL-COMPILE-WHEN-DEFINING* is non-nil, then DEFUN and
-DEFMACRO will compile the body of the function when they are evaluated.  Also,
-each newly defined generic function will be marked as compiled, meaning that
-each new method added to that function will get compiled.  The variable defaults
-to NIL.
+The variable CL-USER:*AL-COMPILE-WHEN-DEFINING* defaults to NIL; when it is
+non-nil, DEFUN and DEFMACRO will compile the body of the function when they are
+evaluated.  Also, each newly defined generic function will be marked as
+compiled, meaning that each new method added to that function will get compiled.
 
 You may want to keep the variable disabled for debugging, since stepping through
 a macro-expanded function is less clear.
@@ -548,6 +544,8 @@ __Known bugs and limitations__
 - Package locks and deletion of packages is still missing
 
 - Displaced arrays are not yet implemented
+
+- Meeting an unexpected dotted list in some places will cause a crash
 
 
 
