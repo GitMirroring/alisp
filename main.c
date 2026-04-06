@@ -2813,8 +2813,6 @@ struct object *builtin_list_all_packages (struct object *list,
 struct object *builtin_make_package (struct object *list,
 				     struct environment *env,
 				     struct outcome *outcome);
-struct object *builtin_in_package (struct object *list, struct environment *env,
-				   struct outcome *outcome);
 struct object *builtin_import (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_export (struct object *list, struct environment *env,
@@ -4186,8 +4184,6 @@ add_standard_definitions (struct environment *env)
 		    0, NULL, 0);
   add_builtin_form ("MAKE-PACKAGE", env, builtin_make_package, 0,
 		    NULL, 0);
-  add_builtin_form ("IN-PACKAGE", env, builtin_in_package, 1, NULL,
-		    0);
   add_builtin_form ("IMPORT", env, builtin_import, 0, NULL, 0);
   add_builtin_form ("EXPORT", env, builtin_export, 0, NULL, 0);
   add_builtin_form ("UNEXPORT", env, builtin_unexport, 0, NULL, 0);
@@ -30084,54 +30080,6 @@ builtin_make_package (struct object *list, struct environment *env,
     }
 
   return ret;
-}
-
-
-struct object *
-builtin_in_package (struct object *list, struct environment *env,
-		    struct outcome *outcome)
-{
-  char *name;
-  int len;
-  struct object *pack;
-
-  if (list_length (list) != 1)
-    {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
-    }
-
-  if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
-      && !IS_SYMBOL (CAR (list)))
-    {
-      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
-			       "CL:CHARACTER)", env, outcome);
-    }
-
-  if (CAR (list)->type == TYPE_STRING)
-    {
-      name = CAR (list)->value_ptr.string->value;
-      len = CAR (list)->value_ptr.string->used_size;
-    }
-  else if (CAR (list)->type == TYPE_CHARACTER)
-    {
-      name = CAR (list)->value_ptr.character;
-      len = strlen (name);
-    }
-  else
-    {
-      name = SYMBOL (CAR (list))->value_ptr.symbol->name;
-      len = SYMBOL (CAR (list))->value_ptr.symbol->name_len;
-    }
-
-  pack = find_package (name, len, env);
-
-  if (!pack)
-    {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
-    }
-
-  return set_value (env->package_sym, pack, 0, 1, env, outcome);
 }
 
 
