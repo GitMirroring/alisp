@@ -30,15 +30,20 @@
 
 
 (setf (macro-function 'defmacro)
-      (lambda (defmacroform defmacroenv)
+      #'(lambda (defmacroform defmacroenv)
 	`(eval-when (:compile-toplevel :load-toplevel :execute)
 	   (progn
 	     (setf (macro-function ',(nth 1 defmacroform))
-		   (lambda (form env)
+		   #'(lambda (form env)
 		     (cl-user:al-with-macro-arguments ,(nth 2 defmacroform)
 						      env form
 						      . ,(nthcdr 3 defmacroform))))
 	     ',(nth 1 defmacroform)))))
+
+
+
+(defmacro lambda (lambdal &body body)
+  `(function (lambda ,lambdal . ,body)))
 
 
 
@@ -3569,11 +3574,18 @@
     ((atom form) form)
     ((member (car form) '(go) :test #'eq)
      form)
-    ((member (car form) '(if progn block tagbody multiple-value-call multiple-value-prog1 and or catch throw progv
-			  unwind-protect function locally) :test #'eq)
+    ((eq (car form) 'function)
+     (if (and (consp (cadr form))
+	      (eq (caadr form) 'lambda))
+	 `(function (lambda ,(cadadr form) . ,(macroexpand-body (cddadr form))))
+	 form))
+    ((member (car form) '(if progn block tagbody multiple-value-call
+			  multiple-value-prog1 and or catch throw progv
+			  unwind-protect locally) :test #'eq)
      (macroexpand-cdr form))
-    ((member (car form) '(let let* flet labels macrolet symbol-macrolet lambda dotimes dolist handler-bind restart-bind
-			  return-from eval-when the) :test #'eq)
+    ((member (car form) '(let let* flet labels macrolet symbol-macrolet dotimes
+			  dolist handler-bind restart-bind return-from eval-when
+			  the) :test #'eq)
      (let ((body (macroexpand-body (cddr form))))
        (if (eq body (cddr form))
 	   form

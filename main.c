@@ -4032,7 +4032,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SETF", env, evaluate_setf, 1, NULL, 0);
   add_builtin_form ("PSETF", env, evaluate_psetf, 1, NULL, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, 1, NULL, 1);
-  add_builtin_form ("LAMBDA", env, evaluate_lambda, 1, NULL, 0);
   add_builtin_form ("APPLY", env, evaluate_apply, 0, NULL, 0);
   add_builtin_form ("FUNCALL", env, evaluate_funcall, 0, NULL, 0);
   add_builtin_form ("DECLARE", env, evaluate_declare, 1, NULL, 0);
