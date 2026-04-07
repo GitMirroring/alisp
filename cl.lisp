@@ -399,6 +399,14 @@
     (t (+ ""))))
 
 
+(defun integer-length (num)
+  (values (ceiling (log (if (minusp num)
+			    (- num)
+			    (1+ num))
+			2))))
+
+
+
 #|
 (defparameter *gensym-counter* 1)
 
@@ -3948,23 +3956,23 @@
            logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
            boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
            boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
-           boole-set boole-xor boole *gensym-counter* gensym gentemp make-list
-           copy-alist copy-tree tree-equal sublis nsublis endp butlast nbutlast
-           acons pairlis shiftf rotatef defsetf when unless define-modify-macro
-           incf decf defstruct defclass define-condition otherwise case ccase
-           ecase typecase ctypecase etypecase return multiple-value-bind
-           multiple-value-setq prog prog* multiple-value-prog1 every some notany
-           notevery member member-if member-if-not find find-if find-if-not
-           assoc assoc-if assoc-if-not rassoc rassoc-if rassoc-if-not position
-           position-if position-if-not count count-if count-if-not remove
-           remove-if remove-if-not delete delete-if delete-if-not
-           remove-duplicates delete-duplicates substitute substitute-if
-           substitute-if-not nsubstitute nsubstitute-if nsubstitute-if-not subst
-           subst-if subst-if-not nsubst nsubst-if nsubst-if-not nreverse
-           revappend nreconc adjoin fill replace push pushnew pop set-difference
-           nset-difference union nunion intersection nintersection
-           set-exclusive-or nset-exclusive-or subsetp mismatch search sort
-           stable-sort array-rank array-dimension array-total-size
+           boole-set boole-xor boole integer-length *gensym-counter* gensym
+           gentemp make-list copy-alist copy-tree tree-equal sublis nsublis endp
+           butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
+           define-modify-macro incf decf defstruct defclass define-condition
+           otherwise case ccase ecase typecase ctypecase etypecase return
+           multiple-value-bind multiple-value-setq prog prog*
+           multiple-value-prog1 every some notany notevery member member-if
+           member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
+           rassoc rassoc-if rassoc-if-not position position-if position-if-not
+           count count-if count-if-not remove remove-if remove-if-not delete
+           delete-if delete-if-not remove-duplicates delete-duplicates
+           substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
+           nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
+           nsubst-if-not nreverse revappend nreconc adjoin fill replace push
+           pushnew pop set-difference nset-difference union nunion intersection
+           nintersection set-exclusive-or nset-exclusive-or subsetp mismatch
+           search sort stable-sort array-rank array-dimension array-total-size
            array-in-bounds-p array-element-type upgraded-array-element-type
            adjustable-array-p get get-properties remprop getf char schar bit
            sbit svref vector-pop vector-push vector-push-extend string= string/=

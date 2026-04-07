@@ -2693,6 +2693,9 @@ struct object *builtin_lognot (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logior (struct object *list, struct environment *env,
 			       struct outcome *outcome);
+struct object *builtin_logcount (struct object *list, struct environment *env,
+				 struct outcome *outcome);
+
 struct object *builtin_make_random_state (struct object *list,
 					  struct environment *env,
 					  struct outcome *outcome);
@@ -4000,6 +4003,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LOG", env, builtin_log, 0, NULL, 0);
   add_builtin_form ("LOGNOT", env, builtin_lognot, 0, NULL, 0);
   add_builtin_form ("LOGIOR", env, builtin_logior, 0, NULL, 0);
+  add_builtin_form ("LOGCOUNT", env, builtin_logcount, 0, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, 1, NULL, 1);
   add_builtin_form ("LET", env, evaluate_let, 1, NULL, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, 1, NULL, 1);
@@ -27725,6 +27729,40 @@ builtin_logior (struct object *list, struct environment *env,
 
       list = CDR (list);
     }
+
+  return ret;
+}
+
+
+struct object *
+builtin_logcount (struct object *list, struct environment *env,
+		  struct outcome *outcome)
+{
+  mpz_t num;
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
+    }
+
+  ret = alloc_number (TYPE_INTEGER);
+
+  if (mpz_cmp_si (CAR (list)->value_ptr.integer, 0) < 0)
+    {
+      mpz_init (num);
+      mpz_com (num, CAR (list)->value_ptr.integer);
+      mpz_set_ui (ret->value_ptr.integer, mpz_popcount (num));
+      mpz_clear (num);
+    }
+  else
+    mpz_set_ui (ret->value_ptr.integer,
+		mpz_popcount (CAR (list)->value_ptr.integer));
 
   return ret;
 }
