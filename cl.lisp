@@ -916,6 +916,15 @@
 
 
 
+(defmethod slot-missing (class inst slotname op &optional newval)
+  (error (format nil "class ~a has no slot ~a" (class-name class) slotname)))
+
+
+(defmethod slot-unbound (class inst slotname)
+  (error 'unbound-slot :name slotname :instance inst))
+
+
+
 (defmethod make-instances-obsolete :around ((classname symbol))
   (call-next-method (find-class classname))
   classname)

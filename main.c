@@ -797,6 +797,8 @@ environment
 
   struct object *abort_sym;
 
+  struct object *slot_missing_func, *slot_unbound_func;
+
   struct object *al_compile_when_defining_sym, *al_debugging_condition_sym;
 
   struct object *al_print_always_two_colons;
@@ -1701,6 +1703,8 @@ struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
 struct object_list *alloc_empty_object_list (size_t sz);
 
+struct object *create_list_with_valist (va_list valist);
+
 struct package_record **alloc_empty_symtable (size_t table_size);
 struct object *create_package (char *name, int name_len);
 struct object *create_package_from_c_strings (char *name, ...);
@@ -2162,6 +2166,11 @@ struct object *call_structure_copyier (struct object *class_name,
 				       struct outcome *outcome);
 struct object *call_method (struct method_list *methlist, struct object *arglist,
 			    struct environment *env, struct outcome *outcome);
+
+struct object *call_function_with_args (struct object *func, int eval_args,
+					struct environment *env,
+					struct outcome *outcome,
+					...);
 
 int is_class_completely_defined (struct object *class);
 struct precedence_relation *add_precedence_relations (struct object *class,
@@ -4590,6 +4599,26 @@ add_standard_definitions (struct environment *env)
   define_generic_function ("REINITIALIZE-INSTANCE", env,
 			   copy_lambda_list (lambdal, 0),
 			   builtin_method_reinitialize_instance);
+
+
+  lambdal = create_lambda_list (env, "CLASS", "OBJECT", "SLOT-NAME", "OPERATION",
+				(char *)NULL);
+  lambdal->next->next->next->next = alloc_parameter (OPTIONAL_PARAM, NULL);
+  lambdal->next->next->next->next->name
+    = intern_symbol_by_char_vector ("NEW-VALUE", strlen ("NEW-VALUE"), 1,
+				    INTERNAL_VISIBILITY, 0, env->cl_package, 0, 0);
+  lambdal->next->next->next->next->reference_strength_factor
+    = !STRENGTH_FACTOR_OF_OBJECT (lambdal->next->next->next->next->name);
+  INC_WEAK_REFCOUNT (lambdal->next->next->next->next->name);
+
+  env->slot_missing_func = define_generic_function ("SLOT-MISSING", env, lambdal,
+						    NULL);
+
+
+  lambdal = create_lambda_list (env, "CLASS", "INSTANCE", "SLOT-NAME", (char *)NULL);
+  env->slot_unbound_func = define_generic_function ("SLOT-UNBOUND", env, lambdal,
+						    NULL);
+
 
   lambdal = create_lambda_list (env, "CLASS", (char *)NULL);
   define_generic_function ("MAKE-INSTANCES-OBSOLETE", env, lambdal,
@@ -8006,6 +8035,33 @@ alloc_empty_object_list (size_t sz)
 
   if (ret)
     last->next = NULL;
+
+  return ret;
+}
+
+
+struct object *
+create_list_with_valist (va_list valist)
+{
+  struct object *ret = &nil_object, *cons, *obj;
+
+  while ((obj = va_arg (valist, struct object *)))
+    {
+      if (ret == &nil_object)
+	{
+	  ret = cons = alloc_empty_cons_pair ();
+	}
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car = obj;
+      add_reference (cons, obj, 0);
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
 }
@@ -13334,25 +13390,28 @@ define_generic_function (char *name, struct environment *env,
 
   f->flags = GENERIC_FUNCTION;
 
-  meth = alloc_object ();
-  meth->type = TYPE_METHOD;
-  m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
-  m->generic_func = fun;
-  add_reference (meth, fun, 0);
-  m->qualifier = PRIMARY_METHOD;
-  m->lambda_list = copy_lambda_list (lambda_list, 1);
-  m->builtin_method = default_method;
-  m->is_compiled = 1;
-  m->body = NULL;
+  if (default_method)
+    {
+      meth = alloc_object ();
+      meth->type = TYPE_METHOD;
+      m = meth->value_ptr.method = malloc_and_check (sizeof (*m));
+      m->generic_func = fun;
+      add_reference (meth, fun, 0);
+      m->qualifier = PRIMARY_METHOD;
+      m->lambda_list = copy_lambda_list (lambda_list, 1);
+      m->builtin_method = default_method;
+      m->is_compiled = 1;
+      m->body = NULL;
 
-  ml = malloc_and_check (sizeof (*ml));
-  ml->reference_strength_factor = 0;
-  ml->meth = meth;
-  ml->next = fun->value_ptr.function->methods;
+      ml = malloc_and_check (sizeof (*ml));
+      ml->reference_strength_factor = 0;
+      ml->meth = meth;
+      ml->next = fun->value_ptr.function->methods;
 
-  fun->value_ptr.function->methods = ml;
+      fun->value_ptr.function->methods = ml;
+    }
 
-  return sym;
+  return fun;
 }
 
 
@@ -16574,6 +16633,27 @@ call_method (struct method_list *methlist, struct object *arglist,
     {
       ret = NULL;
     }
+
+  return ret;
+}
+
+
+struct object *
+call_function_with_args (struct object *func, int eval_args, struct environment *env,
+			 struct outcome *outcome, ...)
+{
+  struct object *arglist, *ret;
+  va_list valist;
+
+  va_start (valist, outcome);
+
+  arglist = create_list_with_valist (valist);
+
+  va_end (valist);
+
+  ret = call_function (func, arglist, eval_args, 0, 0, 1, 0, 0, env, outcome);
+
+  decrement_refcount (arglist);
 
   return ret;
 }
@@ -25629,7 +25709,7 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
 {
   struct class_field *cf;
   struct structure_field *sf;
-  struct object *req, *newval;
+  struct object *req, *newval, *res;
 
   if (list_length (list) != 3)
     {
@@ -25718,8 +25798,17 @@ builtin_setf_slot_value (struct object *list, struct environment *env,
 	}
     }
 
-  outcome->type = SLOT_NOT_FOUND;
-  return NULL;
+  res = call_function_with_args (env->slot_missing_func, 0, env, outcome,
+				 CAR (list)->type == TYPE_STRUCTURE
+				 ? CAR (list)->value_ptr.structure->class_name
+				 ->value_ptr.symbol->typespec
+				 : CAR (list)->value_ptr.standard_object->class,
+				 CAR (list), req, BUILTIN_SYMBOL ("SETF"),
+				 newval, (struct object *)NULL);
+  decrement_refcount (res);
+
+  increment_refcount (newval);
+  return newval;
 }
 
 
@@ -34365,8 +34454,10 @@ builtin_slot_boundp (struct object *list, struct environment *env,
       f = f->next;
     }
 
-  outcome->type = SLOT_NOT_FOUND;
-  return NULL;
+  return call_function_with_args (env->slot_missing_func, 0, env, outcome,
+				  CAR (list)->value_ptr.standard_object->class,
+				  CAR (list), req, BUILTIN_SYMBOL ("SLOT-BOUNDP"),
+				  (struct object *)NULL);
 }
 
 
@@ -34429,8 +34520,10 @@ builtin_slot_value (struct object *list, struct environment *env,
 	      if ((cf->alloc_type == INSTANCE_ALLOCATION && !cf->value)
 		  || (cf->alloc_type == CLASS_ALLOCATION && !cf->decl->value))
 		{
-		  outcome->type = SLOT_NOT_BOUND;
-		  return NULL;
+		  return call_function_with_args
+		    (env->slot_unbound_func, 0, env, outcome,
+		     CAR (list)->value_ptr.standard_object->class,
+		     CAR (list), req, (struct object *)NULL);
 		}
 
 	      if (cf->alloc_type == INSTANCE_ALLOCATION)
@@ -34449,8 +34542,13 @@ builtin_slot_value (struct object *list, struct environment *env,
 	}
     }
 
-  outcome->type = SLOT_NOT_FOUND;
-  return NULL;
+  return call_function_with_args (env->slot_missing_func, 0, env, outcome,
+				  CAR (list)->type == TYPE_STRUCTURE
+				  ? CAR (list)->value_ptr.structure->class_name
+				  ->value_ptr.symbol->typespec
+				  : CAR (list)->value_ptr.standard_object->class,
+				  CAR (list), req, BUILTIN_SYMBOL ("SLOT-VALUE"),
+				  (struct object *)NULL);
 }
 
 
@@ -34459,7 +34557,7 @@ builtin_slot_makunbound (struct object *list, struct environment *env,
 			 struct outcome *outcome)
 {
   struct class_field *f;
-  struct object *req;
+  struct object *req, *res;
 
   if (list_length (list) != 2)
     {
@@ -34489,8 +34587,15 @@ builtin_slot_makunbound (struct object *list, struct environment *env,
       f = f->next;
     }
 
-  outcome->type = SLOT_NOT_FOUND;
-  return NULL;
+  res = call_function_with_args (env->slot_missing_func, 0, env, outcome,
+				 CAR (list)->value_ptr.standard_object->class,
+				 CAR (list), req,
+				 BUILTIN_SYMBOL ("SLOT-MAKUNBOUND"),
+				 (struct object *)NULL);
+  decrement_refcount (res);
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
