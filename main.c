@@ -35846,8 +35846,8 @@ builtin_signal (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
+			       "CL:CONDITION)", env, outcome);
     }
 
 
@@ -35929,8 +35929,8 @@ builtin_error (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
+			       "CL:CONDITION)", env, outcome);
     }
 
 
@@ -36016,8 +36016,8 @@ builtin_warn (struct object *list, struct environment *env,
     }
   else
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
+			       "CL:CONDITION)", env, outcome);
     }
 
 
