@@ -1923,6 +1923,7 @@ make_test ("(typep (make-condition 'new-math-error) 'new-math-error)", "T");
 make_test ("(typep (make-condition 'new-math-error) 'arithmetic-error)", "T");
 make_test ("(typep (make-condition 'new-math-error) 'file-error)", "NIL");
 make_test ("(typep 0 'new-math-error)", "NIL");
+make_test ("(block nil (handler-bind ((new-math-error (lambda (e) (return 10)))) (error 'new-math-error)))", "10");
 make_test ("(define-condition strange-condition nil nil)", "STRANGE-CONDITION");
 make_test ("(typep (make-condition 'strange-condition) 'condition)", "T");
 make_test ("(simple-condition-format-control (make-condition 'simple-condition))", "NIL");
