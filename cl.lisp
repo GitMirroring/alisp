@@ -908,8 +908,8 @@
 
 
 (defmacro define-condition (name supclasses slotcls &rest opts)
-  (unless supclasses
-    (setq supclasses '(condition)))
+  (unless (find 'condition supclasses :test #'eq)
+    (setq supclasses (append supclasses '(condition))))
   `(progn
      (defclass ,name ,supclasses ,slotcls . ,opts)
      ',name))

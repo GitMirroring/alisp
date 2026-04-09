@@ -1860,7 +1860,7 @@ struct class_field_decl *create_class_field_decl (struct object *class,
 						  struct outcome *outcome);
 
 struct object *define_class (struct object *name, struct object *form,
-			     int is_condition_class, struct environment *env,
+			     struct environment *env,
 			     struct outcome *outcome);
 
 struct object *allocate_object_fields (struct object *stdobj,
@@ -10512,8 +10512,8 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 
 
 struct object *
-define_class (struct object *name, struct object *form, int is_condition_class,
-	      struct environment *env, struct outcome *outcome)
+define_class (struct object *name, struct object *form, struct environment *env,
+	      struct outcome *outcome)
 {
   struct object *class, *cons;
   struct standard_class *sc;
@@ -10557,7 +10557,6 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 
       increment_refcount (name);
       sc->name = name;
-      sc->is_condition_class = is_condition_class;
       sc->class_version = 0;
       sc->descendants = NULL;
 
@@ -10571,6 +10570,7 @@ define_class (struct object *name, struct object *form, int is_condition_class,
   sc->class_version++;
 
   sc->parents = NULL;
+  sc->is_condition_class = 0;
   cons = CAR (form);
 
   while (cons->type == TYPE_CONS_PAIR)
@@ -10580,6 +10580,9 @@ define_class (struct object *name, struct object *form, int is_condition_class,
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
+
+      if (SYMBOL (CAR (cons)) == BUILTIN_SYMBOL ("CONDITION"))
+	sc->is_condition_class = 1;
 
       if (sc->parents)
 	p = p->next = malloc_and_check (sizeof (*p));
@@ -10601,10 +10604,10 @@ define_class (struct object *name, struct object *form, int is_condition_class,
   else
     {
       sc->parents = malloc_and_check (sizeof (*sc->parents));
-      sc->parents->obj = CREATE_BUILTIN_SYMBOL (is_condition_class ? "CONDITION"
-						: "STANDARD-OBJECT");
+      sc->parents->obj = CREATE_BUILTIN_SYMBOL ("STANDARD-OBJECT");
       sc->parents->next = NULL;
     }
+
 
   sc->class_precedence_list = NULL;
   sc->fields = NULL;
@@ -10654,7 +10657,7 @@ define_class (struct object *name, struct object *form, int is_condition_class,
     {
       free_standard_class_fields (prev_decls);
 
-      if (!compute_class_precedence_list (class, NULL))
+      if (!compute_class_precedence_list (class, outcome))
 	return NULL;
 
       increment_class_version (class);
@@ -33982,7 +33985,7 @@ builtin_al_defclass (struct object *list, struct environment *env,
       return raise_type_error (CAR (CDR (CDR (list))), "CL:LIST", env, outcome);
     }
 
-  return define_class (name, CDR (list), 0, env, outcome);
+  return define_class (name, CDR (list), env, outcome);
 }
 
 
