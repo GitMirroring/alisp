@@ -530,6 +530,7 @@ make_test ("(get-setf-expansion '(foo))", "NIL");
 make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G2074)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G2074)\n(FOO2)");
 make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G2075)\n(SETQ A #:G2075)\nA");
 make_test ("(get-setf-expansion '(w a b))", "(#:G2076 #:G2077)\n(A B)\n(#:G2078)\n(FUNCALL (FUNCTION (SETF W)) #:G2078 #:G2076 #:G2077)\n(W #:G2076 #:G2077)");
+make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
 
 make_test ("(open-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-input*)", "T");
