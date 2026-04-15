@@ -519,6 +519,8 @@ make_test ("(defmacro mac (&whole wh f g h) `(list ',wh ',f ',g ',h))", "MAC");
 make_test ("(mac 0 1 2)", "((MAC 0 1 2) 0 1 2)");
 make_test ("(defmacro mac2 (&whole wh &rest args) wh)", "MAC2");
 make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
+make_test ("(defmacro mac3 (&key k &environment env) k)", "MAC3");
+make_test ("(mac3)", "NIL");
 
 make_test ("(gensym)", "#:G2070");
 make_test ("(gensym)", "#:G2071");
