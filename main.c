@@ -33486,7 +33486,7 @@ evaluate_define_setf_expander (struct object *list, struct environment *env,
       return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
     }
 
-  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 0, 1);
+  fun = create_function (CAR (CDR (list)), CDR (CDR (list)), env, outcome, 1, 1, 1);
 
   if (!fun)
     return NULL;
