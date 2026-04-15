@@ -10318,13 +10318,21 @@ struct structure_field_decl *
 create_structure_field_decl (struct object *fieldform, struct environment *env,
 			     struct outcome *outcome)
 {
-  struct object *name;
+  struct object *name, *initform = &nil_object;
   struct structure_field_decl *ret;
 
   if (IS_SYMBOL (fieldform))
     name = SYMBOL (fieldform);
-  else if (IS_LIST (fieldform) && IS_SYMBOL (CAR (fieldform)))
-    name = SYMBOL (CAR (fieldform));
+  else if (fieldform->type == TYPE_CONS_PAIR)
+    {
+      name = SYMBOL (CAR (fieldform));
+
+      if (CDR (fieldform)->type == TYPE_CONS_PAIR)
+	{
+	  initform = CAR (CDR (fieldform));
+	  increment_refcount (initform);
+	}
+    }
   else
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -10334,7 +10342,7 @@ create_structure_field_decl (struct object *fieldform, struct environment *env,
   ret = malloc_and_check (sizeof (*ret));
 
   ret->name = name;
-  ret->initform = NULL;
+  ret->initform = initform;
   ret->next = NULL;
 
   return ret;
@@ -33919,15 +33927,21 @@ builtin_al_make_structure (struct object *list, struct environment *env,
 
 
   f = s->fields;
+  fd = class_name->value_ptr.symbol->typespec->value_ptr.structure_class->fields;
 
   while (f)
     {
       if (!f->value)
 	{
-	  f->value = &nil_object;
+	  f->value = evaluate_object (fd->initform, env, outcome);
+	  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	  if (!f->value)
+	    return NULL;
 	}
 
       f = f->next;
+      fd = fd->next;
     }
 
   return ret;

@@ -821,7 +821,8 @@
 
 
 (defmacro defstruct (name-and-opts &rest slotcls)
-  (let (name opt constr copier pred slots funcdefs)
+  (let (name opt constr copier pred slotnames funcdefs
+	     (slcls slotcls))
     (if (symbolp name-and-opts)
 	(setq name name-and-opts)
 	(progn
@@ -841,11 +842,14 @@
     (unless pred
       (setq pred (intern (concatenate 'string (string name) "-P"))))
     (if (stringp (car slotcls))
-	(setq slotcls (cdr slotcls)))
-    (while slotcls
-      (setq slots (cons (car slotcls) slots))
-      (setq slotcls (cdr slotcls)))
-    (dolist (sl slots)
+	(setq slotcls (cdr slotcls) slcls (cdr slcls)))
+    (while slcls
+      (setq slotnames (cons (if (symbolp (car slcls))
+				(car slcls)
+				(caar slcls))
+			    slotnames))
+      (setq slcls (cdr slcls)))
+    (dolist (sl slotnames)
       (let ((accname (intern (concatenate 'string (string name) "-" (string sl)))))
 	(setq funcdefs (append
 			`((defun ,accname (struct)
@@ -854,7 +858,7 @@
 			    (setf (slot-value struct ',sl) newval)))
 			funcdefs))))
     `(progn
-       (apply 'cl-user:al-defstruct ',name ',slots)
+       (apply 'cl-user:al-defstruct ',name ',slotcls)
        ,@funcdefs
        (defun ,constr (&rest args)
 	 (apply 'cl-user:al-make-structure ',name args))
