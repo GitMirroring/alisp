@@ -1633,6 +1633,9 @@ make_test ("(defstruct (ship2 (:predicate is-ship) (:copier copy-the-ship)) x y)
 make_test ("(defparameter s2 (make-ship2))", "S2");
 make_test ("(is-ship s2)", "T");
 make_test ("(ship2-x (copy-the-ship s2))", "NIL");
+make_test ("(defstruct ship3 (w 10 :read-only t) (z (+) :type t))", "SHIP3");
+make_test ("(ship3-w (make-ship3 :w 11))", "11");
+make_test ("(ship3-z (make-ship3))", "0");
 make_test ("(defclass starship () (x y speed))", "#<STANDARD-CLASS STARSHIP>");
 make_test ("(defclass starship () (x y speed))", "#<STANDARD-CLASS STARSHIP>");
 make_test ("(find-class 'starship)", "#<STANDARD-CLASS STARSHIP>");
