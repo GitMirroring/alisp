@@ -15156,7 +15156,8 @@ parse_declaration_specifier (struct object *spec, int is_local,
 	  return 0;
 	}
     }
-  else if (declid != env->dynamic_extent_sym)
+  else if (declid != env->dynamic_extent_sym
+	   && !declid->value_ptr.symbol->is_type)
     {
       outcome->type = UNKNOWN_DECLARATION;
       return 0;
