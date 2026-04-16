@@ -1950,6 +1950,7 @@ make_test ("(al-function-body #'compadd)", "((+ X 0) 3)");
 make_test ("(declaim (optimize speed (safety 0) (debug 3)))", "T");
 make_test ("(declaim (ignorable a) (ignore b c) (inline e) (notinline d f))", "T");
 make_test ("(declaim (type list a) (ftype (function nil nil) b))", "T");
+make_test ("(declaim (integer whatever whenever))", "T");
 make_test ("(proclaim '(optimize speed (safety 0) (debug 3)))", "T");
 make_test ("(proclaim '(ignorable a))", "T");
 make_test ("(proclaim '(type list a))", "T");
