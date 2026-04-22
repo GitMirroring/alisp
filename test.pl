@@ -522,16 +522,16 @@ make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 make_test ("(defmacro mac3 (&key k &environment env) k)", "MAC3");
 make_test ("(mac3)", "NIL");
 
-make_test ("(gensym)", "#:G2070");
-make_test ("(gensym)", "#:G2071");
-make_test ("(gensym 5)", "#:G5");
-make_test ("(gensym \"A\")", "#:A2072");
 make_test ("(gensym)", "#:G2073");
+make_test ("(gensym)", "#:G2074");
+make_test ("(gensym 5)", "#:G5");
+make_test ("(gensym \"A\")", "#:A2075");
+make_test ("(gensym)", "#:G2076");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
-make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G2074)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G2074)\n(FOO2)");
-make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G2075)\n(SETQ A #:G2075)\nA");
-make_test ("(get-setf-expansion '(w a b))", "(#:G2076 #:G2077)\n(A B)\n(#:G2078)\n(FUNCALL (FUNCTION (SETF W)) #:G2078 #:G2076 #:G2077)\n(W #:G2076 #:G2077)");
+make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G2077)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G2077)\n(FOO2)");
+make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G2078)\n(SETQ A #:G2078)\nA");
+make_test ("(get-setf-expansion '(w a b))", "(#:G2079 #:G2080)\n(A B)\n(#:G2081)\n(FUNCALL (FUNCTION (SETF W)) #:G2081 #:G2079 #:G2080)\n(W #:G2079 #:G2080)");
 make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
 
 make_test ("(open-stream-p *standard-input*)", "T");
@@ -752,6 +752,10 @@ make_test ("(let ((cns (cons 0 1))) (symbol-macrolet ((carc (car cns))) (setf ca
 make_test ("(make-string 3)", "\"\0\0\0\"");
 make_test ("(make-string 2 :element-type 'character)", "\"\0\0\"");
 make_test ("(make-string 4 :initial-element #\\ò)", "\"òòòò\"");
+make_test ("(make-sequence 'string 7 :initial-element #\\b)", "\"bbbbbbb\"");
+make_test ("(make-sequence 'list 3)", "(NIL NIL NIL)");
+make_test ("(make-sequence 'vector 5 :initial-element 2)", "#(2 2 2 2 2)");
+#make_test ("(make-sequence 'bit-vector 3)", "#*000");
 make_test ("(intern \"hi\")", "|hi|\nNIL");
 make_test ("(intern \"hi\")", "|hi|\n:INTERNAL");
 make_test ("(intern \"hi\" 'keyword)", ":|hi|\nNIL");
