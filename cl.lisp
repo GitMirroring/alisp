@@ -2097,6 +2097,20 @@
 
 
 
+(defun make-sequence (restype size &key initial-element)
+  (let ((ret (cond
+	       ((subtypep restype 'string)
+		(make-string size))
+	       ((subtypep restype 'vector)
+		(make-array size :element-type restype))
+	       (t
+		(make-list size)))))
+    (dotimes (i size)
+      (setf (elt ret i) initial-element))
+    ret))
+
+
+
 (defmacro defpackage (s &rest opts)
   (let ((name (string s))
 	nicks uses shadows imports exports intern)
@@ -3995,20 +4009,20 @@
            char-not-greaterp char-greaterp char-not-lessp digit-char
            digit-char-p char-int string-upcase string-downcase string-capitalize
            nstring-upcase nstring-downcase nstring-capitalize string-left-trim
-           string-right-trim string-trim defpackage signed-byte unsigned-byte
-           extended-char consp listp symbolp keywordp compiled-function-p
-           functionp packagep integerp rationalp floatp complexp random-state-p
-           characterp standard-char-p vectorp simple-vector-p arrayp sequencep
-           stringp simple-string-p bit-vector-p simple-bit-vector-p hash-table-p
-           pathnamep streamp realp numberp check-type assert macroexpand equal
-           complement mapc mapcan maplist mapl mapcon map-into reduce merge
-           pathname-directory pathname-host pathname-device pathname-version
-           file-namestring directory-namestring host-namestring
-           enough-namestring merge-pathnames file-author file-write-date
-           user-homedir-pathname pathname-match-p directory translate-pathname
-           with-open-file with-open-stream read-sequence terpri write-line
-           write-sequence prin1 princ print write-to-string prin1-to-string
-           princ-to-string force-output with-input-from-string
+           string-right-trim string-trim make-sequence defpackage signed-byte
+           unsigned-byte extended-char consp listp symbolp keywordp
+           compiled-function-p functionp packagep integerp rationalp floatp
+           complexp random-state-p characterp standard-char-p vectorp
+           simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
+           simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
+           check-type assert macroexpand equal complement mapc mapcan maplist
+           mapl mapcon map-into reduce merge pathname-directory pathname-host
+           pathname-device pathname-version file-namestring directory-namestring
+           host-namestring enough-namestring merge-pathnames file-author
+           file-write-date user-homedir-pathname pathname-match-p directory
+           translate-pathname with-open-file with-open-stream read-sequence
+           terpri write-line write-sequence prin1 princ print write-to-string
+           prin1-to-string princ-to-string force-output with-input-from-string
            with-output-to-string pprint yes-or-no-p y-or-n-p *terminal-io*
            do-all-symbols find-all-symbols apropos apropos-list with-slots
            with-accessors with-package-iterator with-hash-table-iterator loop
