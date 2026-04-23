@@ -284,6 +284,11 @@ reason to do otherwise.
 
 __Structure objects and classes__
 
+Structure constructors fill with NIL those slots that are not initialized with
+keyword arguments and that don't have an initialization form.
+
+The TYPE and READ-ONLY options for slots have no effect.
+
 Redefining a structure type works fine, despite being undefined in ANSI.  If you
 redefine a structure type, the existing structures of that type will stick to
 their original definition.
@@ -547,9 +552,13 @@ __Known bugs and limitations__
 
 - Meeting an unexpected dotted list in some places will cause a crash
 
+- Lexical closures, especially of functions, may often cause little memory
+  leaks.  This will get fixed soon, when I'll reorganize the implementation of
+  bindings
+
 
 
 __Minor details__
 
-In functions that take both a :TEST and :TEST-NOT argument, the former takes
-precedence.
+In standard functions that take both a :TEST and :TEST-NOT argument, the former
+takes precedence.
