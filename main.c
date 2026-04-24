@@ -32187,7 +32187,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 		return NULL;
 
 	      env->vars = bind_variable (SYMBOL (CAR (cons1)), res, 1, env->vars);
-	      binsnum++;
+	      env->lex_env_vars_boundary++, binsnum++;
 
 	      cons1 = CDR (cons1);
 	      cons2 = CDR (cons2);
@@ -32228,7 +32228,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 		  l = l->next;
 		}
 
-	      binsnum++;
+	      env->lex_env_vars_boundary++, binsnum++;
 
 	      cons1 = CDR (cons1);
 
@@ -32247,7 +32247,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	      env->vars = bind_variable (SYMBOL (CAR (cons1)), &nil_object, 0,
 					 env->vars);
 
-	      binsnum++;
+	      env->lex_env_vars_boundary++, binsnum++;
 	      cons1 = CDR (cons1);
 	    }
 
@@ -32255,8 +32255,6 @@ setf_value (struct object *form, struct object *value, int eval_value,
 
 	  free_object_list_structure (outcome->other_values);
 	  outcome->other_values = NULL;
-
-	  env->lex_env_vars_boundary += binsnum;
 
 	  val = evaluate_object (expvals->next->next->obj, env, outcome);
 
