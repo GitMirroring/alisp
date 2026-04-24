@@ -1767,18 +1767,34 @@
   def)
 
 
-(defun (setf getf) (newval plist ind &optional def)
-  (let ((l (length plist)))
-    (do ((i 0 (+ i 2)))
-	((>= i l))
-      (when (eq (car plist) ind)
-	(setf (cadr plist) newval)
-	(return-from getf newval))
-      (unless (cddr plist)
-	(setf (cddr plist) (list ind newval))
-	(return-from getf newval))
-      (setq plist (cddr plist))))
-  def)
+(define-setf-expander getf (place key &optional def)
+  (let* ((exp (multiple-value-list (get-setf-expansion place)))
+	 (vars (first exp))
+	 (keysym (gensym))
+	 (defsym (gensym))
+	 (varforms (second exp))
+	 (storevar (car (third exp)))
+	 (getplace (fifth exp))
+	 (setplace (fourth exp))
+	 (newvalsym (list (gensym)))
+	 (blockname (gensym)))
+    (setq vars (append vars (list keysym defsym)))
+    (setq varforms (append varforms (list key def)))
+    (values
+     vars
+     varforms
+     newvalsym
+     `(block ,blockname
+	(let ((plist ,getplace))
+	  (while plist
+	    (when (eq (car plist) ,keysym)
+	      (setf (cadr plist) ,(car newvalsym))
+	      (return-from ,blockname ,(car newvalsym)))
+	    (setq plist (cddr plist))))
+	(let ((,storevar (list* ,keysym ,(car newvalsym) ,getplace)))
+	  ,setplace)
+	,(car newvalsym))
+     `(getf ,getplace ,keysym ,defsym))))
 
 
 
