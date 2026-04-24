@@ -1717,15 +1717,13 @@
 
 
 
-(defun get (sym ind &optional (def nil))
-  (let* ((pl (symbol-plist sym))
-	 (l (length pl)))
-    (do ((i 0 (+ i 2)))
-	((>= i l))
-      (if (eq (car pl) ind)
-	  (return-from get (cadr pl)))
-      (setq pl (cddr pl))))
-  def)
+(defun get (sym key &optional def)
+  (getf (symbol-plist sym) key def))
+
+
+(defun (setf get) (newval sym key &optional def)
+  (setf (getf (symbol-plist sym) key def) newval))
+
 
 
 (defun get-properties (pl il)
