@@ -19,6 +19,7 @@ __Index__
 - Builtin functions and macros
 - alisp extensions
 - Literal objects
+- Backquote notation
 - Setting an undefined variable
 - Arrays
 - Structure objects and classes
@@ -259,11 +260,31 @@ alisp defines these non-standard conditions:
 __Literal objects__
 
 In alisp, the reader always produces fresh objects.  Therefore modifying
-literals, albeit undefined by ANSI, works as expected.  You can also modify the
-result of a backquote expression.
+literals, albeit undefined by ANSI, works as expected.
 
 Of course, such undefined behavior should be avoided if you want best
 portability.
+
+
+
+__Backquote notation__
+
+When evaluating a backquoted expression, alisp keeps as much as possible of the
+source list structure.  Consider for example this form:
+
+ `(0 1 ,(gensym) 2 3)
+
+Each time you evaluate it, the first three conses of the result will get
+allocated fresh, but the third cdr will point to the fourth cons of the original
+form.
+
+This may have unexpected results: if you later modify the fourth cons of the
+returned list, you will effectively modify the backquote form itself.
+
+If you want to ensure that each evaluation produces an entirely fresh result,
+you can prefix a comma and a tick to the last car, like this:
+
+ `(0 1 ,(gensym) 2 ,'3)
 
 
 
