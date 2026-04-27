@@ -896,12 +896,12 @@
 		       (reverse sl)) slots)))
     (dolist (rd readers)
       (setq funcdefs (cons
-		      `(defmethod ,(cdr rd) (obj)
+		      `(defmethod ,(cdr rd) ((obj ,name))
 			 (slot-value obj ',(car rd)))
 		      funcdefs)))
     (dolist (wr writers)
       (setq funcdefs (cons
-		      `(defmethod ,(cdr wr) (newval obj)
+		      `(defmethod ,(cdr wr) (newval (obj ,name))
 			 (setf (slot-value obj ',(car wr)) newval))
 		      funcdefs)))
     `(progn
