@@ -42,6 +42,7 @@ __Index__
 - Debugging
 - Watchpoints
 - Known bugs and limitations
+- Policy on use of Large Language Models
 - Minor details
 
 
@@ -576,6 +577,14 @@ __Known bugs and limitations__
 - Lexical closures, especially of functions, may often cause little memory
   leaks.  This will get fixed soon, when I'll reorganize the implementation of
   bindings
+
+
+
+__Policy on use of Large Language Models__
+
+I'm the only author of alisp and I never use Large Language Models, in
+particular I don't use them for writing code or documentation or tests, nor for
+finding or solving bugs.
 
 
 
