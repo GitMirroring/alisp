@@ -84,64 +84,64 @@ typedef long fixnum;
 
 
 #define IS_SEQUENCE(s) (SYMBOL (s) == &nil_object || (s)->type == TYPE_CONS_PAIR \
-			|| (s)->type == TYPE_STRING			\
 			|| ((s)->type == TYPE_ARRAY			\
 			    && (s)->value_ptr.array->alloc_size		\
 			    && !(s)->value_ptr.array->alloc_size->next)	\
-			|| ((s)->type == TYPE_BITARRAY			\
-			    && (s)->value_ptr.bitarray->alloc_size	\
-			    && !(s)->value_ptr.bitarray->alloc_size->next))
+			|| ((s)->type == TYPE_BYTE_ARRAY		\
+			    && (s)->value_ptr.byte_array->alloc_size	\
+			    && !(s)->value_ptr.byte_array->alloc_size->next))
 
 #define IS_LIST(s) ((s)->type == TYPE_CONS_PAIR || SYMBOL (s) == &nil_object)
 
-#define IS_VECTOR(s) ((s)->type == TYPE_STRING				\
-		      || ((s)->type == TYPE_ARRAY			\
-			  && (s)->value_ptr.array->alloc_size		\
-			  && !(s)->value_ptr.array->alloc_size->next)	\
-		      || ((s)->type == TYPE_BITARRAY			\
-			  && (s)->value_ptr.bitarray->alloc_size	\
-			  && !(s)->value_ptr.bitarray->alloc_size->next))
+#define IS_VECTOR(s) (((s)->type == TYPE_ARRAY				\
+		       && (s)->value_ptr.array->alloc_size		\
+		       && !(s)->value_ptr.array->alloc_size->next)	\
+		      || ((s)->type == TYPE_BYTE_ARRAY			\
+			  && (s)->value_ptr.byte_array->alloc_size	\
+			  && !(s)->value_ptr.byte_array->alloc_size->next))
 
-#define IS_ARRAY(s) ((s)->type == TYPE_STRING || (s)->type == TYPE_ARRAY \
-		     || (s)->type == TYPE_BITARRAY)
+#define IS_STRING(s) ((s)->type == TYPE_BYTE_ARRAY	\
+		      && (s)->value_ptr.byte_array->subtype == BYTE_ARRAY_CHARACTER \
+		      && (s)->value_ptr.byte_array->alloc_size		\
+		      && !(s)->value_ptr.byte_array->alloc_size->next)
 
-#define HAS_FILL_POINTER(s) (((s)->type == TYPE_STRING			\
-			      && (s)->value_ptr.string->fill_pointer >= 0) \
+#define IS_BIT_ARRAY(s) ((s)->type == TYPE_BYTE_ARRAY			\
+			 && (s)->value_ptr.byte_array->subtype == BYTE_ARRAY_UNSIGNED \
+			 && (s)->value_ptr.byte_array->step == 1)
+
+#define IS_BIT_VECTOR(s) (IS_BIT_ARRAY (s)				\
+			  && (s)->value_ptr.byte_array->alloc_size	\
+			  && !(s)->value_ptr.byte_array->alloc_size->next)
+
+#define IS_ARRAY(s) ((s)->type == TYPE_ARRAY || (s)->type == TYPE_BYTE_ARRAY)
+
+#define HAS_FILL_POINTER(s) (((s)->type == TYPE_BYTE_ARRAY		\
+			      && (s)->value_ptr.byte_array->fill_pointer >= 0) \
 			     || ((s)->type == TYPE_ARRAY		\
-				 && (s)->value_ptr.array->fill_pointer >= 0) \
-			     || ((s)->type == TYPE_BITARRAY		\
-				 && (s)->value_ptr.bitarray->fill_pointer >= 0))
+				 && (s)->value_ptr.array->fill_pointer >= 0))
 
 #define SEQUENCE_LENGTH(s) (SYMBOL (s) == &nil_object ? 0 :		\
 			    (s)->type == TYPE_CONS_PAIR ? list_length (s) : \
-			    (s)->type == TYPE_ARRAY ? \
+			    (s)->type == TYPE_ARRAY ?			\
 			    (s)->value_ptr.array->alloc_size->size :	\
-			    (s)->type == TYPE_STRING \
-			    ? (s)->value_ptr.string->used_size :	\
-			    (s)->type == TYPE_BITARRAY			\
-			    ? (s)->value_ptr.bitarray->alloc_size->size : 0)
+			    (s)->type == TYPE_BYTE_ARRAY		\
+			    ? (s)->value_ptr.byte_array->alloc_size->size : 0)
 
 #define ACTUAL_VECTOR_LENGTH(v) ((v)->value_ptr.array->fill_pointer >= 0 \
 				 ? (v)->value_ptr.array->fill_pointer	\
 				 : (v)->value_ptr.array->alloc_size->size) \
 
-#define ACTUAL_STRING_LENGTH(s) ((s)->value_ptr.string->fill_pointer >= 0 \
-				 ? (s)->value_ptr.string->fill_pointer	\
-				 : (s)->value_ptr.string->used_size)
-
-#define ACTUAL_BITVECTOR_LENGTH(v) ((v)->value_ptr.bitarray->fill_pointer >= 0 \
-				    ? (v)->value_ptr.bitarray->fill_pointer \
-				    : (v)->value_ptr.bitarray->alloc_size->size)
+#define ACTUAL_BYTE_VECTOR_LENGTH(v) ((v)->value_ptr.byte_array->fill_pointer >= 0 \
+				      ? (v)->value_ptr.byte_array->fill_pointer \
+				      : (v)->value_ptr.byte_array->alloc_size->size)
 
 #define ACTUAL_SEQUENCE_LENGTH(s) (SYMBOL (s) == &nil_object ? 0	\
 				   : (s)->type == TYPE_CONS_PAIR	\
 				   ? list_length (s)			\
 				   : (s)->type == TYPE_ARRAY		\
 				   ? ACTUAL_VECTOR_LENGTH (s)		\
-				   : (s)->type == TYPE_STRING		\
-				   ? ACTUAL_STRING_LENGTH (s)		\
-				   : (s)->type == TYPE_BITARRAY		\
-				   ? ACTUAL_BITVECTOR_LENGTH (s) : 0)
+				   : (s)->type == TYPE_BYTE_ARRAY	\
+				   ? ACTUAL_BYTE_VECTOR_LENGTH (s) : 0)
 
 
 #define IS_SYMBOL(s) ((s)->type == TYPE_SYMBOL || (s)->type == TYPE_SYMBOL_NAME)
@@ -165,18 +165,18 @@ typedef long fixnum;
 		   NULL)
 
 #define IS_STRING_DESIGNATOR(s) ((s)->type == TYPE_CHARACTER || IS_SYMBOL (s) \
-				 || (s)->type == TYPE_STRING)
+				 || IS_STRING (s))
 
 #define IS_CHARACTER_DESIGNATOR(s) ((IS_SYMBOL (s)			\
 				     && SYMBOL (s)->value_ptr.symbol->name_len) \
-				    || ((s)->type == TYPE_STRING	\
-					&& (s)->value_ptr.string->used_size) \
+				    || (IS_STRING (s)			\
+					&& (s)->value_ptr.byte_array->alloc_size->size) \
 				    || (s)->type == TYPE_CHARACTER)
 
-#define IS_PACKAGE_DESIGNATOR(s) (IS_STRING_DESIGNATOR(s) \
+#define IS_PACKAGE_DESIGNATOR(s) (IS_STRING_DESIGNATOR(s)	\
 				  || (s)->type == TYPE_PACKAGE)
 
-#define IS_PATHNAME_DESIGNATOR(s) ((s)->type == TYPE_STRING		\
+#define IS_PATHNAME_DESIGNATOR(s) (IS_STRING (s)			\
 				   || ((s)->type == TYPE_STREAM		\
 				       && (s)->value_ptr.stream->type	\
 				       == FILE_STREAM)			\
@@ -557,7 +557,7 @@ outcome_type
   (!(o) ? JUST_PREFIX :							\
    emptylist ? UNCLOSED_EMPTY_LIST :					\
    (o)->type == TYPE_CONS_PAIR ? UNCLOSED_NONEMPTY_LIST :		\
-   (o)->type == TYPE_STRING ? INCOMPLETE_STRING :			\
+   IS_STRING (o) ? INCOMPLETE_STRING :					\
    (o)->type == TYPE_SYMBOL_NAME ? INCOMPLETE_SYMBOL_NAME :		\
    (o)->type == TYPE_SHARP_MACRO_CALL ? INCOMPLETE_SHARP_MACRO_CALL : 0)
 
@@ -653,7 +653,7 @@ refcounted_object_list
 /* not a C string. not null-terminated and explicit size. null bytes are
    allowed inside */
 
-struct
+/*struct
 string
 {
   char *value;
@@ -661,7 +661,7 @@ string
   fixnum used_size;
 
   fixnum fill_pointer;
-};
+  };*/
 
 
 enum
@@ -1077,14 +1077,26 @@ array
 };
 
 
+enum
+byte_array_subtype
+  {
+    BYTE_ARRAY_UNSIGNED,
+    BYTE_ARRAY_SIGNED,
+    BYTE_ARRAY_CHARACTER
+  };
+
+
 struct
-bitarray
+byte_array
 {
   struct array_size *alloc_size;
 
   fixnum fill_pointer;
 
-  mpz_t value;
+  enum byte_array_subtype subtype;
+  int step;
+
+  unsigned char *value;
 };
 
 
@@ -1397,10 +1409,9 @@ object_type
     TYPE_RANDOM_STATE,
     TYPE_BYTESPEC,
     TYPE_CONS_PAIR,
-    TYPE_STRING,
     TYPE_CHARACTER,
     TYPE_ARRAY,
-    TYPE_BITARRAY,
+    TYPE_BYTE_ARRAY,
     TYPE_HASHTABLE,
     TYPE_ENVIRONMENT,
     TYPE_PACKAGE,
@@ -1434,10 +1445,9 @@ object_ptr_union
   gmp_randstate_t random_state;
   struct bytespec *bytespec;
   struct cons_pair *cons_pair;
-  struct string *string;
   char *character;
   struct array *array;
-  struct bitarray *bitarray;
+  struct byte_array *byte_array;
   struct hashtable *hashtable;
   struct environment *environment;
   struct package *package;
@@ -1687,7 +1697,7 @@ char *copy_token_to_buffer (const char *input, size_t size);
 size_t utf8len (const char *string);
 size_t next_utf8_char (char *str, size_t sz);
 size_t char_vector_utf8_length (const char *str, size_t sz);
-size_t string_utf8_length (const struct object *str);
+/*size_t string_utf8_length (const struct object *str);*/
 
 void *malloc_and_check (size_t size);
 void *realloc_and_check (void *ptr, size_t size);
@@ -1784,7 +1794,7 @@ struct object *create_string_copying_c_string (const char *str);
 void resize_string_allocation (struct object *string, fixnum size);
 void increment_string_allocation_respecting_fill_pointer (struct object *string,
 							  fixnum incr);
-char *copy_string_to_c_string (struct string *str);
+char *copy_string_to_c_string (struct byte_array *str);
 
 char *concatenate_char_vectors (size_t totsize, ...);
 
@@ -1814,6 +1824,9 @@ int get_filename (struct object *string, int *end);
 
 struct object *inspect_pathname_by_designator (struct object *des);
 
+struct object *alloc_byte_vector (fixnum size, enum byte_array_subtype subtype,
+				  int step, int dont_store_size);
+
 struct object *alloc_vector (fixnum size, int fill_with_nil,
 			     int dont_store_size);
 struct object *create_vector_from_list (struct object *list, fixnum size);
@@ -1835,10 +1848,10 @@ struct object *create_character (char *character, int do_copy);
 struct object *create_character_from_utf8 (char *character, size_t size);
 struct object *create_character_from_char (char ch);
 struct object *create_character_from_designator (struct object *des);
-struct object *get_nth_character (struct object *str, int ind);
-fixnum get_nth_character_offset (struct object *str, int ind);
-fixnum get_nth_character_preceding_offset (struct object *str, int ind);
-int set_nth_character (struct object *str, int ind, char *ch);
+/*struct object *get_nth_character (struct object *str, int ind);*/
+/*fixnum get_nth_character_offset (struct object *str, int ind);
+  fixnum get_nth_character_preceding_offset (struct object *str, int ind);*/
+/*int set_nth_character (struct object *str, int ind, char *ch);*/
 
 struct object *create_file_stream (enum stream_content_type content_type,
 				   enum stream_direction direction,
@@ -3161,8 +3174,8 @@ int symname_is_among (const struct symbol_name *sym, ...);
 int symbol_equals (const struct object *sym, const char *str,
 		   struct environment *env);
 int symbol_is_among (const struct object *sym, struct environment *env, ...);
-int equal_strings (const struct string *s1, const struct string *s2);
-int equalp_strings (const struct string *s1, const struct string *s2);
+int equal_strings (const struct byte_array *s1, const struct byte_array *s2);
+int equalp_strings (const struct byte_array *s1, const struct byte_array *s2);
 struct object *eq_objects (const struct object *obj1, const struct object *obj2);
 struct object *eql_objects (struct object *obj1, struct object *obj2);
 struct object *equal_objects (struct object *obj1, struct object *obj2);
@@ -3199,7 +3212,7 @@ int print_bytespec (const struct bytespec *bs, struct environment *env,
 		    struct stream *str);
 int print_as_string (const char *value, size_t sz, struct environment *env,
 		     struct stream *str);
-int print_string (const struct string *s, struct environment *env,
+int print_string (const struct byte_array *s, struct environment *env,
 		  struct stream *str);
 int print_character (const char *character, struct environment *env,
 		     struct stream *str);
@@ -3209,7 +3222,7 @@ int print_list (const struct cons_pair *list, struct environment *env,
 		struct stream *str);
 int print_array (const struct array *array, struct environment *env,
 		 struct stream *str);
-int print_bitarray (const struct bitarray *array, struct environment *env,
+int print_bitarray (const struct byte_array *array, struct environment *env,
 		    struct stream *str);
 int print_function_or_macro (const struct object *obj, struct environment *env,
 			     struct stream *str);
@@ -3247,13 +3260,12 @@ void restore_invariants_at_node (struct object *node, struct object *root,
 				 int *depth);
 
 void free_object (struct object *obj);
-void free_string (struct object *obj);
 void free_symbol_name (struct object *obj);
 void free_symbol (struct object *obj);
 void free_cons_pair (struct object *obj);
 void free_array_size (struct array_size *size);
 void free_array (struct object *obj);
-void free_bitarray (struct object *obj);
+void free_byte_array (struct object *obj);
 void free_hashtable (struct object *obj);
 void free_integer (struct object *obj);
 void free_ratio (struct object *obj);
@@ -4979,7 +4991,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
       if (out == UNCLOSED_EMPTY_LIST)
 	out = UNCLOSED_NONEMPTY_LIST;
     }
-  else if (ob->type == TYPE_STRING)
+  else if (IS_STRING (ob))
     {
       out = read_string (&ob, input, size, stream, obj_end);
     }
@@ -6089,9 +6101,9 @@ read_string (struct object **obj, const char *input, size_t size, FILE *stream,
 	     const char **string_end)
 {
   size_t length, new_size, incr = 16;
-  struct string *str;
+  struct byte_array *str;
   enum outcome_type out = INCOMPLETE_STRING;
-  int ch, quote = 0;
+  int ch, quote = 0, ind;
 
   if (input)
     {
@@ -6105,26 +6117,28 @@ read_string (struct object **obj, const char *input, size_t size, FILE *stream,
 	  *obj = alloc_string (length);
 	}
       else
-	resize_string_allocation (*obj, (*obj)->value_ptr.string->used_size
+	resize_string_allocation (*obj, (*obj)->value_ptr.byte_array->alloc_size->size
 				  + length);
 
       if (!length)
 	return COMPLETE_OBJECT;
 
-      str = (*obj)->value_ptr.string;
+      str = (*obj)->value_ptr.byte_array;
 
-      normalize_string (str->value + str->used_size, input, size);
-
-      str->used_size += length;
+      normalize_string ((char *) str->value + str->alloc_size->size - length,
+			input, size);
     }
   else
     {
       if (!*obj)
 	{
 	  *obj = alloc_string (incr);
+	  ind = 0;
 	}
+      else
+	ind = (*obj)->value_ptr.byte_array->alloc_size->size;
 
-      str = (*obj)->value_ptr.string;
+      str = (*obj)->value_ptr.byte_array;
 
       ch = fgetc (stream);
 
@@ -6139,19 +6153,20 @@ read_string (struct object **obj, const char *input, size_t size, FILE *stream,
 	    }
 	  else if (ch == '"' && !quote)
 	    {
+	      resize_string_allocation (*obj, ind);
 	      return COMPLETE_OBJECT;
 	    }
 	  else
 	    {
-	      if (str->used_size == str->alloc_size)
+	      if (ind == str->alloc_size->size)
 		{
 		  incr <<= 1;
 		  resize_string_allocation (*obj,
-					    (*obj)->value_ptr.string->used_size
+					    (*obj)->value_ptr.byte_array->alloc_size->size
 					    + incr);
 		}
 
-	      str->value [str->used_size++] = ch;
+	      str->value [ind++] = ch;
 
 	      quote = 0;
 	    }
@@ -6855,7 +6870,7 @@ call_sharp_macro (struct sharp_macro_call *macro_call, struct environment *env,
     }
   else if (macro_call->dispatch_ch == 'p' || macro_call->dispatch_ch == 'P')
     {
-      if (obj->type != TYPE_STRING)
+      if (!IS_STRING (obj))
 	{
 	  outcome->type = WRONG_OBJECT_TYPE_TO_SHARP_MACRO;
 
@@ -7797,12 +7812,12 @@ char_vector_utf8_length (const char *str, size_t sz)
 }
 
 
-size_t
+/*size_t
 string_utf8_length (const struct object *str)
 {
   return char_vector_utf8_length (str->value_ptr.string->value,
 				  str->value_ptr.string->used_size);
-}
+				  }*/
 
 
 void *
@@ -8286,10 +8301,10 @@ inspect_package_by_designator (struct object *des, struct environment *env)
   if (des->type == TYPE_PACKAGE)
     return des;
 
-  if (des->type == TYPE_STRING)
+  if (IS_STRING (des))
     {
-      name = des->value_ptr.string->value;
-      len = des->value_ptr.string->used_size;
+      name = (char *) des->value_ptr.byte_array->value;
+      len = des->value_ptr.byte_array->alloc_size->size;
     }
   else if (des->type == TYPE_CHARACTER)
     {
@@ -9020,34 +9035,19 @@ normalize_string (char *output, const char *input, size_t size)
 struct object *
 alloc_string (fixnum size)
 {
-  struct object *obj = alloc_object ();
-
-  obj->type = TYPE_STRING;
-
-  obj->value_ptr.string = malloc_and_check (sizeof (*obj->value_ptr.string));
-
-  obj->value_ptr.string->value = malloc_and_check (size);
-  obj->value_ptr.string->alloc_size = size;
-  obj->value_ptr.string->used_size = 0;
-  obj->value_ptr.string->fill_pointer = -1;
-
-  num_strings++;
-
-  return obj;
+  return alloc_byte_vector (size, BYTE_ARRAY_CHARACTER, 8, 0);
 }
 
 
 struct object *
 copy_string (struct object *string)
 {
-  struct object *ret = alloc_string (string->value_ptr.string->used_size);
+  struct object *ret = alloc_string (string->value_ptr.byte_array->alloc_size->size);
   int i;
 
-  ret->value_ptr.string->used_size = string->value_ptr.string->used_size;
-
-  for (i = 0; i < ret->value_ptr.string->used_size; i++)
+  for (i = 0; i < ret->value_ptr.byte_array->alloc_size->size; i++)
     {
-      ret->value_ptr.string->value [i] = string->value_ptr.string->value [i];
+      ret->value_ptr.byte_array->value [i] = string->value_ptr.byte_array->value [i];
     }
 
   return ret;
@@ -9060,7 +9060,7 @@ create_string_from_sequence (struct object *seq, fixnum size)
   struct object *ret, *cons;
   fixnum allocs = 0, chars, i, j;
 
-  if (seq->type == TYPE_BITARRAY)
+  if (IS_BIT_ARRAY (seq))
     return NULL;
 
   if (seq->type == TYPE_CONS_PAIR)
@@ -9087,7 +9087,7 @@ create_string_from_sequence (struct object *seq, fixnum size)
 	}
     }
   else
-    allocs = seq->value_ptr.string->used_size;
+    allocs = seq->value_ptr.byte_array->alloc_size->size;
 
   ret = alloc_string (allocs);
 
@@ -9098,7 +9098,7 @@ create_string_from_sequence (struct object *seq, fixnum size)
 
       while (SYMBOL (cons) != &nil_object)
 	{
-	  memcpy (ret->value_ptr.string->value+i, CAR (cons)->value_ptr.character,
+	  memcpy (ret->value_ptr.byte_array->value+i, CAR (cons)->value_ptr.character,
 		  strlen (CAR (cons)->value_ptr.character));
 	  i += strlen (CAR (cons)->value_ptr.character);
 	  cons = CDR (cons);
@@ -9110,7 +9110,7 @@ create_string_from_sequence (struct object *seq, fixnum size)
 
       for (i = 0; i < seq->value_ptr.array->alloc_size->size; i++)
 	{
-	  memcpy (ret->value_ptr.string->value+j, seq->value_ptr.array->value [i]
+	  memcpy (ret->value_ptr.byte_array->value+j, seq->value_ptr.array->value [i]
 		  ->value_ptr.character,
 		  strlen (seq->value_ptr.array->value [i]->value_ptr.character));
 	  j += strlen (seq->value_ptr.array->value [i]->value_ptr.character);
@@ -9120,11 +9120,11 @@ create_string_from_sequence (struct object *seq, fixnum size)
     {
       chars = 0;
 
-      for (i = 0; i < seq->value_ptr.string->used_size; i++)
+      for (i = 0; i < seq->value_ptr.byte_array->alloc_size->size; i++)
 	{
-	  ret->value_ptr.string->value [i] = seq->value_ptr.string->value [i];
+	  ret->value_ptr.byte_array->value [i] = seq->value_ptr.byte_array->value [i];
 
-	  if (IS_LOWEST_BYTE_IN_UTF8 (seq->value_ptr.string->value [i]))
+	  if (IS_LOWEST_BYTE_IN_UTF8 (seq->value_ptr.byte_array->value [i]))
 	    chars++;
 	}
 
@@ -9132,7 +9132,7 @@ create_string_from_sequence (struct object *seq, fixnum size)
 	return NULL;
     }
 
-  ret->value_ptr.string->used_size = allocs;
+  ret->value_ptr.byte_array->alloc_size->size = allocs;
   return ret;
 }
 
@@ -9146,9 +9146,9 @@ create_string_copying_char_vector (const char *str, fixnum size)
   ret = alloc_string (size);
 
   for (i = 0; i < size; i++)
-    ret->value_ptr.string->value [i] = str [i];
+    ret->value_ptr.byte_array->value [i] = str [i];
 
-  ret->value_ptr.string->used_size = size;
+  ret->value_ptr.byte_array->alloc_size->size = size;
 
   return ret;
 }
@@ -9158,15 +9158,20 @@ struct object *
 create_string_with_char_vector (char *str, fixnum size)
 {
   struct object *ret;
+  struct array_size *sz;
 
   ret = alloc_object ();
-  ret->type = TYPE_STRING;
-  ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
+  ret->type = TYPE_BYTE_ARRAY;
+  ret->value_ptr.byte_array = malloc_and_check (sizeof (*ret->value_ptr.byte_array));
 
-  ret->value_ptr.string->value = str;
-  ret->value_ptr.string->alloc_size = size;
+  ret->value_ptr.byte_array->subtype = BYTE_ARRAY_CHARACTER;
+  ret->value_ptr.byte_array->step = 1;
+  ret->value_ptr.byte_array->value = (unsigned char *) str;
 
-  ret->value_ptr.string->used_size = size;
+  sz = malloc_and_check (sizeof (*sz));
+  sz->size = size;
+  sz->next = NULL;
+  ret->value_ptr.byte_array->alloc_size = sz;
 
   num_strings++;
 
@@ -9184,16 +9189,10 @@ create_string_copying_c_string (const char *str)
 void
 resize_string_allocation (struct object *string, fixnum size)
 {
-  if (size == string->value_ptr.string->alloc_size)
-    return;
+  string->value_ptr.byte_array->value =
+    realloc_and_check (string->value_ptr.byte_array->value, size);
 
-  string->value_ptr.string->value =
-    realloc_and_check (string->value_ptr.string->value, size);
-
-  if (size < string->value_ptr.string->used_size)
-    string->value_ptr.string->used_size = size;
-
-  string->value_ptr.string->alloc_size = size;
+  string->value_ptr.byte_array->alloc_size->size = size;
 }
 
 
@@ -9201,29 +9200,23 @@ void
 increment_string_allocation_respecting_fill_pointer (struct object *string,
 						     fixnum incr)
 {
-  string->value_ptr.string->used_size = string->value_ptr.string->fill_pointer
-    +incr;
+  string->value_ptr.byte_array->alloc_size->size
+    = string->value_ptr.byte_array->fill_pointer+incr;
 
-  if (string->value_ptr.string->used_size
-      <= string->value_ptr.string->alloc_size)
-    return;
-
-  string->value_ptr.string->value =
-    realloc_and_check (string->value_ptr.string->value,
-		       string->value_ptr.string->used_size);
-
-  string->value_ptr.string->alloc_size = string->value_ptr.string->used_size;
+  string->value_ptr.byte_array->value =
+    realloc_and_check (string->value_ptr.byte_array->value,
+		       string->value_ptr.byte_array->alloc_size->size);
 }
 
 
 char *
-copy_string_to_c_string (struct string *str)
+copy_string_to_c_string (struct byte_array *str)
 {
-  char *ret = malloc_and_check (str->used_size + 1);
+  char *ret = malloc_and_check (str->alloc_size->size + 1);
 
-  memcpy (ret, str->value, str->used_size);
+  memcpy (ret, str->value, str->alloc_size->size);
 
-  ret [str->used_size] = 0;
+  ret [str->alloc_size->size] = 0;
 
   return ret;
 }
@@ -9568,9 +9561,9 @@ get_directory_file_split (struct object *string)
 {
   int i;
 
-  for (i = string->value_ptr.string->used_size-1; i >= 0; i--)
+  for (i = string->value_ptr.byte_array->alloc_size->size-1; i >= 0; i--)
     {
-      if (string->value_ptr.string->value [i] == '/')
+      if (string->value_ptr.byte_array->value [i] == '/')
 	return i;
     }
 
@@ -9585,12 +9578,12 @@ get_filename (struct object *string, int *end)
 
   *end = -1;
 
-  for (i = string->value_ptr.string->used_size-1; i >= 0; i--)
+  for (i = string->value_ptr.byte_array->alloc_size->size-1; i >= 0; i--)
     {
-      if (string->value_ptr.string->value [i] == '.' && *end == -1)
+      if (string->value_ptr.byte_array->value [i] == '.' && *end == -1)
 	*end = i;
 
-      if (string->value_ptr.string->value [i] == '/')
+      if (string->value_ptr.byte_array->value [i] == '/')
 	{
 	  if (*end == i+1)
 	    *end = -1;
@@ -9606,7 +9599,7 @@ get_filename (struct object *string, int *end)
 struct object *
 inspect_pathname_by_designator (struct object *des)
 {
-  if (des->type == TYPE_STRING)
+  if (IS_STRING (des))
     {
       return des;
     }
@@ -9618,6 +9611,38 @@ inspect_pathname_by_designator (struct object *des)
     {
       return des->value_ptr.filename->value;
     }
+}
+
+
+struct object *
+alloc_byte_vector (fixnum size, enum byte_array_subtype subtype, int step,
+		   int dont_store_size)
+{
+  struct object *obj = alloc_object ();
+  struct byte_array *vec = malloc_and_check (sizeof (*vec));
+  struct array_size *sz;
+
+  if (!dont_store_size)
+    {
+      sz = malloc_and_check (sizeof (*sz));
+      sz->size = size;
+      sz->next = NULL;
+      vec->alloc_size = sz;
+    }
+
+  vec->fill_pointer = -1;
+  vec->subtype = subtype;
+  vec->step = step;
+
+  vec->value = calloc_and_check ((size*step)/8+((size*step)%8 > 0),
+				 sizeof (*vec->value));
+
+  obj->type = TYPE_BYTE_ARRAY;
+  obj->value_ptr.byte_array = vec;
+
+  num_arrays++;
+
+  return obj;
 }
 
 
@@ -9702,37 +9727,33 @@ create_vector_from_list (struct object *list, fixnum size)
 struct object *
 alloc_bitvector (fixnum size)
 {
-  struct object *ret = alloc_object ();
-
-  ret->type = TYPE_BITARRAY;
-  ret->value_ptr.bitarray = malloc_and_check (sizeof (*ret->value_ptr.bitarray));
-
-  ret->value_ptr.bitarray->alloc_size =
-    malloc_and_check (sizeof (*ret->value_ptr.bitarray->alloc_size));
-  ret->value_ptr.bitarray->alloc_size->size = size;
-  ret->value_ptr.bitarray->alloc_size->next = NULL;
-
-  ret->value_ptr.bitarray->fill_pointer = -1;
-
-  mpz_init (ret->value_ptr.bitarray->value);
-
-  return ret;
+  return alloc_byte_vector (size, BYTE_ARRAY_UNSIGNED, 1, 0);
 }
 
 
 struct object *
 create_bitvector_from_char_vector (const char *in, size_t sz, size_t req_size)
 {
-  struct object *ret = alloc_bitvector (req_size);
+  struct object *ret;
   size_t i;
   char l;
+
+  if (!req_size) for (i = 0; i < sz; i++)
+    {
+      if (in [i] != '1' && in [i] != '0')
+	break;
+    }
+
+  ret = alloc_bitvector (req_size ? req_size : i);
 
   for (i = 0; i < sz; i++)
     {
       if (in [i] == '1')
-	mpz_setbit (ret->value_ptr.bitarray->value, i);
+	ret->value_ptr.byte_array->value [i/8] =
+	  WITH_CHANGED_BIT (ret->value_ptr.byte_array->value [i/8], i%8, 1);
       else if (in [i] == '0')
-	mpz_clrbit (ret->value_ptr.bitarray->value, i);
+	ret->value_ptr.byte_array->value [i/8] =
+	  WITH_CHANGED_BIT (ret->value_ptr.byte_array->value [i/8], i%8, 0);
       else
 	break;
     }
@@ -9746,14 +9767,12 @@ create_bitvector_from_char_vector (const char *in, size_t sz, size_t req_size)
 
       for (; i < req_size; i++)
 	{
-	  if (l == '1')
-	    mpz_setbit (ret->value_ptr.bitarray->value, i);
-	  else if (l == '0')
-	    mpz_clrbit (ret->value_ptr.bitarray->value, i);
+	  ret->value_ptr.byte_array->value [i/8] =
+	    WITH_CHANGED_BIT (ret->value_ptr.byte_array->value [i/8], i%8, l == '1');
 	}
     }
 
-  ret->value_ptr.bitarray->alloc_size->size = req_size ? req_size : i;
+  ret->value_ptr.byte_array->alloc_size->size = req_size ? req_size : i;
 
   return ret;
 }
@@ -9792,7 +9811,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	      return NULL;
 	    }
 
-	  if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
+	  if (IS_STRING (seq) || IS_BIT_VECTOR (seq))
 	    decrement_refcount (el);
 	}
     }
@@ -9803,7 +9822,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	  axis [i] = elt (seq, i);
 	  add_reference (arr, axis [i], index+i);
 
-	  if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
+	  if (IS_STRING (seq) || IS_BIT_VECTOR (seq))
 	    decrement_refcount (axis [i]);
 	}
     }
@@ -9862,7 +9881,7 @@ create_array_from_sequence (struct object *seq, fixnum rank)
 				    size->next, rowsize, el))
 	return NULL;
 
-      if (seq->type == TYPE_STRING || seq->type == TYPE_BITARRAY)
+      if (IS_STRING (seq) || IS_BIT_VECTOR (seq))
 	decrement_refcount (el);
     }
 
@@ -9987,8 +10006,8 @@ create_character_from_designator (struct object *des)
     }
   else
     {
-      s = des->value_ptr.string->value;
-      l = des->value_ptr.string->used_size;
+      s = (char *) des->value_ptr.byte_array->value;
+      l = des->value_ptr.byte_array->alloc_size->size;
     }
 
   for (i = 0; i < l; i++)
@@ -10008,7 +10027,7 @@ create_character_from_designator (struct object *des)
 }
 
 
-struct object *
+/*struct object *
 get_nth_character (struct object *str, int ind)
 {
   char *ch = str->value_ptr.string->value;
@@ -10026,10 +10045,10 @@ get_nth_character (struct object *str, int ind)
     }
 
   return create_character_from_utf8 (ch, s);
-}
+  }*/
 
 
-fixnum
+/*fixnum
 get_nth_character_offset (struct object *str, int ind)
 {
   fixnum i;
@@ -10065,10 +10084,10 @@ get_nth_character_preceding_offset (struct object *str, int ind)
     }
 
   return -1;
-}
+  }*/
 
 
-int
+/*int
 set_nth_character (struct object *str, int ind, char *ch)
 {
   char *c = str->value_ptr.string->value, *bk;
@@ -10128,7 +10147,7 @@ set_nth_character (struct object *str, int ind, char *ch)
     }
 
   return 1;
-}
+  }*/
 
 
 struct object *
@@ -10138,7 +10157,7 @@ create_file_stream (enum stream_content_type content_type,
 {
   struct object *obj;
   struct stream *str;
-  char *fn = copy_string_to_c_string (namestring->value_ptr.string);
+  char *fn = copy_string_to_c_string (namestring->value_ptr.byte_array);
   FILE *f;
 
   if (direction == INPUT_STREAM)
@@ -10231,7 +10250,6 @@ create_string_stream (enum stream_direction direction, struct object *instr,
 {
   struct object *obj = alloc_object ();
   struct stream *str = malloc_and_check (sizeof (*str));
-  fixnum begoff, endoff;
 
   str->type = STRING_STREAM;
   str->direction = direction;
@@ -10253,29 +10271,17 @@ create_string_stream (enum stream_direction direction, struct object *instr,
 	}
       else
 	{
-	  begoff = get_nth_character_offset (instr, begin);
-
-	  if (begoff < 0)
-	    return NULL;
-
-	  if (end >= 0)
-	    {
-	      endoff = get_nth_character_preceding_offset (instr, end);
-
-	      if (endoff < 0)
-		return NULL;
-	    }
-
 	  if (end < 0)
 	    {
 	      str->string = create_string_copying_char_vector
-		(instr->value_ptr.string->value+begoff,
-		 instr->value_ptr.string->used_size-begoff);
+		((char *) instr->value_ptr.byte_array->value+begin,
+		 instr->value_ptr.byte_array->alloc_size->size-begin);
 	    }
 	  else
 	    {
 	      str->string = create_string_copying_char_vector
-		(instr->value_ptr.string->value+begoff, endoff-begoff+1);
+		((char *) instr->value_ptr.byte_array->value+begin,
+		 end-begin);
 	    }
 	}
     }
@@ -10461,7 +10467,7 @@ create_class_field_decl (struct object *class, struct object *fieldform,
 	    }
 
 
-	  if (CAR (CDR (fieldform))->type != TYPE_STRING)
+	  if (!IS_STRING (CAR (CDR (fieldform))))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -12907,8 +12913,9 @@ enter_debugger (struct object *cond, struct environment *env,
 
       if (s->type == STRING_STREAM)
 	{
-	  outcome->type = read_actual_object (&obj, 0, s->string->value_ptr.string->value,
-					      s->string->value_ptr.string->used_size,
+	  outcome->type = read_actual_object (&obj, 0,
+					      (char *) s->string->value_ptr.byte_array->value,
+					      s->string->value_ptr.byte_array->alloc_size->size,
 					      NULL, 0, 1, env, outcome, &objbeg, &objend);
 
 	  if (IS_READ_OR_EVAL_ERROR (outcome->type))
@@ -13575,15 +13582,22 @@ elt (struct object *seq, unsigned int ind)
 {
   if (IS_LIST (seq))
     return nth (ind, seq);
-  else if (seq->type == TYPE_STRING)
-    return get_nth_character (seq, ind);
+  else if (seq->type == TYPE_BYTE_ARRAY)
+    {
+      if (seq->value_ptr.byte_array->subtype == BYTE_ARRAY_CHARACTER)
+	{
+	  return create_character_from_char (seq->value_ptr.byte_array->value [ind]);
+	}
+      else if (seq->value_ptr.byte_array->step == 1)
+	{
+	  return create_integer_from_long (!!(seq->value_ptr.byte_array->value [ind/8]
+					      & (1 << (ind%8))));
+	}
+      else
+	return NULL;
+    }
   else if (seq->type == TYPE_ARRAY)
     return seq->value_ptr.array->value [ind];
-  else if (seq->type == TYPE_BITARRAY)
-    {
-      return create_integer_from_long
-	(mpz_tstbit (seq->value_ptr.bitarray->value, ind));
-    }
   else
     return NULL;
 }
@@ -13600,19 +13614,18 @@ set_elt (struct object *seq, unsigned int ind, struct object *val)
       cons->value_ptr.cons_pair->car = val;
       add_reference (cons, val, 0);
     }
-  else if (seq->type == TYPE_STRING)
-    seq->value_ptr.string->value [ind] = val->value_ptr.character [0];
+  else if (IS_STRING (seq))
+    seq->value_ptr.byte_array->value [ind] = *val->value_ptr.character;
   else if (seq->type == TYPE_ARRAY)
     {
       seq->value_ptr.array->value [ind] = val;
       add_reference (seq, val, ind);
     }
-  else if (seq->type == TYPE_BITARRAY)
+  else if (IS_BIT_VECTOR (seq))
     {
-      if (is_zero (val))
-	mpz_clrbit (seq->value_ptr.bitarray->value, ind);
-      else
-	mpz_setbit (seq->value_ptr.bitarray->value, ind);
+      seq->value_ptr.byte_array->value [ind/8] =
+	WITH_CHANGED_BIT (seq->value_ptr.byte_array->value [ind/8], ind%8,
+			  !is_zero (val));
     }
 }
 
@@ -13622,8 +13635,8 @@ sequence_length (const struct object *seq)
 {
   if (IS_LIST (seq))
     return list_length (seq);
-  else if (seq->type == TYPE_STRING)
-    return seq->value_ptr.string->used_size;
+  else if (seq->type == TYPE_BYTE_ARRAY)
+    return seq->value_ptr.byte_array->alloc_size->size;
   else if (seq->type == TYPE_ARRAY)
     return seq->value_ptr.array->alloc_size->size;
   else
@@ -13972,10 +13985,11 @@ hash_object_respecting_equal (const struct object *object, size_t table_size)
 	      + hash_object_respecting_equal (object->value_ptr.cons_pair->cdr,
 					      table_size)) % table_size;
     }
-  else if (object->type == TYPE_STRING)
+  else if (IS_STRING (object))
     {
-      return hash_char_vector (object->value_ptr.string->value,
-			       object->value_ptr.string->used_size, table_size);
+      return hash_char_vector ((char *) object->value_ptr.byte_array->value,
+			       object->value_ptr.byte_array->alloc_size->size,
+			       table_size);
     }
   else
     {
@@ -15178,7 +15192,7 @@ parse_declarations (struct object *body, struct environment *env, int bin_num,
 
   while ((*next)->type == TYPE_CONS_PAIR)
     {
-      if (allow_docstring && CAR (*next)->type == TYPE_STRING
+      if (allow_docstring && IS_STRING (CAR (*next))
 	  && SYMBOL (CDR (*next)) != &nil_object)
 	{
 	  allow_docstring = 0;
@@ -15225,9 +15239,9 @@ undo_special_declarations (struct object *decl, struct environment *env)
   while (decl->type == TYPE_CONS_PAIR
 	 && ((CAR (decl)->type == TYPE_CONS_PAIR
 	      && SYMBOL (CAR (CAR (decl))) == env->declare_sym)
-	     || (!found_string && CAR (decl)->type == TYPE_STRING)))
+	     || (!found_string && IS_STRING (CAR (decl)))))
     {
-      if (CAR (decl)->type == TYPE_STRING)
+      if (IS_STRING (CAR (decl)))
 	{
 	  found_string = 1;
 	  decl = CDR (decl);
@@ -18926,9 +18940,7 @@ int
 type_vector (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
-  return (obj->type == TYPE_ARRAY
-	  && array_rank (obj->value_ptr.array->alloc_size) == 1)
-    || obj->type == TYPE_STRING;
+  return IS_VECTOR (obj);
 }
 
 
@@ -18944,8 +18956,7 @@ int
 type_array (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING
-    || obj->type == TYPE_BITARRAY;
+  return obj->type == TYPE_ARRAY || obj->type == TYPE_BYTE_ARRAY;
 }
 
 
@@ -18954,8 +18965,7 @@ type_simple_array (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct outcome *outcome)
 {
   return (obj->type == TYPE_ARRAY && obj->value_ptr.array->fill_pointer < 0)
-    || (obj->type == TYPE_STRING && obj->value_ptr.string->fill_pointer < 0)
-    || (obj->type == TYPE_BITARRAY && obj->value_ptr.bitarray->fill_pointer < 0);
+    || (obj->type == TYPE_BYTE_ARRAY && obj->value_ptr.byte_array->fill_pointer < 0);
 }
 
 
@@ -18963,8 +18973,7 @@ int
 type_sequence (const struct object *obj, const struct object *typespec,
 	       struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_ARRAY || obj->type == TYPE_STRING
-    || obj->type == TYPE_CONS_PAIR || SYMBOL (obj) == &nil_object;
+  return IS_SEQUENCE (obj);
 }
 
 
@@ -18972,7 +18981,7 @@ int
 type_string (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_STRING;
+  return IS_STRING (obj);
 }
 
 
@@ -18980,7 +18989,7 @@ int
 type_simple_string (const struct object *obj, const struct object *typespec,
 		    struct environment *env, struct outcome *outcome)
 {
-  return obj->type == TYPE_STRING && obj->value_ptr.string->fill_pointer < 0;
+  return IS_STRING (obj) && obj->value_ptr.byte_array->fill_pointer < 0;
 }
 
 
@@ -18988,7 +18997,7 @@ int
 type_bit_vector (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome)
 {
-  return IS_VECTOR (obj) && obj->type == TYPE_BITARRAY;
+  return IS_BIT_VECTOR (obj);
 }
 
 
@@ -18996,7 +19005,7 @@ int
 type_simple_bit_vector (const struct object *obj, const struct object *typespec,
 			struct environment *env, struct outcome *outcome)
 {
-  return IS_VECTOR (obj) && obj->type == TYPE_BITARRAY && !HAS_FILL_POINTER (obj);
+  return IS_BIT_VECTOR (obj) && !HAS_FILL_POINTER (obj);
 }
 
 
@@ -19591,19 +19600,7 @@ builtin_elt (struct object *list, struct environment *env,
 
   ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
 
-  if (CAR (list)->type == TYPE_STRING)
-    {
-      ret = get_nth_character (CAR (list), ind);
-
-      if (!ret)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      return ret;
-    }
-  else if (CAR (list)->type == TYPE_ARRAY)
+  if (CAR (list)->type == TYPE_ARRAY)
     {
       if (array_rank (CAR (list)->value_ptr.array->alloc_size) != 1)
 	{
@@ -19624,24 +19621,23 @@ builtin_elt (struct object *list, struct environment *env,
       increment_refcount (ret);
       return ret;
     }
-  else if (CAR (list)->type == TYPE_BITARRAY)
+  else if (CAR (list)->type == TYPE_BYTE_ARRAY)
     {
-      if (array_rank (CAR (list)->value_ptr.bitarray->alloc_size) != 1)
+      if (array_rank (CAR (list)->value_ptr.byte_array->alloc_size) != 1)
 	{
 	  outcome->type = WRONG_NUMBER_OF_AXES;
 	  return NULL;
 	}
 
-      if (ind >= (CAR (list)->value_ptr.bitarray->fill_pointer >= 0
-		  ? CAR (list)->value_ptr.bitarray->fill_pointer
-		  : CAR (list)->value_ptr.bitarray->alloc_size->size))
+      if (ind >= (CAR (list)->value_ptr.byte_array->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.byte_array->fill_pointer
+		  : CAR (list)->value_ptr.byte_array->alloc_size->size))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
 
-      return create_integer_from_long
-	(mpz_tstbit (CAR (list)->value_ptr.bitarray->value, ind));
+      return elt (CAR (list), ind);
     }
   else if (CAR (list)->type == TYPE_CONS_PAIR
 	   || SYMBOL (CAR (list)) == &nil_object)
@@ -19674,7 +19670,7 @@ struct object *
 builtin_aref (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *arr, *ret, *lin_ind;
+  struct object *arr, *lin_ind;
   int ind, l = list_length (list);
 
   if (!l)
@@ -19684,57 +19680,31 @@ builtin_aref (struct object *list, struct environment *env,
 
   arr = CAR (list);
 
-  if (arr->type == TYPE_STRING)
+  lin_ind = builtin_array_row_major_index (list, env, outcome);
+
+  if (!lin_ind)
+    return NULL;
+
+  ind = mpz_get_si (lin_ind->value_ptr.integer);
+
+  decrement_refcount (lin_ind);
+
+  if (arr->type == TYPE_BYTE_ARRAY)
     {
-      list = CDR (list);
-
-      if (l != 2)
+      if (IS_STRING (arr))
 	{
-	  return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
-	}
-
-      if (CAR (list)->type != TYPE_INTEGER)
-	{
-	  return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
-	}
-
-      ind = mpz_get_si (CAR (list)->value_ptr.integer);
-
-      if (ind < 0)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      ret = get_nth_character (arr, ind);
-
-      if (!ret)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      return ret;
-    }
-  else if (arr->type == TYPE_ARRAY || arr->type == TYPE_BITARRAY)
-    {
-      lin_ind = builtin_array_row_major_index (list, env, outcome);
-
-      if (!lin_ind)
-	return NULL;
-
-      ind = mpz_get_si (lin_ind->value_ptr.integer);
-
-      decrement_refcount (lin_ind);
-
-      if (arr->type == TYPE_ARRAY)
-	{
-	  increment_refcount (arr->value_ptr.array->value [ind]);
-	  return arr->value_ptr.array->value [ind];
+	  return create_character_from_char (arr->value_ptr.byte_array->value [ind]);
 	}
       else
-	return create_integer_from_long
-	  (mpz_tstbit (arr->value_ptr.bitarray->value, ind));
+	{
+	  return create_integer_from_long (!!(arr->value_ptr.byte_array->value [ind/8]
+					      & (1 << (ind%8))));
+	}
+    }
+  else if (arr->type == TYPE_ARRAY)
+    {
+      increment_refcount (arr->value_ptr.array->value [ind]);
+      return arr->value_ptr.array->value [ind];
     }
 
   return raise_type_error (arr, "CL:ARRAY", env, outcome);
@@ -19746,7 +19716,6 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 			struct outcome *outcome)
 {
   int ind;
-  struct object *ret;
 
   if (list_length (list) != 2)
     {
@@ -19765,29 +19734,10 @@ builtin_row_major_aref (struct object *list, struct environment *env,
 
   ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
 
-  if (CAR (list)->type == TYPE_STRING)
-    {
-      if (ind < 0)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      ret = get_nth_character (CAR (list), ind);
-
-      if (!ret)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      return ret;
-    }
-
   if (ind < 0
       || ind >= array_total_size (CAR (list)->type == TYPE_ARRAY
 				  ? CAR (list)->value_ptr.array->alloc_size
-				  : CAR (list)->value_ptr.bitarray->alloc_size))
+				  : CAR (list)->value_ptr.byte_array->alloc_size))
     {
       outcome->type = OUT_OF_BOUND_INDEX;
       return NULL;
@@ -19798,9 +19748,10 @@ builtin_row_major_aref (struct object *list, struct environment *env,
       increment_refcount (CAR (list)->value_ptr.array->value [ind]);
       return CAR (list)->value_ptr.array->value [ind];
     }
-
-  return create_integer_from_long
-    (mpz_tstbit (CAR (list)->value_ptr.bitarray->value, ind));
+  else
+    {
+      return elt (CAR (list), ind);
+    }
 }
 
 
@@ -19842,7 +19793,7 @@ builtin_copy_seq (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       ret = copy_string (CAR (list));
     }
@@ -19886,7 +19837,7 @@ builtin_subseq (struct object *list, struct environment *env,
 {
   int l = list_length (list);
   fixnum i, beg, end, len;
-  struct object *ret, *cons;
+  struct object *ret, *cons, *el;
 
   if (l != 2 && l != 3)
     {
@@ -19910,11 +19861,11 @@ builtin_subseq (struct object *list, struct environment *env,
 			       "CL:NULL)", env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (CAR (list)->type == TYPE_BYTE_ARRAY)
     {
       if (mpz_cmp_si (CAR (CDR (list))->value_ptr.integer, 0) < 0
 	  || mpz_cmp_si (CAR (CDR (list))->value_ptr.integer,
-			 CAR (list)->value_ptr.string->used_size) > 0)
+			 CAR (list)->value_ptr.byte_array->alloc_size->size) > 0)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
@@ -19930,7 +19881,7 @@ builtin_subseq (struct object *list, struct environment *env,
 
       if (l == 3 && SYMBOL (CAR (CDR (CDR (list)))) != &nil_object
 	  && mpz_cmp_si (CAR (CDR (CDR (list)))->value_ptr.integer,
-			 CAR (list)->value_ptr.string->used_size) > 0)
+			 CAR (list)->value_ptr.byte_array->alloc_size->size) > 0)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
@@ -19938,16 +19889,17 @@ builtin_subseq (struct object *list, struct environment *env,
 
       beg = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
       end = (l == 2 || SYMBOL (CAR (CDR (CDR (list)))) == &nil_object)
-	? CAR (list)->value_ptr.string->used_size
+	? CAR (list)->value_ptr.byte_array->alloc_size->size
 	: mpz_get_si (CAR (CDR (CDR (list)))->value_ptr.integer);
 
-      ret = alloc_string (end-beg);
-      ret->value_ptr.string->used_size = end-beg;
+      ret = alloc_byte_vector (end-beg, CAR (list)->value_ptr.byte_array->subtype,
+			       CAR (list)->value_ptr.byte_array->step, 0);
 
       for (i = 0; i<end-beg; i++)
 	{
-	  ret->value_ptr.string->value [i] =
-	    CAR (list)->value_ptr.string->value [beg+i];
+	  el = elt (CAR (list), beg+i);
+	  set_elt (ret, i, el);
+	  decrement_refcount (el);
 	}
     }
   else if (CAR (list)->type == TYPE_ARRAY)
@@ -20082,11 +20034,7 @@ builtin_length (struct object *list, struct environment *env,
 
   seq = CAR (list);
 
-  if (seq->type == TYPE_STRING)
-    {
-      return create_integer_from_long (string_utf8_length (seq));
-    }
-  else if (seq->type == TYPE_CONS_PAIR || SYMBOL (seq) == &nil_object)
+  if (seq->type == TYPE_CONS_PAIR || SYMBOL (seq) == &nil_object)
     {
       return create_integer_from_long (list_length (seq));
     }
@@ -20098,13 +20046,13 @@ builtin_length (struct object *list, struct environment *env,
 
       return create_integer_from_long (seq->value_ptr.array->alloc_size->size);
     }
-  else if (seq->type == TYPE_BITARRAY &&
-	   array_rank (seq->value_ptr.bitarray->alloc_size) == 1)
+  else if (seq->type == TYPE_BYTE_ARRAY &&
+	   array_rank (seq->value_ptr.byte_array->alloc_size) == 1)
     {
-      if (seq->value_ptr.bitarray->fill_pointer >= 0)
-	return create_integer_from_long (seq->value_ptr.bitarray->fill_pointer);
+      if (seq->value_ptr.byte_array->fill_pointer >= 0)
+	return create_integer_from_long (seq->value_ptr.byte_array->fill_pointer);
 
-      return create_integer_from_long (seq->value_ptr.bitarray->alloc_size->size);
+      return create_integer_from_long (seq->value_ptr.byte_array->alloc_size->size);
     }
   else
     {
@@ -20128,8 +20076,8 @@ builtin_fill_pointer (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_STRING)
-    return create_integer_from_long (CAR (list)->value_ptr.string->fill_pointer);
+  if (CAR (list)->type == TYPE_BYTE_ARRAY)
+    return create_integer_from_long (CAR (list)->value_ptr.byte_array->fill_pointer);
   else
     return create_integer_from_long (CAR (list)->value_ptr.array->fill_pointer);
 }
@@ -20267,7 +20215,7 @@ builtin_make_array (struct object *list, struct environment *env,
     }
 
   if (is_subtype_by_char_vector (element_type, "CHARACTER", env))
-    objt = TYPE_STRING;
+    objt = TYPE_BYTE_ARRAY;
   else
     objt = TYPE_ARRAY;
 
@@ -20287,7 +20235,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (objt != TYPE_STRING)
+      if (objt == TYPE_ARRAY)
 	{
 	  ret = alloc_vector (indx, 1, 0);
 
@@ -20295,6 +20243,15 @@ builtin_make_array (struct object *list, struct environment *env,
 	    ret->value_ptr.array->fill_pointer = indx;
 	  else
 	    ret->value_ptr.array->fill_pointer = fillp;
+	}
+      else
+	{
+	  ret = alloc_string (indx);
+
+	  if (fp && SYMBOL (fp) == &t_object)
+	    ret->value_ptr.byte_array->fill_pointer = indx;
+	  else
+	    ret->value_ptr.byte_array->fill_pointer = fillp;
 	}
     }
   else if (dims->type == TYPE_CONS_PAIR)
@@ -20307,7 +20264,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (objt != TYPE_STRING || list_length (dims) != 1)
+      if (list_length (dims) != 1)
 	{
 	  while (SYMBOL (cons) != &nil_object)
 	    {
@@ -20349,11 +20306,6 @@ builtin_make_array (struct object *list, struct environment *env,
 
 	  ret = alloc_vector (tot, 1, 1);
 
-	  if (fp && SYMBOL (fp) == &t_object)
-	    ret->value_ptr.array->fill_pointer = indx;
-	  else
-	    ret->value_ptr.array->fill_pointer = fillp;
-
 	  ret->value_ptr.array->alloc_size = size;
 	}
       else
@@ -20377,6 +20329,25 @@ builtin_make_array (struct object *list, struct environment *env,
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
+
+	  if (objt == TYPE_ARRAY)
+	    {
+	      ret = alloc_vector (indx, 1, 0);
+
+	      if (fp && SYMBOL (fp) == &t_object)
+		ret->value_ptr.array->fill_pointer = indx;
+	      else
+		ret->value_ptr.array->fill_pointer = fillp;
+	    }
+	  else
+	    {
+	      ret = alloc_string (indx);
+
+	      if (fp && SYMBOL (fp) == &t_object)
+		ret->value_ptr.byte_array->fill_pointer = indx;
+	      else
+		ret->value_ptr.byte_array->fill_pointer = fillp;
+	    }
 	}
     }
   else if (SYMBOL (dims) == &nil_object)
@@ -20397,8 +20368,8 @@ builtin_make_array (struct object *list, struct environment *env,
 
   if (initial_contents)
     {
-      if (objt == TYPE_STRING
-	  && (dims->type == TYPE_INTEGER || list_length (dims) != 1))
+      if (objt == TYPE_BYTE_ARRAY
+	  && (dims->type == TYPE_INTEGER || list_length (dims) == 1))
 	{
 	  if (!IS_SEQUENCE (initial_contents))
 	    {
@@ -20406,18 +20377,20 @@ builtin_make_array (struct object *list, struct environment *env,
 				       outcome);
 	    }
 
-	  ret = create_string_from_sequence (initial_contents, indx);
-
-	  if (!ret)
+	  for (i = 0; i < ret->value_ptr.array->alloc_size->size; i++)
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      el = elt (initial_contents, i);
+	      set_elt (ret, i, el);
+
+	      if (IS_BIT_VECTOR (initial_contents)
+		  || IS_STRING (initial_contents))
+		decrement_refcount (el);
 	    }
 
 	  if (fp && SYMBOL (fp) == &t_object)
-	    ret->value_ptr.string->fill_pointer = indx;
+	    ret->value_ptr.byte_array->fill_pointer = indx;
 	  else
-	    ret->value_ptr.string->fill_pointer = fillp;
+	    ret->value_ptr.byte_array->fill_pointer = fillp;
 	}
       else
 	{
@@ -20451,29 +20424,27 @@ builtin_make_array (struct object *list, struct environment *env,
 		  return NULL;
 		}
 
-	      if (initial_contents->type == TYPE_STRING
-		  || initial_contents->type == TYPE_BITARRAY)
+	      if (IS_STRING (initial_contents)
+		  || IS_BIT_ARRAY (initial_contents))
 		{
 		  decrement_refcount (el);
 		}
 	    }
 	}
     }
-  else if (objt == TYPE_STRING
+  else if (objt == TYPE_BYTE_ARRAY
 	   && (dims->type == TYPE_INTEGER
 	       || (dims->type == TYPE_CONS_PAIR && list_length (dims) == 1)))
     {
-      ret = alloc_string (indx);
-
       for (i = 0; i < indx; i++)
-	ret->value_ptr.string->value [i] = 0;
+	ret->value_ptr.byte_array->value [i] = 0;
 
-      ret->value_ptr.string->used_size = indx;
+      ret->value_ptr.byte_array->alloc_size->size = indx;
 
       if (fp && SYMBOL (fp) == &t_object)
-	ret->value_ptr.string->fill_pointer = indx;
+	ret->value_ptr.byte_array->fill_pointer = indx;
       else
-	ret->value_ptr.string->fill_pointer = fillp;
+	ret->value_ptr.byte_array->fill_pointer = fillp;
     }
 
   return ret;
@@ -20523,20 +20494,10 @@ builtin_array_dimensions (struct object *list, struct environment *env,
 
   arr = CAR (list);
 
-  if (arr->type == TYPE_STRING)
-    {
-      ret = alloc_empty_cons_pair ();
-
-      num = alloc_number (TYPE_INTEGER);
-
-      mpz_set_ui (num->value_ptr.integer, arr->value_ptr.string->used_size);
-      ret->value_ptr.cons_pair->car = num;
-      ret->value_ptr.cons_pair->cdr = &nil_object;
-    }
-  else if (arr->type == TYPE_ARRAY || arr->type == TYPE_BITARRAY)
+  if (arr->type == TYPE_ARRAY || arr->type == TYPE_BYTE_ARRAY)
     {
       sz = arr->type == TYPE_ARRAY ? arr->value_ptr.array->alloc_size
-	: arr->value_ptr.bitarray->alloc_size;
+	: arr->value_ptr.byte_array->alloc_size;
 
       if (!sz)
 	return &nil_object;
@@ -20589,34 +20550,10 @@ builtin_array_row_major_index (struct object *list, struct environment *env,
   arr = CAR (list);
   list = CDR (list);
 
-  if (arr->type == TYPE_STRING)
-    {
-      if (l != 2)
-	{
-	  return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
-	}
-
-      if (CAR (list)->type != TYPE_INTEGER)
-	{
-	  return raise_type_error (CAR (list), "CL:INTEGER", env, outcome);
-	}
-
-      tot = mpz_get_si (CAR (list)->value_ptr.integer);
-
-      if (tot < 0 || tot >= arr->value_ptr.string->used_size)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      increment_refcount (CAR (list));
-      return CAR (list);
-    }
-
   if (arr->type == TYPE_ARRAY)
     sz = arr->value_ptr.array->alloc_size;
   else
-    sz = arr->value_ptr.bitarray->alloc_size;
+    sz = arr->value_ptr.byte_array->alloc_size;
 
   tot = 0;
 
@@ -20673,7 +20610,7 @@ struct object *
 builtin_adjust_array (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
-  fixnum newsz, oldsz, i, newchsz, r, newtotsz;
+  fixnum newsz, oldsz, i, r, newtotsz;
   struct object *cons, *ret;
   struct array_size *ind, *in, *size, *s;
 
@@ -20700,40 +20637,19 @@ builtin_adjust_array (struct object *list, struct environment *env,
     ? mpz_get_si (CAR (CAR (CDR (list)))->value_ptr.integer)
     : mpz_get_si (CAR (CDR (list))->value_ptr.integer);
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
-      oldsz = string_utf8_length (CAR (list));
+      oldsz = CAR (list)->value_ptr.byte_array->alloc_size->size;
 
-      if (oldsz > newsz)
+      CAR (list)->value_ptr.byte_array->value =
+	realloc_and_check (CAR (list)->value_ptr.byte_array->value, newsz);
+
+      for (i = oldsz; i < newsz; i++)
 	{
-	  if (!newsz)
-	    {
-	      newchsz = 0;
-	    }
-	  else
-	    {
-	      newchsz = get_nth_character_offset (CAR (list), newsz);
-	    }
+	  CAR (list)->value_ptr.byte_array->value [i] = 0;
 	}
 
-      if (newsz > oldsz)
-	{
-	  newchsz = CAR (list)->value_ptr.string->used_size + (newsz-oldsz);
-	}
-
-      if (newchsz > CAR (list)->value_ptr.string->alloc_size)
-	{
-	  CAR (list)->value_ptr.string->value =
-	    realloc_and_check (CAR (list)->value_ptr.string->value, newchsz);
-	  CAR (list)->value_ptr.string->alloc_size = newchsz;
-	}
-
-      for (i = CAR (list)->value_ptr.string->used_size; i < newchsz; i++)
-	{
-	  CAR (list)->value_ptr.string->value [i] = 0;
-	}
-
-      CAR (list)->value_ptr.string->used_size = newchsz;
+      CAR (list)->value_ptr.byte_array->alloc_size->size = newsz;
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
@@ -20821,7 +20737,7 @@ builtin_adjust_array (struct object *list, struct environment *env,
 			       newsz * sizeof (int));
 	}
     }
-  else if (CAR (list)->type == TYPE_BITARRAY)
+  else if (IS_BIT_ARRAY (CAR (list)))
     {
       if (!CAR (list)->value_ptr.array->alloc_size)
 	{
@@ -21301,7 +21217,7 @@ builtin_pathname (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       ret = create_filename (CAR (list));
     }
@@ -21472,9 +21388,9 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
 	    {
 	      if (SYMBOL (CDR (directory)) == &nil_object
-		  || CAR (CDR (directory))->type != TYPE_STRING
-		  || !CAR (CDR (directory))->value_ptr.string->used_size
-		  || CAR (CDR (directory))->value_ptr.string->value [0] != '/')
+		  || !IS_STRING (CAR (CDR (directory)))
+		  || !CAR (CDR (directory))->value_ptr.byte_array->alloc_size->size
+		  || CAR (CDR (directory))->value_ptr.byte_array->value [0] != '/')
 		{
 		  size = 1;
 		}
@@ -21491,17 +21407,17 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
 	  while (SYMBOL (cons) != &nil_object)
 	    {
-	      if (CAR (cons)->type == TYPE_STRING)
+	      if (IS_STRING (CAR (cons)))
 		{
-		  size += CAR (cons)->value_ptr.string->used_size;
+		  size += CAR (cons)->value_ptr.byte_array->alloc_size->size;
 
-		  if ((!CAR (cons)->value_ptr.string->used_size
-		       || CAR (cons)->value_ptr.string->value
-		       [CAR (cons)->value_ptr.string->used_size-1] != '/')
+		  if ((!CAR (cons)->value_ptr.byte_array->alloc_size->size
+		       || CAR (cons)->value_ptr.byte_array->value
+		       [CAR (cons)->value_ptr.byte_array->alloc_size->size-1] != '/')
 		      && (SYMBOL (CDR (cons)) == &nil_object
-			  || CAR (CDR (cons))->type != TYPE_STRING
-			  || !CAR (CDR (cons))->value_ptr.string->used_size
-			  || CAR (CDR (cons))->value_ptr.string->value [0] != '/'))
+			  || !IS_STRING (CAR (CDR (cons)))
+			  || !CAR (CDR (cons))->value_ptr.byte_array->alloc_size->size
+			  || CAR (CDR (cons))->value_ptr.byte_array->value [0] != '/'))
 		    {
 		      size++;
 		    }
@@ -21525,14 +21441,14 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	      cons = CDR (cons);
 	    }
 	}
-      else if (directory->type == TYPE_STRING)
+      else if (IS_STRING (directory))
 	{
-	  size += directory->value_ptr.string->used_size
-	    + (!directory->value_ptr.string->used_size
-	       || directory->value_ptr.string->value [0] != '/')
-	    + (!directory->value_ptr.string->used_size
-	       || directory->value_ptr.string->value
-	       [directory->value_ptr.string->used_size-1] != '/');
+	  size += directory->value_ptr.byte_array->alloc_size->size
+	    + (!directory->value_ptr.byte_array->alloc_size->size
+	       || directory->value_ptr.byte_array->value [0] != '/')
+	    + (!directory->value_ptr.byte_array->alloc_size->size
+	       || directory->value_ptr.byte_array->value
+	       [directory->value_ptr.byte_array->alloc_size->size-1] != '/');
 	}
       else if (SYMBOL (directory) != &nil_object)
 	{
@@ -21557,9 +21473,9 @@ builtin_make_pathname (struct object *list, struct environment *env,
 	  size += 1;
 	  name_type = WILD_FILENAME;
 	}
-      else if (name->type == TYPE_STRING)
+      else if (IS_STRING (name))
 	{
-	  size += name->value_ptr.string->used_size;
+	  size += name->value_ptr.byte_array->alloc_size->size;
 	}
       else if (SYMBOL (name) != &nil_object)
 	{
@@ -21572,14 +21488,14 @@ builtin_make_pathname (struct object *list, struct environment *env,
     {
       s = get_filename (defaults, &s2);
 
-      size += (s2 >= 0 ? s2 : defaults->value_ptr.string->used_size)-s-1;
+      size += (s2 >= 0 ? s2 : defaults->value_ptr.byte_array->alloc_size->size)-s-1;
     }
 
   if (type)
     {
-      if (type->type == TYPE_STRING)
+      if (IS_STRING (type))
 	{
-	  size += type->value_ptr.string->used_size+1;
+	  size += type->value_ptr.byte_array->alloc_size->size+1;
 	}
       else if (SYMBOL (type) != &nil_object
 	       && !symbol_equals (type, ":WILD", env))
@@ -21594,7 +21510,7 @@ builtin_make_pathname (struct object *list, struct environment *env,
       s = get_filename (defaults, &s2);
 
       if (s2 >= 0)
-	size += defaults->value_ptr.string->used_size-s2;
+	size += defaults->value_ptr.byte_array->alloc_size->size-s2;
     }
 
 
@@ -21603,28 +21519,28 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
   if (directory && symbol_equals (directory, ":WILD", env))
     {
-      memcpy (value->value_ptr.string->value, "/**/", 4);
+      memcpy (value->value_ptr.byte_array->value, "/**/", 4);
       i += 4;
     }
-  else if (directory && directory->type == TYPE_STRING)
+  else if (directory && IS_STRING (directory))
     {
-      if (!directory->value_ptr.string->used_size
-	  || directory->value_ptr.string->value [0] != '/')
+      if (!directory->value_ptr.byte_array->alloc_size->size
+	  || directory->value_ptr.byte_array->value [0] != '/')
 	{
-	  memcpy (value->value_ptr.string->value, "/", 1);
+	  memcpy (value->value_ptr.byte_array->value, "/", 1);
 	  i++;
 	}
 
-      memcpy (value->value_ptr.string->value+i,
-	      directory->value_ptr.string->value,
-	      directory->value_ptr.string->used_size);
-      i += directory->value_ptr.string->used_size;
+      memcpy (value->value_ptr.byte_array->value+i,
+	      directory->value_ptr.byte_array->value,
+	      directory->value_ptr.byte_array->alloc_size->size);
+      i += directory->value_ptr.byte_array->alloc_size->size;
 
-      if (!directory->value_ptr.string->used_size
-	  || directory->value_ptr.string->value
-	  [directory->value_ptr.string->used_size-1] != '/')
+      if (!directory->value_ptr.byte_array->alloc_size->size
+	  || directory->value_ptr.byte_array->value
+	  [directory->value_ptr.byte_array->alloc_size->size-1] != '/')
       {
-	memcpy (value->value_ptr.string->value+i, "/", 1);
+	memcpy (value->value_ptr.byte_array->value+i, "/", 1);
 	i++;
       }
     }
@@ -21633,11 +21549,11 @@ builtin_make_pathname (struct object *list, struct environment *env,
       if (symbol_equals (CAR (directory), ":ABSOLUTE", env))
 	{
 	  if (SYMBOL (CDR (directory)) == &nil_object
-	      || CAR (CDR (directory))->type != TYPE_STRING
-	      || !CAR (CDR (directory))->value_ptr.string->used_size
-	      || CAR (CDR (directory))->value_ptr.string->value [0] != '/')
+	      || !IS_STRING (CAR (CDR (directory)))
+	      || !CAR (CDR (directory))->value_ptr.byte_array->alloc_size->size
+	      || CAR (CDR (directory))->value_ptr.byte_array->value [0] != '/')
 	    {
-	      memcpy (value->value_ptr.string->value, "/", 1);
+	      memcpy (value->value_ptr.byte_array->value, "/", 1);
 	      i++;
 	    }
 	}
@@ -21646,33 +21562,33 @@ builtin_make_pathname (struct object *list, struct environment *env,
 
       while (SYMBOL (cons) != &nil_object)
 	{
-	  if (CAR (cons)->type == TYPE_STRING)
+	  if (IS_STRING (CAR (cons)))
 	    {
-	      memcpy (value->value_ptr.string->value+i,
-		      CAR (cons)->value_ptr.string->value,
-		      CAR (cons)->value_ptr.string->used_size);
-	      i += CAR (cons)->value_ptr.string->used_size;
+	      memcpy (value->value_ptr.byte_array->value+i,
+		      CAR (cons)->value_ptr.byte_array->value,
+		      CAR (cons)->value_ptr.byte_array->alloc_size->size);
+	      i += CAR (cons)->value_ptr.byte_array->alloc_size->size;
 
-	      if ((!CAR (cons)->value_ptr.string->used_size
-		   || CAR (cons)->value_ptr.string->value
-		   [CAR (cons)->value_ptr.string->used_size-1] != '/')
+	      if ((!CAR (cons)->value_ptr.byte_array->alloc_size->size
+		   || CAR (cons)->value_ptr.byte_array->value
+		   [CAR (cons)->value_ptr.byte_array->alloc_size->size-1] != '/')
 		  && (SYMBOL (CDR (cons)) == &nil_object
-		      || CAR (CDR (cons))->type != TYPE_STRING
-		      || !CAR (CDR (cons))->value_ptr.string->used_size
-		      || CAR (CDR (cons))->value_ptr.string->value [0] != '/'))
+		      || !IS_STRING (CAR (CDR (cons)))
+		      || !CAR (CDR (cons))->value_ptr.byte_array->alloc_size->size
+		      || CAR (CDR (cons))->value_ptr.byte_array->value [0] != '/'))
 		{
-		  memcpy (value->value_ptr.string->value+i, "/", 1);
+		  memcpy (value->value_ptr.byte_array->value+i, "/", 1);
 		  i++;
 		}
 	    }
 	  else if (symbol_equals (CAR (cons), ":WILD", env))
 	    {
-	      memcpy (value->value_ptr.string->value+i, "*/", 2);
+	      memcpy (value->value_ptr.byte_array->value+i, "*/", 2);
 	      i += 2;
 	    }
 	  else
 	    {
-	      memcpy (value->value_ptr.string->value+i, "**/", 3);
+	      memcpy (value->value_ptr.byte_array->value+i, "**/", 3);
 	      i += 3;
 	    }
 
@@ -21681,52 +21597,52 @@ builtin_make_pathname (struct object *list, struct environment *env,
     }
   else if ((!directory || SYMBOL (directory) != &nil_object) && defaults)
     {
-      memcpy (value->value_ptr.string->value, defaults->value_ptr.string->value,
+      memcpy (value->value_ptr.byte_array->value, defaults->value_ptr.byte_array->value,
 	      s+1);
       i += s+1;
     }
 
   if (name_type == WILD_FILENAME)
     {
-      memcpy (value->value_ptr.string->value+i, "*", 1);
+      memcpy (value->value_ptr.byte_array->value+i, "*", 1);
       i++;
     }
-  else if (name && name->type == TYPE_STRING)
+  else if (name && IS_STRING (name))
     {
-      memcpy (value->value_ptr.string->value+i,
-	      name->value_ptr.string->value, name->value_ptr.string->used_size);
-      i += name->value_ptr.string->used_size;
+      memcpy (value->value_ptr.byte_array->value+i,
+	      name->value_ptr.byte_array->value, name->value_ptr.byte_array->alloc_size->size);
+      i += name->value_ptr.byte_array->alloc_size->size;
     }
   else if ((!name || SYMBOL (name) != &nil_object) && defaults)
     {
-      memcpy (value->value_ptr.string->value+i,
-	      defaults->value_ptr.string->value+s+1,
-	      (s2 >= 0 ? s2 : defaults->value_ptr.string->used_size)-s-1);
-      i += (s2 >= 0 ? s2 : defaults->value_ptr.string->used_size)-s-1;
+      memcpy (value->value_ptr.byte_array->value+i,
+	      defaults->value_ptr.byte_array->value+s+1,
+	      (s2 >= 0 ? s2 : defaults->value_ptr.byte_array->alloc_size->size)-s-1);
+      i += (s2 >= 0 ? s2 : defaults->value_ptr.byte_array->alloc_size->size)-s-1;
     }
 
-  if (type && type->type == TYPE_STRING)
+  if (type && IS_STRING (type))
     {
-      memcpy (value->value_ptr.string->value+i, ".", 1);
+      memcpy (value->value_ptr.byte_array->value+i, ".", 1);
       i++;
-      memcpy (value->value_ptr.string->value+i,
-	      type->value_ptr.string->value, type->value_ptr.string->used_size);
-      i += type->value_ptr.string->used_size;
+      memcpy (value->value_ptr.byte_array->value+i,
+	      type->value_ptr.byte_array->value, type->value_ptr.byte_array->alloc_size->size);
+      i += type->value_ptr.byte_array->alloc_size->size;
     }
   else if ((!type || !IS_SYMBOL (type)) && defaults)
     {
       if (s2 >= 0)
 	{
-	  memcpy (value->value_ptr.string->value+i, ".", 1);
+	  memcpy (value->value_ptr.byte_array->value+i, ".", 1);
 	  i++;
-	  memcpy (value->value_ptr.string->value+i,
-		  defaults->value_ptr.string->value+s2+1,
-		  defaults->value_ptr.string->used_size-s2-1);
-	  size += defaults->value_ptr.string->used_size-s2;
+	  memcpy (value->value_ptr.byte_array->value+i,
+		  defaults->value_ptr.byte_array->value+s2+1,
+		  defaults->value_ptr.byte_array->alloc_size->size-s2-1);
+	  size += defaults->value_ptr.byte_array->alloc_size->size-s2;
 	}
     }
 
-  value->value_ptr.string->used_size = i;
+  value->value_ptr.byte_array->alloc_size->size = i;
 
   ret = create_filename (value);
   decrement_refcount (ret->value_ptr.filename->value);
@@ -21840,13 +21756,14 @@ builtin_al_pathname_directory (struct object *list, struct environment *env,
   if (s < 0)
     return &nil_object;
 
-  if (s == ns->value_ptr.string->used_size-1)
+  if (s == ns->value_ptr.byte_array->alloc_size->size-1)
     {
       increment_refcount (ns);
       return ns;
     }
 
-  return create_string_copying_char_vector (ns->value_ptr.string->value, s+1);
+  return create_string_copying_char_vector ((char *) ns->value_ptr.byte_array->value,
+					    s+1);
 }
 
 
@@ -21923,12 +21840,12 @@ builtin_pathname_name (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!ns->value_ptr.string->used_size)
+  if (!ns->value_ptr.byte_array->alloc_size->size)
     return &nil_object;
 
-  if (ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '.'
-      && (ns->value_ptr.string->used_size == 1
-	  || ns->value_ptr.string->value [ns->value_ptr.string->used_size-2] == '/'))
+  if (ns->value_ptr.byte_array->value [ns->value_ptr.byte_array->alloc_size->size-1] == '.'
+      && (ns->value_ptr.byte_array->alloc_size->size == 1
+	  || ns->value_ptr.byte_array->value [ns->value_ptr.byte_array->alloc_size->size-2] == '/'))
     {
       return create_string_copying_c_string (".");
     }
@@ -21942,14 +21859,15 @@ builtin_pathname_name (struct object *list, struct environment *env,
     }
 
   if (s < 0)
-    return create_string_copying_char_vector (ns->value_ptr.string->value, dot);
+    return create_string_copying_char_vector ((char *) ns->value_ptr.byte_array->value,
+					      dot);
 
-  if (s == ns->value_ptr.string->used_size-1)
+  if (s == ns->value_ptr.byte_array->alloc_size->size-1)
     return &nil_object;
 
-  return create_string_copying_char_vector (ns->value_ptr.string->value+s+1,
+  return create_string_copying_char_vector ((char *) ns->value_ptr.byte_array->value+s+1,
 					    dot >= 0 ? dot-s-1 :
-					    ns->value_ptr.string->used_size-s-1);
+					    ns->value_ptr.byte_array->alloc_size->size-s-1);
 }
 
 
@@ -22026,24 +21944,25 @@ builtin_pathname_type (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (!ns->value_ptr.string->used_size
-      || ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '/')
+  if (!ns->value_ptr.byte_array->alloc_size->size
+      || ns->value_ptr.byte_array->value [ns->value_ptr.byte_array->alloc_size->size-1] == '/')
     return &nil_object;
 
-  if (ns->value_ptr.string->value [ns->value_ptr.string->used_size-1] == '.'
-      && ns->value_ptr.string->used_size > 1
-      && ns->value_ptr.string->value [ns->value_ptr.string->used_size-2] != '/')
+  if (ns->value_ptr.byte_array->value [ns->value_ptr.byte_array->alloc_size->size-1] == '.'
+      && ns->value_ptr.byte_array->alloc_size->size > 1
+      && ns->value_ptr.byte_array->value [ns->value_ptr.byte_array->alloc_size->size-2] != '/')
     return alloc_string (0);
 
 
-  for (i = ns->value_ptr.string->used_size-2; i >= 0; i--)
+  for (i = ns->value_ptr.byte_array->alloc_size->size-2; i >= 0; i--)
     {
-      if (ns->value_ptr.string->value [i] == '/')
+      if (ns->value_ptr.byte_array->value [i] == '/')
 	return &nil_object;
 
-      if (ns->value_ptr.string->value [i] == '.')
+      if (ns->value_ptr.byte_array->value [i] == '.')
 	return create_string_copying_char_vector
-	  (ns->value_ptr.string->value+i+1, ns->value_ptr.string->used_size-i-1);
+	  ((char *) ns->value_ptr.byte_array->value+i+1,
+	   ns->value_ptr.byte_array->alloc_size->size-i-1);
     }
 
   return &nil_object;
@@ -22074,7 +21993,7 @@ builtin_wild_pathname_p (struct object *list, struct environment *env,
 
   if (l == 1 || symbol_equals (CAR (CDR (list)), ":NAME", env))
     {
-      if (CAR (list)->type == TYPE_STREAM || CAR (list)->type == TYPE_STRING
+      if (CAR (list)->type == TYPE_STREAM || IS_STRING (CAR (list))
 	  || CAR (list)->value_ptr.filename->name_type != WILD_FILENAME)
 	return &nil_object;
 
@@ -22168,7 +22087,7 @@ builtin_truename (struct object *list, struct environment *env,
 
   ns = inspect_pathname_by_designator (CAR (list));
 
-  fn = copy_string_to_c_string (ns->value_ptr.string);
+  fn = copy_string_to_c_string (ns->value_ptr.byte_array);
 
   f = fopen (fn, "r");
 
@@ -22206,7 +22125,7 @@ builtin_probe_file (struct object *list, struct environment *env,
 
   ns = inspect_pathname_by_designator (CAR (list));
 
-  fn = copy_string_to_c_string (ns->value_ptr.string);
+  fn = copy_string_to_c_string (ns->value_ptr.byte_array);
 
   f = fopen (fn, "r");
 
@@ -22244,7 +22163,7 @@ builtin_ensure_directories_exist (struct object *list, struct environment *env,
 
   ns = inspect_pathname_by_designator (CAR (list));
 
-  fn = copy_string_to_c_string (ns->value_ptr.string);
+  fn = copy_string_to_c_string (ns->value_ptr.byte_array);
   i = 1;
 
   while (1)
@@ -22398,10 +22317,10 @@ builtin_rename_file (struct object *list, struct environment *env,
     }
 
   oldn = copy_string_to_c_string
-    (inspect_pathname_by_designator (CAR (list))->value_ptr.string);
+    (inspect_pathname_by_designator (CAR (list))->value_ptr.byte_array);
 
   newn = copy_string_to_c_string
-    (inspect_pathname_by_designator (CAR (CDR (list)))->value_ptr.string);
+    (inspect_pathname_by_designator (CAR (CDR (list)))->value_ptr.byte_array);
 
   ret = rename (oldn, newn);
 
@@ -22444,7 +22363,7 @@ builtin_delete_file (struct object *list, struct environment *env,
     }
 
   fn = copy_string_to_c_string
-    (inspect_pathname_by_designator (CAR (list))->value_ptr.string);
+    (inspect_pathname_by_designator (CAR (list))->value_ptr.byte_array);
 
   ret = remove (fn);
 
@@ -22537,21 +22456,22 @@ builtin_read_char (struct object *list, struct environment *env,
     {
       eof = 1;
 
-      for (i = 1; i < s->string->value_ptr.string->used_size && i < 4; i++)
+      for (i = 1; i < s->string->value_ptr.byte_array->alloc_size->size && i < 4; i++)
 	{
 	  eof = 0;
 
-	  if (IS_LOWEST_BYTE_IN_UTF8 (s->string->value_ptr.string->value [i]))
+	  if (IS_LOWEST_BYTE_IN_UTF8 (s->string->value_ptr.byte_array->value [i]))
 	    break;
 	}
 
       if (!eof)
 	{
-	  ret = create_character_from_utf8 (s->string->value_ptr.string->value, i);
+	  ret = create_character_from_utf8 ((char *) s->string->value_ptr.byte_array->value,
+					    i);
 
 	  newstr = create_string_copying_char_vector
-	    (s->string->value_ptr.string->value+i,
-	     s->string->value_ptr.string->used_size-i);
+	    ((char *)s->string->value_ptr.byte_array->value+i,
+	     s->string->value_ptr.byte_array->alloc_size->size-i);
 	  delete_reference (str, s->string, 0);
 	  s->string = newstr;
 	  add_reference (str, s->string, 0);
@@ -22638,16 +22558,15 @@ builtin_read_line (struct object *list, struct environment *env,
 	}
 
       ret = create_string_with_char_vector (in, i);
-      ret->value_ptr.string->alloc_size = sz;
-      ret->value_ptr.string->fill_pointer = -1;
+      ret->value_ptr.byte_array->fill_pointer = -1;
     }
   else if (s->type == STRING_STREAM)
     {
       eof = 1;
 
-      for (i = 0; i < s->string->value_ptr.string->used_size; i++)
+      for (i = 0; i < s->string->value_ptr.byte_array->alloc_size->size; i++)
 	{
-	  if (s->string->value_ptr.string->value [i] == '\n')
+	  if (s->string->value_ptr.byte_array->value [i] == '\n')
 	    {
 	      eof = 0;
 	      break;
@@ -22671,8 +22590,8 @@ builtin_read_line (struct object *list, struct environment *env,
 	  delete_reference (str, s->string, 0);
 
 	  s->string = create_string_copying_char_vector
-	    (ret->value_ptr.string->value+i+1,
-	     ret->value_ptr.string->used_size-i-1);
+	    ((char *) ret->value_ptr.byte_array->value+i+1,
+	     ret->value_ptr.byte_array->alloc_size->size-i-1);
 	  resize_string_allocation (ret, i);
 
 	  add_reference (str, s->string, 0);
@@ -22744,14 +22663,14 @@ builtin_read (struct object *list, struct environment *env,
     eofval = CAR (CDR (CDR (list)));
 
   if (s->type == STRING_STREAM)
-    objend = s->string->value_ptr.string->value;
+    objend = (char *) s->string->value_ptr.byte_array->value;
 
   do
     {
       out = read_object (&ret, 0, s->type == STRING_STREAM ? objend : NULL,
 			 s->type == STRING_STREAM ?
-			 s->string->value_ptr.string->used_size
-			 -(objend-s->string->value_ptr.string->value) : 0,
+			 s->string->value_ptr.byte_array->alloc_size->size
+			 -(objend-(char *)s->string->value_ptr.byte_array->value) : 0,
 			 s->type == FILE_STREAM ? s->file : NULL,
 			 0, 1, env, outcome, &objbeg, &objend);
       clear_read_labels (&env->read_labels);
@@ -22799,9 +22718,9 @@ builtin_read (struct object *list, struct environment *env,
     {
       newstr =
 	create_string_copying_char_vector (objend + 1,
-					   s->string->value_ptr.string->used_size
+					   s->string->value_ptr.byte_array->alloc_size->size
 					   - (objend
-					      - s->string->value_ptr.string->value
+					      - (char *)s->string->value_ptr.byte_array->value
 					      + 1));
 
       delete_reference (str, s->string, 0);
@@ -22857,14 +22776,14 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
     eofval = CAR (CDR (CDR (list)));
 
   if (s->type == STRING_STREAM)
-    objend = s->string->value_ptr.string->value;
+    objend = (char *) s->string->value_ptr.byte_array->value;
 
   do
     {
       out = read_object (&ret, 0, s->type == STRING_STREAM ? objend : NULL,
 			 s->type == STRING_STREAM ?
-			 s->string->value_ptr.string->used_size
-			 -(objend-s->string->value_ptr.string->value) : 0,
+			 s->string->value_ptr.byte_array->alloc_size->size
+			 -(objend-(char *)s->string->value_ptr.byte_array->value) : 0,
 			 s->type == FILE_STREAM ? s->file : NULL,
 			 1, 1, env, outcome, &objbeg, &objend);
       clear_read_labels (&env->read_labels);
@@ -22912,9 +22831,9 @@ builtin_read_preserving_whitespace (struct object *list, struct environment *env
     {
       newstr =
 	create_string_copying_char_vector (objend + 1,
-					   s->string->value_ptr.string->used_size
+					   s->string->value_ptr.byte_array->alloc_size->size
 					   - (objend
-					      - s->string->value_ptr.string->value
+					      - (char *) s->string->value_ptr.byte_array->value
 					      + 1));
 
       delete_reference (str, s->string, 0);
@@ -22941,18 +22860,18 @@ builtin_read_from_string (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
-  objend = CAR (list)->value_ptr.string->value;
+  objend = (char *) CAR (list)->value_ptr.byte_array->value;
 
   do
     {
-      out = read_object (&ret, 0, objend, CAR (list)->value_ptr.string->used_size
-			 -(objend-CAR (list)->value_ptr.string->value), NULL, 0,
-			 1, env, outcome, &objbeg, &objend);
+      out = read_object (&ret, 0, objend, CAR (list)->value_ptr.byte_array->alloc_size->size
+			 -(objend-(char *)CAR (list)->value_ptr.byte_array->value),
+			 NULL, 0, 1, env, outcome, &objbeg, &objend);
       clear_read_labels (&env->read_labels);
 
       if (out == SKIPPED_OBJECT)
@@ -22981,7 +22900,8 @@ builtin_read_from_string (struct object *list, struct environment *env,
     }
 
   prepend_object_to_obj_list
-    (create_integer_from_long (objend - CAR (list)->value_ptr.string->value + 1),
+    (create_integer_from_long (objend
+			       - (char *) CAR (list)->value_ptr.byte_array->value + 1),
      &outcome->other_values);
 
   return ret;
@@ -23003,13 +22923,13 @@ builtin_parse_integer (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
-  in = CAR (list)->value_ptr.string->value;
-  sz = CAR (list)->value_ptr.string->used_size;
+  in = (char *) CAR (list)->value_ptr.byte_array->value;
+  sz = CAR (list)->value_ptr.byte_array->alloc_size->size;
 
   if (!next_nonspace_char (&ch, &in, &sz, NULL)
       || !is_number (in-1, sz+1, 10, &t, &nend, &epos, &tokend)
@@ -23020,7 +22940,7 @@ builtin_parse_integer (struct object *list, struct environment *env,
     }
 
   prepend_object_to_obj_list
-    (create_integer_from_long (CAR (list)->value_ptr.string->used_size),
+    (create_integer_from_long (CAR (list)->value_ptr.byte_array->alloc_size->size),
      &outcome->other_values);
 
   return create_number (in-1, nend-in+2, epos, 10, TYPE_INTEGER);
@@ -23160,7 +23080,7 @@ struct object *
 builtin_write_string (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
-  struct string *s;
+  struct byte_array *s;
   struct object *str;
   int l;
 
@@ -23169,7 +23089,7 @@ builtin_write_string (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
@@ -23179,7 +23099,7 @@ builtin_write_string (struct object *list, struct environment *env,
       return raise_type_error (CAR (CDR (list)), "CL:STREAM", env, outcome);
     }
 
-  s = CAR (list)->value_ptr.string;
+  s = CAR (list)->value_ptr.byte_array;
 
   str = l == 2 ? CAR (CDR (list))
     : inspect_variable (env->std_out_sym, env);
@@ -23190,9 +23110,9 @@ builtin_write_string (struct object *list, struct environment *env,
       return NULL;
     }
 
-  write_to_stream (str->value_ptr.stream, s->value, s->used_size);
+  write_to_stream (str->value_ptr.stream, (char *) s->value, s->alloc_size->size);
 
-  if (s->value [s->used_size - 1] == '\n')
+  if (s->value [s->alloc_size->size - 1] == '\n')
     str->value_ptr.stream->dirty_line = 0;
   else
     str->value_ptr.stream->dirty_line = 1;
@@ -23339,7 +23259,7 @@ builtin_load (struct object *list, struct environment *env,
 
   ns = CAR (list);
   fn = copy_string_to_c_string
-    (inspect_pathname_by_designator (ns)->value_ptr.string);
+    (inspect_pathname_by_designator (ns)->value_ptr.byte_array);
 
   list = CDR (list);
 
@@ -23789,7 +23709,7 @@ builtin_make_string_input_stream (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 3, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
@@ -23837,13 +23757,13 @@ builtin_make_string_output_stream (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (0, 1, env, outcome);
     }
 
-  if (l && CAR (list)->type != TYPE_STRING && SYMBOL (CAR (list)) != &nil_object)
+  if (l && !IS_STRING (CAR (list)) && SYMBOL (CAR (list)) != &nil_object)
     {
       return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:NULL)", env,
 			       outcome);
     }
 
-  str = (l && CAR (list)->type == TYPE_STRING) ? CAR (list) : NULL;
+  str = (l && IS_STRING (CAR (list))) ? CAR (list) : NULL;
 
   return create_string_stream (OUTPUT_STREAM, str, -1, -1);
 }
@@ -24166,7 +24086,7 @@ struct object *
 builtin_concatenate (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
-  int l = list_length (list), i, j, k;
+  int l = list_length (list), i, j, k, ind;
   struct object *ret, *retcons, *cons;
   fixnum len = 0;
 
@@ -24201,24 +24121,25 @@ builtin_concatenate (struct object *list, struct environment *env,
     {
       for (i = 1; i < l; i++)
 	{
-	  if (nth (i, list)->type != TYPE_STRING)
+	  if (!IS_STRING (nth (i, list)))
 	    {
 	      return raise_type_error (nth (i, list), "CL:STRING", env, outcome);
 	    }
 
-	  len += nth (i, list)->value_ptr.string->used_size;
+	  len += nth (i, list)->value_ptr.byte_array->alloc_size->size;
 	}
 
       ret = alloc_string (len);
       list = CDR (list);
 
+      ind = 0;
+
       for (i = 1; i < l; i++)
 	{
-	  memcpy (ret->value_ptr.string->value + ret->value_ptr.string->used_size,
-		  CAR (list)->value_ptr.string->value,
-		  CAR (list)->value_ptr.string->used_size);
-	  ret->value_ptr.string->used_size +=
-	    CAR (list)->value_ptr.string->used_size;
+	  memcpy (ret->value_ptr.byte_array->value+ind,
+		  CAR (list)->value_ptr.byte_array->value,
+		  CAR (list)->value_ptr.byte_array->alloc_size->size);
+	  ind += CAR (list)->value_ptr.byte_array->alloc_size->size;
 
 	  list = CDR (list);
 	}
@@ -25158,8 +25079,7 @@ builtin_map (struct object *list, struct environment *env,
 
       for (j = 2; j < l; j++)
 	{
-	  if (nth (j, list)->type == TYPE_STRING
-	      || nth (j, list)->type == TYPE_BITARRAY)
+	  if (IS_STRING (nth (j, list)) || IS_BIT_VECTOR (nth (j, list)))
 	    {
 	      decrement_refcount (CAR (argscons));
 	    }
@@ -25174,8 +25094,8 @@ builtin_map (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if ((ret->type == TYPE_STRING && val->type != TYPE_CHARACTER)
-	  || (ret->type == TYPE_BITARRAY && !is_bit (val)))
+      if ((IS_STRING (ret) && val->type != TYPE_CHARACTER)
+	  || (IS_BIT_VECTOR (ret) && !is_bit (val)))
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -25190,8 +25110,8 @@ builtin_map (struct object *list, struct environment *env,
   if (ret->type == TYPE_CONS_PAIR)
     last_cons_pair (ret)->value_ptr.cons_pair->cdr = &nil_object;
 
-  if (ret->type == TYPE_STRING)
-    ret->value_ptr.string->used_size = min;
+  if (IS_STRING (ret))
+    ret->value_ptr.byte_array->alloc_size->size = min;
 
   free_list_structure (args);
 
@@ -25238,17 +25158,17 @@ builtin_reverse (struct object *list, struct environment *env,
 	  seq = CDR (seq);
 	}
     }
-  else if (seq->type == TYPE_STRING)
+  else if (IS_STRING (seq))
     {
-      sz = ACTUAL_STRING_LENGTH (seq);
+      sz = ACTUAL_VECTOR_LENGTH (seq);
 
       ret = alloc_string (sz);
-      ret->value_ptr.string->used_size = sz;
+      ret->value_ptr.byte_array->alloc_size->size = sz;
 
       for (i = sz; i > 0; i--)
 	{
-	  ret->value_ptr.string->value [sz-i] =
-	    seq->value_ptr.string->value [i-1];
+	  ret->value_ptr.byte_array->value [sz-i] =
+	    seq->value_ptr.byte_array->value [i-1];
 	}
     }
   else if (seq->type == TYPE_ARRAY)
@@ -25401,54 +25321,27 @@ builtin_setf_aref (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  lin_ind = builtin_array_row_major_index (list, env, outcome);
+
+  if (!lin_ind)
+    return NULL;
+
+  ind = mpz_get_si (lin_ind->value_ptr.integer);
+
+  decrement_refcount (lin_ind);
+
+
+  if (CAR (list)->type == TYPE_BYTE_ARRAY)
     {
-      if (l != 3)
+      if (IS_STRING (CAR (list)))
 	{
-	  return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
-	}
+	  if (newval->type != TYPE_CHARACTER)
+	    {
+	      return raise_type_error (newval, "CL:CHARACTER", env, outcome);
+	    }
 
-      if (CAR (CDR (list))->type != TYPE_INTEGER)
-	{
-	  return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
-	}
-
-      ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
-
-      if (ind < 0)
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-
-      if (newval->type != TYPE_CHARACTER)
-	{
-	  return raise_type_error (newval, "CL:CHARACTER", env, outcome);
-	}
-
-      if (!set_nth_character (CAR (list), ind, newval->value_ptr.character))
-	{
-	  outcome->type = OUT_OF_BOUND_INDEX;
-	  return NULL;
-	}
-    }
-  else
-    {
-      lin_ind = builtin_array_row_major_index (list, env, outcome);
-
-      if (!lin_ind)
-	return NULL;
-
-      ind = mpz_get_si (lin_ind->value_ptr.integer);
-
-      decrement_refcount (lin_ind);
-
-      if (CAR (list)->type == TYPE_ARRAY)
-	{
-	  delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
-			    ind);
-	  add_reference (CAR (list), newval, ind);
-	  CAR (list)->value_ptr.array->value [ind] = newval;
+	  CAR (list)->value_ptr.byte_array->value [ind]
+	    = *newval->value_ptr.character;
 	}
       else
 	{
@@ -25458,11 +25351,17 @@ builtin_setf_aref (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (is_zero (newval))
-	    mpz_clrbit (CAR (list)->value_ptr.bitarray->value, ind);
-	  else
-	    mpz_setbit (CAR (list)->value_ptr.bitarray->value, ind);
+	  CAR (list)->value_ptr.byte_array->value [ind/8]
+	    = WITH_CHANGED_BIT (CAR (list)->value_ptr.byte_array->value [ind/8],
+				ind%8, !is_zero (newval));
 	}
+    }
+  else
+    {
+      delete_reference (CAR (list), CAR (list)->value_ptr.array->value [ind],
+			ind);
+      add_reference (CAR (list), newval, ind);
+      CAR (list)->value_ptr.array->value [ind] = newval;
     }
 
   increment_refcount (newval);
@@ -25500,18 +25399,22 @@ builtin_setf_elt (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       if (newval->type != TYPE_CHARACTER)
 	{
 	  return raise_type_error (newval, "CL:CHARACTER", env, outcome);
 	}
 
-      if (!set_nth_character (CAR (list), ind, newval->value_ptr.character))
+      if (ind >= (CAR (list)->value_ptr.byte_array->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.byte_array->fill_pointer
+		  : CAR (list)->value_ptr.byte_array->alloc_size->size))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
+
+      CAR (list)->value_ptr.byte_array->value [ind] = *newval->value_ptr.character;
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
@@ -25528,7 +25431,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
       add_reference (CAR (list), newval, ind);
       CAR (list)->value_ptr.array->value [ind] = newval;
     }
-  else if (CAR (list)->type == TYPE_BITARRAY)
+  else if (IS_BIT_VECTOR (CAR (list)))
     {
       if (newval->type != TYPE_INTEGER || !is_bit (newval))
 	{
@@ -25536,18 +25439,17 @@ builtin_setf_elt (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (ind >= (CAR (list)->value_ptr.bitarray->fill_pointer >= 0
-		  ? CAR (list)->value_ptr.bitarray->fill_pointer
-		  : CAR (list)->value_ptr.bitarray->alloc_size->size))
+      if (ind >= (CAR (list)->value_ptr.byte_array->fill_pointer >= 0
+		  ? CAR (list)->value_ptr.byte_array->fill_pointer
+		  : CAR (list)->value_ptr.byte_array->alloc_size->size))
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
 
-      if (is_zero (newval))
-	mpz_clrbit (CAR (list)->value_ptr.bitarray->value, ind);
-      else
-	mpz_setbit (CAR (list)->value_ptr.bitarray->value, ind);
+      CAR (list)->value_ptr.byte_array->value [ind/8] =
+	WITH_CHANGED_BIT (CAR (list)->value_ptr.byte_array->value [ind/8], ind%8,
+			  !is_zero (newval));
     }
   else
     {
@@ -25599,15 +25501,15 @@ builtin_setf_fill_pointer (struct object *list, struct environment *env,
       return NULL;
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (CAR (list)->type == TYPE_BYTE_ARRAY)
     {
-      if (fp > CAR (list)->value_ptr.string->used_size)
+      if (fp > CAR (list)->value_ptr.byte_array->alloc_size->size)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
 	}
 
-      CAR (list)->value_ptr.string->fill_pointer = fp;
+      CAR (list)->value_ptr.byte_array->fill_pointer = fp;
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
@@ -28080,7 +27982,7 @@ builtin_type_of (struct object *list, struct environment *env,
     {
       ret = BUILTIN_SYMBOL ("SYMBOL");
     }
-  else if (CAR (list)->type == TYPE_STRING)
+  else if (IS_STRING (CAR (list)))
     {
       ret = BUILTIN_SYMBOL ("STRING");
     }
@@ -28120,7 +28022,7 @@ builtin_type_of (struct object *list, struct environment *env,
     {
       ret = BUILTIN_SYMBOL ("PACKAGE");
     }
-  else if (CAR (list)->type == TYPE_ARRAY || CAR (list)->type == TYPE_BITARRAY)
+  else if (CAR (list)->type == TYPE_ARRAY || CAR (list)->type == TYPE_BYTE_ARRAY)
     {
       ret = BUILTIN_SYMBOL ("ARRAY");
     }
@@ -28264,8 +28166,8 @@ builtin_coerce (struct object *list, struct environment *env,
 	{
 	  el = elt (CAR (list), i);
 
-	  if ((ret->type == TYPE_STRING && el->type != TYPE_CHARACTER)
-	      || (ret->type == TYPE_BITARRAY && !is_bit (el)))
+	  if ((IS_STRING (ret) && el->type != TYPE_CHARACTER)
+	      || (IS_BIT_ARRAY (ret) && !is_bit (el)))
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
@@ -28273,8 +28175,7 @@ builtin_coerce (struct object *list, struct environment *env,
 
 	  set_elt (ret, i, el);
 
-	  if (CAR (list)->type == TYPE_STRING
-	      || CAR (list)->type == TYPE_BITARRAY)
+	  if (IS_STRING (CAR (list)) || IS_BIT_ARRAY (CAR (list)))
 	    decrement_refcount (el);
 	}
 
@@ -28445,29 +28346,35 @@ builtin_make_string (struct object *list, struct environment *env,
 
   ret = alloc_object ();
 
-  ret->type = TYPE_STRING;
-  ret->value_ptr.string = malloc_and_check (sizeof (*ret->value_ptr.string));
+  ret->type = TYPE_BYTE_ARRAY;
+  ret->value_ptr.byte_array = malloc_and_check (sizeof (*ret->value_ptr.byte_array));
 
   if (initial_element)
     {
       sz *= strlen (initial_element->value_ptr.character);
-      ret->value_ptr.string->value = malloc_and_check (sz);
+      ret->value_ptr.byte_array->value = malloc_and_check (sz);
 
       i = 0;
 
       while (i < sz)
 	{
-	  memcpy (ret->value_ptr.string->value+i,
+	  memcpy (ret->value_ptr.byte_array->value+i,
 		  initial_element->value_ptr.character,
 		  strlen (initial_element->value_ptr.character));
 	  i += strlen (initial_element->value_ptr.character);
 	}
     }
   else
-    ret->value_ptr.string->value = calloc_and_check (sz, 1);
+    ret->value_ptr.byte_array->value = calloc_and_check (sz, 1);
 
-  ret->value_ptr.string->alloc_size = ret->value_ptr.string->used_size = sz;
-  ret->value_ptr.string->fill_pointer = -1;
+  ret->value_ptr.byte_array->alloc_size
+    = malloc_and_check (sizeof (*ret->value_ptr.byte_array->alloc_size));
+  ret->value_ptr.byte_array->alloc_size->size = sz;
+  ret->value_ptr.byte_array->alloc_size->next = NULL;
+
+  ret->value_ptr.byte_array->fill_pointer = -1;
+  ret->value_ptr.byte_array->subtype = BYTE_ARRAY_CHARACTER;
+  ret->value_ptr.byte_array->step = 8;
 
   num_strings++;
 
@@ -28488,7 +28395,7 @@ builtin_intern (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
@@ -28513,8 +28420,8 @@ builtin_intern (struct object *list, struct environment *env,
     pack = inspect_variable (env->package_sym, env);
 
 
-  ent = inspect_accessible_symbol_by_name (CAR (list)->value_ptr.string->value,
-					   CAR (list)->value_ptr.string->used_size,
+  ent = inspect_accessible_symbol_by_name ((char *) CAR (list)->value_ptr.byte_array->value,
+					   CAR (list)->value_ptr.byte_array->alloc_size->size,
 					   pack, 0, &ispr);
 
   if (ent)
@@ -28528,8 +28435,8 @@ builtin_intern (struct object *list, struct environment *env,
     }
   else
     {
-      ret = intern_symbol_by_char_vector (CAR (list)->value_ptr.string->value,
-					  CAR (list)->value_ptr.string->used_size,
+      ret = intern_symbol_by_char_vector ((char *) CAR (list)->value_ptr.byte_array->value,
+					  CAR (list)->value_ptr.byte_array->alloc_size->size,
 					  1, pack == env->keyword_package
 					  ? EXTERNAL_VISIBILITY
 					  : INTERNAL_VISIBILITY, 1, pack,
@@ -28556,7 +28463,7 @@ builtin_find_symbol (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
@@ -28581,8 +28488,9 @@ builtin_find_symbol (struct object *list, struct environment *env,
     pack = inspect_variable (env->package_sym, env);
 
 
-  ent = inspect_accessible_symbol_by_name (CAR (list)->value_ptr.string->value,
-					   CAR (list)->value_ptr.string->used_size,
+  ent = inspect_accessible_symbol_by_name ((char *) CAR (list)->value_ptr.byte_array->value,
+					   CAR (list)->value_ptr.byte_array->
+					   alloc_size->size,
 					   pack, 0, &ispr);
 
   if (ent)
@@ -28654,7 +28562,7 @@ struct object *
 builtin_make_symbol (struct object *list, struct environment *env,
 		     struct outcome *outcome)
 {
-  struct string *s;
+  struct byte_array *s;
   struct object *ret;
 
   if (list_length (list) != 1)
@@ -28662,14 +28570,14 @@ builtin_make_symbol (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
-  s = CAR (list)->value_ptr.string;
+  s = CAR (list)->value_ptr.byte_array;
 
-  ret = create_symbol (s->value, s->used_size, 1);
+  ret = create_symbol ((char *)s->value, s->alloc_size->size, 1);
 
   ret->value_ptr.symbol->home_package = &nil_object;
 
@@ -29145,11 +29053,11 @@ builtin_gensym (struct object *list, struct environment *env,
       pr = "G";
       s = 1;
     }
-  else if (CAR (list)->type == TYPE_STRING)
+  else if (IS_STRING (CAR (list)))
     {
       num = inspect_variable (env->gensym_counter_sym, env);
-      pr = CAR (list)->value_ptr.string->value;
-      s = CAR (list)->value_ptr.string->used_size;
+      pr = (char *) CAR (list)->value_ptr.byte_array->value;
+      s = CAR (list)->value_ptr.byte_array->alloc_size->size;
     }
   else if (CAR (list)->type == TYPE_INTEGER
 	   && mpz_cmp_si (CAR (list)->value_ptr.integer, 0) >= 0)
@@ -29166,7 +29074,7 @@ builtin_gensym (struct object *list, struct environment *env,
 
   gmp_asprintf (&buf, "%Zd", num->value_ptr.integer);
 
-  if (SYMBOL (list) == &nil_object || CAR (list)->type == TYPE_STRING)
+  if (SYMBOL (list) == &nil_object || IS_STRING (CAR (list)))
     {
       newcnt = alloc_number (TYPE_INTEGER);
       mpz_set (newcnt->value_ptr.integer, num->value_ptr.integer);
@@ -29370,7 +29278,7 @@ builtin_string (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       increment_refcount (CAR (list));
       return CAR (list);
@@ -29386,8 +29294,9 @@ builtin_string (struct object *list, struct environment *env,
       l = strlen (CAR (list)->value_ptr.character);
 
       ret = alloc_string (l);
-      strncpy (ret->value_ptr.string->value, CAR (list)->value_ptr.character, l);
-      ret->value_ptr.string->used_size = l;
+      strncpy ((char *) ret->value_ptr.byte_array->value,
+	       CAR (list)->value_ptr.character, l);
+      ret->value_ptr.byte_array->alloc_size->size = l;
 
       return ret;
     }
@@ -29715,10 +29624,10 @@ builtin_find_package (struct object *list, struct environment *env,
     {
       return CAR (list);
     }
-  else if (CAR (list)->type == TYPE_STRING)
+  else if (IS_STRING (CAR (list)))
     {
-      ret = find_package (CAR (list)->value_ptr.string->value,
-			  CAR (list)->value_ptr.string->used_size, env);
+      ret = find_package ((char *) CAR (list)->value_ptr.byte_array->value,
+			  CAR (list)->value_ptr.byte_array->alloc_size->size, env);
     }
   else if (IS_SYMBOL (CAR (list)))
     {
@@ -29883,10 +29792,10 @@ builtin_rename_package (struct object *list, struct environment *env,
       name = CAR (CDR (list))->value_ptr.package->name;
       len = CAR (CDR (list))->value_ptr.package->name_len;
     }
-  else if (CAR (CDR (list))->type == TYPE_STRING)
+  else if (IS_STRING (CAR (CDR (list))))
     {
-      name = CAR (CDR (list))->value_ptr.string->value;
-      len = CAR (CDR (list))->value_ptr.string->used_size;
+      name = (char *) CAR (CDR (list))->value_ptr.byte_array->value;
+      len = CAR (CDR (list))->value_ptr.byte_array->alloc_size->size;
     }
   else if (CAR (CDR (list))->type == TYPE_CHARACTER)
     {
@@ -29922,10 +29831,10 @@ builtin_rename_package (struct object *list, struct environment *env,
 
       while (SYMBOL (cons) != &nil_object)
 	{
-	  if (CAR (cons)->type == TYPE_STRING)
+	  if (IS_STRING (CAR (cons)))
 	    {
-	      name = CAR (cons)->value_ptr.string->value;
-	      len = CAR (cons)->value_ptr.string->used_size;
+	      name = (char *) CAR (cons)->value_ptr.byte_array->value;
+	      len = CAR (cons)->value_ptr.byte_array->alloc_size->size;
 	    }
 	  else if (CAR (cons)->type == TYPE_CHARACTER)
 	    {
@@ -30109,17 +30018,17 @@ builtin_make_package (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING && CAR (list)->type != TYPE_CHARACTER
+  if (!IS_STRING (CAR (list)) && CAR (list)->type != TYPE_CHARACTER
       && !IS_SYMBOL (CAR (list)))
     {
       return raise_type_error (CAR (list), "(CL:OR CL:STRING CL:SYMBOL "
 			       "CL:CHARACTER)", env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
-      name = CAR (list)->value_ptr.string->value;
-      len = CAR (list)->value_ptr.string->used_size;
+      name = (char *) CAR (list)->value_ptr.byte_array->value;
+      len = CAR (list)->value_ptr.byte_array->alloc_size->size;
     }
   else if (CAR (list)->type == TYPE_CHARACTER)
     {
@@ -30723,10 +30632,10 @@ builtin_shadow (struct object *list, struct environment *env,
 
   do
     {
-      if (des->type == TYPE_STRING)
+      if (IS_STRING (des))
 	{
-	  s = des->value_ptr.string->value;
-	  sl = des->value_ptr.string->used_size;
+	  s = (char *)des->value_ptr.byte_array->value;
+	  sl = des->value_ptr.byte_array->alloc_size->size;
 	}
       else if (des->type == TYPE_CHARACTER)
 	{
@@ -32615,7 +32524,7 @@ evaluate_defconstant (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
     }
 
-  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING)
+  if (l == 3 && !IS_STRING (CAR (CDR (CDR (list)))))
     {
       return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
     }
@@ -32680,7 +32589,7 @@ evaluate_defparameter (struct object *list, struct environment *env,
       return raise_type_error (s, "CL:SYMBOL", env, outcome);
     }
 
-  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING)
+  if (l == 3 && !IS_STRING (CAR (CDR (CDR (list)))))
     {
       return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
     }
@@ -32714,7 +32623,7 @@ evaluate_defvar (struct object *list, struct environment *env,
       return raise_type_error (s, "CL:SYMBOL", env, outcome);
     }
 
-  if (l == 3 && CAR (CDR (CDR (list)))->type != TYPE_STRING)
+  if (l == 3 && !IS_STRING (CAR (CDR (CDR (list)))))
     {
       return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
     }
@@ -33757,7 +33666,7 @@ builtin_al_defstruct (struct object *list, struct environment *env,
   sc->fields = NULL;
   list = CDR (list);
 
-  if (list->type == TYPE_CONS_PAIR && CAR (list)->type == TYPE_STRING)
+  if (list->type == TYPE_CONS_PAIR && IS_STRING (CAR (list)))
     list = CDR (list);
 
   while (SYMBOL (list) != &nil_object)
@@ -35824,7 +35733,7 @@ builtin_signal (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       cond = create_condition_by_c_string ("SIMPLE-CONDITION", &nil_object, env,
 					   outcome);
@@ -35906,7 +35815,7 @@ builtin_error (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       cond = create_condition_by_c_string ("SIMPLE-ERROR", &nil_object, env,
 					   outcome);
@@ -35993,7 +35902,7 @@ builtin_warn (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
-  if (CAR (list)->type == TYPE_STRING)
+  if (IS_STRING (CAR (list)))
     {
       cond = create_condition_by_c_string ("SIMPLE-WARNING", &nil_object, env,
 					   outcome);
@@ -37467,7 +37376,7 @@ builtin_al_list_directory (struct object *list, struct environment *env,
 
   ns = inspect_pathname_by_designator (CAR (list));
 
-  fn = copy_string_to_c_string (ns->value_ptr.string);
+  fn = copy_string_to_c_string (ns->value_ptr.byte_array);
 
   d = opendir (fn);
 
@@ -37523,7 +37432,7 @@ builtin_al_directoryp (struct object *list, struct environment *env,
 
   ns = inspect_pathname_by_designator (CAR (list));
 
-  fn = copy_string_to_c_string (ns->value_ptr.string);
+  fn = copy_string_to_c_string (ns->value_ptr.byte_array);
 
   if (stat (fn, &st))
     {
@@ -37585,7 +37494,7 @@ builtin_al_getcwd (struct object *list, struct environment *env,
     }
 
   ret = create_string_with_char_vector (buf, len);
-  ret->value_ptr.string->fill_pointer = -1;
+  ret->value_ptr.byte_array->fill_pointer = -1;
 
   return ret;
 }
@@ -37603,12 +37512,12 @@ builtin_al_getenv (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
 
-  if (CAR (list)->type != TYPE_STRING)
+  if (!IS_STRING (CAR (list)))
     {
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
-  envvar = copy_string_to_c_string (CAR (list)->value_ptr.string);
+  envvar = copy_string_to_c_string (CAR (list)->value_ptr.byte_array);
 
   envval = getenv (envvar);
 
@@ -37642,9 +37551,9 @@ builtin_al_system (struct object *list, struct environment *env,
 
       return &nil_object;
     }
-  else if (CAR (list)->type == TYPE_STRING)
+  else if (IS_STRING (CAR (list)))
     {
-      com = copy_string_to_c_string (CAR (list)->value_ptr.string);
+      com = copy_string_to_c_string (CAR (list)->value_ptr.byte_array);
 
       ret = system (com);
 
@@ -37771,14 +37680,14 @@ symbol_is_among (const struct object *sym, struct environment *env, ...)
 
 
 int
-equal_strings (const struct string *s1, const struct string *s2)
+equal_strings (const struct byte_array *s1, const struct byte_array *s2)
 {
   fixnum i;
 
-  if (s1->used_size != s2->used_size)
+  if (s1->alloc_size->size != s2->alloc_size->size)
     return 0;
 
-  for (i = 0; i < s1->used_size; i++)
+  for (i = 0; i < s1->alloc_size->size; i++)
     if (s1->value [i] != s2->value [i])
       return 0;
 
@@ -37787,15 +37696,15 @@ equal_strings (const struct string *s1, const struct string *s2)
 
 
 int
-equalp_strings (const struct string *s1, const struct string *s2)
+equalp_strings (const struct byte_array *s1, const struct byte_array *s2)
 {
   fixnum i;
   int single_byte = 1;
 
-  if (s1->used_size != s2->used_size)
+  if (s1->alloc_size->size != s2->alloc_size->size)
     return 0;
 
-  for (i = 0; i < s1->used_size; i++)
+  for (i = 0; i < s1->alloc_size->size; i++)
     {
       if (IS_LOWEST_BYTE_IN_UTF8 (s1->value [i]) && single_byte)
 	{
@@ -37870,9 +37779,9 @@ equal_objects (struct object *obj1, struct object *obj2)
   if (eql_objects (obj1, obj2) == &t_object)
     return &t_object;
 
-  if (obj1->type == TYPE_STRING && obj2->type == TYPE_STRING)
+  if (IS_STRING (obj1) && IS_STRING (obj2))
     {
-      if (equal_strings (obj1->value_ptr.string, obj2->value_ptr.string))
+      if (equal_strings (obj1->value_ptr.byte_array, obj2->value_ptr.byte_array))
 	return &t_object;
 
       return &nil_object;
@@ -37941,9 +37850,9 @@ equalp_objects (struct object *obj1, struct object *obj2)
       return &nil_object;
     }
 
-  if (obj1->type == TYPE_STRING && obj2->type == TYPE_STRING)
+  if (IS_STRING (obj1) && IS_STRING (obj2))
     {
-      if (equalp_strings (obj1->value_ptr.string, obj2->value_ptr.string))
+      if (equalp_strings (obj1->value_ptr.byte_array, obj2->value_ptr.byte_array))
 	return &t_object;
 
       return &nil_object;
@@ -38028,7 +37937,7 @@ fresh_line (struct stream *str)
 int
 write_to_stream (struct stream *stream, const char *str, size_t size)
 {
-  struct string *s;
+  struct byte_array *s;
   size_t i;
   struct refcounted_object_list *l;
 
@@ -38061,16 +37970,14 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
     }
   else
     {
-      s = stream->string->value_ptr.string;
+      s = stream->string->value_ptr.byte_array;
 
       if (s->fill_pointer < 0)
 	{
-	  resize_string_allocation (stream->string, s->used_size + size);
+	  resize_string_allocation (stream->string, s->alloc_size->size + size);
 
 	  for (i = 0; i < size; i++)
-	    s->value [s->used_size + i] = str [i];
-
-	  s->used_size = s->alloc_size;
+	    s->value [s->alloc_size->size - size + i] = str [i];
 	}
       else
 	{
@@ -38080,7 +37987,7 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
 	  for (i = 0; i < size; i++)
 	    s->value [s->fill_pointer + i] = str [i];
 
-	  s->fill_pointer = s->used_size;
+	  s->fill_pointer = s->alloc_size->size;
 	}
 
       if (str [size-1] == '\n')
@@ -38123,9 +38030,10 @@ write_long_to_stream (struct stream *stream, long z)
 
   if (stream->type == STRING_STREAM)
     {
-      if (stream->string->value_ptr.string->fill_pointer < 0)
+      if (stream->string->value_ptr.byte_array->fill_pointer < 0)
 	resize_string_allocation (stream->string,
-				  stream->string->value_ptr.string->used_size+size);
+				  stream->string->value_ptr.byte_array->alloc_size->size
+				  +size);
       else
 	increment_string_allocation_respecting_fill_pointer (stream->string,
 							     size);
@@ -38217,14 +38125,15 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 	}
     }
 
-  if (str->type == STRING_STREAM)
+  /*if (str->type == STRING_STREAM)
     {
-      if (str->string->value_ptr.string->fill_pointer < 0)
+      if (str->string->value_ptr.byte_array->fill_pointer < 0)
 	resize_string_allocation (str->string,
-				  str->string->value_ptr.string->used_size+sz);
+				  str->string->value_ptr.byte_array->alloc_size->size
+				  +sz);
       else
 	increment_string_allocation_respecting_fill_pointer (str->string, sz);
-    }
+	}*/
 
   if (do_need_multiple_escape && write_to_stream (str, "|", 1) < 0)
     return -1;
@@ -38481,7 +38390,7 @@ print_as_string (const char *value, size_t sz, struct environment *env,
 
 
 int
-print_string (const struct string *s, struct environment *env,
+print_string (const struct byte_array *s, struct environment *env,
 	      struct stream *str)
 {
   fixnum i, chars = 0;
@@ -38490,7 +38399,7 @@ print_string (const struct string *s, struct environment *env,
   if (pesc && write_to_stream (str, "\"", 1) < 0)
     return -1;
 
-  for (i = 0; i < s->used_size; i++)
+  for (i = 0; i < s->alloc_size->size; i++)
     {
       if (s->fill_pointer >= 0 && i >= s->fill_pointer)
 	break;
@@ -38499,7 +38408,7 @@ print_string (const struct string *s, struct environment *env,
 	  && write_to_stream (str, "\\", 1) < 0)
 	return -1;
 
-      if (write_to_stream (str, &s->value [i], 1) < 0)
+      if (write_to_stream (str, (char *)&s->value [i], 1) < 0)
 	return -1;
 
       if (IS_LOWEST_BYTE_IN_UTF8 (s->value [i]))
@@ -38562,8 +38471,9 @@ print_filename (const struct filename *fn, struct environment *env,
   if (write_to_stream (str, "#P", 2) < 0)
     return -1;
 
-  return print_as_string (fn->value->value_ptr.string->value,
-			  fn->value->value_ptr.string->used_size, env, str);
+  return print_as_string ((char *)fn->value->value_ptr.byte_array->value,
+			  fn->value->value_ptr.byte_array->alloc_size->size, env,
+			  str);
 }
 
 
@@ -38698,7 +38608,7 @@ print_array (const struct array *array, struct environment *env,
 
 
 int
-print_bitarray (const struct bitarray *array, struct environment *env,
+print_bitarray (const struct byte_array *array, struct environment *env,
 		struct stream *str)
 {
   fixnum rk = array_rank (array->alloc_size), i;
@@ -38711,7 +38621,7 @@ print_bitarray (const struct bitarray *array, struct environment *env,
       for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer :
 		       array->alloc_size->size); i++)
 	{
-	  if (mpz_tstbit (array->value, i))
+	  if (array->value [i/8] & (1 << (i%8)))
 	    {
 	      if (write_to_stream (str, "1", 1) < 0)
 		return -1;
@@ -38944,8 +38854,8 @@ print_object (const struct object *obj, struct environment *env,
 	}
       else if (obj->type == TYPE_BYTESPEC)
 	return print_bytespec (obj->value_ptr.bytespec, env, str);
-      else if (obj->type == TYPE_STRING)
-	return print_string (obj->value_ptr.string, env, str);
+      else if (IS_STRING (obj))
+	return print_string (obj->value_ptr.byte_array, env, str);
       else if (obj->type == TYPE_CHARACTER)
 	return print_character (obj->value_ptr.character, env, str);
       else if (obj->type == TYPE_FILENAME)
@@ -38958,8 +38868,8 @@ print_object (const struct object *obj, struct environment *env,
 	return print_list (obj->value_ptr.cons_pair, env, str);
       else if (obj->type == TYPE_ARRAY)
 	return print_array (obj->value_ptr.array, env, str);
-      else if (obj->type == TYPE_BITARRAY)
-	return print_bitarray (obj->value_ptr.bitarray, env, str);
+      else if (IS_BIT_ARRAY (obj))
+	return print_bitarray (obj->value_ptr.byte_array, env, str);
       else if (obj->type == TYPE_HASHTABLE)
 	{
 	  if (write_to_stream (str, "#<HASH-TABLE ",
@@ -40367,9 +40277,15 @@ free_object (struct object *obj)
   if (!obj)
     return;
 
-  if (obj->type == TYPE_STRING)
-    free_string (obj);
-  else if (obj->type == TYPE_SYMBOL_NAME)
+  /*if (IS_FREEING (obj))
+    {
+      printf ("freeing loop!\n");
+      abort ();
+      }
+
+      SET_FREEING_FLAG (obj);*/
+
+  if (obj->type == TYPE_SYMBOL_NAME)
     free_symbol_name (obj);
   else if (obj->type == TYPE_SYMBOL)
     free_symbol (obj);
@@ -40388,8 +40304,8 @@ free_object (struct object *obj)
     }
   else if (obj->type == TYPE_ARRAY)
     free_array (obj);
-  else if (obj->type == TYPE_BITARRAY)
-    free_bitarray (obj);
+  else if (obj->type == TYPE_BYTE_ARRAY)
+    free_byte_array (obj);
   else if (obj->type == TYPE_HASHTABLE)
     free_hashtable (obj);
   else if (obj->type == TYPE_CHARACTER)
@@ -40472,17 +40388,6 @@ free_object (struct object *obj)
     }
 
   num_objects--;
-}
-
-
-void
-free_string (struct object *obj)
-{
-  free (obj->value_ptr.string->value);
-  free (obj->value_ptr.string);
-  free (obj);
-
-  num_strings--;
 }
 
 
@@ -40575,11 +40480,11 @@ free_array (struct object *obj)
 
 
 void
-free_bitarray (struct object *obj)
+free_byte_array (struct object *obj)
 {
-  free_array_size (obj->value_ptr.bitarray->alloc_size);
-  mpz_clear (obj->value_ptr.bitarray->value);
-  free (obj->value_ptr.bitarray);
+  free_array_size (obj->value_ptr.byte_array->alloc_size);
+  free (obj->value_ptr.byte_array->value);
+  free (obj->value_ptr.byte_array);
   free (obj);
 }
 
