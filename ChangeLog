@@ -1,3 +1,40 @@
+v1.6 (7-May-2026):
+
+- Specialized arrays have been completely redesigned.  Now strings and bit
+  vectors are just instances of byte arrays, that in the future will be also
+  used for arrays specialized to integers of various size.  This change has
+  seemingly caused a regression: now strings are byte-based and so Unicode is
+  not handled anymore; but Unicode support will come back in due time in a
+  different fashion
+
+- (SETF GETF) was pretty much broken, now it has been fixed.  (SETF GET) has
+  been added
+
+- MAKE-SEQUENCE has been added
+
+- Now DEFPACKAGE supports the option :SHADOWING-IMPORT-FROM, so it's pretty much
+  complete
+
+- Now structure slots support initialization forms
+
+- The new implementation in lisp of DEFCLASS had a bug: it defined accessor
+  methods without type specializers: this caused subtle bugs when two different
+  classes had an accessor with the same name for fields of different names.  Of
+  course, ASDF did precisely that.  Now it's been fixed
+
+- A recent regression has been fixed: now user-defined conditions can be raised
+  again
+
+- Generic functions SLOT-MISSING and SLOT-UNBOUND have been added
+
+- INTEGER-LENGTH and LOGCOUNT have been added
+
+- LAMBDA and IN-PACKAGE have been moved to lisp code
+
+- Other minor fixes and enhancements
+
+
+
 v1.5 (1-Apr-2026):
 
 Here are the big news:
