@@ -20088,8 +20088,8 @@ builtin_make_array (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
   int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize;
-  struct object *ret, *cons, *dims, *fp = NULL, *initial_contents = NULL,
-    *element_type = NULL, *allow_other_keys = NULL, *el;
+  struct object *ret, *cons, *dims, *fp = NULL, *initial_element = NULL,
+    *initial_contents = NULL, *element_type = NULL, *allow_other_keys = NULL, *el;
   struct array_size *size = NULL, *sz;
   enum object_type objt;
 
@@ -20124,6 +20124,20 @@ builtin_make_array (struct object *list, struct environment *env,
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":INITIAL-ELEMENT", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (!initial_element)
+	    initial_element = CAR (CDR (list));
 
 	  list = CDR (list);
 	}
@@ -20219,9 +20233,12 @@ builtin_make_array (struct object *list, struct environment *env,
   else
     objt = TYPE_ARRAY;
 
-  if (dims->type == TYPE_INTEGER)
+  if (dims->type == TYPE_INTEGER
+      || (dims->type == TYPE_CONS_PAIR && list_length (dims) == 1
+	  && CAR (dims)->type == TYPE_INTEGER))
     {
-      indx = mpz_get_si (dims->value_ptr.integer);
+      indx = tot = mpz_get_si (dims->type == TYPE_INTEGER ? dims->value_ptr.integer
+			       : CAR (dims)->value_ptr.integer);
 
       if (indx < 0)
 	{
@@ -20258,61 +20275,17 @@ builtin_make_array (struct object *list, struct environment *env,
     {
       cons = dims;
 
-      if (fp && list_length (dims) != 1)
+      if (fp)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
 
-      if (list_length (dims) != 1)
+      while (SYMBOL (cons) != &nil_object)
 	{
-	  while (SYMBOL (cons) != &nil_object)
+	  if (CAR (cons)->type != TYPE_INTEGER)
 	    {
-	      if (CAR (cons)->type != TYPE_INTEGER)
-		{
-		  return raise_type_error (CAR (cons), "CL:INTEGER", env,
-					   outcome);
-		}
-
-	      indx = mpz_get_si (CAR (cons)->value_ptr.integer);
-
-	      if (indx < 0)
-		{
-		  outcome->type = INVALID_SIZE;
-		  return NULL;
-		}
-
-	      if (size)
-		{
-		  sz->next = malloc_and_check (sizeof (*sz->next));
-		  sz = sz->next;
-		}
-	      else
-		size = sz = malloc_and_check (sizeof (*sz->next));
-
-	      sz->size = indx;
-	      tot *= indx;
-
-	      cons = CDR (cons);
-	    }
-
-	  if (fp && fillp > sz->size)
-	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  sz->next = NULL;
-
-	  ret = alloc_vector (tot, 1, 1);
-
-	  ret->value_ptr.array->alloc_size = size;
-	}
-      else
-	{
-	  if (CAR (dims)->type != TYPE_INTEGER)
-	    {
-	      return raise_type_error (CAR (dims), "CL:INTEGER", env,
+	      return raise_type_error (CAR (cons), "CL:INTEGER", env,
 				       outcome);
 	    }
 
@@ -20324,31 +20297,25 @@ builtin_make_array (struct object *list, struct environment *env,
 	      return NULL;
 	    }
 
-	  if (fp && fillp > indx)
+	  if (size)
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
-	    }
-
-	  if (objt == TYPE_ARRAY)
-	    {
-	      ret = alloc_vector (indx, 1, 0);
-
-	      if (fp && SYMBOL (fp) == &t_object)
-		ret->value_ptr.array->fill_pointer = indx;
-	      else
-		ret->value_ptr.array->fill_pointer = fillp;
+	      sz->next = malloc_and_check (sizeof (*sz->next));
+	      sz = sz->next;
 	    }
 	  else
-	    {
-	      ret = alloc_string (indx);
+	    size = sz = malloc_and_check (sizeof (*sz->next));
 
-	      if (fp && SYMBOL (fp) == &t_object)
-		ret->value_ptr.byte_array->fill_pointer = indx;
-	      else
-		ret->value_ptr.byte_array->fill_pointer = fillp;
-	    }
+	  sz->size = indx;
+	  tot *= indx;
+
+	  cons = CDR (cons);
 	}
+
+      sz->next = NULL;
+
+      ret = alloc_vector (tot, 1, 1);
+
+      ret->value_ptr.array->alloc_size = size;
     }
   else if (SYMBOL (dims) == &nil_object)
     {
@@ -20365,6 +20332,7 @@ builtin_make_array (struct object *list, struct environment *env,
     {
       return raise_type_error (dims, "(CL:OR CL:INTEGER CL:LIST)", env, outcome);
     }
+
 
   if (initial_contents)
     {
@@ -20431,6 +20399,11 @@ builtin_make_array (struct object *list, struct environment *env,
 		}
 	    }
 	}
+    }
+  else if (initial_element)
+    {
+      for (i = 0; i < tot; i++)
+	set_elt (ret, i, initial_element);
     }
   else if (objt == TYPE_BYTE_ARRAY
 	   && (dims->type == TYPE_INTEGER
