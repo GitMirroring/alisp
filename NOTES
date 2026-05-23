@@ -578,6 +578,8 @@ __Known bugs and limitations__
   leaks.  This will get fixed soon, when I'll reorganize the implementation of
   bindings
 
+- The 'short form' of DEFSETF is not yet implemented
+
 
 
 __Policy on use of Large Language Models__
