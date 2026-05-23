@@ -20089,7 +20089,8 @@ builtin_make_array (struct object *list, struct environment *env,
 {
   int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize;
   struct object *ret, *cons, *dims, *fp = NULL, *initial_element = NULL,
-    *initial_contents = NULL, *element_type = NULL, *allow_other_keys = NULL, *el;
+    *initial_contents = NULL, *element_type = NULL, *adjustable = NULL,
+    *allow_other_keys = NULL, *el;
   struct array_size *size = NULL, *sz;
   enum object_type objt;
 
@@ -20174,6 +20175,20 @@ builtin_make_array (struct object *list, struct environment *env,
 	      return raise_type_error (CAR (CDR (list)), "CL:SEQUENCE", env,
 				       outcome);
 	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":ADJUSTABLE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (!adjustable)
+	    adjustable = CAR (CDR (list));
 
 	  list = CDR (list);
 	}
