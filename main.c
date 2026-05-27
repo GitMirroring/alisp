@@ -31494,7 +31494,7 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 
 	  body = NULL;
 	  read_object (&body, 0,
-		       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments nil "
+		       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments cl:nil "
 					 "cl::env cl::form))"),
 		       NULL, 0, 0, env, outcome, &objb, &obje);
 
