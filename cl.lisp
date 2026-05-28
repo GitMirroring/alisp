@@ -821,22 +821,50 @@
 
 
 (defmacro defstruct (name-and-opts &rest slotcls)
-  (let (name opt constr copier pred slotnames funcdefs
+  (let (name opt constrname constrs constrdefs copier pred slotnames funcdefs constr-prov-p
 	     (slcls slotcls))
     (if (symbolp name-and-opts)
-	(setq name name-and-opts)
-	(progn
-	  (setq name (car name-and-opts))
-	  (setq name-and-opts (cdr name-and-opts))
-	  (while name-and-opts
-	    (let ((opt (car name-and-opts)))
-	      (cond
-		((eq (car opt) :copier)
-		 (setq copier (cadr opt)))
-		((eq (car opt) :predicate)
-		 (setq pred (cadr opt))))
-	      (setq name-and-opts (cdr name-and-opts))))))
-    (setq constr (intern (concatenate 'string "MAKE-" (string name))))
+	(setq name name-and-opts name-and-opts nil)
+	(setq name (car name-and-opts) name-and-opts (cdr name-and-opts)))
+    (setq constrname (intern (concatenate 'string "MAKE-" (string name))))
+    (while name-and-opts
+      (let ((opt (car name-and-opts)))
+	(cond
+	  ((eq (car opt) :copier)
+	   (setq copier (cadr opt)))
+	  ((eq (car opt) :predicate)
+	   (setq pred (cadr opt)))
+	  ((eq (car opt) :constructor)
+	   (setq constr-prov-p t)
+	   (cond
+	     ((and (cdr opt) (not (cadr opt)))
+	      (setq constrs nil))
+	     ((not (cdr opt))
+	      (setq constrs (cons (list constrname) constrs)))
+	     (t
+	      (setq constrs (cons (cdr opt) constrs))))))
+	(setq name-and-opts (cdr name-and-opts))))
+    (unless constr-prov-p
+      (setq constrs (list (list constrname))))
+    (dolist (constr constrs)
+      (if (= 1 (length constr))
+	  (setq constrdefs (cons
+			    `(defun ,(car constr) (&rest args)
+			       (apply 'cl-user:al-make-structure ',name args))
+			    constrdefs))
+	  (setq constrdefs (cons
+			    `(defun ,(car constr) ,(cadr constr)
+			       (apply 'cl-user:al-make-structure
+				      ',name
+				      ,(let (args)
+					 (mapcar
+					  (lambda (a)
+					    (setq args (list* (intern (string a) 'keyword)
+							      a
+							      args)))
+					  (cadr constr))
+					 (cons 'list args))))
+			    constrdefs))))
     (unless copier
       (setq copier (intern (concatenate 'string "COPY-" (string name)))))
     (unless pred
@@ -860,8 +888,7 @@
     `(progn
        (apply 'cl-user:al-defstruct ',name ',slotcls)
        ,@funcdefs
-       (defun ,constr (&rest args)
-	 (apply 'cl-user:al-make-structure ',name args))
+       ,@constrdefs
        (defun ,copier (struct)
 	 (copy-structure struct))
        (defun ,pred (struct)
