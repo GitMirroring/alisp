@@ -22902,13 +22902,16 @@ builtin_parse_integer (struct object *list, struct environment *env,
 {
   unsigned char ch;
   const char *in;
-  size_t sz, epos;
+  int found_unknown_key = 0, startind, endind, radixnum, parse_end;
+  size_t sz, epos, nonspsz;
   enum object_type t;
   const char *nend, *tokend;
+  struct object *ret, *str, *start = NULL, *end = NULL, *radix = NULL,
+    *junk_allowed = NULL, *allow_other_keys = NULL;
 
-  if (list_length (list) != 1)
+  if (!list_length (list))
     {
-      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
     }
 
   if (!IS_STRING (CAR (list)))
@@ -22916,22 +22919,180 @@ builtin_parse_integer (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:STRING", env, outcome);
     }
 
-  in = (char *) CAR (list)->value_ptr.byte_array->value;
-  sz = CAR (list)->value_ptr.byte_array->alloc_size->size;
+  str = CAR (list);
+  list = CDR (list);
 
-  if (!next_nonspace_char (&ch, &in, &sz, NULL)
-      || !is_number (in-1, sz+1, 10, &t, &nend, &epos, &tokend)
-      || t != TYPE_INTEGER)
+  while (SYMBOL (list) != &nil_object)
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      if (symbol_equals (CAR (list), ":START", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (list))->type == TYPE_INTEGER)
+	    {
+	      if (!start)
+		start = CAR (CDR (list));
+	    }
+	  else
+	    {
+	      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":END", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (list))->type == TYPE_INTEGER
+	      || SYMBOL (CAR (CDR (list))) == &nil_object)
+	    {
+	      if (!end)
+		end = CAR (CDR (list));
+	    }
+	  else
+	    {
+	      return raise_type_error (CAR (CDR (list)),
+				       "(CL:OR CL:INTEGER CL:NULL)", env, outcome);
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":RADIX", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (CAR (CDR (list))->type == TYPE_INTEGER)
+	    {
+	      if (!radix)
+		radix = CAR (CDR (list));
+	    }
+	  else
+	    {
+	      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":JUNK-ALLOWED", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (!junk_allowed)
+	    junk_allowed = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  if (!allow_other_keys)
+	    allow_other_keys = CAR (CDR (list));
+
+	  list = CDR (list);
+	}
+      else
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  found_unknown_key = 1;
+
+	  list = CDR (list);
+	}
+
+      list = CDR (list);
+    }
+
+  if (found_unknown_key && (!allow_other_keys
+			    || SYMBOL (allow_other_keys) == &nil_object))
+    {
+      raise_al_unknown_keyword_argument (env, outcome);
       return NULL;
     }
 
-  prepend_object_to_obj_list
-    (create_integer_from_long (CAR (list)->value_ptr.byte_array->alloc_size->size),
-     &outcome->other_values);
+  if (!start)
+    startind = 0;
+  else
+    startind = mpz_get_si (start->value_ptr.integer);
 
-  return create_number (in-1, nend-in+2, epos, 10, TYPE_INTEGER);
+  if (!end || SYMBOL (end) == &nil_object)
+    endind = str->value_ptr.byte_array->alloc_size->size;
+  else
+    endind = mpz_get_si (end->value_ptr.integer);
+
+  if (!radix)
+    radixnum = 10;
+  else
+    radixnum = mpz_get_si (radix->value_ptr.integer);
+
+  if (!junk_allowed)
+    junk_allowed = &nil_object;
+
+  in = (char *) str->value_ptr.byte_array->value+startind;
+  sz = endind-startind;
+
+  if (!next_nonspace_char (&ch, &in, &sz, NULL)
+      || !is_number (in-1, sz+1, radixnum, &t, &nend, &epos, &tokend)
+      || t != TYPE_INTEGER)
+    {
+      if (SYMBOL (junk_allowed) == &nil_object)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+      else
+	ret = &nil_object;
+
+      parse_end = in-(char *)str->value_ptr.byte_array->value-1;
+    }
+  else
+    {
+      ret = create_number (in-1, nend-in+2, epos, radixnum, TYPE_INTEGER);
+
+      nend++;
+      nonspsz = endind - (nend - (char *) str->value_ptr.byte_array->value);
+
+      if ((nonspsz > 0) && next_nonspace_char (&ch, &nend, &nonspsz, NULL))
+	parse_end = nend - (char *) str->value_ptr.byte_array->value;
+      else
+	parse_end = endind;
+    }
+
+  prepend_object_to_obj_list (create_integer_from_long (parse_end),
+			      &outcome->other_values);
+
+  return ret;
 }
 
 
