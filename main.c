@@ -22902,7 +22902,7 @@ builtin_parse_integer (struct object *list, struct environment *env,
 {
   unsigned char ch;
   const char *in;
-  int found_unknown_key = 0, startind, endind, radixnum, parse_end;
+  int found_unknown_key = 0, startind, endind, radixnum, parse_end, i;
   size_t sz, epos, nonspsz;
   enum object_type t;
   const char *nend, *tokend;
@@ -23062,31 +23062,60 @@ builtin_parse_integer (struct object *list, struct environment *env,
   in = (char *) str->value_ptr.byte_array->value+startind;
   sz = endind-startind;
 
-  if (!next_nonspace_char (&ch, &in, &sz, NULL)
-      || !is_number (in-1, sz+1, radixnum, &t, &nend, &epos, &tokend)
-      || t != TYPE_INTEGER)
+  while (sz && isspace ((unsigned char) *in))
+    {
+      in++;
+      sz--;
+    }
+
+  for (i = 0; i < sz; i++)
+    {
+      if (!i && in [i] == '-')
+	continue;
+
+      if (in [i] < '0' || '9' < in [i])
+	break;
+    }
+
+  if (!i)
     {
       if (SYMBOL (junk_allowed) == &nil_object)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
 	}
-      else
-	ret = &nil_object;
 
-      parse_end = in-(char *)str->value_ptr.byte_array->value-1;
+      ret = &nil_object;
+      parse_end = in-(char *) str->value_ptr.byte_array->value;
     }
   else
     {
-      ret = create_number (in-1, nend-in+2, epos, radixnum, TYPE_INTEGER);
+      if (i < sz && !isspace ((unsigned char) in [i])
+	  && SYMBOL (junk_allowed) == &nil_object)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
 
-      nend++;
-      nonspsz = endind - (nend - (char *) str->value_ptr.byte_array->value);
+      ret = create_number (in, i, 0, radixnum, TYPE_INTEGER);
 
-      if ((nonspsz > 0) && next_nonspace_char (&ch, &nend, &nonspsz, NULL))
-	parse_end = nend - (char *) str->value_ptr.byte_array->value;
-      else
-	parse_end = endind;
+      in += i;
+      sz -= i;
+
+      while (sz && isspace ((unsigned char) *in))
+	{
+	  in++;
+	  sz--;
+	}
+
+      if (sz && !isspace ((unsigned char) *in)
+	  && SYMBOL (junk_allowed) == &nil_object)
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      parse_end = in-(char *) str->value_ptr.byte_array->value;
     }
 
   prepend_object_to_obj_list (create_integer_from_long (parse_end),
