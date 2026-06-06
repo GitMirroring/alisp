@@ -1318,6 +1318,8 @@ make_test ("(parse-integer \" 123456 \" :start 2 :end 5)", "234\n5");
 make_test ("(parse-integer \" 123456 \" :start 3)", "3456\n8");
 make_test ("(parse-integer \" abc \" :junk-allowed t)", "NIL\n1");
 make_test ("(parse-integer \"123\" :radix 10)", "123\n3");
+make_test ("(parse-integer \"ab2c\" :start 2 :end 4 :radix 10 :junk-allowed t)", "2\n3");
+make_test ("(parse-integer \"\" :junk-allowed t)", "NIL\n0");
 make_test ("(let ((seq (make-array 8))) (write (read-sequence seq (make-string-input-stream \"0 1 2 3 4 5\") :start 5)) seq)", "8\n#(NIL NIL NIL NIL NIL #\\0 #\\Space #\\1)");
 make_test ("(eval '(write \"\"))", "\"\"\n\"\"");
 make_test ("(setq var 10)", "10");
