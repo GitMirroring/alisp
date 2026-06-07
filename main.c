@@ -2958,8 +2958,6 @@ struct object *evaluate_psetq
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_psetf
-(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_function_name
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_function_body
@@ -4053,7 +4051,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("SETQ", env, evaluate_setq, 1, NULL, 1);
   add_builtin_form ("PSETQ", env, evaluate_psetq, 1, NULL, 0);
   add_builtin_form ("SETF", env, evaluate_setf, 1, NULL, 0);
-  add_builtin_form ("PSETF", env, evaluate_psetf, 1, NULL, 0);
   add_builtin_form ("FUNCTION", env, evaluate_function, 1, NULL, 1);
   add_builtin_form ("APPLY", env, evaluate_apply, 0, NULL, 0);
   add_builtin_form ("FUNCALL", env, evaluate_funcall, 0, NULL, 0);
@@ -32999,51 +32996,6 @@ evaluate_setf (struct object *list, struct environment *env,
     }
 
   return ret;
-}
-
-
-struct object *
-evaluate_psetf (struct object *list, struct environment *env,
-		struct outcome *outcome)
-{
-  struct object *cons = list;
-  int l = list_length (list);
-  struct object_list *ls, *last;
-
-  if (l % 2)
-    {
-      outcome->type = ODD_NUMBER_OF_ARGUMENTS;
-
-      return NULL;
-    }
-
-  last = ls = alloc_empty_object_list (l / 2);
-
-  while (SYMBOL (cons) != &nil_object)
-    {
-      last->obj = evaluate_object (CAR (CDR (cons)), env, outcome);
-
-      if (!last->obj)
-	return NULL;
-
-      cons = CDR (CDR (cons));
-      last = last->next;
-    }
-
-  cons = list;
-  last = ls;
-
-  while (SYMBOL (cons) != &nil_object)
-    {
-      setf_value (CAR (cons), last->obj, 0, env, outcome);
-
-      cons = CDR (CDR (cons));
-      last = last->next;
-    }
-
-  free_object_list (ls);
-
-  return &nil_object;
 }
 
 

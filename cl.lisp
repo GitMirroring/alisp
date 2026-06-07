@@ -755,6 +755,31 @@
 
 
 
+(defmacro psetf (&rest args)
+  (let (formvars forms newvalvars newvalforms storeforms letvars)
+    (while args
+      (let ((exp (multiple-value-list (get-setf-expansion (car args)))))
+	(setq formvars (cons (car exp) formvars))
+	(setq forms (cons (nth 1 exp) forms))
+	(setq newvalvars (cons (nth 2 exp) newvalvars))
+	(setq newvalforms (cons (cadr args) newvalforms))
+	(setq storeforms (cons (nth 3 exp) storeforms)))
+      (setq args (cddr args)))
+    (while formvars
+      (setq letvars (cons (list (caar newvalvars) (car newvalforms))
+			  letvars))
+      (setq letvars (append (mapcar (lambda (fv f)
+				      (list fv f))
+				    (car formvars)
+				    (car forms))
+			    letvars))
+      (setq formvars (cdr formvars) forms (cdr forms)
+	    newvalvars (cdr newvalvars) newvalforms (cdr newvalforms)))
+    `(let* ,letvars
+       ,@(reverse storeforms))))
+
+
+
 (defmacro defsetf (accessfn secondarg &rest args)
   (if (listp secondarg)
       (let (formsymsyms storesymsyms)
@@ -4069,10 +4094,10 @@
            boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
            boole-set boole-xor boole integer-length *gensym-counter* gensym
            gentemp make-list copy-alist copy-tree tree-equal sublis nsublis endp
-           butlast nbutlast acons pairlis shiftf rotatef defsetf when unless
-           define-modify-macro incf decf defstruct defclass define-condition
-           otherwise case ccase ecase typecase ctypecase etypecase return
-           multiple-value-bind multiple-value-setq prog prog*
+           butlast nbutlast acons pairlis shiftf rotatef psetf defsetf when
+           unless define-modify-macro incf decf defstruct defclass
+           define-condition otherwise case ccase ecase typecase ctypecase
+           etypecase return multiple-value-bind multiple-value-setq prog prog*
            multiple-value-prog1 every some notany notevery member member-if
            member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
            rassoc rassoc-if rassoc-if-not position position-if position-if-not
