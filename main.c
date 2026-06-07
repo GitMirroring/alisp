@@ -22900,12 +22900,9 @@ struct object *
 builtin_parse_integer (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
-  unsigned char ch;
   const char *in;
   int found_unknown_key = 0, startind, endind, radixnum, parse_end, i;
-  size_t sz, epos, nonspsz;
-  enum object_type t;
-  const char *nend, *tokend;
+  size_t sz;
   struct object *ret, *str, *start = NULL, *end = NULL, *radix = NULL,
     *junk_allowed = NULL, *allow_other_keys = NULL;
 
