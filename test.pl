@@ -523,16 +523,16 @@ make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 make_test ("(defmacro mac3 (&key k &environment env) k)", "MAC3");
 make_test ("(mac3)", "NIL");
 
-make_test ("(gensym)", "#:G2086");
-make_test ("(gensym)", "#:G2087");
-make_test ("(gensym 5)", "#:G5");
-make_test ("(gensym \"A\")", "#:A2088");
+make_test ("(gensym)", "#:G2088");
 make_test ("(gensym)", "#:G2089");
+make_test ("(gensym 5)", "#:G5");
+make_test ("(gensym \"A\")", "#:A2090");
+make_test ("(gensym)", "#:G2091");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
-make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G2090)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G2090)\n(FOO2)");
-make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G2091)\n(SETQ A #:G2091)\nA");
-make_test ("(get-setf-expansion '(w a b))", "(#:G2092 #:G2093)\n(A B)\n(#:G2094)\n(FUNCALL (FUNCTION (SETF W)) #:G2094 #:G2092 #:G2093)\n(W #:G2092 #:G2093)");
+make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G2092)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G2092)\n(FOO2)");
+make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G2093)\n(SETQ A #:G2093)\nA");
+make_test ("(get-setf-expansion '(w a b))", "(#:G2094 #:G2095)\n(A B)\n(#:G2096)\n(FUNCALL (FUNCTION (SETF W)) #:G2096 #:G2094 #:G2095)\n(W #:G2094 #:G2095)");
 make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
 
 make_test ("(open-stream-p *standard-input*)", "T");
@@ -1942,6 +1942,12 @@ make_test ("(defgeneric genfun15 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN15>")
 make_test ("(defmethod genfun15 (x) 10)", "#<STANDARD-METHOD GENFUN15 (T)>");
 make_test ("(genfun14 5)", "0");
 make_test ("(defun fle (b &optional c &rest d &key e &allow-other-keys &aux f) 0 1 2)", "FLE");
+#make_test ("(defgeneric genfun16 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN16>");
+#make_test ("(defmethod genfun16 ((x integer)) (lambda nil (call-next-method)))", "#<STANDARD-METHOD GENFUN16 (INTEGER)>");
+#make_test ("(defmethod genfun16 ((x real)) (write 'here))", "#<STANDARD-METHOD GENFUN16 (REAL)>");
+#make_test ("(funcall (genfun16 0))", "HERE\nHERE");
+make_test ("(defgeneric genfun17 (x) (:method ((x string)) (write 'string)) (:method ((x integer)) (write 'integer)) (:documentation \"whatever\"))", "#<STANDARD-GENERIC-FUNCTION GENFUN17>");
+make_test ("(genfun17 \"hello\")", "STRING\nSTRING");
 make_test ("(function-lambda-expression #'fle)", "(LAMBDA (B &OPTIONAL C &REST D &KEY E &ALLOW-OTHER-KEYS &AUX F) 0 1 2)\nNIL\nFLE");
 make_test ("(function-lambda-expression (let ((i 0)) (lambda (x) 0 1)))", "(LAMBDA (X) 0 1)\nT\nNIL");
 make_test ("(define-condition new-math-error (arithmetic-error) (a b))", "NEW-MATH-ERROR");
