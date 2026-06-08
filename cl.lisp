@@ -66,7 +66,12 @@
 
 
 (defmacro defgeneric (name lambdal &rest args)
-  `(ensure-generic-function ',name :lambda-list ',lambdal))
+  `(progn
+     (ensure-generic-function ',name :lambda-list ',lambdal)
+     ,@(mapcar (lambda (methdesc)
+		 (list* 'defmethod name (cdr methdesc)))
+	       (remove-if (lambda (arg) (not (eq (car arg) :method))) args))
+     (fdefinition ',name)))
 
 
 (defun add-method (genfun meth)
