@@ -84,9 +84,27 @@
 
 
 (defmacro defmethod (&rest args)
-  `(let ((meth (apply 'cl-user:al-create-method ',args)))
-     (add-method #',(car args) meth)
-     meth))
+  (let ((name (car args))
+	newargs)
+    (setq args (cdr args))
+    (while (not (typep (car args) 'list))
+      (setq newargs (cons (car args) newargs))
+      (setq args (cdr args)))
+    (setq newargs (cons (car args) newargs))
+    (setq args (cdr args))
+    (while (and
+	    (typep (car args) 'cons)
+	    (eq (caar args) 'declare))
+      (setq newargs (cons (car args) newargs))
+      (setq args (cdr args)))
+    (setq newargs (cons `(block ,(if (typep name 'symbol)
+				     name
+				     (cadr name))
+			   . ,args) newargs))
+    (setq newargs (reverse newargs))
+    `(let ((meth (apply 'cl-user:al-create-method ',name ',newargs)))
+       (add-method #',name meth)
+       meth)))
 
 
 
