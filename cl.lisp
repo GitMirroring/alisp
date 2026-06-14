@@ -92,6 +92,9 @@
       (setq args (cdr args)))
     (setq newargs (cons (car args) newargs))
     (setq args (cdr args))
+    (when (typep (car args) 'string)
+      (setq newargs (cons (car args) newargs))
+      (setq args (cdr args)))
     (while (and
 	    (typep (car args) 'cons)
 	    (eq (caar args) 'declare))
