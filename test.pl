@@ -1934,7 +1934,7 @@ make_test ("(defmethod genfun12 ((x number) &key &allow-other-keys))", "#<STANDA
 make_test ("(defmethod genfun12 ((x real) &key) (write 'here))", "#<STANDARD-METHOD GENFUN12 (REAL)>");
 make_test ("(genfun12 0 :other 1)", "HERE\nHERE");
 make_test ("(defgeneric genfun13 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN13>");
-make_test ("(defmethod genfun13 (x) (declare (special x)) (f))", "#<STANDARD-METHOD GENFUN13 (T)>");
+make_test ("(defmethod genfun13 (x) \"doc\" (declare (special x)) (f))", "#<STANDARD-METHOD GENFUN13 (T)>");
 make_test ("(defun f nil x)", "F");
 make_test ("(genfun13 0)", "0");
 make_test ("(defgeneric genfun14 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN14>");
