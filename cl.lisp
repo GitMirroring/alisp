@@ -748,6 +748,16 @@
      `(values ,@(mapcar (lambda (e) (nth 4 e)) exps)))))
 
 
+(define-setf-expander the (type form)
+  (let ((storesym (gensym)))
+    (values
+     nil
+     nil
+     (list storesym)
+     `(setf ,form ,storesym)
+     `(the ,type ,form))))
+
+
 
 (defmacro shiftf (&rest args)
   (let* ((places (subseq args 0 (- (length args) 1)))
