@@ -534,6 +534,8 @@ make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G2103)\n(FUNCALL (FUNCT
 make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G2104)\n(SETQ A #:G2104)\nA");
 make_test ("(get-setf-expansion '(w a b))", "(#:G2105 #:G2106)\n(A B)\n(#:G2107)\n(FUNCALL (FUNCTION (SETF W)) #:G2107 #:G2105 #:G2106)\n(W #:G2105 #:G2106)");
 make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
+make_test ("(defmacro setf-mac nil 'setfvar)", "SETF-MAC");
+make_test ("(let ((setfvar 0)) (setf (setf-mac) 1) setfvar)", "1");
 
 make_test ("(open-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-input*)", "T");
@@ -2014,8 +2016,8 @@ make_test ("(block a (defun a nil) (block b (defun b nil) (block c (defun c nil)
 make_test ("(block a (block b (block c (block d (defun f nil (return-from b 10)))) (block e (block b (f))) 11))", "10");
 make_test ("(defun test () (write 1) (write 2) (return-from test 10) (write 3))", "TEST");
 make_test ("(test)", "12\n10");
-make_test ("(defun (setf test2) (x y) (return-from test2 10))", "(SETF TEST2)");
-make_test ("(setf (test2 0) 1)", "10");
+make_test ("(defun (setf test3) (x y) (return-from test3 10))", "(SETF TEST3)");
+make_test ("(setf (test3 0) 1)", "10");
 make_test ("(defun f () (throw 'label (values 0 1 2)))", "F");
 make_test ("(catch 'label (f))", "0\n1\n2");
 make_test ("(block nil (handler-bind ((file-error (lambda (e) (write 0))) (division-by-zero (lambda (e) (return 1)))) (/ 1 0)))", "1");
