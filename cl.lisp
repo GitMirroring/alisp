@@ -172,6 +172,17 @@
 (defun ninth (list) (nth 8 list))
 (defun tenth (list) (nth 9 list))
 
+(defun (setf first) (newval list) (setf (nth 0 list) newval))
+(defun (setf second) (newval list) (setf (nth 1 list) newval))
+(defun (setf third) (newval list) (setf (nth 2 list) newval))
+(defun (setf fourth) (newval list) (setf (nth 3 list) newval))
+(defun (setf fifth) (newval list) (setf (nth 4 list) newval))
+(defun (setf sixth) (newval list) (setf (nth 5 list) newval))
+(defun (setf seventh) (newval list) (setf (nth 6 list) newval))
+(defun (setf eighth) (newval list) (setf (nth 7 list) newval))
+(defun (setf ninth) (newval list) (setf (nth 8 list) newval))
+(defun (setf tenth) (newval list) (setf (nth 9 list) newval))
+
 
 (defun rest (list) (cdr list))
 
