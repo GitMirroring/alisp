@@ -33543,9 +33543,9 @@ builtin_get_setf_expansion (struct object *list, struct environment *env,
 			    struct outcome *outcome)
 {
   struct object *tmp, *l, *cons, *val, *newv, *func;
-  int len;
+  int ll, len;
 
-  if (list_length (list) != 1)
+  if (!(ll = list_length (list)) || ll > 2)
     {
       return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
     }
