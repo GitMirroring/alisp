@@ -32370,7 +32370,7 @@ setf_value (struct object *form, struct object *value, int eval_value,
 
 	  if (fun && ismac && !fun->value_ptr.function->builtin_form)
 	    {
-	      res = call_function (fun, CDR (form), 0, 1, 1, 1, 0, 0, env,
+	      res = call_function (fun, form, 0, 1, 1, 1, 0, 0, env,
 				   outcome);
 	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
