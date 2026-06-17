@@ -1569,6 +1569,8 @@ make_test ("'s3", "S3");
 make_test ("(gentemp \"S\")", "S4");
 make_test ("(second '(0))", "NIL");
 make_test ("(fifth '(0 1 2 3 4))", "4");
+make_test ("(let ((list '(0 1 2 3 4 5 6 7 8 9))) (setf (third list) 10) list)", "(0 1 10 3 4 5 6 7 8 9)");
+make_test ("(let ((list '(0 1 2 3 4 5 6 7 8 9))) (setf (ninth list) 10) list)", "(0 1 2 3 4 5 6 7 10 9)");
 make_test ("(make-list 3)", "(NIL NIL NIL)");
 make_test ("(make-list 4 :initial-element 0)", "(0 0 0 0)");
 make_test ("(copy-alist '((1 . 10) (2 . \"a\") (3 . 'a)))", "((1 . 10) (2 . \"a\") (3 QUOTE A))");
