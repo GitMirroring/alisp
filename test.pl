@@ -536,6 +536,8 @@ make_test ("(get-setf-expansion '(w a b))", "(#:G2105 #:G2106)\n(A B)\n(#:G2107)
 make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
 make_test ("(defmacro setf-mac nil 'setfvar)", "SETF-MAC");
 make_test ("(let ((setfvar 0)) (setf (setf-mac) 1) setfvar)", "1");
+make_test ("(defmacro setf-mac2 (x) x)", "SETF-MAC2");
+make_test ("(let ((setfvar 0)) (setf (setf-mac2 setfvar) 1) setfvar)", "1");
 
 make_test ("(open-stream-p *standard-input*)", "T");
 make_test ("(input-stream-p *standard-input*)", "T");
