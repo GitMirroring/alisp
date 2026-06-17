@@ -2019,6 +2019,9 @@ void print_stepping_help (void);
 struct object *enter_debugger (struct object *cond, struct environment *env,
 			       struct outcome *outcome);
 
+struct object *create_setf_function_name (struct object *sym,
+					  struct environment *env);
+
 void add_profiling_data (struct profiling_record **data, struct object *name,
 			 int is_setf, clock_t time, clock_t evaltime);
 
@@ -13155,6 +13158,21 @@ enter_debugger (struct object *cond, struct environment *env,
   env->lex_env_vars_boundary--;
 
   return &t_object;
+}
+
+
+struct object *
+create_setf_function_name (struct object *sym, struct environment *env)
+{
+  struct object *ret = alloc_empty_list (2);
+
+  ret->value_ptr.cons_pair->car = env->setf_sym;
+  add_reference (ret, CAR (ret), 0);
+
+  ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = sym;
+  add_reference (CDR (ret), CAR (CDR (ret)), 0);
+
+  return ret;
 }
 
 
@@ -32215,7 +32233,7 @@ struct object *
 setf_value (struct object *form, struct object *value, int eval_value,
 	    struct environment *env, struct outcome *outcome)
 {
-  struct object *exp, *cons1, *cons2, *res, *val, *args, *fun;
+  struct object *exp, *cons1, *cons2, *res, *val, *args, *fun, *funcname;
   struct object_list *expvals, *l;
   int binsnum = 0, ismac;
 
@@ -32366,7 +32384,11 @@ setf_value (struct object *form, struct object *value, int eval_value,
 
 	  if (!fun)
 	    {
-	      outcome->type = INVALID_ACCESSOR;
+	      decrement_refcount (value);
+	      decrement_refcount (args);
+	      funcname = create_setf_function_name (SYMBOL (CAR (form)), env);
+	      raise_undefined_function (funcname, env, outcome);
+	      decrement_refcount (funcname);
 	      return NULL;
 	    }
 
