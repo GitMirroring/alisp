@@ -32366,6 +32366,20 @@ setf_value (struct object *form, struct object *value, int eval_value,
 	}
       else
 	{
+	  fun = get_function (SYMBOL (CAR (form)), env, 0, 0, 0, 0, &ismac);
+
+	  if (fun && ismac && !fun->value_ptr.function->builtin_form)
+	    {
+	      res = call_function (fun, CDR (form), 0, 1, 1, 1, 0, 0, env,
+				   outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!res)
+		return NULL;
+
+	      return setf_value (res, value, eval_value, env, outcome);
+	    }
+
 	  args = evaluate_through_list (CDR (form), env, outcome);
 
 	  if (!args)
