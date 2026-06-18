@@ -34,15 +34,16 @@ To build from a git snapshot, start with
 
 configure admits --with[out]-readline as an option, to build with line editing
 or not; also note that the test suite will not work without readline, because
-the script is written around readline's unusual echo behavior.
+the test script is written around readline's unusual echo behavior.
 
 configure will also accept the option AL_MODULE_PATH containing a
 slash-terminated path where al will look for cl.lisp and for modules like ASDF.
 
-If you don't set AL_MODULE_PATH, you'll get a build that looks in the current
-directory and so runs fine from the source tree; if you want a true installation
-then set the variable, if your installation prefix is "/usr/local", I'd suggest
-setting it to "/usr/local/lib/alisp/" like this
+If you don't set AL_MODULE_PATH, you'll get a build that always looks in the
+current directory of when you run the program (not necessarily where the
+executable is!).  If you want a true system-wide installation then you should
+set the variable: if your installation prefix is "/usr/local", I'd suggest the
+value "/usr/local/lib/alisp/" like this
 
   $ ./configure AL_MODULE_PATH=/usr/local/lib/alisp/
 
@@ -54,7 +55,7 @@ will build the program and
 
   $ make install
 
-will install it if you have write permissions on the target directories.
+will install it as long as you have write permissions on the target directories.
 
 A lisp file named cl.lisp contains many standard definitions.  By default, this
 file gets loaded at startup, unless you pass -q or --dont-load-cl.  To load the
