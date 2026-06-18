@@ -308,6 +308,8 @@ make_test ("(defun fun2 (x) (declare (ignorable x)) \"docstring\" (declare (spec
 make_test ("(fun2 10)", "10");
 make_test ("(defun fun3 nil \"not a docstring\")", "FUN3");
 make_test ("(fun3)", "\"not a docstring\"");
+make_test ("(defun getdynvar nil dynvar)", "GETDYNVAR");
+make_test ("(let* ((dynvar 10) (newvar (getdynvar))) (declare (special dynvar)) newvar)", "10");
 make_test ("(defun fooo () (list x y z))", "FOOO");
 make_test ("(progv '(x y z) '(0 1 2) (fooo))", "(0 1 2)");
 make_test ("(flet ((a () (write \"\"))) (a))", "\"\"\n\"\"");
