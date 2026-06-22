@@ -32,14 +32,14 @@
 
 (setf (macro-function 'defmacro)
       #'(lambda (defmacroform defmacroenv)
-	`(eval-when (:compile-toplevel :load-toplevel :execute)
-	   (progn
-	     (setf (macro-function ',(nth 1 defmacroform))
-		   #'(lambda (form env)
-		     (cl-user:al-with-macro-arguments ,(nth 2 defmacroform)
-						      env form
-						      . ,(nthcdr 3 defmacroform))))
-	     ',(nth 1 defmacroform)))))
+	  `(eval-when (:compile-toplevel :load-toplevel :execute)
+	     (progn
+	       (setf (macro-function ',(nth 1 defmacroform))
+		     #'(lambda (form env)
+			 (al:with-macro-arguments ,(nth 2 defmacroform)
+			   env form
+			   . ,(nthcdr 3 defmacroform))))
+	       ',(nth 1 defmacroform)))))
 
 
 
@@ -57,10 +57,10 @@
 (defmacro defun (name lambdal &body body)
   `(progn
      (setf (fdefinition ',name)
-	   (if cl-user:*al-compile-when-defining*
+	   (if al:*compile-when-defining*
 	       (compile nil (lambda ,lambdal . ,body))
 	       (function (lambda ,lambdal . ,body))))
-     (setf (cl-user:al-function-name (fdefinition ',name))
+     (setf (al:function-name (fdefinition ',name))
 	   ',name)
      ',name))
 
@@ -75,12 +75,12 @@
 
 
 (defun add-method (genfun meth)
-  (when (and cl-user:*al-compile-when-defining*
-	     (not (typep meth 'cl-user:al-compiled-method)))
-    (setf (cl-user:al-function-body meth)
-	  (macroexpand-body (cl-user:al-function-body meth)))
-    (setf (cl-user:al-function-attributes meth) '(:compiled)))
-  (cl-user:al-add-method genfun meth))
+  (when (and al:*compile-when-defining*
+	     (not (typep meth 'al:compiled-method)))
+    (setf (al:function-body meth)
+	  (macroexpand-body (al:function-body meth)))
+    (setf (al:function-attributes meth) '(:compiled)))
+  (al:add-method genfun meth))
 
 
 (defmacro defmethod (&rest args)
@@ -105,7 +105,7 @@
 				     (cadr name))
 			   . ,args) newargs))
     (setq newargs (reverse newargs))
-    `(let ((meth (apply 'cl-user:al-create-method ',name ',newargs)))
+    `(let ((meth (apply 'al:create-method ',name ',newargs)))
        (add-method #',name meth)
        meth)))
 
@@ -129,7 +129,7 @@
 (defun require (mod &optional pl)
   (unless (member mod *modules* :test #'string=)
     (if (string= mod "ASDF")
-	(load (concatenate 'string cl-user:*al-module-path* "asdf.lisp"))
+	(load (concatenate 'string al:*module-path* "asdf.lisp"))
 	(error (format nil "don't know how to require ~a" mod)))))
 
 
@@ -922,11 +922,11 @@
       (if (= 1 (length constr))
 	  (setq constrdefs (cons
 			    `(defun ,(car constr) (&rest args)
-			       (apply 'cl-user:al-make-structure ',name args))
+			       (apply 'al:make-structure ',name args))
 			    constrdefs))
 	  (setq constrdefs (cons
 			    `(defun ,(car constr) ,(cadr constr)
-			       (apply 'cl-user:al-make-structure
+			       (apply 'al:make-structure
 				      ',name
 				      ,(let (args)
 					 (mapcar
@@ -958,7 +958,7 @@
 			    (setf (slot-value struct ',sl) newval)))
 			funcdefs))))
     `(progn
-       (apply 'cl-user:al-defstruct ',name ',slotcls)
+       (apply 'al:defstruct ',name ',slotcls)
        ,@funcdefs
        ,@constrdefs
        (defun ,copier (struct)
@@ -1004,7 +1004,7 @@
 			 (setf (slot-value obj ',(car wr)) newval))
 		      funcdefs)))
     `(progn
-       (cl-user:al-defclass ',name ',supclasses ',slots)
+       (al:defclass ',name ',supclasses ',slots)
        ,@funcdefs
        (find-class ',name))))
 
@@ -2548,7 +2548,7 @@
 
 
 (defun pathname-directory (fn &key case)
-  (let ((dir (cl-user:al-pathname-directory fn)))
+  (let ((dir (al:pathname-directory fn)))
     (if dir
 	(let ((spl (split-pathname dir)))
 	  (if (string= (car spl) "/")
@@ -2576,8 +2576,8 @@
 (defun merge-pathnames (pn &optional defpn defv)
   (let* ((p1 (pathname pn))
 	 (p2 (pathname defpn))
-	 (dir (or (cl-user:al-pathname-directory p1)
-		  (cl-user:al-pathname-directory p2)))
+	 (dir (or (al:pathname-directory p1)
+		  (al:pathname-directory p2)))
 	 (dirtype (if (and
 		       (> (length dir) 0) (char= (elt dir 0) #\/))
 		      :absolute
@@ -2594,7 +2594,7 @@
 (defun file-write-date (fn))
 
 (defun user-homedir-pathname (&optional h)
-  (make-pathname :directory (cl-user:al-getenv "HOME")))
+  (make-pathname :directory (al:getenv "HOME")))
 
 
 (defun split-pathname (path)
@@ -2622,8 +2622,8 @@
 
 
 (defun pathname-match-p (path wild)
-  (let ((pdir (split-pathname (cl-user:al-pathname-directory path)))
-	(wdir (split-pathname (cl-user:al-pathname-directory wild))))
+  (let ((pdir (split-pathname (al:pathname-directory path)))
+	(wdir (split-pathname (al:pathname-directory wild))))
     (while (and pdir wdir)
       (when (string= (car wdir) "**")
 	(while (/= (length wdir) (length pdir))
@@ -2652,11 +2652,11 @@
 	(concatenate 'string path "/"))))
 
 
-(defun cl-user::al-list-directory-with-full-path (dir)
+(defun al::list-directory-with-full-path (dir)
   (mapcar (lambda (f) (merge-pathnames (ensure-directory dir)
 				       f))
-	  (cl-user:al-list-directory dir)))
-(export 'cl-user::al-list-directory-with-full-path 'cl-user)
+	  (al:list-directory dir)))
+(export 'al::list-directory-with-full-path 'al)
 
 
 (defun exclude-directory (path)
@@ -2668,36 +2668,36 @@
 	(or name (make-string 0)))))
 
 
-(defun cl-user::al-list-subdirs (dir)
+(defun al::list-subdirs (dir)
   "List the subdirectories of DIR with full path.  Excludes '.' and '..'."
   (let (out
 	(dir (namestring dir)))
-    (dolist (f (cl-user:al-list-directory-with-full-path dir))
+    (dolist (f (al:list-directory-with-full-path dir))
       (if (and (string/= (exclude-directory f) ".")
 	       (string/= (exclude-directory f) "..")
-	       (cl-user:al-directoryp f))
+	       (al:directoryp f))
 	  (setq out (cons (ensure-directory f) out))))
     out))
-(export 'cl-user::al-list-subdirs 'cl-user)
+(export 'al::list-subdirs 'al)
 
 
 (defun directory (fn)
   (let ((name (pathname-name fn))
 	(type (pathname-type fn))
-	(dir (cl-user:al-pathname-directory fn))
+	(dir (al:pathname-directory fn))
 	(full (namestring fn))
 	(spl (split-pathname fn)))
     (cond
       ((and (string= name "*")
 	    (or (not type)
 		(string= type "*")))
-       (cl-user:al-list-directory-with-full-path (or dir ".")))
+       (al:list-directory-with-full-path (or dir ".")))
       ((string= name "*")
        (remove-if (lambda (f) (string/= (or (pathname-type f) "") type))
-		  (cl-user:al-list-directory-with-full-path (or dir "."))))
+		  (al:list-directory-with-full-path (or dir "."))))
       ((string= (car (last spl)) "*")
        (mapcar 'pathname
-	       (cl-user:al-list-subdirs (subseq full 0 (- (length full) 2)))))
+	       (al:list-subdirs (subseq full 0 (- (length full) 2)))))
       (t
        (if (probe-file fn)
 	   (list (pathname fn)))))))
@@ -2831,7 +2831,7 @@
 		    `((setq ,index (length ,strsym))))
 	      ,@forms)
 	 ,@(if index
-	       `((setq ,index (- ,index (length (cl-user:al-string-input-stream-string ,var))))))
+	       `((setq ,index (- ,index (length (al:string-input-stream-string ,var))))))
 	 (close ,var)))))
 
 
@@ -2862,13 +2862,13 @@
     (write-string "  " str)))
 
 (defun print-object-nicely (str obj)
-  (indent str cl-user::*al-pprint-depth*)
+  (indent str al:*pprint-depth*)
   (let (*print-pretty*)
     (if (atom obj)
 	(format str "~a" obj)
 	(format str "(~a" (car obj))))
   (when (consp obj)
-    (incf cl-user::*al-pprint-depth*)
+    (incf al:*pprint-depth*)
     (setq obj (cdr obj))
     (unless obj
       (let (*print-pretty*)
@@ -2885,7 +2885,7 @@
 	      (let (*print-pretty*)
 		(format str " . ~a)" (cdr obj)))))
       (setq obj (cdr obj)))
-    (decf cl-user::*al-pprint-depth*)))
+    (decf al:*pprint-depth*)))
 
 (setq *print-pprint-dispatch* (cons (list 't #'print-object-nicely 0) *print-pprint-dispatch*))
 
@@ -3435,34 +3435,34 @@
     (setq l (cddr lets))
 
     (dolist (v vars)
-      (setf (car l) `(cl-user:al-loopy-destructuring-bind ,(mapcar 'car v) ,(cons 'list (mapcar 'cadr v)) ,nil))
+      (setf (car l) `(al:loopy-destructuring-bind ,(mapcar 'car v) ,(cons 'list (mapcar 'cadr v)) ,nil))
       (setq l (cdddar l)))
 
     (let (vrs)
       (dolist (i iters)
 	(when (eq (car i) :in)
 	  (setq vrs (append (flatten-tree-skipping-nils (elt i 1)) (cons (elt i 2) vrs)))
-	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 1) (car ,(elt i 3)))
+	  (setq initial-setup `((al:loopy-setq ,(elt i 1) (car ,(elt i 3)))
 				(when (endp ,(elt i 2))
 				  (setq ,skip-body-sym t)
 				  (go ,prologue-tag))
-				(cl-user:al-loopy-setq ,(elt i 2) ,(elt i 3))
+				(al:loopy-setq ,(elt i 2) ,(elt i 3))
 				. ,initial-setup))
-	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 1) (car ,(elt i 2)))
+	  (setq iteration-setup `((al:loopy-setq ,(elt i 1) (car ,(elt i 2)))
 				  (if (endp ,(elt i 2)) (return-from ,inner-block-name nil))
-				  (cl-user:al-loopy-setq ,(elt i 2) (funcall ,(elt i 4) ,(elt i 2)))
+				  (al:loopy-setq ,(elt i 2) (funcall ,(elt i 4) ,(elt i 2)))
 				  . ,iteration-setup)))
 	(when (eq (car i) :on)
 	  (setq vrs (append (flatten-tree-skipping-nils (elt i 1)) (cons (elt i 2) vrs)))
 	  (setq initial-setup `((when (endp ,(elt i 2))
 				  (setq ,skip-body-sym t)
 				  (go ,prologue-tag))
-				(cl-user:al-loopy-setq ,(elt i 1) ,(elt i 3))
-				(cl-user:al-loopy-setq ,(elt i 2) ,(elt i 3))
+				(al:loopy-setq ,(elt i 1) ,(elt i 3))
+				(al:loopy-setq ,(elt i 2) ,(elt i 3))
 				. ,initial-setup))
 	  (setq iteration-setup `((if (endp ,(elt i 2)) (return-from ,inner-block-name nil))
-				  (cl-user:al-loopy-setq ,(elt i 1) ,(elt i 2))
-				  (cl-user:al-loopy-setq ,(elt i 2) (funcall ,(elt i 4) ,(elt i 2)))
+				  (al:loopy-setq ,(elt i 1) ,(elt i 2))
+				  (al:loopy-setq ,(elt i 2) (funcall ,(elt i 4) ,(elt i 2)))
 				  . ,iteration-setup)))
 	(when (eq (car i) :from)
 	  (let ((stopvar (gensym))
@@ -3481,9 +3481,9 @@
 				      . ,iteration-setup))))
 	(when (eq (car i) :eq)
 	  (setq vrs (append (flatten-tree-skipping-nils (elt i 1)) vrs))
-	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(elt i 2))
+	  (setq initial-setup `((al:loopy-setq ,(elt i 1) ,(elt i 2))
 				. ,initial-setup))
-	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 1) ,(if (elt i 3) (elt i 4) (elt i 2)))
+	  (setq iteration-setup `((al:loopy-setq ,(elt i 1) ,(if (elt i 3) (elt i 4) (elt i 2)))
 				  . ,iteration-setup)))
 	(when (eq (car i) :across)
 	  (setq vrs (list* (elt i 1) (elt i 2) (elt i 3) vrs))
@@ -3507,21 +3507,21 @@
 				  (incf ,(elt i 1))
 				  . ,iteration-setup)))
 	(when (eq (car i) :hashtable)
-	  (setq initial-setup `((cl-user:al-loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
-				(cl-user:al-loopy-setq ,(elt i 1) (caar ,(elt i 3)))
+	  (setq initial-setup `((al:loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
+				(al:loopy-setq ,(elt i 1) (caar ,(elt i 3)))
 				(when (endp ,(elt i 3))
 				  (setq ,skip-body-sym t)
 				  (go ,prologue-tag))
 				(setq ,(elt i 3)
 				      (let (o) (maphash (lambda (k v) (setq o (cons (cons k v) o))) ,(elt i 4)) o))
 				. ,initial-setup))
-	  (setq iteration-setup `((cl-user:al-loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
-				  (cl-user:al-loopy-setq ,(elt i 1) (caar ,(elt i 3)))
+	  (setq iteration-setup `((al:loopy-setq ,(elt i 2) (cdar ,(elt i 3)))
+				  (al:loopy-setq ,(elt i 1) (caar ,(elt i 3)))
 				  (if (endp ,(elt i 3)) (return-from ,inner-block-name nil))
 				  (setq ,(elt i 3) (cdr ,(elt i 3)))
 				  . ,iteration-setup)))
 	(when (eq (car i) :package)
-	  (setq initial-setup `((cl-user:al-loopy-setq ,(or (elt i 1) (elt i 2) (elt i 3)) (car ,(elt i 5)))
+	  (setq initial-setup `((al:loopy-setq ,(or (elt i 1) (elt i 2) (elt i 3)) (car ,(elt i 5)))
 				(when (endp ,(elt i 5))
 				  (setq ,skip-body-sym t)
 				  (go ,prologue-tag))
@@ -3545,7 +3545,7 @@
 						   (setq out (cons sym out))))))
 					out))
 				. ,initial-setup))
-	  (setq iteration-setup `((cl-user:al-loopy-setq ,(or (elt i 1) (elt i 2) (elt i 3)) (car ,(elt i 5)))
+	  (setq iteration-setup `((al:loopy-setq ,(or (elt i 1) (elt i 2) (elt i 3)) (car ,(elt i 5)))
 				  (if (endp ,(elt i 5)) (return-from ,inner-block-name nil))
 				  (setq ,(elt i 5) (cdr ,(elt i 5)))
 				  . ,iteration-setup))))
@@ -3736,20 +3736,20 @@
 
 
 
-(defparameter cl-user::*al-expand-compiler-macros* t)
-(export 'cl-user::*al-expand-compiler-macros* 'cl-user)
+(defparameter al::*expand-compiler-macros* t)
+(export 'al::*expand-compiler-macros* 'al)
 
 
-(defparameter cl-user::*al-compiler-macro-registry* (make-hash-table :test 'equal))
-(export 'cl-user::*al-compiler-macro-registry* 'cl-user)
+(defparameter al::*compiler-macro-registry* (make-hash-table :test 'equal))
+(export 'al::*compiler-macro-registry* 'al)
 
 
 (defun compiler-macro-function (name)
-  (values (gethash name cl-user:*al-compiler-macro-registry*)))
+  (values (gethash name al:*compiler-macro-registry*)))
 
 
 (defun (setf compiler-macro-function) (newval name)
-  (setf (gethash name cl-user:*al-compiler-macro-registry*) newval))
+  (setf (gethash name al:*compiler-macro-registry*) newval))
 
 
 (defmacro define-compiler-macro (name lambdal &body body)
@@ -3757,9 +3757,9 @@
      (progn
        (setf (compiler-macro-function ',name)
 	     (lambda (form env)
-	       (cl-user:al-with-macro-arguments ,lambdal
-						env form
-						. ,body)))
+	       (al:with-macro-arguments ,lambdal
+		 env form
+		 . ,body)))
        ',name)))
 
 
@@ -3779,7 +3779,7 @@
 
 (defun macroexpand-form-deeply (form)
   (if (and
-       cl-user:*al-expand-compiler-macros*
+       al:*expand-compiler-macros*
        (consp form)
        (symbolp (car form)))
       (let ((compmac (compiler-macro-function (car form))))
@@ -3844,7 +3844,7 @@
 
 
 (defun compile-file-pathname (infile &key output-file &allow-other-keys)
-  (let ((dir (cl-user:al-pathname-directory infile)))
+  (let ((dir (al:pathname-directory infile)))
     (make-pathname :directory (and dir (if (char= (elt dir 0) #\/) dir (list :relative dir)))
 		   :name (pathname-name infile)
 		   :type "alc")))
@@ -3869,7 +3869,7 @@
 	   (return nil)))
        (write-string ")" str)))
     (symbol
-     (let ((cl-user:*al-print-always-two-colons* t))
+     (let ((al:*print-always-two-colons* t))
        (if (symbol-package obj)
 	   (write obj :stream str)
 	   (let ((ind (position obj gensyms :test 'eq)))
@@ -3882,18 +3882,18 @@
      (format str "#.(CL:FUNCTION ~s)" (nth-value 2 (function-lambda-expression obj))))
     (package
      (format str "#.(CL:FIND-PACKAGE ~s)" (package-name obj)))
-    (cl-user:al-backquote
+    (al:backquote
      (write-string "`" str)
-     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
-    (cl-user:al-comma
+     (setq gensyms (write-preserving-similarity (al:next obj) str gensyms)))
+    (al:comma
      (write-string "," str)
-     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
-    (cl-user:al-at
+     (setq gensyms (write-preserving-similarity (al:next obj) str gensyms)))
+    (al:at
      (write-string "@" str)
-     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
-    (cl-user:al-dot
+     (setq gensyms (write-preserving-similarity (al:next obj) str gensyms)))
+    (al:dot
      (write-string "." str)
-     (setq gensyms (write-preserving-similarity (cl-user:al-next obj) str gensyms)))
+     (setq gensyms (write-preserving-similarity (al:next obj) str gensyms)))
     (otherwise (write obj :stream str)))
   gensyms)
 
@@ -3956,14 +3956,14 @@
 			   (fdefinition name))))
   (unless (typep definition 'compiled-function)
     (if (typep definition 'generic-function)
-	(dolist (meth (cl-user:al-dump-methods definition))
-	  (unless (typep meth 'cl-user:al-compiled-method)
-	    (setf (cl-user:al-function-body meth)
-		  (macroexpand-body (cl-user:al-function-body meth)))
-	    (setf (cl-user:al-function-attributes meth) '(:compiled))))
-	(setf (cl-user:al-function-body definition)
-	      (macroexpand-body (cl-user:al-function-body definition))))
-    (setf (cl-user:al-function-attributes definition) '(:compiled)))
+	(dolist (meth (al:dump-methods definition))
+	  (unless (typep meth 'al:compiled-method)
+	    (setf (al:function-body meth)
+		  (macroexpand-body (al:function-body meth)))
+	    (setf (al:function-attributes meth) '(:compiled))))
+	(setf (al:function-body definition)
+	      (macroexpand-body (al:function-body definition))))
+    (setf (al:function-attributes definition) '(:compiled)))
   (if name
       (progn
 	(if (and (symbolp name)
@@ -4094,16 +4094,16 @@
 
 
 
-(defparameter cl-user::*al-enable-breakpoints* t)
-(export 'cl-user::*al-enable-breakpoints* 'cl-user)
+(defparameter al::*enable-breakpoints* t)
+(export 'al::*enable-breakpoints* 'al)
 
-(define-condition cl-user::al-break nil nil)
-(export 'cl-user::al-break 'cl-user)
+(define-condition al::break nil nil)
+(export 'al::break 'al)
 
 (defun break (&optional form &rest args)
-  (if cl-user:*al-enable-breakpoints*
+  (if al:*enable-breakpoints*
       (with-simple-restart (continue "")
-	(invoke-debugger (make-condition 'cl-user:al-break)))
+	(invoke-debugger (make-condition 'al:break)))
       nil))
 
 
