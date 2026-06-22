@@ -72,7 +72,7 @@ __Stack overflows__
 
 As a protection against stack overflows in lisp code, al has a limit on stack
 depth set by the LISP_STACK_SIZE macro in C.  If that limit is reached, the
-interpreter will signal a condition.
+interpreter will signal a condition of type AL:MAXIMUM-STACK-DEPTH-EXCEEDED.
 
 
 
@@ -97,163 +97,159 @@ Be careful, you can easily make your image unusable this way.
 
 __alisp extensions__
 
-al has many non-standard builtins and variables; their names are interned in the
-CL-USER package.  There are also some non-standard extensions of standard
-functions.
+al has many non-standard builtins and variables; their names are exported from
+the package ALISP, nicknamed AL; note that you cannot USE this package in
+CL-USER due to some conflicts.
+There are also some non-standard extensions of standard functions.
 
-- *AL-ARGC* (an integer) and *AL-ARGV* (a vector of strings) let you access argc
-  and argv of C, respectively, so they contain the number and value of
-  command-line arguments passed to the interpreter respectively
+- *ARGC* (an integer) and *ARGV* (a vector of strings) let you access argc and
+  argv of C, respectively, so they contain the number and value of command-line
+  arguments passed to the interpreter respectively
 
-- AL-GETENV takes a string and returns the value of the environment variable
-  with that name, or NIL if such does not exist
+- GETENV takes a string and returns the value of the environment variable with
+  that name, or NIL if such does not exist
 
-- AL-SYSTEM takes a string or NIL; in the first case it tries executing that
+- SYSTEM takes a string or NIL; in the first case it tries executing that
   command, in the second it tells whether an execution environment is actually
-  available.  AL-SYSTEM uses the 'system' function from C, so the precise
-  working depends on your C environment
+  available.  SYSTEM uses the 'system' function from C, so the precise working
+  depends on your C environment
 
-- the AL-EXIT function takes an optional integer (defaulting to 0) and exits the
+- the EXIT function takes an optional integer (defaulting to 0) and exits the
   interpreter with that return value
 
-- the function AL-LIST-DIRECTORY takes a single pathname designator and returns
-  a list with the filenames (without any leading path) contained in that
-  directory
+- the function LIST-DIRECTORY takes a single pathname designator and returns a
+  list with the filenames (without any leading path) contained in that directory
 
-- the function AL-DIRECTORYP takes a single pathname designator, it queries the
+- the function DIRECTORYP takes a single pathname designator, it queries the
   filesystem and returns T if the path designates a directory, NIL otherwise
 
-- the function AL-GETCWD takes no arguments and returns the current working
+- the function GETCWD takes no arguments and returns the current working
   directory as a slash-terminated string
 
-- the functions AL-PRINT-NO-WARRANTY and AL-PRINT-TERMS-AND-CONDITIONS print
-  legal information
+- the functions PRINT-NO-WARRANTY and PRINT-TERMS-AND-CONDITIONS print legal
+  information
 
-- the function AL-STRING-INPUT-STREAM-STRING takes an input string stream and
+- the function STRING-INPUT-STREAM-STRING takes an input string stream and
   returns a string with the characters left to read
 
 - the standard function MAKE-STRING-OUTPUT-STREAM takes an optional string
   argument; if provided, writing operations append to the string, also
   respecting the fill pointer if present
 
-- the variable *AL-COMPILE-WHEN-DEFINING* is described in "Compilation"
+- the variable *COMPILE-WHEN-DEFINING* is described in "Compilation"
 
-- AL-BREAK is a condition class that represents encountering a breakpoint
+- BREAK is a condition class that represents encountering a breakpoint
 
-- the *AL-ENABLE-BREAKPOINTS* parameter lets you enable or disable breakpoints
+- the *ENABLE-BREAKPOINTS* parameter lets you enable or disable breakpoints
   globally.  It defaults to T
 
-- when you enter the debugger due to a condition, *AL-DEBUGGING-CONDITION* is
-  bound dinamically to that condition object; if you entered the debugger due to
+- when you enter the debugger due to a condition, *DEBUGGING-CONDITION* is bound
+  dinamically to that condition object; if you entered the debugger due to
   stepping, this variable is NIL
 
-- the functions AL-WATCH and AL-UNWATCH control watchpoints, see "Watchpoints"
+- the functions WATCH and UNWATCH control watchpoints, see "Watchpoints"
 
-- the variable *AL-PPRINT-DEPTH* is used by the pretty printer and contains the
+- the variable *PPRINT-DEPTH* is used by the pretty printer and contains the
   current level of indentation
 
-- when the variable *AL-PRINT-ALWAYS-TWO-COLONS* is non-nil, the printer always
+- when the variable *PRINT-ALWAYS-TWO-COLONS* is non-nil, the printer always
   prefixes symbols with two colons when it prints the package name.  This is
   used by the file compiler
 
-- the function AL-PRINT-RESTARTS prints the available restarts and returns T
+- the function PRINT-RESTARTS prints the available restarts and returns T
 
-- the function AL-PRINT-BACKTRACE takes an optional argument and prints the
-  current backtrace of all called functions (including macros) and their
-  arguments.  If the argument is non-nil, the function is verbose, meaning it
-  also prints special forms and builtin macros as frames.  The function always
-  returns T
+- the function PRINT-BACKTRACE takes an optional argument and prints the current
+  backtrace of all called functions (including macros) and their arguments.  If
+  the argument is non-nil, the function is verbose, meaning it also prints
+  special forms and builtin macros as frames.  The function always returns T
 
-- the function AL-LIST-BACKTRACE takes an optional argument and returns a list
-  with the argument lists of each call in the backtrace, in the same order as
-  AL-PRINT-BACKTRACE.  The argument has the same effect as that of
-  AL-PRINT-BACKTRACE
+- the function LIST-BACKTRACE takes an optional argument and returns a list with
+  the argument lists of each call in the backtrace, in the same order as
+  PRINT-BACKTRACE.  The argument has the same effect as that of PRINT-BACKTRACE
 
-- the function AL-DUMP-BINDINGS takes no arguments and returns a list with all
-  the non-global live variable bindings, starting with the most recently
+- the function DUMP-BINDINGS takes no arguments and returns a list with all the
+  non-global live variable bindings, starting with the most recently
   established.  Each binding is a list containing the symbol, the value, the
   type of the binding (:LEXICAL or :SPECIAL); for lexical bindings, there's also
   a fourth element of T if the binding is in scope at that moment.  This
   function is intended to be called in the debugger, but works everywhere
 
-- the function AL-DUMP-FUNCTION-BINDINGS does the same thing as
-  AL-DUMP-BINDINGS, but with local function bindings
+- the function DUMP-FUNCTION-BINDINGS does the same thing as DUMP-BINDINGS, but
+  with local function bindings
 
-- the function AL-DUMP-CAPTURED-ENV takes a function object and returns a list
-  with all the lexical variable bindings that the function closed over.  The
-  format of the list is the same as AL-DUMP-BINDINGS, without the fourth field
-  since it doesn't apply
+- the function DUMP-CAPTURED-ENV takes a function object and returns a list with
+  all the lexical variable bindings that the function closed over.  The format
+  of the list is the same as DUMP-BINDINGS, without the fourth field since it
+  doesn't apply
 
-- the function AL-DUMP-METHODS takes a generic function and returns a list of
-  its method objects
+- the function DUMP-METHODS takes a generic function and returns a list of its
+  method objects
 
 - the standard function FUNCTION-LAMBDA-EXPRESSION also accepts a method object.
   In that case, it returns the body of that method as a list
 
 - each function object carries a name field for clarity and debugging purposes.
-  The function AL-FUNCTION-NAME takes a function and returns its name (or NIL
-  for anonymous functions), while (SETF AL-FUNCTION-NAME) lets you change the
-  name
+  The function FUNCTION-NAME takes a function and returns its name (or NIL for
+  anonymous functions), while (SETF FUNCTION-NAME) lets you change the name
 
-- the functions AL-FUNCTION-BODY and (SETF AL-FUNCTION-BODY) let you inspect and
+- the functions FUNCTION-BODY and (SETF FUNCTION-BODY) let you inspect and
   change the body of a function or method object
 
 - each function or method object carries a set of attributes expressed as a list
-  of keywords.  The functions AL-FUNCTION-ATTRIBUTES and (SETF
-  AL-FUNCTION-ATTRIBUTES) let you inspect and change such list.  Currently the
-  only recognised attribute is :COMPILED
+  of keywords.  The functions FUNCTION-ATTRIBUTES and (SETF FUNCTION-ATTRIBUTES)
+  let you inspect and change such list.  Currently the only recognised attribute
+  is :COMPILED
 
-- the function AL-DUMP-FIELDS takes either a structure object, a standard object
-  or a standard class and dumps the slots of that object or class as a list.
-  Each slot of an object is represented as a symbol with its name, if it is
-  unbound, or as a name-value pair, if it is bound; for classes, only the name
-  is present
+- the function DUMP-FIELDS takes either a structure object, a standard object or
+  a standard class and dumps the slots of that object or class as a list.  Each
+  slot of an object is represented as a symbol with its name, if it is unbound,
+  or as a name-value pair, if it is bound; for classes, only the name is present
 
-- the function AL-CLASS-PRECEDENCE-LIST takes a standard class object (not for a
+- the function CLASS-PRECEDENCE-LIST takes a standard class object (not for a
   structure class) and returns the class precedence list of that class, as a
   list of class objects
 
-- the special operators AL-LOOPY-DESTRUCTURING-BIND and AL-LOOPY-SETQ are
-  similar to DESTRUCTURING-BIND and SETQ respectively, but they allow the kind
-  of destructuring that LOOP uses, which has more lax rules than
+- the special operators LOOPY-DESTRUCTURING-BIND and LOOPY-SETQ are similar to
+  DESTRUCTURING-BIND and SETQ respectively, but they allow the kind of
+  destructuring that LOOP uses, which has more lax rules than
   DESTRUCTURING-BIND.  In particular, you can provide more or less elements in
   the template than values, and you can put a NIL in the template to ignore the
   corresponding subtree
 
-- the functions AL-START-PROFILING, AL-STOP-PROFILING, AL-CLEAR-PROFILING and
-  AL-REPORT-PROFILING govern the profiler, see "Profiling".
+- the functions START-PROFILING, STOP-PROFILING, CLEAR-PROFILING and
+  REPORT-PROFILING govern the profiler, see "Profiling".
 
 
 alisp has the following non-standard types:
 
-- AL-FUNCTION-NAME is a function name as defined by ANSI, that is a symbol or a
+- FUNCTION-NAME is a function name as defined by ANSI, that is a symbol or a
   list made by CL:SETF and a symbol
 
-- AL-COMPILED-METHOD is a subtype of METHOD and represents a compiled method
+- COMPILED-METHOD is a subtype of METHOD and represents a compiled method
 
-- the types AL-BACKQUOTE, AL-COMMA, AL-AT and AL-DOT represent the respective
-  elements in backquote notation.  You can call the AL-NEXT function to reach
-  the next element when traversing them
+- the types BACKQUOTE, COMMA, AT and DOT represent the respective elements in
+  backquote notation.  You can call the NEXT function to reach the next element
+  when traversing them
 
 
 alisp defines these non-standard conditions:
 
-- AL-MAXIMUM-STACK-DEPTH-EXCEEDED derives from PROGRAM-ERROR and is raised when
-  the stack depth of lisp code exceeds the limit.  The MAX-DEPTH slot holds that
+- MAXIMUM-STACK-DEPTH-EXCEEDED derives from PROGRAM-ERROR and is raised when the
+  stack depth of lisp code exceeds the limit.  The MAX-DEPTH slot holds that
   limit
 
-- AL-WRONG-NUMBER-OF-ARGUMENTS derives from PROGRAM-ERROR and is raised when a
+- WRONG-NUMBER-OF-ARGUMENTS derives from PROGRAM-ERROR and is raised when a
   function gets the wrong number of arguments.  The minimum and maximum number
   of accepted arguments are in the slots MIN-ARGS and MAX-ARGS respectively
 
-- AL-UNKNOWN-KEYWORD-ARGUMENT derives from PROGRAM-ERROR and is raised when a
+- UNKNOWN-KEYWORD-ARGUMENT derives from PROGRAM-ERROR and is raised when a
   function gets an unknown keyword argument
 
-- AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM derives from PROGRAM-ERROR
-  and is raised when a function with keyword arguments receives an odd number of
+- ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM derives from PROGRAM-ERROR and
+  is raised when a function with keyword arguments receives an odd number of
   arguments in the keyword part of the form
 
-- AL-INVALID-FORM derives from PROGRAM-ERROR and is raised when you attempt
+- INVALID-FORM derives from PROGRAM-ERROR and is raised when you attempt
   evaluating an invalid form; the form itself is stored in the FORM slot
 
 
@@ -276,14 +272,14 @@ source list structure.  Consider for example this form:
  `(0 1 ,(gensym) 2 3)
 
 Each time you evaluate it, the first three conses of the result will get
-allocated fresh, but the third cdr will point to the fourth cons of the original
+allocated fresh, but the third cdr will point to the fourth cons of the source
 form.
 
 This may have unexpected results: if you later modify the fourth cons of the
-returned list, you will effectively modify the backquote form itself.
+returned list, you will modify the backquote form itself.
 
-If you want to ensure that each evaluation produces an entirely fresh result,
-you can prefix a comma and a tick to the last car, like this:
+If you want to ensure that each evaluation produces an entirely fresh list
+structure, you can prefix a comma and a tick to the last car, like this:
 
  `(0 1 ,(gensym) 2 ,'3)
 
@@ -416,14 +412,9 @@ libgmp.
 
 __Character encoding__
 
-al expects its input in UTF-8 and stores strings in the same encoding.  (Note
-that UTF-8 is compatible with ASCII, but not with ISO-8859).  If al gets input
-in a different encoding, it might still work somewhat, as long as it understands
-basic macro characters, except for things like counting the characters in a
-string or accessing characters by index.
-
-Input that is not well-formed UTF-8 may cause incorrect behavior in string
-manipulation functions, but should not cause a crash.
+al stores strings as array of bytes, so it is agnostic to their encoding as long
+as it recognizes basic ASCII characters like parenthesis, ticks, etc.  Better
+support for Unicode will come in the future.
 
 
 
@@ -451,18 +442,18 @@ living objects; FUNCTION also includes macros.
 
 __Profiling__
 
-al has a basic profiler.  You can start profiling with AL-START-PROFILING, which
-introduces some overhead, and stop it with AL-STOP-PROFILING.
+al has a basic profiler.  You can start profiling with START-PROFILING, which
+introduces some overhead, and stop it with STOP-PROFILING.
 
 If you later start profiling again, al will keep adding to the previous data;
-calling AL-CLEAR-PROFILING clears all data.
+calling CLEAR-PROFILING clears all data.
 
-AL-REPORT-PROFILING returns a list in which each element is a list which
-contains a name, a counter of all the times that function or macro has been
-called, all the time (in the same unit used by clock () of your C library, often
-microseconds) spent in that function or macro, including the time spent in all
-descendants in the call graph, and the average time spent per call, that is the
-ratio between the second and first number.
+REPORT-PROFILING returns a list in which each element is a list which contains a
+name, a counter of all the times that function or macro has been called, all the
+time (in the same unit used by clock () of your C library, often microseconds)
+spent in that function or macro, including the time spent in all descendants in
+the call graph, and the average time spent per call, that is the ratio between
+the second and first number.
 
 For functions, the total time doesn't include evaluation of arguments.  For
 macros, the time includes both expansion and evaluation of result.
@@ -484,8 +475,8 @@ using a list makes these objects very easy to inspect and modify.
 
 __Compilation__
 
-The variable CL-USER:*AL-COMPILE-WHEN-DEFINING* defaults to NIL; when it is
-non-nil, DEFUN and DEFMACRO will compile the body of the function when they are
+The variable AL:*COMPILE-WHEN-DEFINING* defaults to NIL; when it is non-nil,
+DEFUN and DEFMACRO will compile the body of the function when they are
 evaluated.  Also, each newly defined generic function will be marked as
 compiled, meaning that each new method added to that function will get compiled.
 
@@ -499,11 +490,11 @@ the function macro-expanded.
 
 __Compiler macros__
 
-Definitions of compiler macros are stored in
-CL-USER:*AL-COMPILER-MACRO-REGISTRY*, an EQUAL hash table indexed by macro name.
+Definitions of compiler macros are stored in AL:*COMPILER-MACRO-REGISTRY*, an
+EQUAL hash table indexed by macro name.
 
-Compiler macros are expanded when compiling, only if
-CL-USER:*AL-EXPAND-COMPILER-MACROS* is non-nil.
+Compiler macros are expanded when compiling, only if AL:*EXPAND-COMPILER-MACROS*
+is non-nil.
 
 
 
@@ -540,7 +531,7 @@ BREAK or in any other way.  The following commands are available:
 
 - E continues execution until the end of current function
 
-- BT is equivalent to (CL-USER:AL-PRINT-BACKTRACE)
+- BT is equivalent to (AL:PRINT-BACKTRACE)
 
 - H or ? display help.
 
@@ -555,9 +546,9 @@ debugging command is executed again.
 __Watchpoints__
 
 You can watch standard objects and hash tables for modifications.  The function
-AL-WATCH takes a standard object or an hash table as argument and toggles
-watching on it; it returns T if the object is one of those types, NIL otherwise.
-AL-UNWATCH untoggles watching on its argument.
+WATCH takes a standard object or an hash table as argument and toggles watching
+on it; it returns T if the object is one of those types, NIL otherwise.
+UNWATCH untoggles watching on its argument.
 
 When a watched object is modified in any field or a watched hash table has an
 object added or removed or is cleared, the debugger is entered.
