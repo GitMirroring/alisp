@@ -102,7 +102,7 @@
 
 
 
-(setq cl-user:*al-compile-when-defining* t)
+(setq al:*compile-when-defining* t)
 
 
 
@@ -2128,7 +2128,7 @@ Beware: may return empty string if a variable is present but empty;
 use getenvp to return NIL in such a case."
     (declare (ignorable x))
     #+(or abcl clasp clisp ecl xcl) (ext:getenv x)
-    #+alisp (cl-user:al-getenv x)
+    #+alisp (al:getenv x)
     #+allegro (sys:getenv x)
     #+clozure (ccl:getenv x)
     #+cmucl (unix:unix-getenv x)
@@ -2364,7 +2364,7 @@ suitable for use as a directory name to segregate Lisp FASLs, C dynamic librarie
     "Get the current working directory as per POSIX getcwd(3), as a pathname object"
     (or #+(or abcl genera mezzano xcl) (truename *default-pathname-defaults*) ;; d-p-d is canonical!
         #+allegro (excl::current-directory)
-	#+alisp (pathname (cl-user:al-getcwd))
+	#+alisp (pathname (al:getcwd))
         #+clisp (ext:default-directory)
         #+clozure (ccl:current-directory)
         #+(or cmucl scl) (#+cmucl parse-unix-namestring* #+scl lisp::parse-unix-namestring
@@ -4738,7 +4738,7 @@ This is designed to abstract away the implementation specific quit forms."
     (when finish-output ;; essential, for ClozureCL, and for standard compliance.
       (finish-outputs))
     #+(or abcl xcl) (ext:quit :status code)
-    #+alisp (cl-user:al-exit code)
+    #+alisp (al:exit code)
     #+allegro (excl:exit code :quiet t)
     #+(or clasp ecl) (si:quit code)
     #+clisp (ext:quit code)
@@ -4903,7 +4903,7 @@ depending on whether *LISP-INTERACTION* is set, enter debugger or die"
   (defun raw-command-line-arguments ()
     "Find what the actual command line for this process was."
     #+abcl ext:*command-line-argument-list* ; Use 1.0.0 or later!
-    #+alisp (map 'list #'identity cl-user:*al-argv*)
+    #+alisp (map 'list #'identity al:*argv*)
     #+allegro (sys:command-line-arguments) ; default: :application t
     #+(or clasp ecl) (loop :for i :from 0 :below (si:argc) :collect (si:argv i))
     #+clisp (coerce (ext:argv) 'list)
@@ -14147,4 +14147,4 @@ using (SYS:UPDATE-ALLEGRO)."))
 
 
 
-(setq cl-user:*al-compile-when-defining* nil)
+(setq al:*compile-when-defining* nil)
