@@ -43,7 +43,7 @@ for ((1..5))
 {
     if (eof ($al_out))
     {
-	print "EOF reached from al, it probably crashed\n";
+	print "Got EOF from al, it probably crashed\n";
 
 	exit;
     }
