@@ -730,7 +730,7 @@ environment
 
 
   struct object_list *packages;
-  struct object *cl_package, *cluser_package, *keyword_package;
+  struct object *cl_package, *cluser_package, *keyword_package, *al_package;
 
   struct go_tag_frame *go_tag_stack;
 
@@ -1957,6 +1957,7 @@ struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
 				 struct environment *env);
 
 struct object *create_empty_condition_by_c_string (char *classname,
+						   struct object *package,
 						   struct environment *env);
 struct object *raise_unbound_variable (struct object *sym,
 				       struct environment *env,
@@ -3349,7 +3350,9 @@ main (int argc, char *argv [])
   c_stdout = env.c_stdout;
 
 
-  define_variable ("*AL-ARGC*", create_integer_from_long (argc), &env);
+  env.package_sym->value_ptr.symbol->value_cell = env.al_package;
+
+  define_variable ("*ARGC*", create_integer_from_long (argc), &env);
 
   al_argv = alloc_vector (argc, 0, 0);
 
@@ -3359,10 +3362,12 @@ main (int argc, char *argv [])
 	create_string_copying_c_string (argv [i]);
     }
 
-  define_variable ("*AL-ARGV*", al_argv, &env);
+  define_variable ("*ARGV*", al_argv, &env);
 
-  define_variable ("*AL-MODULE-PATH*",
+  define_variable ("*MODULE-PATH*",
 		   create_string_copying_c_string (MODULE_PATH), &env);
+
+  env.package_sym->value_ptr.symbol->value_cell = env.cluser_package;
 
 
   if (!quit_after_opts)
@@ -4652,125 +4657,132 @@ add_standard_definitions (struct environment *env)
 			   builtin_method_change_class);
 
 
-  env->package_sym->value_ptr.symbol->value_cell = env->cluser_package;
+  env->al_package = create_package_from_c_strings ("ALISP", "AL", (char *)NULL);
+  prepend_object_to_obj_list (env->al_package, &env->packages);
 
-  add_builtin_form ("AL-WITH-MACRO-ARGUMENTS", env, evaluate_al_with_macro_arguments,
+  env->package_sym->value_ptr.symbol->value_cell = env->al_package;
+
+
+  add_builtin_form ("WITH-MACRO-ARGUMENTS", env, evaluate_al_with_macro_arguments,
 		    1, NULL, 0);
 
-  add_builtin_form ("AL-LOOPY-DESTRUCTURING-BIND", env,
+  add_builtin_form ("LOOPY-DESTRUCTURING-BIND", env,
 		    evaluate_al_loopy_destructuring_bind, 1, NULL, 0);
-  add_builtin_form ("AL-LOOPY-SETQ", env, evaluate_al_loopy_setq, 1,
+  add_builtin_form ("LOOPY-SETQ", env, evaluate_al_loopy_setq, 1,
 		    NULL, 0);
 
-  add_builtin_form ("AL-STRING-INPUT-STREAM-STRING", env,
+  add_builtin_form ("STRING-INPUT-STREAM-STRING", env,
 		    builtin_al_string_input_stream_string, 0, NULL,
 		    0);
 
-  add_builtin_form ("AL-ADD-METHOD", env, builtin_al_add_method, 0,
+  add_builtin_form ("ADD-METHOD", env, builtin_al_add_method, 0,
 		    NULL, 0);
-  add_builtin_form ("AL-CREATE-METHOD", env, builtin_al_create_method,
+  add_builtin_form ("CREATE-METHOD", env, builtin_al_create_method,
 		    0, NULL, 0);
 
-  add_builtin_form ("AL-DEFSTRUCT", env, builtin_al_defstruct, 0, NULL, 0);
-  add_builtin_form ("AL-MAKE-STRUCTURE", env, builtin_al_make_structure, 0, NULL,
+  add_builtin_form ("DEFSTRUCT", env, builtin_al_defstruct, 0, NULL, 0);
+  add_builtin_form ("MAKE-STRUCTURE", env, builtin_al_make_structure, 0, NULL,
 		    0);
-  add_builtin_form ("AL-DEFCLASS", env, builtin_al_defclass, 0, NULL, 0);
+  add_builtin_form ("DEFCLASS", env, builtin_al_defclass, 0, NULL, 0);
 
-  add_builtin_form ("AL-FUNCTION-NAME", env, builtin_al_function_name,
+  add_builtin_form ("FUNCTION-NAME", env, builtin_al_function_name,
 		    0, builtin_setf_al_function_name, 0);
-  add_builtin_form ("AL-FUNCTION-BODY", env, builtin_al_function_body,
+  add_builtin_form ("FUNCTION-BODY", env, builtin_al_function_body,
 		    0, builtin_setf_al_function_body, 0);
-  add_builtin_form ("AL-FUNCTION-ATTRIBUTES", env, builtin_al_function_attributes,
+  add_builtin_form ("FUNCTION-ATTRIBUTES", env, builtin_al_function_attributes,
 		    0, builtin_setf_al_function_attributes, 0);
 
-  add_builtin_form ("AL-PRINT-RESTARTS", env, builtin_al_print_restarts,
+  add_builtin_form ("PRINT-RESTARTS", env, builtin_al_print_restarts,
 		    0, NULL, 0);
 
-  add_builtin_form ("AL-DUMP-BINDINGS", env, builtin_al_dump_bindings,
+  add_builtin_form ("DUMP-BINDINGS", env, builtin_al_dump_bindings,
 		    0, NULL, 0);
-  add_builtin_form ("AL-DUMP-FUNCTION-BINDINGS", env,
+  add_builtin_form ("DUMP-FUNCTION-BINDINGS", env,
 		    builtin_al_dump_function_bindings, 0, NULL, 0);
-  add_builtin_form ("AL-DUMP-CAPTURED-ENV", env, builtin_al_dump_captured_env,
+  add_builtin_form ("DUMP-CAPTURED-ENV", env, builtin_al_dump_captured_env,
 		    0, NULL, 0);
-  add_builtin_form ("AL-DUMP-METHODS", env, builtin_al_dump_methods,
+  add_builtin_form ("DUMP-METHODS", env, builtin_al_dump_methods,
 		    0, NULL, 0);
-  add_builtin_form ("AL-DUMP-FIELDS", env, builtin_al_dump_fields, 0,
+  add_builtin_form ("DUMP-FIELDS", env, builtin_al_dump_fields, 0,
 		    NULL, 0);
-  add_builtin_form ("AL-CLASS-PRECEDENCE-LIST", env,
+  add_builtin_form ("CLASS-PRECEDENCE-LIST", env,
 		    builtin_al_class_precedence_list, 0, NULL, 0);
 
-  add_builtin_form ("AL-START-PROFILING", env, builtin_al_start_profiling,
+  add_builtin_form ("START-PROFILING", env, builtin_al_start_profiling,
 		    0, NULL, 0);
-  add_builtin_form ("AL-STOP-PROFILING", env, builtin_al_stop_profiling,
+  add_builtin_form ("STOP-PROFILING", env, builtin_al_stop_profiling,
 		    0, NULL, 0);
-  add_builtin_form ("AL-CLEAR-PROFILING", env, builtin_al_clear_profiling,
+  add_builtin_form ("CLEAR-PROFILING", env, builtin_al_clear_profiling,
 		    0, NULL, 0);
-  add_builtin_form ("AL-REPORT-PROFILING", env, builtin_al_report_profiling,
-		    0, NULL, 0);
-
-  add_builtin_form ("AL-PRINT-BACKTRACE", env, builtin_al_print_backtrace,
-		    0, NULL, 0);
-  add_builtin_form ("AL-LIST-BACKTRACE", env, builtin_al_list_backtrace,
+  add_builtin_form ("REPORT-PROFILING", env, builtin_al_report_profiling,
 		    0, NULL, 0);
 
-  add_builtin_form ("AL-WATCH", env, builtin_al_watch, 0, NULL, 0);
-  add_builtin_form ("AL-UNWATCH", env, builtin_al_unwatch, 0, NULL,
+  add_builtin_form ("PRINT-BACKTRACE", env, builtin_al_print_backtrace,
+		    0, NULL, 0);
+  add_builtin_form ("LIST-BACKTRACE", env, builtin_al_list_backtrace,
+		    0, NULL, 0);
+
+  add_builtin_form ("WATCH", env, builtin_al_watch, 0, NULL, 0);
+  add_builtin_form ("UNWATCH", env, builtin_al_unwatch, 0, NULL,
 		    0);
 
-  add_builtin_form ("AL-NEXT", env, builtin_al_next, 0, NULL, 0);
+  add_builtin_form ("NEXT", env, builtin_al_next, 0, NULL, 0);
 
-  add_builtin_form ("AL-PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
+  add_builtin_form ("PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    0, NULL, 0);
-  add_builtin_form ("AL-PRINT-TERMS-AND-CONDITIONS", env,
+  add_builtin_form ("PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, 0, NULL,
 		    0);
 
-  add_builtin_form ("AL-PATHNAME-DIRECTORY", env, builtin_al_pathname_directory,
+  add_builtin_form ("PATHNAME-DIRECTORY", env, builtin_al_pathname_directory,
 		    0, NULL, 0);
-  add_builtin_form ("AL-LIST-DIRECTORY", env, builtin_al_list_directory,
+  add_builtin_form ("LIST-DIRECTORY", env, builtin_al_list_directory,
 		    0, NULL, 0);
-  add_builtin_form ("AL-DIRECTORYP", env, builtin_al_directoryp, 0,
+  add_builtin_form ("DIRECTORYP", env, builtin_al_directoryp, 0,
 		    NULL, 0);
-  add_builtin_form ("AL-GETCWD", env, builtin_al_getcwd, 0, NULL, 0);
+  add_builtin_form ("GETCWD", env, builtin_al_getcwd, 0, NULL, 0);
 
-  add_builtin_form ("AL-GETENV", env, builtin_al_getenv, 0, NULL, 0);
-  add_builtin_form ("AL-SYSTEM", env, builtin_al_system, 0, NULL, 0);
-  add_builtin_form ("AL-EXIT", env, builtin_al_exit, 0, NULL, 0);
+  add_builtin_form ("GETENV", env, builtin_al_getenv, 0, NULL, 0);
+  add_builtin_form ("SYSTEM", env, builtin_al_system, 0, NULL, 0);
+  add_builtin_form ("EXIT", env, builtin_al_exit, 0, NULL, 0);
 
   env->al_compile_when_defining_sym =
-    define_variable ("*AL-COMPILE-WHEN-DEFINING*", &nil_object, env);
+    define_variable ("*COMPILE-WHEN-DEFINING*", &nil_object, env);
   env->al_debugging_condition_sym =
-    define_variable ("*AL-DEBUGGING-CONDITION*", &nil_object, env);
+    define_variable ("*DEBUGGING-CONDITION*", &nil_object, env);
 
-  define_variable ("*AL-PPRINT-DEPTH*", create_integer_from_long (0), env);
+  define_variable ("*PPRINT-DEPTH*", create_integer_from_long (0), env);
 
   env->al_print_always_two_colons =
-    define_variable ("*AL-PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
+    define_variable ("*PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
 
 
-  add_builtin_type ("AL-FUNCTION-NAME", env, type_al_function_name, 1,
+  add_builtin_type ("FUNCTION-NAME", env, type_al_function_name, 1,
 		    (char *)NULL);
 
-  add_builtin_type ("AL-COMPILED-METHOD", env, type_al_compiled_method, 1,
+  add_builtin_type ("COMPILED-METHOD", env, type_al_compiled_method, 1,
 		    "METHOD", (char *)NULL);
 
-  add_builtin_type ("AL-BACKQUOTE", env, type_al_backquote, 1, (char *)NULL);
-  add_builtin_type ("AL-COMMA", env, type_al_comma, 1, (char *)NULL);
-  add_builtin_type ("AL-AT", env, type_al_at, 1, (char *)NULL);
-  add_builtin_type ("AL-DOT", env, type_al_dot, 1, (char *)NULL);
+  add_builtin_type ("BACKQUOTE", env, type_al_backquote, 1, (char *)NULL);
+  add_builtin_type ("COMMA", env, type_al_comma, 1, (char *)NULL);
+  add_builtin_type ("AT", env, type_al_at, 1, (char *)NULL);
+  add_builtin_type ("DOT", env, type_al_dot, 1, (char *)NULL);
 
-  add_condition_class ("AL-MAXIMUM-STACK-DEPTH-EXCEEDED", env, 1, "PROGRAM-ERROR",
+  add_condition_class ("MAXIMUM-STACK-DEPTH-EXCEEDED", env, 1, "PROGRAM-ERROR",
 		       (char *)NULL, "MAX-DEPTH", (char *)NULL);
-  add_condition_class ("AL-WRONG-NUMBER-OF-ARGUMENTS", env, 1, "PROGRAM-ERROR",
+  add_condition_class ("WRONG-NUMBER-OF-ARGUMENTS", env, 1, "PROGRAM-ERROR",
 		       (char *)NULL, "MAX-ARGS", "MIN-ARGS", (char *)NULL);
 
-  add_condition_class ("AL-UNKNOWN-KEYWORD-ARGUMENT", env, 1, "PROGRAM-ERROR",
+  add_condition_class ("UNKNOWN-KEYWORD-ARGUMENT", env, 1, "PROGRAM-ERROR",
 		       (char *)NULL, (char *)NULL);
-  add_condition_class ("AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env,
+  add_condition_class ("ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env,
 		       1, "PROGRAM-ERROR", (char *)NULL, (char *)NULL);
 
-  add_condition_class ("AL-INVALID-FORM", env, 1, "PROGRAM-ERROR", (char *)NULL,
+  add_condition_class ("INVALID-FORM", env, 1, "PROGRAM-ERROR", (char *)NULL,
 		       "FORM", (char *)NULL);
+
+
+  env->package_sym->value_ptr.symbol->value_cell = env->cluser_package;
 }
 
 
@@ -11915,7 +11927,7 @@ add_condition_class (char *name, struct environment *env, int is_standard, ...)
   while ((s = va_arg (valist, char *)))
     {
       par = intern_symbol_by_char_vector (s, strlen (s), 1, INTERNAL_VISIBILITY,
-					  1, pack, 0, 1);
+					  1, env->cl_package, 0, 1);
 
       prepend_object_to_obj_list (par, &cc->parents);
     }
@@ -12097,14 +12109,15 @@ list_lambda_list (struct parameter *par, int allow_other_keys,
 
 
 struct object *
-create_empty_condition_by_c_string (char *classname, struct environment *env)
+create_empty_condition_by_c_string (char *classname, struct object *package,
+				    struct environment *env)
 {
   struct object *ret, *class, *class_name;
   struct standard_object *so;
 
   class_name = intern_symbol_by_char_vector (classname, strlen (classname), 0,
-					     INTERNAL_VISIBILITY, 0,
-					     env->cluser_package, 0, 0);
+					     INTERNAL_VISIBILITY, 0, package,
+					     0, 0);
 
   class = SYMBOL (class_name)->value_ptr.symbol->typespec;
 
@@ -12133,6 +12146,7 @@ raise_unbound_variable (struct object *sym, struct environment *env,
 			struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string ("UNBOUND-VARIABLE",
+							    env->cluser_package,
 							    env), *ret;
 
   cond->value_ptr.standard_object->fields->value = sym;
@@ -12155,6 +12169,7 @@ raise_undefined_function (struct object *sym, struct environment *env,
 			  struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string ("UNDEFINED-FUNCTION",
+							    env->cluser_package,
 							    env), *ret;
 
   cond->value_ptr.standard_object->fields->value = sym;
@@ -12176,7 +12191,9 @@ struct object *
 raise_type_error (struct object *datum, char *type, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *cond = create_empty_condition_by_c_string ("TYPE-ERROR", env),
+  struct object *cond = create_empty_condition_by_c_string ("TYPE-ERROR",
+							    env->cluser_package,
+							    env),
     *ret;
   const char *b, *e;
 
@@ -12202,7 +12219,9 @@ struct object *
 raise_end_of_file (struct object *stream, struct environment *env,
 		   struct outcome *outcome)
 {
-  struct object *cond = create_empty_condition_by_c_string ("END-OF-FILE", env),
+  struct object *cond = create_empty_condition_by_c_string ("END-OF-FILE",
+							    env->cluser_package,
+							    env),
     *ret;
 
   cond->value_ptr.standard_object->fields->value = stream;
@@ -12224,7 +12243,9 @@ struct object *
 raise_file_error (struct object *fn, const char *fs, struct environment *env,
 		  struct outcome *outcome)
 {
-  struct object *cond = create_empty_condition_by_c_string ("FILE-ERROR", env),
+  struct object *cond = create_empty_condition_by_c_string ("FILE-ERROR",
+							    env->cluser_package,
+							    env),
     *ret;
 
   if (!fn)
@@ -12254,7 +12275,8 @@ raise_al_maximum_stack_depth_exceeded (int maxdepth, struct environment *env,
 				       struct outcome *outcome)
 {
   struct object *cond =
-    create_empty_condition_by_c_string ("AL-MAXIMUM-STACK-DEPTH-EXCEEDED", env),
+    create_empty_condition_by_c_string ("MAXIMUM-STACK-DEPTH-EXCEEDED",
+					env->al_package, env),
     *ret, *depth;
 
   depth = create_integer_from_long (maxdepth);
@@ -12279,7 +12301,8 @@ raise_al_wrong_number_of_arguments (int minargs, int maxargs,
 				    struct outcome *outcome)
 {
   struct object *cond =
-    create_empty_condition_by_c_string ("AL-WRONG-NUMBER-OF-ARGUMENTS", env),
+    create_empty_condition_by_c_string ("WRONG-NUMBER-OF-ARGUMENTS",
+					env->al_package, env),
     *ret;
 
   cond->value_ptr.standard_object->fields->value =
@@ -12304,7 +12327,7 @@ raise_al_unknown_keyword_argument (struct environment *env,
 				   struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string
-    ("AL-UNKNOWN-KEYWORD-ARGUMENT", env), *ret;
+    ("UNKNOWN-KEYWORD-ARGUMENT", env->al_package, env), *ret;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -12323,7 +12346,8 @@ raise_al_odd_number_of_arguments_in_keyword_part_of_form (struct environment *en
 							  struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string
-    ("AL-ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env), *ret;
+    ("ODD-NUMBER-OF-ARGUMENTS-IN-KEYWORD-PART-OF-FORM", env->al_package, env),
+    *ret;
 
   ret = handle_condition (cond, env, outcome);
 
@@ -12341,7 +12365,8 @@ struct object *
 raise_al_invalid_form (struct object *form, struct environment *env,
 		       struct outcome *outcome)
 {
-  struct object *cond = create_empty_condition_by_c_string ("AL-INVALID-FORM",
+  struct object *cond = create_empty_condition_by_c_string ("INVALID-FORM",
+							    env->al_package,
 							    env), *ret;
 
   cond->value_ptr.standard_object->fields->value = form;
@@ -12363,6 +12388,7 @@ struct object *
 raise_program_error (struct environment *env, struct outcome *outcome)
 {
   struct object *cond = create_empty_condition_by_c_string ("PROGRAM-ERROR",
+							    env->cluser_package,
 							    env), *ret;
 
   ret = handle_condition (cond, env, outcome);
@@ -12380,7 +12406,9 @@ raise_program_error (struct environment *env, struct outcome *outcome)
 struct object *
 raise_error (struct environment *env, struct outcome *outcome)
 {
-  struct object *cond = create_empty_condition_by_c_string ("ERROR", env),
+  struct object *cond = create_empty_condition_by_c_string ("ERROR",
+							    env->cluser_package,
+							    env),
     *ret;
 
   ret = handle_condition (cond, env, outcome);
@@ -12845,7 +12873,7 @@ enter_debugger (struct object *cond, struct environment *env,
       print_to_stream (str->value_ptr.stream, "\nof fields ");
       print_fields (cond, env, str);
       print_to_stream (str->value_ptr.stream,
-		       "\n(condition object bound to CL-USER:*AL-DEBUGGING-CONDITION*)\n\n");
+		       "\n(condition object bound to AL:*DEBUGGING-CONDITION*)\n\n");
 
       print_available_restarts (env, 1, str);
       print_to_stream (str->value_ptr.stream, "\n");
@@ -26066,7 +26094,7 @@ builtin_setf_fdefinition (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (CDR (list))))
     {
-      return raise_type_error (CAR (CDR (list)), "CL-USER:AL-FUNCTION-NAME", env,
+      return raise_type_error (CAR (CDR (list)), "AL:FUNCTION-NAME", env,
 			       outcome);
     }
 
@@ -26153,7 +26181,7 @@ builtin_setf_al_function_name (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env, outcome);
+      return raise_type_error (CAR (list), "AL:FUNCTION-NAME", env, outcome);
     }
 
   newval = IS_SYMBOL (CAR (list)) ? SYMBOL (CAR (list))
@@ -28343,30 +28371,30 @@ builtin_type_of (struct object *list, struct environment *env,
   else if (CAR (list)->type == TYPE_BACKQUOTE)
     {
       ret =
-	intern_symbol_by_char_vector ("AL-BACKQUOTE", strlen ("AL-BACKQUOTE"), 0,
+	intern_symbol_by_char_vector ("BACKQUOTE", strlen ("BACKQUOTE"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0, 0);
+				      env->al_package, 0, 0);
     }
   else if (CAR (list)->type == TYPE_COMMA)
     {
       ret =
-	intern_symbol_by_char_vector ("AL-COMMA", strlen ("AL-COMMA"), 0,
+	intern_symbol_by_char_vector ("COMMA", strlen ("COMMA"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0, 0);
+				      env->al_package, 0, 0);
     }
   else if (CAR (list)->type == TYPE_AT)
     {
       ret =
-	intern_symbol_by_char_vector ("AL-AT", strlen ("AL-AT"), 0,
+	intern_symbol_by_char_vector ("AT", strlen ("AT"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0, 0);
+				      env->al_package, 0, 0);
     }
   else if (CAR (list)->type == TYPE_DOT)
     {
       ret =
-	intern_symbol_by_char_vector ("AL-DOT", strlen ("AL-DOT"), 0,
+	intern_symbol_by_char_vector ("DOT", strlen ("DOT"), 0,
 				      EXTERNAL_VISIBILITY, 0,
-				      env->cluser_package, 0, 0);
+				      env->al_package, 0, 0);
     }
 
   increment_refcount (ret);
@@ -29030,7 +29058,7 @@ builtin_fboundp (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (s))
     {
-      return raise_type_error (s, "CL-USER:AL-FUNCTION-NAME", env, outcome);
+      return raise_type_error (s, "AL:FUNCTION-NAME", env, outcome);
     }
 
   if ((CAR (list)->type == TYPE_CONS_PAIR
@@ -29116,7 +29144,7 @@ builtin_fdefinition (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (s))
     {
-      return raise_type_error (s, "CL-USER:AL-FUNCTION-NAME", env, outcome);
+      return raise_type_error (s, "AL:FUNCTION-NAME", env, outcome);
     }
 
   ret = get_function (IS_SYMBOL (s) ? SYMBOL (s) : SYMBOL (CAR (CDR (s))), env,
@@ -29296,7 +29324,7 @@ builtin_fmakunbound (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+      return raise_type_error (CAR (list), "AL:FUNCTION-NAME", env,
 			       outcome);
     }
 
@@ -31806,7 +31834,7 @@ create_binding_from_flet_form (struct object *form, struct environment *env,
 
 	  body = NULL;
 	  read_object (&body, 0,
-		       STRING_COMMA_LEN ("((cl-user:al-with-macro-arguments cl:nil "
+		       STRING_COMMA_LEN ("((al:with-macro-arguments cl:nil "
 					 "cl::env cl::form))"),
 		       NULL, 0, 0, env, outcome, &objb, &obje);
 
@@ -32103,7 +32131,7 @@ inspect_function_by_function_name (struct object *name, int only_globals,
   int ismac;
 
   if (!IS_FUNCTION_NAME (name))
-    return raise_type_error (name, "CL-USER:AL-FUNCTION-NAME", env, outcome);
+    return raise_type_error (name, "AL:FUNCTION-NAME", env, outcome);
 
   fun = get_function (name->type == TYPE_CONS_PAIR ? SYMBOL (CAR (CDR (name)))
 		      : SYMBOL (name), env, 1, name->type == TYPE_CONS_PAIR,
@@ -34813,7 +34841,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+      return raise_type_error (CAR (list), "AL:FUNCTION-NAME", env,
 			       outcome);
     }
 
@@ -34979,7 +35007,7 @@ builtin_al_create_method (struct object *list, struct environment *env,
 
   if (!IS_FUNCTION_NAME (CAR (list)))
     {
-      return raise_type_error (CAR (list), "CL-USER:AL-FUNCTION-NAME", env,
+      return raise_type_error (CAR (list), "AL:FUNCTION-NAME", env,
 			       outcome);
     }
 
@@ -41099,9 +41127,9 @@ print_welcome_message (void)
 {
   puts ("al Copyright (C) 2022-2025 Andrea Monaco\n"
 	"This program comes with ABSOLUTELY NO WARRANTY; for details type "
-	"`(al-print-no-warranty)'.\n"
+	"`(al:print-no-warranty)'.\n"
 	"This is free software, and you are welcome to redistribute it\n"
-	"under certain conditions; type `(al-print-terms-and-conditions)' for "
+	"under certain conditions; type `(al:print-terms-and-conditions)' for "
 	"details.\n");
 }
 
