@@ -383,17 +383,15 @@ binding
 {
   enum binding_type type;
 
-  int refcount;
-
   struct object *sym;
   struct object *obj;
+
+  struct object *captured_bin;
 
   int is_symbol_macro;
   int is_macro;
 
   int prev_special;
-
-  struct binding *closure_bin;
 
   struct binding *next;
 };
@@ -968,8 +966,8 @@ function
     int max_args;*/
   struct object *env_var;
 
-  struct binding *lex_vars;
-  struct binding *lex_funcs;
+  struct object *lex_vars;
+  struct object *lex_funcs;
 
   struct block *encl_blocks;
 
@@ -1768,10 +1766,10 @@ struct refcounted_object_list **clone_tailsharing_hash_table
 void free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
 size_t table_size);*/
 
-void capture_lexical_environment (struct binding **lex_vars,
-				  struct binding **lex_funcs,
-				  struct binding *vars, int var_num,
-				  struct binding *funcs, int func_num);
+void capture_lexical_environment (struct object **lex_vars,
+				  struct object **lex_funcs, struct binding *vars,
+				  int var_num, struct binding *funcs, int func_num,
+				  struct environment *env);
 
 struct object *create_function (struct object *lambda_list, struct object *body,
 				struct environment *env,
@@ -2156,7 +2154,7 @@ struct object *evaluate_body
 int parse_argument_list (struct object *arglist, struct parameter *par,
 			 int eval_args, int also_pass_name, int is_typespec,
 			 int found_amp_key, int allow_other_keys,
-			 struct binding *lex_vars, int create_new_lex_env,
+			 struct object *lex_vars, int create_new_lex_env,
 			 struct object *decls,
 			 struct environment *env, struct outcome *outcome,
 			 struct binding **bins, int *argsnum, int *closnum);
@@ -2164,9 +2162,9 @@ int destructure_tree (struct object *template, struct object *vals,
 		      struct binding **bins, int *binnum,
 		      struct outcome *outcome);
 
-void restore_lexical_variables (struct environment *env, struct binding *vars,
+void restore_lexical_variables (struct environment *env, struct object *vars,
 				int *num_vars);
-void restore_lexical_functions (struct environment *env, struct binding *funcs,
+void restore_lexical_functions (struct environment *env, struct object *funcs,
 				int *num_funcs);
 
 struct object *build_environment_object (struct environment *env);
@@ -7975,8 +7973,8 @@ alloc_function (void)
 
   fun->lambda_list = NULL;
   fun->allow_other_keys = 0;
-  fun->lex_vars = NULL;
-  fun->lex_funcs = NULL;
+  fun->lex_vars = &nil_object;
+  fun->lex_funcs = &nil_object;
   fun->encl_blocks = NULL;
   fun->encl_tags = NULL;
   fun->body = NULL;
@@ -8839,17 +8837,19 @@ free_tailsharing_hash_table (struct refcounted_object_list **hash_table,
 
 
 void
-capture_lexical_environment (struct binding **lex_vars,
-			     struct binding **lex_funcs, struct binding *vars,
-			     int var_num, struct binding *funcs, int func_num)
+capture_lexical_environment (struct object **lex_vars, struct object **lex_funcs,
+			     struct binding *vars, int var_num,
+			     struct binding *funcs, int func_num,
+			     struct environment *env)
 {
-  struct binding *bin, *b;
+  struct binding *b;
+  struct object *cons;
 
   if (lex_vars)
-    *lex_vars = NULL;
+    *lex_vars = &nil_object;
 
   if (lex_funcs)
-    *lex_funcs = NULL;
+    *lex_funcs = &nil_object;
 
   while (vars && var_num)
     {
@@ -8857,25 +8857,38 @@ capture_lexical_environment (struct binding **lex_vars,
 	{
 	  b = vars;
 
-	  while (!b->sym)
+	  if (*lex_vars == &nil_object)
+	    *lex_vars = cons = alloc_empty_cons_pair ();
+	  else
 	    {
-	      b = b->closure_bin;
+	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      cons = CDR (cons);
 	    }
 
-	  if (!*lex_vars)
-	    *lex_vars = bin = malloc_and_check (sizeof (*bin));
+	  if (!b->sym)
+	    {
+	      cons->value_ptr.cons_pair->car = b->captured_bin;
+	      add_reference (cons, CAR (cons), 0);
+	    }
 	  else
-	    bin = bin->next = malloc_and_check (sizeof (*bin));
+	    {
+	      cons->value_ptr.cons_pair->car = alloc_empty_list (2);
+	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->car = b->sym;
+	      add_reference (CAR (cons), CAR (CAR (cons)), 0);
+	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+		value_ptr.cons_pair->car = b->obj;
+	      add_reference (CDR (CAR (cons)), CAR (CDR (CAR (cons))), 0);
 
+	      increment_refcount (CAR (cons));
+	      b->captured_bin = CAR (cons);
 
-	  bin->type = LEXICAL_BINDING;
-	  bin->refcount = 0;
-	  bin->sym = NULL;
-	  bin->obj = NULL;
-	  bin->closure_bin = b;
-	  bin->next = NULL;
+	      decrement_refcount (b->sym);
+	      b->sym = NULL;
+	      decrement_refcount (b->obj);
+	      b->obj = NULL;
+	    }
 
-	  b->refcount++;
+	  cons->value_ptr.cons_pair->cdr = &nil_object;
 	}
 
       vars = vars->next;
@@ -8891,25 +8904,43 @@ capture_lexical_environment (struct binding **lex_vars,
 	{
 	  b = funcs;
 
-	  while (!b->sym)
+	  if (*lex_funcs == &nil_object)
+	    *lex_funcs = cons = alloc_empty_cons_pair ();
+	  else
 	    {
-	      b = b->closure_bin;
+	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	      cons = CDR (cons);
 	    }
 
-	  if (!*lex_funcs)
-	    *lex_funcs = bin = malloc_and_check (sizeof (*bin));
+	  if (!b->sym)
+	    {
+	      cons->value_ptr.cons_pair->car = b->captured_bin;
+	      add_reference (cons, CAR (cons), 0);
+	    }
 	  else
-	    bin = bin->next = malloc_and_check (sizeof (*bin));
+	    {
+	      cons->value_ptr.cons_pair->car = alloc_empty_list (3);
+	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->car = b->sym;
+	      add_reference (CAR (cons), CAR (CAR (cons)), 0);
+	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+		value_ptr.cons_pair->car = b->obj;
+	      add_reference (CDR (CAR (cons)), CAR (CDR (CAR (cons))), 0);
+	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+		value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+		= b->is_macro ? KEYWORD (":MACRO") : KEYWORD (":FUNCTION");
+	      add_reference (CDR (CDR (CAR (cons))), CAR (CDR (CDR (CAR (cons)))),
+			     0);
 
+	      increment_refcount (CAR (cons));
+	      b->captured_bin = CAR (cons);
 
-	  bin->type = LEXICAL_BINDING;
-	  bin->refcount = 0;
-	  bin->sym = NULL;
-	  bin->obj = NULL;
-	  bin->closure_bin = b;
-	  bin->next = NULL;
+	      decrement_refcount (b->sym);
+	      b->sym = NULL;
+	      decrement_refcount (b->obj);
+	      b->obj = NULL;
+	    }
 
-	  b->refcount++;
+	  cons->value_ptr.cons_pair->cdr = &nil_object;
 	}
 
       funcs = funcs->next;
@@ -8947,7 +8978,12 @@ create_function (struct object *lambda_list, struct object *body,
   if (capture_lexenv)
     capture_lexical_environment (&f->lex_vars, &f->lex_funcs, env->vars,
 				 env->lex_env_vars_boundary, env->funcs,
-				 env->lex_env_funcs_boundary);
+				 env->lex_env_funcs_boundary, env);
+
+  add_reference (fun, f->lex_vars, 2);
+  decrement_refcount (f->lex_vars);
+  add_reference (fun, f->lex_funcs, 3);
+  decrement_refcount (f->lex_funcs);
 
   f->encl_blocks = env->blocks ? env->blocks->frame : NULL;
 
@@ -11459,7 +11495,6 @@ create_binding (struct object *sym, struct object *obj, enum binding_type type,
   struct binding *bin = malloc_and_check (sizeof (*bin));
 
   bin->type = type;
-  bin->refcount = 1;
   bin->sym = sym;
   bin->obj = obj;
   bin->is_symbol_macro = 0;
@@ -11535,22 +11570,18 @@ remove_function_bindings (struct binding *env, int num)
 
   b = env->next;
 
-  env->refcount--;
-
-  if (!env->refcount)
+  if (env->sym)
     {
-      if (env->sym)
-	{
-	  decrement_refcount (env->sym);
-	  decrement_refcount (env->obj);
-	}
-      else
-	{
-	  env->closure_bin->refcount--;
-	}
-
-      free (env);
+      decrement_refcount (env->sym);
+      decrement_refcount (env->obj);
     }
+  else
+    {
+      decrement_refcount (env->captured_bin);
+    }
+
+  free (env);
+
 
   if (num == 1)
     return b;
@@ -11578,25 +11609,22 @@ remove_bindings (struct binding *env, int num, int decrement_dyn_bin_count)
       if (env->sym)
 	env->sym->value_ptr.symbol->is_special = env->prev_special;
       else
-	env->closure_bin->sym->value_ptr.symbol->is_special = env->prev_special;
+	env->captured_bin->value_ptr.cons_pair->car->value_ptr.symbol->is_special
+	  = env->prev_special;
     }
 
-  env->refcount--;
-
-  if (!env->refcount)
+  if (env->sym)
     {
-      if (env->sym)
-	{
-	  decrement_refcount (env->sym);
-	  decrement_refcount (env->obj);
-	}
-      else
-	{
-	  env->closure_bin->refcount--;
-	}
-
-      free (env);
+      decrement_refcount (env->sym);
+      decrement_refcount (env->obj);
     }
+  else
+    {
+      decrement_refcount (env->captured_bin);
+    }
+
+  free (env);
+
 
   if (num == 1)
     return b;
@@ -11616,8 +11644,11 @@ find_binding (struct symbol *sym, struct binding *bins, enum binding_type type,
 	  && (bins->type == LEXICAL_BINDING || !only_lexical)
 	  && !(bins->type & DELETED_BINDING))
 	{
-	  if (!bins->sym && bins->closure_bin->sym->value_ptr.symbol == sym)
-	    return bins->closure_bin;
+	  if (!bins->sym && bins->captured_bin->value_ptr.cons_pair->car
+	      ->value_ptr.symbol == sym)
+	    {
+	      return bins;
+	    }
 	  else if (bins->sym && bins->sym->value_ptr.symbol == sym)
 	    return bins;
 	}
@@ -12469,11 +12500,11 @@ dump_bindings (struct binding *bin, int lex_boundary, struct environment *env)
       cons->value_ptr.cons_pair->car = l = alloc_empty_list (3);
       cons->value_ptr.cons_pair->cdr = &nil_object;
 
-      l->value_ptr.cons_pair->car = bin->sym ? bin->sym : bin->closure_bin->sym;
+      l->value_ptr.cons_pair->car = bin->sym ? bin->sym : CAR (bin->captured_bin);
       add_reference (l, CAR (l), 0);
 
       l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
-	= bin->sym ? bin->obj : bin->closure_bin->obj;
+	= bin->sym ? bin->obj : CAR (CDR (bin->captured_bin));;
       add_reference (CDR (l), CAR (CDR (l)), 0);
 
       l->value_ptr.cons_pair->cdr->value_ptr.cons_pair->cdr->
@@ -12635,10 +12666,10 @@ print_bindings_in_reverse (struct binding *bins, int num,
       for (i = 1; i < num; i++)
 	b = b->next;
 
-      print_object (b->sym ? b->sym : b->closure_bin->sym, env,
+      print_object (b->sym ? b->sym : CAR (b->captured_bin), env,
 		    str->value_ptr.stream);
       printf ("=");
-      print_object (b->sym ? b->obj : b->closure_bin->obj, env,
+      print_object (b->sym ? b->obj : CAR (CDR (b->captured_bin)), env,
 		    str->value_ptr.stream);
 
       if (num > 1)
@@ -12730,10 +12761,10 @@ print_backtrace (struct environment *env, int be_verbose)
 
 	  while (b)
 	    {
-	      print_object (b->closure_bin->sym, env,
+	      print_object (CAR (b->captured_bin), env,
 			    env->c_stdout->value_ptr.stream);
 	      printf ("=");
-	      print_object (b->closure_bin->obj, env,
+	      print_object (CAR (CDR (b->captured_bin)), env,
 			    env->c_stdout->value_ptr.stream);
 
 	      if (b->next)
@@ -13249,7 +13280,7 @@ add_call_frame (struct object *funcobj, int is_macro, struct object *args,
 		struct environment *env, int argsnum, struct call_frame *stack)
 {
   struct call_frame *ret = malloc_and_check (sizeof (*ret));
-  struct binding *b, *var, *bin;
+  struct binding *b, *bin;
 
   increment_refcount (funcobj);
   ret->funcobj = funcobj;
@@ -13268,23 +13299,18 @@ add_call_frame (struct object *funcobj, int is_macro, struct object *args,
 
       for (; argsnum; argsnum--)
 	{
-	  var = b;
-
-	  while (!var->sym)
-	    {
-	      var = var->closure_bin;
-	    }
-
 	  bin = malloc_and_check (sizeof (*bin));
 	  bin->type = LEXICAL_BINDING;
-	  bin->refcount = 0;
-	  bin->sym = NULL;
-	  bin->obj = NULL;
-	  bin->closure_bin = var;
+
+	  bin->sym = b->sym ? b->sym : CAR (b->captured_bin);
+	  increment_refcount (bin->sym);
+
+	  bin->obj = b->sym ? b->obj : CAR (CDR (b->captured_bin));
+	  increment_refcount (bin->obj);
+
+	  bin->captured_bin = NULL;
 	  bin->next = ret->args;
 	  ret->args = bin;
-
-	  var->refcount++;
 
 	  b = b->next;
 	}
@@ -13311,14 +13337,8 @@ remove_call_frame (struct call_frame *stack)
 
       while (b)
 	{
-	  b->closure_bin->refcount--;
-
-	  if (!b->closure_bin->refcount)
-	    {
-	      decrement_refcount (b->closure_bin->sym);
-	      decrement_refcount (b->closure_bin->obj);
-	      free (b->closure_bin);
-	    }
+	  decrement_refcount (b->sym);
+	  decrement_refcount (b->obj);
 
 	  n = b->next;
 	  free (b);
@@ -15480,7 +15500,7 @@ int
 parse_argument_list (struct object *arglist, struct parameter *par,
 		     int eval_args, int also_pass_name, int is_typespec,
 		     int found_amp_key, int allow_other_keys,
-		     struct binding *lex_vars, int create_new_lex_env,
+		     struct object *lex_vars, int create_new_lex_env,
 		     struct object *decls,
 		     struct environment *env, struct outcome *outcome,
 		     struct binding **bins, int *argsnum, int *closnum)
@@ -15535,7 +15555,7 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 	  if (!parse_argument_list (CAR (arglist), par->sub_lambda_list,
 				    eval_args, 0, is_typespec,
 				    par->sub_found_amp_key,
-				    par->sub_allow_other_keys, NULL, 0, decls,
+				    par->sub_allow_other_keys, &nil_object, 0, decls,
 				    env, outcome, &subbins, &subargs, &subclos))
 	    {
 	      remove_bindings (*bins, *argsnum, 0);
@@ -15651,8 +15671,8 @@ parse_argument_list (struct object *arglist, struct parameter *par,
 
 	  if (!parse_argument_list (arglist, par->sub_lambda_list, eval_args, 0,
 				    is_typespec, par->sub_found_amp_key,
-				    par->sub_allow_other_keys, NULL, 0, decls, env,
-				    outcome, &subbins, &subargs, &subclos))
+				    par->sub_allow_other_keys, &nil_object, 0, decls,
+				    env, outcome, &subbins, &subargs, &subclos))
 	    {
 	      remove_bindings (*bins, *argsnum, 0);
 	      return 0;
@@ -16035,62 +16055,66 @@ destructure_tree (struct object *template, struct object *vals,
 
 
 void
-restore_lexical_variables (struct environment *env, struct binding *vars,
+restore_lexical_variables (struct environment *env, struct object *vars,
 			   int *num_vars)
 {
   struct binding *b;
 
   *num_vars = 0;
 
-  while (vars)
+  while (vars->type == TYPE_CONS_PAIR)
     {
       b = malloc_and_check (sizeof (*b));
 
       b->type = LEXICAL_BINDING;
-      b->refcount = 1;
+      b->is_symbol_macro = 0;
       b->sym = NULL;
       b->obj = NULL;
-      b->closure_bin = vars->closure_bin;
-      b->next = env->vars;
-      b->closure_bin->refcount++;
 
-      b->prev_special = b->closure_bin->sym->value_ptr.symbol->is_special;
-      b->closure_bin->sym->value_ptr.symbol->is_special = 0;
+      b->captured_bin = CAR (vars);
+      increment_refcount (CAR (vars));
+
+      b->next = env->vars;
+
+      b->prev_special = CAR (b->captured_bin)->value_ptr.symbol->is_special;
+      CAR (b->captured_bin)->value_ptr.symbol->is_special = 0;
 
       env->vars = b;
 
       (*num_vars)++;
 
-      vars = vars->next;
+      vars = CDR (vars);
     }
 }
 
 
 void
-restore_lexical_functions (struct environment *env, struct binding *funcs,
+restore_lexical_functions (struct environment *env, struct object *funcs,
 			   int *num_funcs)
 {
   struct binding *b;
 
   *num_funcs = 0;
 
-  while (funcs)
+  while (funcs->type == TYPE_CONS_PAIR)
     {
       b = malloc_and_check (sizeof (*b));
 
       b->type = LEXICAL_BINDING;
-      b->refcount = 1;
+      b->is_macro = SYMBOL (CAR (CDR (CDR (CAR (funcs))))) == KEYWORD (":MACRO");
       b->sym = NULL;
       b->obj = NULL;
-      b->closure_bin = funcs->closure_bin;
+
+      b->captured_bin = CAR (funcs);
+      increment_refcount (CAR (funcs));
+
       b->next = env->funcs;
-      b->closure_bin->refcount++;
 
       env->funcs = b;
 
       (*num_funcs)++;
 
-      funcs = funcs->next;
+      funcs = CDR (funcs);
     }
 }
 
@@ -16099,7 +16123,7 @@ struct object *
 build_environment_object (struct environment *env)
 {
   struct object *cons, *last_cons, *ret;
-  struct binding *b, *bin;
+  struct binding *b;
   int lex_vars = env->lex_env_vars_boundary,
     lex_funcs = env->lex_env_funcs_boundary;
 
@@ -16110,19 +16134,15 @@ build_environment_object (struct environment *env)
 
   while (b && lex_funcs)
     {
-      if (!b->sym)
-	bin = b->closure_bin;
-      else
-	bin = b;
-
-      if (bin->is_macro)
+      if (b->is_macro)
 	{
 	  cons = alloc_empty_list (2);
 
-	  cons->value_ptr.cons_pair->car = bin->sym;
+	  cons->value_ptr.cons_pair->car = b->sym ? b->sym : CAR (b->captured_bin);
 	  add_reference (cons, CAR (cons), 0);
 
-	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
+	  cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+	    = b->sym ? b->obj : CAR (CDR (b->captured_bin));
 	  add_reference (CDR (cons), CAR (CDR (cons)), 0);
 
 	  if (ret->value_ptr.cons_pair->car == &nil_object)
@@ -16151,19 +16171,15 @@ build_environment_object (struct environment *env)
     {
       if (b->type == LEXICAL_BINDING)
 	{
-	  if (!b->sym)
-	    bin = b->closure_bin;
-	  else
-	    bin = b;
+	  cons = alloc_empty_list (1 + !!b->is_symbol_macro);
 
-	  cons = alloc_empty_list (1 + !!bin->is_symbol_macro);
-
-	  cons->value_ptr.cons_pair->car = bin->sym;
+	  cons->value_ptr.cons_pair->car = b->sym ? b->sym : CAR (b->captured_bin);
 	  add_reference (cons, CAR (cons), 0);
 
-	  if (bin->is_symbol_macro)
+	  if (b->is_symbol_macro)
 	    {
-	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car = bin->obj;
+	      cons->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+		= b->sym ? b->obj : CAR (CDR (b->captured_bin));
 	      add_reference (CDR (cons), CAR (CDR (cons)), 0);
 	    }
 
@@ -16184,7 +16200,7 @@ build_environment_object (struct environment *env)
     }
 
   if (ret->value_ptr.cons_pair->cdr->value_ptr.cons_pair->car != &nil_object)
-  last_cons->value_ptr.cons_pair->cdr = &nil_object;
+    last_cons->value_ptr.cons_pair->cdr = &nil_object;
 
   return ret;
 }
@@ -16739,8 +16755,8 @@ call_method (struct method_list *methlist, struct object *arglist,
 
   if (parse_argument_list (arglist, methlist->meth->value_ptr.method->lambda_list,
 			   0, 0, 0, methlist->meth->value_ptr.method->found_amp_key,
-			   func->value_ptr.function->allow_other_keys, NULL, 1,
-			   &nil_object, env, outcome, &bins, &argsnum, &closnum))
+			   func->value_ptr.function->allow_other_keys, &nil_object,
+			   1, &nil_object, env, outcome, &bins, &argsnum, &closnum))
     {
       env->method_args = arglist;
       methl = env->method_list;
@@ -18205,12 +18221,15 @@ evaluate_object (struct object *obj, struct environment *env,
 	    {
 	      if (bind->is_symbol_macro)
 		{
-		  ret = evaluate_object (bind->obj, env, outcome);
+		  ret = evaluate_object (bind->sym ? bind->obj
+					 : CAR (CDR (bind->captured_bin)), env,
+					 outcome);
 		}
 	      else
 		{
-		  increment_refcount (bind->obj);
-		  ret = bind->obj;
+		  increment_refcount (bind->sym ? bind->obj
+				      : CAR (CDR (bind->captured_bin)));
+		  ret = bind->sym ? bind->obj : CAR (CDR (bind->captured_bin));
 		}
 	    }
 	  else if (sym->value_ptr.symbol->value_dyn_bins_num
@@ -31931,7 +31950,7 @@ struct object *
 evaluate_labels (struct object *list, struct environment *env,
 		 struct outcome *outcome)
 {
-  struct object *res, *bind_forms, *body;
+  struct object *res, *bind_forms, *body, *func;
   int bin_num = 0, i;
   struct binding *bin;
 
@@ -31962,8 +31981,14 @@ evaluate_labels (struct object *list, struct environment *env,
 
   for (i = 0; i < bin_num; i++)
     {
-      capture_lexical_environment (NULL, &bin->obj->value_ptr.function->lex_funcs,
-				   NULL, 0, env->funcs, bin_num);
+      func = bin->sym ? bin->obj : CAR (CDR (bin->captured_bin));
+
+      delete_reference (func, func->value_ptr.function->lex_funcs, 3);
+      func->value_ptr.function->lex_funcs = &nil_object;
+      capture_lexical_environment (NULL, &func->value_ptr.function->lex_funcs,
+				   NULL, 0, env->funcs, bin_num, env);
+      add_reference (func, func->value_ptr.function->lex_funcs, 3);
+      decrement_refcount (func->value_ptr.function->lex_funcs);
 
       bin = bin->next;
     }
@@ -32055,9 +32080,10 @@ get_dynamic_value (struct object *sym, struct environment *env)
 }
 
 
-struct object *get_function (struct object *sym, struct environment *env,
-			     int only_functions, int setf_func, int only_globals,
-			     int increment_refc, int *is_macro)
+struct object *
+get_function (struct object *sym, struct environment *env,
+	      int only_functions, int setf_func, int only_globals,
+	      int increment_refc, int *is_macro)
 {
   struct object *f;
   struct binding *b = env->funcs;
@@ -32067,10 +32093,11 @@ struct object *get_function (struct object *sym, struct environment *env,
     {
       while (b && lexb)
 	{
-	  if (!b->sym && b->closure_bin->sym == SYMBOL (sym)
-	      && !setf_func == !b->closure_bin->obj->value_ptr.function->is_setf_func)
+	  if (!b->sym && CAR (b->captured_bin) == SYMBOL (sym)
+	      && !setf_func == !(CAR (CDR (b->captured_bin))->value_ptr.function
+				 ->is_setf_func))
 	    {
-	      *is_macro = b->closure_bin->is_macro;
+	      *is_macro = CAR (CDR (CDR (b->captured_bin))) == KEYWORD (":MACRO");
 	      break;
 	    }
 	  else if (b->sym && SYMBOL (sym) == b->sym
@@ -32096,10 +32123,7 @@ struct object *get_function (struct object *sym, struct environment *env,
     }
   else
     {
-      if (!b->sym)
-	b = b->closure_bin;
-
-      f = b->obj;
+      f = !b->sym ? CAR (CDR (b->captured_bin)) : b->obj;
     }
 
   if (f && f->type != TYPE_FUNCTION && only_functions)
@@ -32238,9 +32262,20 @@ set_value (struct object *sym, struct object *value, int expand_symmacros,
 	      return setf_value (b->obj, val, 0, env, outcome);
 	    }
 
-	  decrement_refcount (b->obj);
-	  b->obj = val;
-	  increment_refcount (val);
+	  if (b->sym)
+	    {
+	      decrement_refcount (b->obj);
+	      b->obj = val;
+	      increment_refcount (val);
+	    }
+	  else
+	    {
+	      delete_reference (CDR (b->captured_bin),
+				CAR (CDR (b->captured_bin)), 0);
+	      CDR (b->captured_bin)->value_ptr.cons_pair->car = val;
+	      add_reference (CDR (b->captured_bin),
+			     CAR (CDR (b->captured_bin)), 0);
+	    }
 	}
       else
 	{
@@ -33013,7 +33048,8 @@ evaluate_al_with_macro_arguments (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
     }
 
-  fun = create_function (CAR (list), CDR (CDR (CDR (list))), env, outcome, 1, 1, 1);
+  fun = create_function (CAR (list), CDR (CDR (CDR (list))), env, outcome, 1, 1,
+			 0);
 
   if (!fun)
     return NULL;
@@ -34959,7 +34995,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
       if (found_amp_key)
 	fun->value_ptr.function->flags |= FOUND_AMP_KEY;
 
-      i = 2;
+      i = 4;
       free_lambda_list_content (fun, fun->value_ptr.function->lambda_list, &i,
 				0);
       free_lambda_list_structure (fun->value_ptr.function->lambda_list);
@@ -35160,13 +35196,13 @@ builtin_al_add_method (struct object *list, struct environment *env,
       ml->meth = CAR (CDR (list));
       ml->next = CAR (list)->value_ptr.function->methods;
       CAR (list)->value_ptr.function->methods = ml;
-      add_reference (CAR (list), ml->meth, 6);
+      add_reference (CAR (list), ml->meth, 8);
     }
   else
     {
-      delete_reference (CAR (list), ml->meth, 6+ind*8);
+      delete_reference (CAR (list), ml->meth, 8+ind*8);
       ml->meth = CAR (CDR (list));
-      add_reference (CAR (list), ml->meth, 6+ind*8);
+      add_reference (CAR (list), ml->meth, 8+ind*8);
     }
 
   increment_refcount (CAR (list));
@@ -35219,7 +35255,7 @@ builtin_remove_method (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   struct method_list *ml, *prev = NULL;
-  int i = 6;
+  int i = 8;
 
   if (list_length (list) != 2)
     {
@@ -35415,8 +35451,9 @@ builtin_function_lambda_expression (struct object *list, struct environment *env
 	  increment_refcount (outcome->other_values->obj);
 	}
 
-      prepend_object_to_obj_list (CAR (list)->value_ptr.function->lex_vars ?
-				  &t_object : &nil_object, &outcome->other_values);
+      prepend_object_to_obj_list (SYMBOL (CAR (list)->value_ptr.function->lex_vars)
+				  != &nil_object ? &t_object : &nil_object,
+				  &outcome->other_values);
     }
   else if (CAR (list)->type == TYPE_METHOD)
     {
@@ -36683,7 +36720,8 @@ builtin_al_dump_captured_env (struct object *list, struct environment *env,
       return raise_type_error (CAR (list), "CL:FUNCTION", env, outcome);
     }
 
-  return dump_bindings (CAR (list)->value_ptr.function->lex_vars, 0, env);
+  increment_refcount (CAR (list)->value_ptr.function->lex_vars);
+  return CAR (list)->value_ptr.function->lex_vars;
 }
 
 
@@ -40093,13 +40131,13 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
     }
   else if (src->type == TYPE_FUNCTION)
     {
-      if (ind <= 1)
+      if (ind <= 3)
 	{
 	  return !(src->flags & (0x1 << ind))
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
 
-      ind -= 2;
+      ind -= 4;
 
       if (ind % 8 == 4)
 	{
@@ -40192,14 +40230,14 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
     }
   else if (src->type == TYPE_FUNCTION)
     {
-      if (ind <= 1)
+      if (ind <= 3)
 	{
 	  src->flags = (src->flags & ~(1 << ind))
 	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
 	}
       else
 	{
-	  ind -= 2;
+	  ind -= 4;
 
 	  if (ind % 8 == 4)
 	    {
@@ -40534,13 +40572,18 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 
       rest_inv_at_edge (node->value_ptr.function->body, 1);
 
+      rest_inv_at_edge (node->value_ptr.function->lex_vars, 2);
+
+      rest_inv_at_edge (node->value_ptr.function->lex_funcs, 3);
+
+
       par = node->value_ptr.function->lambda_list;
-      i = 2;
+      i = 4;
 
       restore_invariants_at_lambda_list (par, node, &i, root, depth);
 
       ml = node->value_ptr.function->methods;
-      i = 6;
+      i = 8;
 
       while (ml)
 	{
@@ -41016,56 +41059,19 @@ free_method_list (struct object *fun, struct method_list *ml, int ind)
 void
 free_function_or_macro (struct object *obj)
 {
-  struct binding *b, *nx;
-  int i = 2;
+  int i = 4;
 
   delete_reference (obj, obj->value_ptr.function->name, 0);
   delete_reference (obj, obj->value_ptr.function->body, 1);
+  delete_reference (obj, obj->value_ptr.function->lex_vars, 2);
+  delete_reference (obj, obj->value_ptr.function->lex_funcs, 3);
 
   free_lambda_list_content (obj, obj->value_ptr.function->lambda_list, &i, 0);
   free_lambda_list_structure (obj->value_ptr.function->lambda_list);
   obj->value_ptr.function->lambda_list = NULL;
 
-  free_method_list (obj, obj->value_ptr.function->methods, 6);
+  free_method_list (obj, obj->value_ptr.function->methods, 8);
   obj->value_ptr.function->methods = NULL;
-
-  b = obj->value_ptr.function->lex_vars;
-
-  while (b)
-    {
-      nx = b->next;
-
-      b->closure_bin->refcount--;
-
-      if (!b->closure_bin->refcount)
-	{
-	  decrement_refcount (b->closure_bin->sym);
-	  decrement_refcount (b->closure_bin->obj);
-	  free (b->closure_bin);
-	}
-
-      free (b);
-      b = nx;
-    }
-
-  b = obj->value_ptr.function->lex_funcs;
-
-  while (b)
-    {
-      nx = b->next;
-
-      b->closure_bin->refcount--;
-
-      if (!b->closure_bin->refcount)
-	{
-	  decrement_refcount (b->closure_bin->sym);
-	  decrement_refcount (b->closure_bin->obj);
-	  free (b->closure_bin);
-	}
-
-      free (b);
-      b = nx;
-    }
 
   if (obj->value_ptr.function->encl_blocks)
     remove_block (obj->value_ptr.function->encl_blocks);
