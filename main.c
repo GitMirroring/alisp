@@ -12761,11 +12761,9 @@ print_backtrace (struct environment *env, int be_verbose)
 
 	  while (b)
 	    {
-	      print_object (CAR (b->captured_bin), env,
-			    env->c_stdout->value_ptr.stream);
+	      print_object (b->sym, env, env->c_stdout->value_ptr.stream);
 	      printf ("=");
-	      print_object (CAR (CDR (b->captured_bin)), env,
-			    env->c_stdout->value_ptr.stream);
+	      print_object (b->obj, env, env->c_stdout->value_ptr.stream);
 
 	      if (b->next)
 		printf (" ");
