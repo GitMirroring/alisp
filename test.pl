@@ -324,6 +324,8 @@ make_test ("(labels (((setf foo) (x y z) (list x y z))) (setf (foo 0 1) 2))", "(
 make_test ("(let ((i 0)) (labels ((fun () (setq i 1))) (fun)) i)", "1");
 make_test ("(defun funfoo (x) x)", "FUNFOO");
 make_test ("(labels ((funfoo () 0)) (funfoo))", "0");
+make_test ("(flet ((func1 nil 0)) (labels ((func2 nil (func1))) (func2)))", "0");
+make_test ("(flet ((func1 nil 0)) (flet ((func2 nil (func1))) (func2)))", "0");
 make_test ("(macrolet ((w (a) `(write ,a))) (w \"\"))", "\"\"\n\"\"");
 make_test ("(defmacro localmac (x y) `(+ ,x ,y))", "LOCALMAC");
 make_test ("(macrolet ((localmac (x y) `(* ,x ,y)) (localmac2 nil '(+))) (localmac 4 5))", "20");
