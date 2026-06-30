@@ -2029,6 +2029,7 @@ make_test ("(catch 'label (f))", "0\n1\n2");
 make_test ("(block nil (handler-bind ((file-error (lambda (e) (write 0))) (division-by-zero (lambda (e) (return 1)))) (/ 1 0)))", "1");
 make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (write 0))) (arithmetic-error (lambda (e) (write 1))) (error (lambda (e) (return 2)))) (/ 1 0)))", "01\n2");
 make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (return 0)))) (handler-bind ((arithmetic-error (lambda (e) (write 1)))) (/ 1 0))))", "1\n0");
+make_test ("(block nil (handler-bind ((division-by-zero (lambda (e) (return 0)))) (handler-bind ((arithmetic-error (lambda (e) (write 1))) (division-by-zero (lambda (e) (write 2)))) (/ 1 0))))", "12\n0");
 make_test ("(block nil (handler-bind ((type-error (lambda (e) (write 0) (return 1)))) (+ \"\")))", "0\n1");
 make_test ("(restart-bind ((rest (lambda () (write 10)))) (invoke-restart 'rest) (write 11))", "1011\n11");
 make_test ("(restart-bind ((foo (lambda (b) (write b)))) (invoke-restart 'foo 'c))", "C\nC");
