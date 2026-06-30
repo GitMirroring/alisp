@@ -1711,6 +1711,7 @@ struct object *alloc_sharp_macro_call (void);
 struct object *alloc_bytespec (void);
 struct object_list *alloc_empty_object_list (size_t sz);
 
+struct object *create_list (struct object *el, ...);
 struct object *create_list_with_valist (va_list valist);
 
 struct package_record **alloc_empty_symtable (size_t table_size);
@@ -1971,6 +1972,9 @@ struct object *raise_end_of_file (struct object *stream, struct environment *env
 struct object *raise_file_error (struct object *fn, const char *fs,
 				 struct environment *env,
 				 struct outcome *outcome);
+struct object *raise_division_by_zero (struct object *n1, struct object *n2,
+				       struct environment *env,
+				       struct outcome *outcome);
 struct object *raise_al_maximum_stack_depth_exceeded (int maxdepth,
 						      struct environment *env,
 						      struct outcome *outcome);
@@ -8069,6 +8073,36 @@ alloc_empty_object_list (size_t sz)
 
 
 struct object *
+create_list (struct object *el, ...)
+{
+  va_list valist;
+  struct object *ret, *cons, *obj;
+
+  ret = cons = alloc_empty_cons_pair ();
+
+  ret->value_ptr.cons_pair->car = el;
+  add_reference (ret, CAR (ret), 0);
+
+  va_start (valist, el);
+
+  while ((obj = va_arg (valist, struct object *)))
+    {
+      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+      cons = CDR (cons);
+
+      cons->value_ptr.cons_pair->car = obj;
+      add_reference (cons, CAR (cons), 0);
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  va_end (valist);
+
+  return ret;
+}
+
+
+struct object *
 create_list_with_valist (va_list valist)
 {
   struct object *ret = &nil_object, *cons, *obj;
@@ -11910,10 +11944,6 @@ does_condition_include_outcome_type (struct object *cond, enum outcome_type type
 
   if ((SYMBOL (cond) == BUILTIN_SYMBOL ("TYPE-ERROR")
       && type == WRONG_TYPE_OF_ARGUMENT)
-      || (SYMBOL (cond) == BUILTIN_SYMBOL ("DIVISION-BY-ZERO")
-       && type == CANT_DIVIDE_BY_ZERO)
-      || (SYMBOL (cond) == BUILTIN_SYMBOL ("ARITHMETIC-ERROR")
-	  && type == CANT_DIVIDE_BY_ZERO)
       || (SYMBOL (cond) == BUILTIN_SYMBOL ("ERROR") && type > EVAL_OK))
     {
       return 1;
@@ -12297,6 +12327,31 @@ raise_file_error (struct object *fn, const char *fs, struct environment *env,
     increment_refcount (fn);
 
   cond->value_ptr.standard_object->fields->value = fn;
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_division_by_zero (struct object *n1, struct object *n2,
+			struct environment *env, struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string
+    ("DIVISION-BY-ZERO", env->cluser_package, env), *ret;
+
+  cond->value_ptr.standard_object->fields->value
+    = create_list (n1, n2, (struct object *) NULL);
+
+  cond->value_ptr.standard_object->fields->next->value
+    = create_list (BUILTIN_SYMBOL ("/"), (struct object *) NULL);
 
   ret = handle_condition (cond, env, outcome);
 
@@ -26825,8 +26880,7 @@ divide_two_numbers (struct object *n1, struct object *n2, struct environment *en
 
   if (is_zero (n2))
     {
-      outcome->type = CANT_DIVIDE_BY_ZERO;
-      return NULL;
+      return raise_division_by_zero (n1, n2, env, outcome);
     }
 
   if (t == TYPE_COMPLEX)
@@ -27292,10 +27346,11 @@ builtin_divide (struct object *list, struct environment *env,
 
       ret2 = divide_two_numbers (ret, CAR (list), env, outcome);
 
+      decrement_refcount (ret);
+
       if (!ret2)
 	return NULL;
 
-      decrement_refcount (ret);
       ret = ret2;
 
       list = CDR (list);
