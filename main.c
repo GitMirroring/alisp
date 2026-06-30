@@ -11998,42 +11998,51 @@ handle_condition (struct object *cond, struct environment *env,
 		  struct outcome *outcome)
 {
   struct handler_binding *b;
-  struct handler_binding_frame *f;
+  struct handler_binding_frame *f, *tmp;
   struct object *hret;
   struct object *arg;
 
   if (!env->handlers)
     return &nil_object;
 
-  b = env->handlers->frame;
-
   arg = alloc_empty_cons_pair ();
   arg->value_ptr.cons_pair->car = cond;
   add_reference (arg, cond, 0);
   arg->value_ptr.cons_pair->cdr = &nil_object;
 
-  while (b)
+
+  f = env->handlers;
+
+  while (f)
     {
-      if (is_subtype (cond->value_ptr.standard_object->class, b->condition, NULL,
-		      env, outcome))
+      b = f->frame;
+
+      while (b)
 	{
-	  f = env->handlers;
-	  env->handlers = env->handlers->next;
-
-	  hret = call_function (b->handler, arg, 1, 0, 0, 1, 0, 0, env, outcome);
-
-	  env->handlers = f;
-
-	  if (!hret)
+	  if (is_subtype (cond->value_ptr.standard_object->class, b->condition,
+			  NULL, env, outcome))
 	    {
-	      decrement_refcount (arg);
-	      return NULL;
+	      tmp = env->handlers;
+	      env->handlers = f->next;
+
+	      hret = call_function (b->handler, arg, 1, 0, 0, 1, 0, 0, env,
+				    outcome);
+
+	      env->handlers = tmp;
+
+	      if (!hret)
+		{
+		  decrement_refcount (arg);
+		  return NULL;
+		}
+
+	      decrement_refcount (hret);
 	    }
 
-	  decrement_refcount (hret);
+	  b = b->next;
 	}
 
-      b = b->next;
+      f = f->next;
     }
 
   decrement_refcount (arg);
