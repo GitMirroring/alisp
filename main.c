@@ -32048,7 +32048,8 @@ evaluate_labels (struct object *list, struct environment *env,
       delete_reference (func, func->value_ptr.function->lex_funcs, 3);
       func->value_ptr.function->lex_funcs = &nil_object;
       capture_lexical_environment (NULL, &func->value_ptr.function->lex_funcs,
-				   NULL, 0, env->funcs, bin_num, env);
+				   NULL, 0, env->funcs,
+				   env->lex_env_funcs_boundary, env);
       add_reference (func, func->value_ptr.function->lex_funcs, 3);
       decrement_refcount (func->value_ptr.function->lex_funcs);
 
