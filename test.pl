@@ -760,6 +760,8 @@ make_test ("symmac", "10");
 make_test ("(macroexpand 'symmac)", "*READ-BASE*\nT");
 make_test ("(symbol-macrolet ((smac1 (1+ *read-base*)) (smac2 (+ 2 *read-base*))) smac1)", "11");
 make_test ("(let ((cns (cons 0 1))) (symbol-macrolet ((carc (car cns))) (setf carc 10)) cns)", "(10 . 1)");
+make_test ("(symbol-macrolet ((localsymmac (+))) (defun symmacfun nil localsymmac))", "SYMMACFUN");
+make_test ("(symmacfun)", "0");
 
 make_test ("(make-string 3)", "\"\0\0\0\"");
 make_test ("(make-string 2 :element-type 'character)", "\"\0\0\"");
