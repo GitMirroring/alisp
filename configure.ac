@@ -1,4 +1,4 @@
-# Copyright (C) 2022-2025 Andrea Monaco
+# Copyright (C) 2022-2026 Andrea Monaco
 # 
 # This file is part of alisp, a lisp implementation.
 #
