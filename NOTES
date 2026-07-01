@@ -565,10 +565,6 @@ __Known bugs and limitations__
 
 - Meeting an unexpected dotted list in some places will cause a crash
 
-- Lexical closures, especially of functions, may often cause little memory
-  leaks.  This will get fixed soon, when I'll reorganize the implementation of
-  bindings
-
 - The 'short form' of DEFSETF is not yet implemented
 
 
