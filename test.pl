@@ -492,6 +492,8 @@ make_test ("(let ((x 0)) (defun inc () (setf x (+ x 1))))", "INC");
 make_test ("(inc)", "1");
 make_test ("(inc)", "2");
 make_test ("(inc)", "3");
+make_test ("(let ((x 0)) (let ((x 1)) (defun closurefun nil x)))", "CLOSUREFUN");
+make_test ("(closurefun)", "1");
 make_test ("(let ((hh 0)) (defun f nil hh))", "F");
 make_test ("(f)", "0");
 make_test ("(defparameter hh 1)", "HH");
