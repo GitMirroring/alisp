@@ -8891,13 +8891,7 @@ capture_lexical_environment (struct object **lex_vars, struct object **lex_funcs
 	{
 	  b = vars;
 
-	  if (*lex_vars == &nil_object)
-	    *lex_vars = cons = alloc_empty_cons_pair ();
-	  else
-	    {
-	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-	      cons = CDR (cons);
-	    }
+	  cons = alloc_empty_cons_pair ();
 
 	  if (!b->sym)
 	    {
@@ -8922,7 +8916,8 @@ capture_lexical_environment (struct object **lex_vars, struct object **lex_funcs
 	      b->obj = NULL;
 	    }
 
-	  cons->value_ptr.cons_pair->cdr = &nil_object;
+	  cons->value_ptr.cons_pair->cdr = *lex_vars;
+	  *lex_vars = cons;
 	}
 
       vars = vars->next;
@@ -8938,13 +8933,7 @@ capture_lexical_environment (struct object **lex_vars, struct object **lex_funcs
 	{
 	  b = funcs;
 
-	  if (*lex_funcs == &nil_object)
-	    *lex_funcs = cons = alloc_empty_cons_pair ();
-	  else
-	    {
-	      cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
-	      cons = CDR (cons);
-	    }
+	  cons = alloc_empty_cons_pair ();
 
 	  if (!b->sym)
 	    {
@@ -8974,7 +8963,8 @@ capture_lexical_environment (struct object **lex_vars, struct object **lex_funcs
 	      b->obj = NULL;
 	    }
 
-	  cons->value_ptr.cons_pair->cdr = &nil_object;
+	  cons->value_ptr.cons_pair->cdr = *lex_funcs;
+	  *lex_funcs = cons;
 	}
 
       funcs = funcs->next;
