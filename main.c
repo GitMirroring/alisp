@@ -8900,12 +8900,18 @@ capture_lexical_environment (struct object **lex_vars, struct object **lex_funcs
 	    }
 	  else
 	    {
-	      cons->value_ptr.cons_pair->car = alloc_empty_list (2);
+	      cons->value_ptr.cons_pair->car = alloc_empty_list (3);
 	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->car = b->sym;
 	      add_reference (CAR (cons), CAR (CAR (cons)), 0);
 	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
 		value_ptr.cons_pair->car = b->obj;
 	      add_reference (CDR (CAR (cons)), CAR (CDR (CAR (cons))), 0);
+	      cons->value_ptr.cons_pair->car->value_ptr.cons_pair->cdr->
+		value_ptr.cons_pair->cdr->value_ptr.cons_pair->car
+		= b->is_symbol_macro ? KEYWORD (":SYMBOL-MACRO")
+		: KEYWORD (":VARIABLE");
+	      add_reference (CDR (CDR (CAR (cons))), CAR (CDR (CDR (CAR (cons)))),
+			     0);
 
 	      increment_refcount (CAR (cons));
 	      b->captured_bin = CAR (cons);
@@ -16119,7 +16125,8 @@ restore_lexical_variables (struct environment *env, struct object *vars,
       b = malloc_and_check (sizeof (*b));
 
       b->type = LEXICAL_BINDING;
-      b->is_symbol_macro = 0;
+      b->is_symbol_macro = SYMBOL (CAR (CDR (CDR (CAR (vars)))))
+	== KEYWORD (":SYMBOL-MACRO");
       b->sym = NULL;
       b->obj = NULL;
 
