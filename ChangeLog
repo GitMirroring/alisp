@@ -1,3 +1,56 @@
+v1.7 (1-Jul-2026):
+
+- All the names of alisp extensions have been moved from COMMON-LISP-USER to a
+  dedicated package ALISP, nicknamed AL
+
+- The implementation of lexical closures has been rehauled; now they don't cause
+  leaks anymore
+
+- Now MAKE-ARRAY accepts options ADJUSTABLE (which is ignored, since all arrays
+  are adjustable in alisp) and INITIAL-ELEMENT
+
+- Now LOOP supports clauses to iterate over symbols in packages and the MINIMIZE
+  and MAXIMIZE clauses
+
+- DEFSTRUCT supports the CONSTRUCTOR option
+
+- PARSE-INTEGER has been completed with all the options
+
+- PSETF was broken: it didn't evaluate subforms to places in parallel, only the
+  new values.  It's been fixed and implemented in lisp
+
+- DEFGENERIC now supports the METHOD option
+
+- A block with the same name as the generic function now surrounds the body of
+  methods, as required by ANSI
+
+- Now SETF tries to macroexpand its first argument, as required by ANSI, and the
+  idiom (SETF (THE ...) ...) is also supported; a proper condition is raised
+  when the accessor is unknown
+
+- The second argument to GET-SETF-EXPANSION is supported (and ignored)
+
+- (SETF FIRST), (SETF SECOND), etc. have been added
+
+- Declarations in LET* and DO* were parsed after the bindings were completed, in
+  violation of ANSI; this has been fixed
+
+- Handling of conditions was a bit broken: it only searched for handlers in the
+  innermost HANDLER-BIND.  Now it's been fixed
+
+- DIVISION-BY-ZERO is raised when appropriate
+
+- LABELS has been fixed; previously its body didn't see bindings of outer FLET
+  and LABELS
+
+- Previously lexical closures were captured in reverse order, causing inversion
+  of shadowings; this has been fixed
+
+After the redesign of lexical closures and other fixes, now the whole test.pl
+suite runs without leaks, according to valgrind!  That's quite an achievement.
+
+
+
 v1.6 (7-May-2026):
 
 - Specialized arrays have been completely redesigned.  Now strings and bit
