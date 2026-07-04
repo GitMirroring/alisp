@@ -3623,6 +3623,7 @@
 					(setq iterbegin nil args (cdr otherargs)))
 		     (setq in-spec nil skip-mode nil))
 		    ((char= ch #\^) (unless args (setq skip-mode t)) (setq in-spec nil))
+		    ((char-equal ch #\c) (unless skip-mode (write-char (car args))) (setq args (cdr args)) (setq in-spec nil))
 		    ((char-equal ch #\s) (unless skip-mode (prin1 (car args))) (setq args (cdr args)) (setq in-spec nil))
 		    ((char-equal ch #\a) (unless skip-mode (princ (funcall case-conv (car args)))) (setq args (cdr args)) (setq in-spec nil))
 		    ((find (char-downcase ch) "doxr")
