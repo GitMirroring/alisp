@@ -21035,6 +21035,39 @@ builtin_make_hash_table (struct object *list, struct environment *env,
 
 	  list = CDR (list);
 	}
+      else if (symbol_equals (CAR (list), ":SIZE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":REHASH-SIZE", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
+      else if (symbol_equals (CAR (list), ":REHASH-THRESHOLD", env))
+	{
+	  if (SYMBOL (CDR (list)) == &nil_object)
+	    {
+	      raise_al_odd_number_of_arguments_in_keyword_part_of_form
+		(env, outcome);
+	      return NULL;
+	    }
+
+	  list = CDR (list);
+	}
       else if (SYMBOL (CAR (list)) == env->key_allow_other_keys_sym)
 	{
 	  if (SYMBOL (CDR (list)) == &nil_object)
