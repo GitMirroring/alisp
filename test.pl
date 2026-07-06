@@ -980,6 +980,7 @@ make_test ("(digit-char-p #\\g 16)", "NIL");
 make_test ("(string-upcase \"Hello\")", "\"HELLO\"");
 make_test ("(string-downcase \"Hello\")", "\"hello\"");
 make_test ("(string-capitalize \"this is a Good day\")", "\"This Is A Good Day\"");
+make_test ("(string-capitalize \"aB CC\")", "\"Ab Cc\"");
 make_test ("(string-left-trim '(#\\a #\\b) \"aabbabahello\")", "\"hello\"");
 make_test ("(string-left-trim '(#\\a #\\b) \"aabbab\")", "\"\"");
 make_test ("(string-left-trim #(#\\N) nil)", "\"IL\"");
