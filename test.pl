@@ -1408,6 +1408,7 @@ make_test ("(princ '|Aa,a|)", "Aa,a\n|Aa,a|");
 make_test ("(princ :hi)", "HI\n:HI");
 make_test ("(princ #\\a)", "a\n#\\a");
 make_test ("(princ \"aaa\" *standard-output*)", "aaa\n\"aaa\"");
+make_test ("(princ \"\")", "\"\"");
 make_test ("(write-to-string :aaa)", "\":AAA\"");
 make_test ("(prin1-to-string :aaa)", "\":AAA\"");
 make_test ("(princ-to-string :aaa)", "\"AAA\"");
