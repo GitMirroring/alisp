@@ -2160,7 +2160,7 @@
 	      (progn
 		(setf (aref ret i) (char-upcase (aref str i)))
 		(setq notword nil))
-	      (setf (aref ret i) (aref str i)))
+	      (setf (aref ret i) (char-downcase (aref str i))))
 	  (progn
 	    (setq notword t)
 	    (setf (aref ret i) (aref str i)))))
