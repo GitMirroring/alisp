@@ -38374,6 +38374,9 @@ write_to_stream (struct stream *stream, const char *str, size_t size)
   size_t i;
   struct refcounted_object_list *l;
 
+  if (!size)
+    return 0;
+
   if (stream->type == BROADCAST_STREAM)
     {
       l = stream->broadcast_to;
@@ -39233,8 +39236,6 @@ print_object (const struct object *obj, struct environment *env,
     }
   else
     {
-      str->dirty_line = 1;
-
       if (obj->type == TYPE_INTEGER)
 	return print_bignum (obj->value_ptr.integer, env, str);
       else if (obj->type == TYPE_FIXNUM)
