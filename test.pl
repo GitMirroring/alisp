@@ -1383,6 +1383,7 @@ make_test ("(let ((*standard-output* *standard-output*) (var (write 0))))", "0\n
 make_test ("(write-string \"aaa\\n\")", "aaan\n\"aaan\"");
 make_test ("(write-string \"\n" .
 	   "\")", "\n\"\n\"");
+make_test ("(write-string \"\")", "\"\"");
 make_test ("(write-char #\\a)", "a\n#\\a");
 make_test ("(write-char #\\newline)", "\n#\\Newline");
 make_test ("(write-byte (char-code #\\a) *standard-output*)", "a\n97");
