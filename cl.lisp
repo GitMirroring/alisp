@@ -3597,12 +3597,25 @@
 		      (capit-depth 0)
 		      (case-conv-primitive #'identity)
 		      (string-buffer (make-string 0)))
-	  (labels ((print-and-clear-string-buffer nil
-		     (when (< 0 (length string-buffer))
-		       (princ (convert-case string-buffer))
-		       (setq string-buffer (make-string 0))
-		       (if capit-only-first-word
-			   (setq case-conv-primitive #'string-downcase))))
+	  (labels ((print-and-clear-string-buffer-if-possible nil
+		     (let ((i 0))
+		       (while (< i (length string-buffer))
+			 (if (alphanumericp (elt string-buffer i))
+			     (incf i)
+			     (progn
+			       (write-string (convert-case (subseq string-buffer 0 (+ i 1))))
+			       (if (and capit-only-first-word
+					(some #'alphanumericp (subseq string-buffer 0 (+ i 1))))
+				   (setq case-conv-primitive #'string-downcase))
+			       (setq string-buffer (subseq string-buffer (+ i 1))
+				     i 0))))))
+		    (flush-and-clear-string-buffer nil
+		     (print-and-clear-string-buffer-if-possible)
+		     (write-string (convert-case string-buffer))
+		     (if (and capit-only-first-word
+			      (some #'alphanumericp string-buffer))
+			 (setq case-conv-primitive #'string-downcase))
+		     (setq string-buffer (make-string 0)))
 		   (convert-case (s)
 		     (if (or (stringp s)
 			     (symbolp s)
@@ -3620,17 +3633,17 @@
 		      ((char= ch #\,) (setq dirargs (cons num dirargs) num 0))
 		      ((char= ch #\~)
 		       (unless skip-mode
-			 (print-and-clear-string-buffer)
-			 (write-char #\~))
+			 (setq string-buffer (concatenate 'string string-buffer "~"))
+			 (print-and-clear-string-buffer-if-possible))
 		       (setq in-spec nil))
 		      ((char= ch #\%)
 		       (unless skip-mode
-			 (print-and-clear-string-buffer)
-			 (write-char #\newline))
+			 (setq string-buffer (concatenate 'string string-buffer (string #\newline)))
+			 (print-and-clear-string-buffer-if-possible))
 		       (setq in-spec nil))
 		      ((char= ch #\&)
 		       (unless skip-mode
-			 (print-and-clear-string-buffer)
+			 (flush-and-clear-string-buffer)
 			 (fresh-line))
 		       (setq in-spec nil))
 		      ((char= ch #\()
@@ -3651,8 +3664,9 @@
 		      ((char= ch #\))
 		       (if (< 0 capit-depth)
 			   (decf capit-depth))
-		       (if (= 0 capit-depth)
-			   (setq case-conv-primitive #'identity))
+		       (when (= 0 capit-depth)
+			 (flush-and-clear-string-buffer)
+			 (setq case-conv-primitive #'identity))
 		       (setq in-spec nil))
 		      ((char= ch #\{) (setq iterbegin i in-spec nil)
 		       (if at-sign
@@ -3665,11 +3679,22 @@
 		      ((char= ch #\^) (unless args (setq skip-mode t)) (setq in-spec nil))
 		      ((char-equal ch #\c)
 		       (unless skip-mode
-			 (write-char (elt (string (convert-case (car args))) 0))
-			 (setq args (cdr args)))
+			 (setq string-buffer (concatenate 'string string-buffer (string (car args)))
+			       args (cdr args))
+			 (print-and-clear-string-buffer-if-possible))
 		       (setq in-spec nil))
-		      ((char-equal ch #\s) (unless skip-mode (prin1 (car args))) (setq args (cdr args)) (setq in-spec nil))
-		      ((char-equal ch #\a) (unless skip-mode (princ (convert-case (car args)))) (setq args (cdr args)) (setq in-spec nil))
+		      ((char-equal ch #\s)
+		       (unless skip-mode
+			 (setq string-buffer (concatenate 'string string-buffer (prin1-to-string (car args)))
+			       args (cdr args))
+			 (print-and-clear-string-buffer-if-possible))
+		       (setq in-spec nil))
+		      ((char-equal ch #\a)
+		       (unless skip-mode
+			 (setq string-buffer (concatenate 'string string-buffer (princ-to-string (car args)))
+			       args (cdr args))
+			 (print-and-clear-string-buffer-if-possible))
+		       (setq in-spec nil))
 		      ((find (char-downcase ch) "doxr")
 		       (setq dirargs (cons num dirargs))
 		       (let ((*print-base* (cond
@@ -3681,21 +3706,19 @@
 			     (*print-radix* nil)
 			     (*print-readably* nil))
 			 (unless skip-mode
-			   (write (car args)))
-			 (setq args (cdr args))
+			   (setq string-buffer (concatenate 'string string-buffer (princ-to-string (car args)))
+				 args (cdr args))
+			   (print-and-clear-string-buffer-if-possible))
 			 (setq in-spec nil)))
 		      (t (setq in-spec nil)))
 		    (if (char= ch #\~)
 			(progn
-			  (print-and-clear-string-buffer)
+			  (print-and-clear-string-buffer-if-possible)
 			  (setq in-spec t at-sign nil colon nil sign nil num 0 dirargs nil))
 			(unless skip-mode
-			  (if (alphanumericp ch)
-			      (setq string-buffer (concatenate 'string string-buffer (string ch)))
-			      (progn
-				(print-and-clear-string-buffer)
-				(write-char ch))))))))
-	    (print-and-clear-string-buffer))
+			  (setq string-buffer (concatenate 'string string-buffer (string ch)))
+			  (print-and-clear-string-buffer-if-possible))))))
+	    (flush-and-clear-string-buffer))
 	  (if (not out)
 	      (values (get-output-stream-string *standard-output*) args)
 	      (values nil args))))))
