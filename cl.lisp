@@ -70,6 +70,9 @@
 
 (defmacro defgeneric (name lambdal &rest args)
   `(progn
+     (if (and (fboundp ',name)
+	      (typep (fdefinition ',name) 'generic-function))
+	 (warn (format nil "redefining generic function ~a" ',name)))
      (ensure-generic-function ',name :lambda-list ',lambdal)
      ,@(mapcar (lambda (methdesc)
 		 (list* 'defmethod name (cdr methdesc)))
