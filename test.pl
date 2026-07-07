@@ -1519,6 +1519,7 @@ make_test ("(format nil \"~( AB ~c ~a ~)\" #\\D \"eF\")", "\" ab d ef \"");
 make_test ("(format nil \"~:@( ~( aB ~c ~a ~)~)\" #\\d \"eF\")", "\"  AB D EF \"");
 make_test ("(format nil \"~:( aB ~c ~a ~)\" #\\d \"eFG\")", "\" Ab D Efg \"");
 make_test ("(format nil \"~@( aB ~c ~a ~)\" #\\D \"eFG\")", "\" Ab d efg \"");
+make_test ("(format nil \"~:( aB~c ~s~a ~)\" #\\D \"ab\" \"eFG\")", "\" Abd \\\"Ab\\\"Efg \"");
 make_test ("(format t (formatter \"~s\") \"Hello\" 'y)", "\"Hello\"\nNIL");
 make_test ("(funcall (formatter \"~a ~a\") *error-output* 'x 10 \"hi\")", "X 10\n(\"hi\")");
 make_test ("(let ((s (make-string-output-stream))) (list (format s \"the number is ~a and the list is ~s\" 10 '(1 2 3)) (get-output-stream-string s)))", "(NIL \"the number is 10 and the list is (1 2 3)\")");
