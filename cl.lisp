@@ -33,13 +33,14 @@
 (setf (macro-function 'defmacro)
       #'(lambda (defmacroform defmacroenv)
 	  `(eval-when (:compile-toplevel :load-toplevel :execute)
-	     (progn
-	       (setf (macro-function ',(nth 1 defmacroform))
-		     #'(lambda (form env)
-			 (al:with-macro-arguments ,(nth 2 defmacroform)
-			   env form
-			   . ,(nthcdr 3 defmacroform))))
-	       ',(nth 1 defmacroform)))))
+	     (if (fboundp ',(nth 1 defmacroform))
+		 (warn (format nil "redefining ~a globally as a macro" ',(nth 1 defmacroform))))
+	     (setf (macro-function ',(nth 1 defmacroform))
+		   #'(lambda (form env)
+		       (al:with-macro-arguments ,(nth 2 defmacroform)
+			 env form
+			 . ,(nthcdr 3 defmacroform))))
+	     ',(nth 1 defmacroform))))
 
 
 
@@ -56,6 +57,8 @@
 
 (defmacro defun (name lambdal &body body)
   `(progn
+     (if (fboundp ',name)
+	 (warn (format nil "redefining ~a globally as a function" ',name)))
      (setf (fdefinition ',name)
 	   (if al:*compile-when-defining*
 	       (compile nil (lambda ,lambdal . ,body))
