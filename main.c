@@ -23524,12 +23524,16 @@ builtin_write_string (struct object *list, struct environment *env,
       return NULL;
     }
 
-  write_to_stream (str->value_ptr.stream, (char *) s->value, s->alloc_size->size);
+  if (s->alloc_size->size)
+    {
+      write_to_stream (str->value_ptr.stream, (char *) s->value,
+		       s->alloc_size->size);
 
-  if (s->value [s->alloc_size->size - 1] == '\n')
-    str->value_ptr.stream->dirty_line = 0;
-  else
-    str->value_ptr.stream->dirty_line = 1;
+      if (s->value [s->alloc_size->size - 1] == '\n')
+	str->value_ptr.stream->dirty_line = 0;
+      else
+	str->value_ptr.stream->dirty_line = 1;
+    }
 
   increment_refcount (CAR (list));
   return CAR (list);
