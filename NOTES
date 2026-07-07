@@ -39,6 +39,7 @@ __Index__
 - Compilation
 - Compiler macros
 - Error reporting
+- Warnings
 - Debugging
 - Watchpoints
 - Known bugs and limitations
@@ -510,6 +511,16 @@ Then at some point I implemented a decent subset of the condition system, so I
 started replacing the old system of reporting with the one that ANSI requires.
 Many types of error situations now raise proper conditions; the old system is
 used in some places, but I will gradually replace it.
+
+
+
+__Warnings__
+
+A warning is issued when a global function or macro is redefined with DEFUN,
+DEFMACRO or DEFGENERIC.  No warning is displayed when redefinition occurs with
+(SETF FDEFINITION), (SETF SYMBOL-FUNCTION), (SETF MACRO-FUNCTION) or
+ENSURE-GENERIC-FUNCTION, since those are considered more primitive.  Also local
+redefinition of a global function or macro, even repeated, is not reported.
 
 
 
