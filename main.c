@@ -36330,7 +36330,7 @@ struct object *
 builtin_warn (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
-  struct object *cond, *ret, *bos;
+  struct object *cond, *ret, *bos, *str;
   int res;
 
   if (!list_length (list))
@@ -36408,13 +36408,16 @@ builtin_warn (struct object *list, struct environment *env,
   if (is_subtype_by_char_vector (cond->value_ptr.standard_object->class,
 				 "SIMPLE-WARNING", env))
     {
-      printf ("emitted ");
-      print_object (cond->value_ptr.standard_object->class->
-		    value_ptr.standard_class->name, env,
-		    env->c_stdout->value_ptr.stream);
-      printf (": ");
-      print_object (cond->value_ptr.standard_object->fields->value, env,
-		    env->c_stdout->value_ptr.stream);
+      printf ("warning: ");
+
+      str = cond->value_ptr.standard_object->fields->value;
+
+      if (IS_STRING (str))
+	{
+	  fwrite (str->value_ptr.byte_array->value,
+		  str->value_ptr.byte_array->alloc_size->size, 1, stdout);
+	}
+
       printf ("\n");
       env->c_stdout->value_ptr.stream->dirty_line = 0;
     }
