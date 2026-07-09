@@ -24,5 +24,5 @@ al_SOURCES = main.c
 install-data-local:
 	if [ -n "$(AL_MODULE_PATH)" ]; \
 		then mkdir -p "$(AL_MODULE_PATH)"; \
-		cp cl.lisp asdf.lisp "$(AL_MODULE_PATH)"; \
+		cp cl.lisp asdf.lisp compiler.lisp "$(AL_MODULE_PATH)"; \
 	fi
