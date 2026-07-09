@@ -2726,6 +2726,8 @@ struct object *builtin_logior (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logcount (struct object *list, struct environment *env,
 				 struct outcome *outcome);
+struct object *builtin_ldb (struct object *list, struct environment *env,
+			    struct outcome *outcome);
 
 struct object *builtin_make_random_state (struct object *list,
 					  struct environment *env,
@@ -4036,6 +4038,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("LOGNOT", env, builtin_lognot, 0, NULL, 0);
   add_builtin_form ("LOGIOR", env, builtin_logior, 0, NULL, 0);
   add_builtin_form ("LOGCOUNT", env, builtin_logcount, 0, NULL, 0);
+  add_builtin_form ("LDB", env, builtin_ldb, 0, NULL, 0);
   add_builtin_form ("QUOTE", env, evaluate_quote, 1, NULL, 1);
   add_builtin_form ("LET", env, evaluate_let, 1, NULL, 1);
   add_builtin_form ("LET*", env, evaluate_let_star, 1, NULL, 1);
@@ -28194,6 +28197,46 @@ builtin_logcount (struct object *list, struct environment *env,
   else
     mpz_set_ui (ret->value_ptr.integer,
 		mpz_popcount (CAR (list)->value_ptr.integer));
+
+  return ret;
+}
+
+
+struct object *
+builtin_ldb (struct object *list, struct environment *env,
+	     struct outcome *outcome)
+{
+  struct object *ret;
+  int beg, end, i;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_BYTESPEC)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+    }
+
+  beg = mpz_get_si (CAR (list)->value_ptr.bytespec->pos);
+  end = beg + mpz_get_si (CAR (list)->value_ptr.bytespec->size);
+
+  ret = create_integer_from_long (0);
+
+  for (i = beg; i < end; i++)
+    {
+      if (mpz_tstbit (CAR (CDR (list))->value_ptr.integer, i))
+	mpz_setbit (ret->value_ptr.integer, i-beg);
+      else
+	mpz_clrbit (ret->value_ptr.integer, i-beg);
+    }
 
   return ret;
 }
