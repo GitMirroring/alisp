@@ -1073,6 +1073,7 @@ make_test ("(make-array 3 :adjustable t)", "#(NIL NIL NIL)");
 make_test ("(make-array '(2 3 2) :initial-contents '(((a b) (c d) (e f)) ((g h) (i j) (k l))))", "#3A(((A B) (C D) (E F)) ((G H) (I J) (K L)))");
 make_test ("(make-array '(2 3 2) :initial-contents #(((a b) #(c d) \"ef\") ((g h) #(i j) #*10)))", "#3A(((A B) (C D) (#\\e #\\f)) ((G H) (I J) (1 0)))");
 make_test ("(make-array 3 :initial-contents '(a b c))", "#(A B C)");
+make_test ("(make-array 3 :element-type 'unsigned-byte)", "#(NIL NIL NIL)");
 make_test ("(make-array 3 :element-type 'character)", "\"\0\0\0\"");
 make_test ("(make-array 3 :element-type 'character :initial-contents \"abc\")", "\"abc\"");
 make_test ("(make-array '(4) :element-type 'character :initial-contents \"abcd\")", "\"abcd\"");
