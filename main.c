@@ -28037,6 +28037,7 @@ builtin_expt (struct object *list, struct environment *env,
 
       if (CAR (list)->type == TYPE_INTEGER)
 	{
+	  mpz_set_si (mpq_numref (ret->value_ptr.ratio), 1);
 	  mpz_set (mpq_denref (ret->value_ptr.ratio),
 		   CAR (list)->value_ptr.integer);
 	}
