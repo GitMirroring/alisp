@@ -13599,7 +13599,7 @@ define_constant (struct object *sym, struct object *form,
   sym->value_ptr.symbol->value_cell = val;
   add_reference (sym, val, 0);
   decrement_refcount (val);
-  mark_as_constant (val);
+  /*mark_as_constant (val);*/
 
   increment_refcount (sym);
   return sym;
@@ -40155,6 +40155,8 @@ mark_as_constant (struct object *obj)
 	    {
 	      mark_as_constant (r->key);
 	      mark_as_constant (r->value);
+
+	      r = r->next;
 	    }
 	}
     }
