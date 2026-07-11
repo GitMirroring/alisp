@@ -408,6 +408,13 @@
       (t (logxor (car ints) (apply 'logxor (cdr ints)))))))
 
 
+(defun logbitp (ind num)
+  (= 1 (ldb (byte 1 ind) num)))
+
+(defun ldb-test (bytespec num)
+  (not (zerop (ldb bytespec num))))
+
+
 (defconstant boole-1 'boole-1)
 (defconstant boole-2 'boole-2)
 (defconstant boole-andc1 'boole-andc1)
@@ -451,6 +458,10 @@
 			    (- num)
 			    (1+ num))
 			2))))
+
+
+(defun ash (num count)
+  (values (floor (* num (expt 2 count)))))
 
 
 
@@ -4004,10 +4015,10 @@
            cond identity constantly *read-default-float-format* pi 1+ 1- minusp
            plusp abs zerop signum mod rem evenp oddp rationalize gcd lcm isqrt
            conjugate cis upgraded-complex-part-type logand logandc1 logandc2
-           logeqv lognand lognor logorc1 logorc2 logxor boole-1 boole-2
-           boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
+           logeqv lognand lognor logorc1 logorc2 logxor logbitp ldb-test boole-1
+           boole-2 boole-andc1 boole-andc2 boole-and boole-c1 boole-c2 boole-clr
            boole-eqv boole-ior boole-nand boole-nor boole-orc1 boole-orc2
-           boole-set boole-xor boole integer-length *gensym-counter* gensym
+           boole-set boole-xor boole integer-length ash *gensym-counter* gensym
            gentemp make-list copy-alist copy-tree tree-equal sublis nsublis endp
            butlast nbutlast acons pairlis shiftf rotatef psetf defsetf when
            unless define-modify-macro incf decf defstruct defclass
