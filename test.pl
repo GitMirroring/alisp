@@ -2623,6 +2623,7 @@ make_test ("(exp 2.5)", "12.1824939607034732347");
 make_test ("(expt 2 3)", "8");
 make_test ("(expt 2 0)", "1");
 make_test ("(expt 1/2 -2)", "4");
+make_test ("(expt 2 -2)", "1/4");
 make_test ("(expt 2 1/2)", "1.41421356237309514547");
 make_test ("(expt 1.2 -2.5)", "0.633938145260608987286");
 make_test ("(log 1)", "0.0");
