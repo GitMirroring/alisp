@@ -2233,7 +2233,7 @@ int check_type_by_char_vector (struct object *obj, char *type,
 			       struct environment *env, struct outcome *outcome);
 int type_starts_with (const struct object *typespec, const struct object *sym);
 int is_subtype_by_char_vector (struct object *first, char *second,
-			       struct environment *env);
+			       struct environment *env, struct outcome *outcome);
 int is_descendant (struct object *first, const struct object_list *parents,
 		   struct object *second, struct object *prev,
 		   struct environment *env);
@@ -17866,13 +17866,13 @@ type_starts_with (const struct object *typespec, const struct object *sym)
 
 int
 is_subtype_by_char_vector (struct object *first, char *second,
-			   struct environment *env)
+			   struct environment *env, struct outcome *outcome)
 {
   return is_subtype (first,
 		     intern_symbol_by_char_vector (second, strlen (second), 1,
 						   EXTERNAL_VISIBILITY, 0,
 						   env->cl_package, 0, 0), NULL,
-		     env, NULL);
+		     env, outcome);
 }
 
 
@@ -20452,7 +20452,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
     }
 
-  if (is_subtype_by_char_vector (element_type, "CHARACTER", env))
+  if (is_subtype_by_char_vector (element_type, "CHARACTER", env, outcome))
     objt = TYPE_BYTE_ARRAY;
   else
     objt = TYPE_ARRAY;
@@ -24522,7 +24522,7 @@ builtin_concatenate (struct object *list, struct environment *env,
     }
 
   if (!SYMBOL (CAR (list))->value_ptr.symbol->is_type
-      || !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env)
+      || !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env, outcome)
       || SYMBOL (CAR (list)) == &nil_object)
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -24538,7 +24538,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 	}
     }
 
-  if (is_subtype_by_char_vector (CAR (list), "STRING", env))
+  if (is_subtype_by_char_vector (CAR (list), "STRING", env, outcome))
     {
       for (i = 1; i < l; i++)
 	{
@@ -24567,7 +24567,7 @@ builtin_concatenate (struct object *list, struct environment *env,
 
       return ret;
     }
-  else if (is_subtype_by_char_vector (CAR (list), "VECTOR", env))
+  else if (is_subtype_by_char_vector (CAR (list), "VECTOR", env, outcome))
     {
       for (i = 1; i < l; i++)
 	{
@@ -25436,7 +25436,7 @@ builtin_map (struct object *list, struct environment *env,
     }
 
   if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
-      || !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env))
+      || !is_subtype_by_char_vector (CAR (list), "SEQUENCE", env, outcome))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
@@ -25472,17 +25472,17 @@ builtin_map (struct object *list, struct environment *env,
       if (min == -1 || (ACTUAL_SEQUENCE_LENGTH (nth (i, list)) < min))
 	min = ACTUAL_SEQUENCE_LENGTH (nth (i, list));
 
-      if (!min && is_subtype_by_char_vector (CAR (list), "LIST", env))
+      if (!min && is_subtype_by_char_vector (CAR (list), "LIST", env, outcome))
 	return &nil_object;
     }
 
   if (SYMBOL (CAR (list)) == &nil_object)
     ret = &nil_object;
-  else if (is_subtype_by_char_vector (CAR (list), "LIST", env))
+  else if (is_subtype_by_char_vector (CAR (list), "LIST", env, outcome))
     ret = alloc_empty_list (min);
-  else if (is_subtype_by_char_vector (CAR (list), "STRING", env))
+  else if (is_subtype_by_char_vector (CAR (list), "STRING", env, outcome))
     ret = alloc_string (min);
-  else if (is_subtype_by_char_vector (CAR (list), "BIT-VECTOR", env))
+  else if (is_subtype_by_char_vector (CAR (list), "BIT-VECTOR", env, outcome))
     ret = alloc_bitvector (min);
   else
     ret = alloc_vector (min, 0, 0);
@@ -28615,7 +28615,7 @@ builtin_coerce (struct object *list, struct environment *env,
       return CAR (list);
     }
 
-  if (is_subtype_by_char_vector (CAR (CDR (list)), "SEQUENCE", env) > 0)
+  if (is_subtype_by_char_vector (CAR (CDR (list)), "SEQUENCE", env, outcome) > 0)
     {
       if (!IS_SEQUENCE (CAR (list)))
 	{
@@ -28624,11 +28624,12 @@ builtin_coerce (struct object *list, struct environment *env,
 
       l = ACTUAL_SEQUENCE_LENGTH (CAR (list));
 
-      if (is_subtype_by_char_vector (CAR (CDR (list)), "LIST", env))
+      if (is_subtype_by_char_vector (CAR (CDR (list)), "LIST", env, outcome))
 	ret = alloc_empty_list (l);
-      else if (is_subtype_by_char_vector (CAR (CDR (list)), "STRING", env))
+      else if (is_subtype_by_char_vector (CAR (CDR (list)), "STRING", env, outcome))
 	ret = alloc_string (l);
-      else if (is_subtype_by_char_vector (CAR (CDR (list)), "BIT-VECTOR", env))
+      else if (is_subtype_by_char_vector (CAR (CDR (list)), "BIT-VECTOR", env,
+					  outcome))
 	ret = alloc_bitvector (l);
       else
 	ret = alloc_vector (l, 0, 0);
@@ -28652,7 +28653,8 @@ builtin_coerce (struct object *list, struct environment *env,
 
       return ret;
     }
-  else if (is_subtype_by_char_vector (CAR (CDR (list)), "CHARACTER", env) > 0)
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "CHARACTER", env,
+				      outcome) > 0)
     {
       if (!IS_CHARACTER_DESIGNATOR (CAR (list)))
 	{
@@ -28662,7 +28664,8 @@ builtin_coerce (struct object *list, struct environment *env,
 
       return create_character_from_designator (CAR (list));
     }
-  else if (is_subtype_by_char_vector (CAR (CDR (list)), "COMPLEX", env) > 0)
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "COMPLEX", env,
+				      outcome) > 0)
     {
       if (!IS_REAL (CAR (list)))
 	{
@@ -28671,7 +28674,7 @@ builtin_coerce (struct object *list, struct environment *env,
 
       return create_complex (CAR (list), NULL, 0, env, outcome);
     }
-  else if (is_subtype_by_char_vector (CAR (CDR (list)), "FLOAT", env) > 0)
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "FLOAT", env, outcome) > 0)
     {
       if (!IS_REAL (CAR (list)))
 	{
@@ -28689,7 +28692,8 @@ builtin_coerce (struct object *list, struct environment *env,
 
 	return ret;
     }
-  else if (is_subtype_by_char_vector (CAR (CDR (list)), "FUNCTION", env) > 0)
+  else if (is_subtype_by_char_vector (CAR (CDR (list)), "FUNCTION", env,
+				      outcome) > 0)
     {
       if (IS_SYMBOL (CAR (list)))
 	{
@@ -36241,7 +36245,7 @@ builtin_signal (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_STANDARD_OBJECT &&
 	   is_subtype_by_char_vector (CAR (list)->value_ptr.standard_object->class,
-				      "CONDITION", env))
+				      "CONDITION", env, outcome))
     {
       cond = CAR (list);
     }
@@ -36323,7 +36327,7 @@ builtin_error (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_STANDARD_OBJECT &&
 	   is_subtype_by_char_vector (CAR (list)->value_ptr.standard_object->class,
-				      "CONDITION", env))
+				      "CONDITION", env, outcome))
     {
       increment_refcount (CAR (list));
       cond = CAR (list);
@@ -36410,7 +36414,7 @@ builtin_warn (struct object *list, struct environment *env,
     }
   else if (CAR (list)->type == TYPE_STANDARD_OBJECT &&
 	   is_subtype_by_char_vector (CAR (list)->value_ptr.standard_object->class,
-				      "CONDITION", env))
+				      "CONDITION", env, outcome))
     {
       increment_refcount (CAR (list));
       cond = CAR (list);
@@ -36449,7 +36453,7 @@ builtin_warn (struct object *list, struct environment *env,
     }
 
   if (is_subtype_by_char_vector (cond->value_ptr.standard_object->class,
-				 "SIMPLE-WARNING", env))
+				 "SIMPLE-WARNING", env, outcome))
     {
       printf ("warning: ");
 
@@ -36465,7 +36469,7 @@ builtin_warn (struct object *list, struct environment *env,
       env->c_stdout->value_ptr.stream->dirty_line = 0;
     }
   else if (is_subtype_by_char_vector (cond->value_ptr.standard_object->class,
-				      "WARNING", env))
+				      "WARNING", env, outcome))
     {
       printf ("emitted ");
       print_object (cond->value_ptr.standard_object->class->
@@ -36494,7 +36498,8 @@ builtin_make_condition (struct object *list, struct environment *env,
     }
 
   if (!IS_SYMBOL (CAR (list)) || !SYMBOL (CAR (list))->value_ptr.symbol->is_type
-      || !is_subtype_by_char_vector (SYMBOL (CAR (list)), "CONDITION", env))
+      || !is_subtype_by_char_vector (SYMBOL (CAR (list)), "CONDITION", env,
+				     outcome))
     {
       outcome->type = WRONG_TYPE_OF_ARGUMENT;
       return NULL;
