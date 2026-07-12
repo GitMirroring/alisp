@@ -1958,6 +1958,8 @@ struct object *list_lambda_list (struct parameter *par, int allow_other_keys,
 struct object *create_empty_condition_by_c_string (char *classname,
 						   struct object *package,
 						   struct environment *env);
+struct object *raise_simple_warning (struct object *msg, struct environment *env,
+				     struct outcome *outcome);
 struct object *raise_unbound_variable (struct object *sym,
 				       struct environment *env,
 				       struct outcome *outcome);
@@ -12207,6 +12209,43 @@ create_empty_condition_by_c_string (char *classname, struct object *package,
   ret->value_ptr.standard_object = so;
 
   return allocate_object_fields (ret, class);
+}
+
+
+struct object *
+raise_simple_warning (struct object *msg, struct environment *env,
+		      struct outcome *outcome)
+{
+  struct object *warn = create_empty_condition_by_c_string ("SIMPLE-WARNING",
+							    env->cluser_package,
+							    env), *ret, *str;
+
+  warn->value_ptr.standard_object->fields->value = msg;
+  increment_refcount (msg);
+
+  ret = handle_condition (warn, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (warn);
+      return NULL;
+    }
+
+  printf ("warning: ");
+
+  str = warn->value_ptr.standard_object->fields->value;
+
+  if (IS_STRING (str))
+    {
+      fwrite (str->value_ptr.byte_array->value,
+	      str->value_ptr.byte_array->alloc_size->size, 1, stdout);
+    }
+
+  printf ("\n");
+  env->c_stdout->value_ptr.stream->dirty_line = 0;
+
+  decrement_refcount (warn);
+  return &nil_object;
 }
 
 
@@ -32357,7 +32396,7 @@ set_value (struct object *sym, struct object *value, int expand_symmacros,
 	   int eval_value, struct environment *env, struct outcome *outcome)
 {
   struct symbol *s = sym->value_ptr.symbol;
-  struct object *val;
+  struct object *val, *msgstr;
   struct binding *b;
 
   if (s->is_const)
@@ -32428,6 +32467,20 @@ set_value (struct object *sym, struct object *value, int expand_symmacros,
 	    {
 	      sym->value_ptr.symbol->is_parameter = 1;
 	      sym->value_ptr.symbol->is_special++;
+
+	      msgstr = create_string_stream (OUTPUT_STREAM, NULL, 0, 0);
+
+	      write_to_stream (msgstr->value_ptr.stream,
+			       STRING_COMMA_LEN ("setting undefined variable "));
+	      print_symbol (sym, env, msgstr->value_ptr.stream);
+	      write_to_stream (msgstr->value_ptr.stream,
+			       STRING_COMMA_LEN (", now it's proclaimed special"));
+
+	      if (!raise_simple_warning (msgstr->value_ptr.stream->string, env,
+					 outcome))
+		return NULL;
+
+	      decrement_refcount (msgstr);
 	    }
 
 	  if (expand_symmacros && sym->value_ptr.symbol->is_symbol_macro)
