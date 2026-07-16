@@ -18263,6 +18263,8 @@ evaluate_object (struct object *obj, struct environment *env,
   struct object *sym, *ret;
   int stepping_over_this_form;
 
+  increment_refcount (obj);
+
   if (env->stepping_flags && !(env->stepping_flags & STEPPING_OVER_FORM)
       && !DONT_STEP (obj))
     {
@@ -18344,6 +18346,7 @@ evaluate_object (struct object *obj, struct environment *env,
 	  else if (sym->value_ptr.symbol->value_cell)
 	    {
 	      increment_refcount (sym->value_ptr.symbol->value_cell);
+	      decrement_refcount (obj);
 	      return sym->value_ptr.symbol->value_cell;
 	    }
 	  else
@@ -18358,7 +18361,6 @@ evaluate_object (struct object *obj, struct environment *env,
     }
   else
     {
-      increment_refcount (obj);
       return obj;
     }
 
@@ -18382,6 +18384,8 @@ evaluate_object (struct object *obj, struct environment *env,
 	  && env->stepping_flags & STEPPING_OVER_FORM)
 	env->stepping_flags = env->stepping_flags & ~STEPPING_OVER_FORM;
     }
+
+  decrement_refcount (obj);
 
   return ret;
 }
