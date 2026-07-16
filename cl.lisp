@@ -263,8 +263,7 @@
 	,tag
 	(if ,cond
 	    (progn
-	      (progn
-		,@body)
+	      ,@body
 	      (go ,tag))))))
 
 
