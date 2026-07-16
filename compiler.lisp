@@ -81,15 +81,29 @@
 	      (eq (caadr form) 'lambda))
 	 (macroexpand-body (cddadr form)))
      form)
-    ((member (car form) '(if progn block tagbody multiple-value-call
+    ((member (car form) '(if progn prog1 prog2 block tagbody multiple-value-call
 			  multiple-value-prog1 and or catch throw progv
 			  unwind-protect locally) :test #'eq)
      (macroexpand-body (cdr form))
      form)
-    ((member (car form) '(let let* flet labels macrolet symbol-macrolet dotimes
-			  dolist handler-bind restart-bind return-from eval-when
+    ((member (car form) '(let let* handler-bind restart-bind :test #'eq))
+     (dolist (f (cadr form))
+       (if (and (consp f)
+		(consp (cdr f)))
+	   (setf (cadr f) (macroexpand-form-deeply (cadr f)))))
+     (macroexpand-body (cddr form))
+     form)
+    ((member (car form) '(flet labels macrolet) :test #'eq)
+     (dolist (f (cadr form))
+       (macroexpand-body (cddr f)))
+     (macroexpand-body (cddr form))
+     form)
+    ((member (car form) '(symbol-macrolet dotimes dolist return-from eval-when
 			  the) :test #'eq)
      (macroexpand-body (cddr form))
+     form)
+    ((member (car form) '(do do* :test #'eq))
+     (macroexpand-body (cdddr form))
      form)
     ((member (car form) '(setq setf) :test #'eq)
      (let ((cons (cdr form)))
