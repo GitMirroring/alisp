@@ -4002,6 +4002,14 @@
 
 
 
+(dolist (sym '(while split-pathname al::list-directory-with-full-path
+	       exclude-directory al::list-subdirs indent print-object-nicely
+	       loop-parse-accumulation loop-parse-iteration
+	       loop-parse-conditional flatten-tree-skipping-nils
+	       format-returning-unconsumed-args))
+  (compile sym))
+
+
 (dolist
     (sym '(*features* *default-pathname-defaults* defmacro in-package defun
            defgeneric add-method defmethod machine-instance machine-type
@@ -4064,9 +4072,6 @@
            with-accessors with-package-iterator with-hash-table-iterator loop
            loop-finish format formatter encode-universal-time
            decode-universal-time get-universal-time *readtable*
-           compiler-macro-function define-compiler-macro with-compilation-unit
-           *compile-file-truename* *compile-file-pathname* *compile-print*
-           *compile-verbose* compile-file-pathname compile-file compile
            with-standard-io-syntax handler-case restart-case with-simple-restart
            find-restart cerror package-error-package unbound-slot-instance
            cell-error-name type-error-datum type-error-expected-type
@@ -4077,6 +4082,7 @@
   (export sym)
   (if (fboundp sym)
       (compile sym)))
+
 
 
 

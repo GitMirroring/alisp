@@ -311,6 +311,16 @@
 
 
 
+
 (dolist (sym '(macroexpand-body macroexpand-form-deeply
 	       write-preserving-similarity parse-toplevel-form-at-compile-time))
   (compile sym))
+
+
+(dolist (sym '(compiler-macro-function define-compiler-macro
+	       with-compilation-unit *compile-file-truename*
+	       *compile-file-pathname* *compile-print* *compile-verbose*
+	       compile-file-pathname compile-file compile))
+  (export sym)
+  (if (fboundp sym)
+      (compile sym)))
