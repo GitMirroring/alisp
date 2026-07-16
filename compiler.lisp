@@ -55,14 +55,64 @@
 
 
 
-(defun macroexpand-cdr (form)
+(defun macroexpand-body (form)
+  (let ((cons form))
+    (while cons
+      (setf (car cons) (macroexpand-form-deeply (car cons)))
+      (setq cons (cdr cons)))
+    form))
+
+
+(defun macroexpand-form-deeply (form)
+  (if (and
+       al:*expand-compiler-macros*
+       (consp form)
+       (symbolp (car form)))
+      (let ((compmac (compiler-macro-function (car form))))
+	(if compmac
+	    (setq form (funcall compmac form nil)))))
+  (setq form (macroexpand form))
+  (cond
+    ((atom form) form)
+    ((member (car form) '(go) :test #'eq)
+     form)
+    ((eq (car form) 'function)
+     (if (and (consp (cadr form))
+	      (eq (caadr form) 'lambda))
+	 (macroexpand-body (cddadr form)))
+     form)
+    ((member (car form) '(if progn block tagbody multiple-value-call
+			  multiple-value-prog1 and or catch throw progv
+			  unwind-protect locally) :test #'eq)
+     (macroexpand-body (cdr form))
+     form)
+    ((member (car form) '(let let* flet labels macrolet symbol-macrolet dotimes
+			  dolist handler-bind restart-bind return-from eval-when
+			  the) :test #'eq)
+     (macroexpand-body (cddr form))
+     form)
+    ((member (car form) '(setq setf) :test #'eq)
+     (let ((cons (cdr form)))
+       (while cons
+	 (setf (car cons) (macroexpand-form-deeply (car cons)))
+	 (setq cons (cddr cons))))
+     form)
+    ((not (special-operator-p (car form)))
+     (macroexpand-body (cdr form))
+     form)
+    (t
+     form)))
+
+
+
+(defun macroexpand-cdr-nondestructively (form)  ;; the non-destructive variants are not used
   (let ((cdr (macroexpand-body (cdr form))))
     (if (eq cdr (cdr form))
 	form
 	(cons (car form) cdr))))
 
 
-(defun macroexpand-form-deeply (form)
+(defun macroexpand-form-deeply-nondestructively (form)
   (if (and
        al:*expand-compiler-macros*
        (consp form)
@@ -99,7 +149,7 @@
      form)))
 
 
-(defun macroexpand-body (body)
+(defun macroexpand-body-nondestructively (body)
   (let ((out body)
 	(cons body)
 	last-copied last-alloc)
@@ -117,6 +167,7 @@
 	  (setf (car last-alloc) form)))
       (setq cons (cdr cons)))
     out))
+
 
 
 (defparameter *compile-file-truename* nil)
