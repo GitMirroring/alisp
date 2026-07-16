@@ -308,3 +308,9 @@
 	    (setf (fdefinition name) definition))
 	(values name nil nil))
       (values definition nil nil)))
+
+
+
+(dolist (sym '(macroexpand-body macroexpand-form-deeply
+	       write-preserving-similarity parse-toplevel-form-at-compile-time))
+  (compile sym))
