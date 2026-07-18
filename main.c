@@ -2605,6 +2605,9 @@ struct object *builtin_setf_fdefinition (struct object *list,
 struct object *builtin_setf_macro_function (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
+struct object *builtin_setf_al_next (struct object *list,
+				     struct environment *env,
+				     struct outcome *outcome);
 struct object *builtin_setf_al_function_name (struct object *list,
 					      struct environment *env,
 					      struct outcome *outcome);
@@ -4733,7 +4736,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("UNWATCH", env, builtin_al_unwatch, 0, NULL,
 		    0);
 
-  add_builtin_form ("NEXT", env, builtin_al_next, 0, NULL, 0);
+  add_builtin_form ("NEXT", env, builtin_al_next, 0, builtin_setf_al_next, 0);
 
   add_builtin_form ("PRINT-NO-WARRANTY", env, builtin_al_print_no_warranty,
 		    0, NULL, 0);
@@ -26326,6 +26329,30 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
 
   increment_refcount (newval);
   return newval;
+}
+
+
+struct object *
+builtin_setf_al_next (struct object *list, struct environment *env,
+		      struct outcome *outcome)
+{
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (!IS_PREFIX (CAR (CDR (list))->type))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  delete_reference (CAR (CDR (list)), CAR (CDR (list))->value_ptr.next, 0);
+  CAR (CDR (list))->value_ptr.next = CAR (list);
+  add_reference (CAR (CDR (list)), CAR (CDR (list))->value_ptr.next, 0);
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
