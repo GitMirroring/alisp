@@ -55,6 +55,32 @@
 
 
 
+(defun macroexpand-backquote (next backquote-depth)
+  (cond
+    ((typep next 'al:backquote)
+     (setf (al:next next) (macroexpand-backquote (al:next next) (1+ backquote-depth)))
+     next)
+    ((typep next 'al:comma)
+     (if (= 1 backquote-depth)
+	 (setf (al:next next) (macroexpand-form-deeply (al:next next)))
+	 (setf (al:next next) (macroexpand-backquote (al:next next) (1- backquote-depth))))
+     next)
+    ((typep next 'al:dot)
+     (setf (al:next next) (macroexpand-backquote (al:next next) backquote-depth))
+     next)
+    ((typep next 'al:at)
+     (setf (al:next next) (macroexpand-backquote (al:next next) backquote-depth))
+     next)
+    ((consp next)
+     (let ((cons next))
+       (while (consp cons)
+	 (setf (car cons) (macroexpand-backquote (car cons) backquote-depth))
+	 (setq cons (cdr cons))))
+     next)
+    (t
+     next)))
+
+
 (defun macroexpand-body (form)
   (let ((cons form))
     (while cons
@@ -73,6 +99,9 @@
 	    (setq form (funcall compmac form nil)))))
   (setq form (macroexpand form))
   (cond
+    ((typep form 'al:backquote)
+     (setf (al:next form) (macroexpand-backquote (al:next form) 1))
+     form)
     ((atom form) form)
     ((member (car form) '(go) :test #'eq)
      form)
@@ -86,7 +115,8 @@
 			  unwind-protect locally) :test #'eq)
      (macroexpand-body (cdr form))
      form)
-    ((member (car form) '(let let* handler-bind restart-bind :test #'eq))
+    ((member (car form) '(let let* handler-bind restart-bind
+			  al:with-macro-arguments :test #'eq))
      (dolist (f (cadr form))
        (if (and (consp f)
 		(consp (cdr f)))
@@ -326,7 +356,7 @@
 
 
 
-(dolist (sym '(macroexpand-body macroexpand-form-deeply
+(dolist (sym '(macroexpand-backquote macroexpand-body macroexpand-form-deeply
 	       write-preserving-similarity parse-toplevel-form-at-compile-time))
   (compile sym))
 
