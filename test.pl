@@ -659,6 +659,8 @@ make_test ("(typep (make-array 3 :fill-pointer t) 'simple-vector)", "NIL");
 make_test ("(typep \"abc\" 'array)", "T");
 make_test ("(typep \"abc\" 'simple-array)", "T");
 make_test ("(typep (make-array 3 :fill-pointer t) 'simple-array)", "NIL");
+make_test ("(typep \"abc\" 'al:byte-array)", "T");
+make_test ("(typep #(0 1 2) 'al:byte-array)", "NIL");
 make_test ("(typep (make-hash-table) 'hash-table)", "T");
 make_test ("(typep '(1 2) 'list)", "T");
 make_test ("(typep #(1 2) 'sequence)", "T");
