@@ -2324,6 +2324,8 @@ int type_array (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome);
 int type_simple_array (const struct object *obj, const struct object *typespec,
 		       struct environment *env, struct outcome *outcome);
+int type_al_byte_array (const struct object *obj, const struct object *typespec,
+			struct environment *env, struct outcome *outcome);
 int type_sequence (const struct object *obj, const struct object *typespec,
 		   struct environment *env, struct outcome *outcome);
 int type_string (const struct object *obj, const struct object *typespec,
@@ -4766,6 +4768,8 @@ add_standard_definitions (struct environment *env)
   env->al_print_always_two_colons =
     define_variable ("*PRINT-ALWAYS-TWO-COLONS*", &nil_object, env);
 
+
+  add_builtin_type ("BYTE-ARRAY", env, type_al_byte_array, 1, (char *)NULL);
 
   add_builtin_type ("FUNCTION-NAME", env, type_al_function_name, 1,
 		    (char *)NULL);
@@ -19221,6 +19225,14 @@ type_simple_array (const struct object *obj, const struct object *typespec,
 {
   return (obj->type == TYPE_ARRAY && obj->value_ptr.array->fill_pointer < 0)
     || (obj->type == TYPE_BYTE_ARRAY && obj->value_ptr.byte_array->fill_pointer < 0);
+}
+
+
+int
+type_al_byte_array (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_BYTE_ARRAY;
 }
 
 
