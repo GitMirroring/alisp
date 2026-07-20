@@ -17967,8 +17967,8 @@ is_subtype (struct object *firstsp, struct object *secondsp,
 	    struct outcome *outcome)
 {
   struct object_list *p;
-  struct object *firstsym, *secondsym, *first, *second;
-  int ret;
+  struct object *firstsym, *secondsym, *first, *second, *cons;
+  int ret = 0;
 
   if (firstsp->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (firstsp)))
     firstsym = SYMBOL (CAR (firstsp));
@@ -17995,7 +17995,10 @@ is_subtype (struct object *firstsp, struct object *secondsp,
 	return -2;
     }
   else
-    first = firstsp;
+    {
+      first = firstsp;
+      increment_refcount (first);
+    }
 
   if (((secondsp->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (secondsp)))
        || IS_SYMBOL (secondsp))
@@ -18012,31 +18015,54 @@ is_subtype (struct object *firstsp, struct object *secondsp,
 	return -2;
     }
   else
-    second = secondsp;
+    {
+      second = secondsp;
+      increment_refcount (second);
+    }
 
 
-  if (SYMBOL (first) == &nil_object || SYMBOL (second) == &t_object)
-    return 1;
-
-  if (IS_SYMBOL (second) && type_starts_with (first, SYMBOL (second)))
-    return 1;
+  if (SYMBOL (first) == &nil_object || SYMBOL (second) == &t_object
+      || (IS_SYMBOL (second) && type_starts_with (first, SYMBOL (second))))
+    {
+      ret = 1;
+      goto cleanup_and_leave;
+    }
 
   if (IS_CLASS (first) || IS_CLASS (second))
     {
       if (first->type == TYPE_STANDARD_CLASS)
-	first = first->value_ptr.standard_class->name;
+	{
+	  decrement_refcount (first);
+	  first = first->value_ptr.standard_class->name;
+	  increment_refcount (first);
+	}
 
       if (first->type == TYPE_STRUCTURE_CLASS)
-	first = first->value_ptr.structure_class->name;
+	{
+	  decrement_refcount (first);
+	  first = first->value_ptr.structure_class->name;
+	  increment_refcount (first);
+	}
 
       if (second->type == TYPE_STANDARD_CLASS)
-	second = second->value_ptr.standard_class->name;
+	{
+	  decrement_refcount (second);
+	  second = second->value_ptr.standard_class->name;
+	  increment_refcount (second);
+	}
 
       if (second->type == TYPE_STRUCTURE_CLASS)
-	second = second->value_ptr.structure_class->name;
+	{
+	  decrement_refcount (second);
+	  second = second->value_ptr.structure_class->name;
+	  increment_refcount (second);
+	}
 
       if (SYMBOL (first) == SYMBOL (second))
-	return 1;
+	{
+	  ret = 1;
+	  goto cleanup_and_leave;
+	}
     }
 
 
@@ -18052,55 +18078,66 @@ is_subtype (struct object *firstsp, struct object *secondsp,
       ret = is_descendant (SYMBOL (first), p, SYMBOL (second), prev, env);
 
       if (ret)
-	return 1;
+	{
+	  ret = 1;
+	  goto cleanup_and_leave;
+	}
     }
 
   if (first->type == TYPE_CONS_PAIR)
     {
       if (SYMBOL (CAR (first)) == env->or_sym)
 	{
-	  first = CDR (first);
+	  cons = CDR (first);
 
-	  while (first->type == TYPE_CONS_PAIR)
+	  while (cons->type == TYPE_CONS_PAIR)
 	    {
-	      ret = is_subtype (CAR (first), second, NULL, env, outcome);
+	      ret = is_subtype (CAR (cons), second, NULL, env, outcome);
 
 	      if (ret <= 0)
-		return ret;
+		goto cleanup_and_leave;
 
-	      first = CDR (first);
+	      cons = CDR (cons);
 	    }
 
-	  if (SYMBOL (first) != &nil_object)
+	  if (SYMBOL (cons) != &nil_object)
 	    {
-	      raise_type_error (first, "CL:LIST", env, outcome);
+	      raise_type_error (cons, "CL:LIST", env, outcome);
 	      return -1;
 	    }
 
-	  return 1;
+	  ret = 1;
+	  goto cleanup_and_leave;
 	}
 
       if (SYMBOL (CAR (first)) == env->and_sym)
 	{
-	  first = CDR (first);
+	  cons = CDR (first);
 
-	  while (first->type == TYPE_CONS_PAIR)
+	  if (SYMBOL (cons) == &nil_object)
 	    {
-	      ret = is_subtype (CAR (first), second, NULL, env, outcome);
-
-	      if (ret)
-		return ret;
-
-	      first = CDR (first);
+	      ret = is_subtype (&t_object, second, NULL, env, outcome);
+	      goto cleanup_and_leave;
 	    }
 
-	  if (SYMBOL (first) != &nil_object)
+	  while (cons->type == TYPE_CONS_PAIR)
 	    {
-	      raise_type_error (first, "CL:LIST", env, outcome);
+	      ret = is_subtype (CAR (cons), second, NULL, env, outcome);
+
+	      if (ret)
+		goto cleanup_and_leave;
+
+	      cons = CDR (cons);
+	    }
+
+	  if (SYMBOL (cons) != &nil_object)
+	    {
+	      raise_type_error (cons, "CL:LIST", env, outcome);
 	      return -1;
 	    }
 
-	  return -1;
+	  ret = -1;
+	  goto cleanup_and_leave;
 	}
     }
 
@@ -18108,52 +18145,64 @@ is_subtype (struct object *firstsp, struct object *secondsp,
     {
       if (SYMBOL (CAR (second)) == env->or_sym)
 	{
-	  first = CDR (second);
+	  cons = CDR (second);
 
-	  while (second->type == TYPE_CONS_PAIR)
+	  if (SYMBOL (cons) == &nil_object)
 	    {
-	      ret = is_subtype (first, CAR (second), NULL, env, outcome);
-
-	      if (ret)
-		return ret;
-
-	      second = CDR (second);
+	      ret = is_subtype (first, &nil_object, NULL, env, outcome);
+	      goto cleanup_and_leave;
 	    }
 
-	  if (SYMBOL (second) != &nil_object)
+	  while (cons->type == TYPE_CONS_PAIR)
 	    {
-	      raise_type_error (second, "CL:LIST", env, outcome);
+	      ret = is_subtype (first, CAR (cons), NULL, env, outcome);
+
+	      if (ret)
+		goto cleanup_and_leave;
+
+	      cons = CDR (cons);
+	    }
+
+	  if (SYMBOL (cons) != &nil_object)
+	    {
+	      raise_type_error (cons, "CL:LIST", env, outcome);
 	      return -1;
 	    }
 
-	  return -1;
+	  ret = -1;
+	  goto cleanup_and_leave;
 	}
 
       if (SYMBOL (CAR (second)) == env->and_sym)
 	{
-	  second = CDR (second);
+	  cons = CDR (second);
 
-	  while (second->type == TYPE_CONS_PAIR)
+	  while (cons->type == TYPE_CONS_PAIR)
 	    {
-	      ret = is_subtype (first, CAR (second), NULL, env, outcome);
+	      ret = is_subtype (first, CAR (cons), NULL, env, outcome);
 
 	      if (ret <= 0)
-		return ret;
+		goto cleanup_and_leave;
 
-	      second = CDR (second);
+	      cons = CDR (cons);
 	    }
 
-	  if (SYMBOL (second) != &nil_object)
+	  if (SYMBOL (cons) != &nil_object)
 	    {
-	      raise_type_error (second, "CL:LIST", env, outcome);
+	      raise_type_error (cons, "CL:LIST", env, outcome);
 	      return -1;
 	    }
 
-	  return 1;
+	  ret = 1;
+	  goto cleanup_and_leave;
 	}
     }
 
-  return 0;
+ cleanup_and_leave:
+  decrement_refcount (first);
+  decrement_refcount (second);
+
+  return ret;
 }
 
 
