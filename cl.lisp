@@ -2287,6 +2287,10 @@
       `(integer 0 ,(1- (expt 2 s)))))
 
 
+(deftype bit nil
+  '(unsigned-byte 1))
+
+
 (deftype mod (s)
   `(integer 0 ,(1- s)))
 

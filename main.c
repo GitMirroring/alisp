@@ -2294,8 +2294,6 @@ int type_bignum (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
 int type_fixnum (const struct object *obj, const struct object *typespec,
 		 struct environment *env, struct outcome *outcome);
-int type_bit (const struct object *obj, const struct object *typespec,
-	      struct environment *env, struct outcome *outcome);
 int type_ratio (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome);
 int type_float (const struct object *obj, const struct object *typespec,
@@ -4271,7 +4269,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_type ("INTEGER", env, type_integer, 1, "RATIONAL", (char *)NULL);
   add_builtin_type ("BIGNUM", env, type_bignum, 1, "INTEGER", (char *)NULL);
   add_builtin_type ("FIXNUM", env, type_fixnum, 1, "INTEGER", (char *)NULL);
-  add_builtin_type ("BIT", env, type_bit, 1, "INTEGER", (char *)NULL);
   add_builtin_type ("RATIO", env, type_ratio, 1, "RATIONAL", (char *)NULL);
   add_builtin_type ("FLOAT", env, type_float, 1, "REAL", (char *)NULL);
   add_builtin_type ("SHORT-FLOAT", env, type_short_float, 1, "SINGLE-FLOAT",
@@ -19151,14 +19148,6 @@ type_fixnum (const struct object *obj, const struct object *typespec,
 	     struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_FIXNUM;
-}
-
-
-int
-type_bit (const struct object *obj, const struct object *typespec,
-	  struct environment *env, struct outcome *outcome)
-{
-  return obj->type == TYPE_INTEGER && is_bit (obj);
 }
 
 
