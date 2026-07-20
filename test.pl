@@ -712,6 +712,8 @@ make_test ("(subtypep 'character 'float)", "NIL\nT");
 make_test ("(subtypep 'character 'integer)", "NIL\nT");
 make_test ("(subtypep 'character 'bit)", "NIL\nT");
 make_test ("(subtypep 'integer '(or string number))", "T\nT");
+make_test ("(subtypep 'integer '(or))", "NIL\nT");
+make_test ("(subtypep '(and) 'integer)", "NIL\nT");
 make_test ("(subtypep 'integer '(and number float))", "NIL\nT");
 make_test ("(subtypep '(and string vector) 'array)", "T\nT");
 make_test ("(subtypep '(or rational float) 'number)", "T\nT");
