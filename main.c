@@ -1823,6 +1823,12 @@ int get_filename (struct object *string, int *end);
 
 struct object *inspect_pathname_by_designator (struct object *des);
 
+enum object_type select_array_element_type (struct object *elemtype,
+					    struct environment *env,
+					    struct outcome *outcome,
+					    enum byte_array_subtype *subt,
+					    int *step);
+
 struct object *alloc_byte_vector (fixnum size, enum byte_array_subtype subtype,
 				  int step, int dont_store_size);
 
@@ -2235,6 +2241,8 @@ int check_type_by_char_vector (struct object *obj, char *type,
 			       struct environment *env, struct outcome *outcome);
 int type_starts_with (const struct object *typespec, const struct object *sym);
 int is_subtype_by_char_vector (struct object *first, char *second,
+			       struct environment *env, struct outcome *outcome);
+int is_subtype_by_read_object (struct object *first, char *second,
 			       struct environment *env, struct outcome *outcome);
 
 int is_integer_subtype_of_integer (struct object *firstsp, struct object *secondsp,
@@ -9706,6 +9714,85 @@ inspect_pathname_by_designator (struct object *des)
     {
       return des->value_ptr.filename->value;
     }
+}
+
+
+enum object_type
+select_array_element_type (struct object *elemtype, struct environment *env,
+			   struct outcome *outcome, enum byte_array_subtype *subt,
+			   int *step)
+{
+  if (is_subtype_by_char_vector (elemtype, "CHARACTER", env, outcome))
+    {
+      *subt = BYTE_ARRAY_CHARACTER;
+      *step = 8;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 1)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
+      *step = 1;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 8)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_SIGNED;
+      *step = 8;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 16)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_SIGNED;
+      *step = 16;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 32)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_SIGNED;
+      *step = 32;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 64)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_SIGNED;
+      *step = 64;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 8)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
+      *step = 8;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 16)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
+      *step = 16;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 32)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
+      *step = 32;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 64)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
+      *step = 64;
+      return TYPE_BYTE_ARRAY;
+    }
+  else
+    return TYPE_ARRAY;
 }
 
 
@@ -17925,6 +18012,25 @@ is_subtype_by_char_vector (struct object *first, char *second,
 
 
 int
+is_subtype_by_read_object (struct object *first, char *second,
+			   struct environment *env, struct outcome *outcome)
+{
+  struct object *tp = NULL;
+  const char *objb, *obje;
+  int ret;
+
+  read_object (&tp, 0, second, strlen (second), NULL, 0, 0, env, outcome,
+	       &objb, &obje);
+
+  ret = is_subtype (first, tp, NULL, env, outcome);
+
+  decrement_refcount (tp);
+
+  return ret;
+}
+
+
+int
 is_integer_subtype_of_integer (struct object *firstsp, struct object *secondsp,
 			       struct environment *env, struct outcome *outcome)
 {
@@ -20542,12 +20648,14 @@ struct object *
 builtin_make_array (struct object *list, struct environment *env,
 		    struct outcome *outcome)
 {
-  int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize;
+  int indx, tot = 1, fillp = -1, found_unknown_key = 0, i, rowsize, step;
   struct object *ret, *cons, *dims, *fp = NULL, *initial_element = NULL,
     *initial_contents = NULL, *element_type = NULL, *adjustable = NULL,
     *allow_other_keys = NULL, *el;
   struct array_size *size = NULL, *sz;
   enum object_type objt;
+  enum byte_array_subtype subt;
+
 
   if (!list_length (list))
     {
@@ -20698,10 +20806,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
     }
 
-  if (is_subtype_by_char_vector (element_type, "CHARACTER", env, outcome))
-    objt = TYPE_BYTE_ARRAY;
-  else
-    objt = TYPE_ARRAY;
+  objt = select_array_element_type (element_type, env, outcome, &subt, &step);
 
   if (dims->type == TYPE_INTEGER
       || (dims->type == TYPE_CONS_PAIR && list_length (dims) == 1
@@ -20733,7 +20838,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
       else
 	{
-	  ret = alloc_string (indx);
+	  ret = alloc_byte_vector (indx, subt, step, 0);
 
 	  if (fp && SYMBOL (fp) == &t_object)
 	    ret->value_ptr.byte_array->fill_pointer = indx;
@@ -20783,9 +20888,16 @@ builtin_make_array (struct object *list, struct environment *env,
 
       sz->next = NULL;
 
-      ret = alloc_vector (tot, 1, 1);
-
-      ret->value_ptr.array->alloc_size = size;
+      if (objt == TYPE_ARRAY)
+	{
+	  ret = alloc_vector (tot, 1, 1);
+	  ret->value_ptr.array->alloc_size = size;
+	}
+      else
+	{
+	  ret = alloc_byte_vector (indx, subt, step, 1);
+	  ret->value_ptr.byte_array->alloc_size = size;
+	}
     }
   else if (SYMBOL (dims) == &nil_object)
     {
@@ -20795,8 +20907,16 @@ builtin_make_array (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      ret = alloc_vector (1, 1, 1);
-      ret->value_ptr.array->alloc_size = NULL;
+      if (objt == TYPE_ARRAY)
+	{
+	  ret = alloc_vector (1, 1, 1);
+	  ret->value_ptr.array->alloc_size = NULL;
+	}
+      else
+	{
+	  ret = alloc_byte_vector (1, subt, step, 1);
+	  ret->value_ptr.byte_array->alloc_size = NULL;
+	}
     }
   else
     {
@@ -20874,20 +20994,6 @@ builtin_make_array (struct object *list, struct environment *env,
     {
       for (i = 0; i < tot; i++)
 	set_elt (ret, i, initial_element);
-    }
-  else if (objt == TYPE_BYTE_ARRAY
-	   && (dims->type == TYPE_INTEGER
-	       || (dims->type == TYPE_CONS_PAIR && list_length (dims) == 1)))
-    {
-      for (i = 0; i < indx; i++)
-	ret->value_ptr.byte_array->value [i] = 0;
-
-      ret->value_ptr.byte_array->alloc_size->size = indx;
-
-      if (fp && SYMBOL (fp) == &t_object)
-	ret->value_ptr.byte_array->fill_pointer = indx;
-      else
-	ret->value_ptr.byte_array->fill_pointer = fillp;
     }
 
   return ret;
