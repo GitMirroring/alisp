@@ -1089,6 +1089,8 @@ make_test ("(make-array 3 :element-type 'character :initial-contents '(#\\a #\\b
 make_test ("(make-array 3 :fill-pointer 2 :element-type 'character :initial-contents \"abc\")", "\"ab\"");
 make_test ("(make-array 5 :initial-element t)", "#(T T T T T)");
 make_test ("(make-array 7 :element-type 'character :initial-element #\\u)", "\"uuuuuuu\"");
+make_test ("(make-array 3 :element-type 'bit)", "#*000");
+make_test ("(make-array 4 :element-type '(unsigned-byte 1) :initial-element 1)", "#*1111");
 make_test ("(defparameter arr (make-array 5 :fill-pointer 3))", "ARR");
 make_test ("arr", "#(NIL NIL NIL)");
 make_test ("(fill-pointer arr)", "3");
