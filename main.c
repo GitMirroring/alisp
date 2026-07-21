@@ -2236,6 +2236,11 @@ int check_type_by_char_vector (struct object *obj, char *type,
 int type_starts_with (const struct object *typespec, const struct object *sym);
 int is_subtype_by_char_vector (struct object *first, char *second,
 			       struct environment *env, struct outcome *outcome);
+
+int is_integer_subtype_of_integer (struct object *firstsp, struct object *secondsp,
+				   struct environment *env,
+				   struct outcome *outcome);
+
 int is_descendant (struct object *first, const struct object_list *parents,
 		   struct object *second, struct object *prev,
 		   struct environment *env);
@@ -17920,6 +17925,113 @@ is_subtype_by_char_vector (struct object *first, char *second,
 
 
 int
+is_integer_subtype_of_integer (struct object *firstsp, struct object *secondsp,
+			       struct environment *env, struct outcome *outcome)
+{
+  struct object *min1, *min2, *max1, *max2;
+
+  if (SYMBOL (firstsp) == &nil_object)
+    {
+      min1 = &nil_object;
+      max1 = &nil_object;
+    }
+  else if (firstsp->type == TYPE_CONS_PAIR)
+    {
+      if (symbol_equals (CAR (firstsp), "*", NULL))
+	min1 = &nil_object;
+      else if (CAR (firstsp)->type == TYPE_INTEGER)
+	min1 = CAR (firstsp);
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return -1;
+	}
+
+      if (SYMBOL (CDR (firstsp)) == &nil_object)
+	max1 = &nil_object;
+      else if (CDR (firstsp)->type == TYPE_CONS_PAIR)
+	{
+	  if (symbol_equals (CAR (CDR (firstsp)), "*", NULL))
+	    max1 = &nil_object;
+	  else if (CAR (CDR (firstsp))->type == TYPE_INTEGER)
+	    max1 = CAR (CDR (firstsp));
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return -1;
+	    }
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return -1;
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return -1;
+    }
+
+  if (SYMBOL (secondsp) == &nil_object)
+    {
+      min2 = &nil_object;
+      max2 = &nil_object;
+    }
+  else if (secondsp->type == TYPE_CONS_PAIR)
+    {
+      if (symbol_equals (CAR (secondsp), "*", NULL))
+	min2 = &nil_object;
+      else if (CAR (secondsp)->type == TYPE_INTEGER)
+	min2 = CAR (secondsp);
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return -1;
+	}
+
+      if (SYMBOL (CDR (secondsp)) == &nil_object)
+	max2 = &nil_object;
+      else if (CDR (secondsp)->type == TYPE_CONS_PAIR)
+	{
+	  if (symbol_equals (CAR (CDR (secondsp)), "*", NULL))
+	    max2 = &nil_object;
+	  else if (CAR (CDR (secondsp))->type == TYPE_INTEGER)
+	    max2 = CAR (CDR (secondsp));
+	  else
+	    {
+	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	      return -1;
+	    }
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return -1;
+	}
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return -1;
+    }
+
+
+  if ((min2 == &nil_object
+       || (min1->type == TYPE_INTEGER
+	   && mpz_cmp (min1->value_ptr.integer, min2->value_ptr.integer) >= 0))
+      && (max2 == &nil_object
+	  || (max1->type == TYPE_INTEGER
+	      && mpz_cmp (max1->value_ptr.integer, max2->value_ptr.integer) <= 0)))
+    {
+      return 1;
+    }
+
+  return 0;
+}
+
+
+int
 is_descendant (struct object *first, const struct object_list *parents,
 	       struct object *second, struct object *prev,
 	       struct environment *env)
@@ -17964,7 +18076,8 @@ is_subtype (struct object *firstsp, struct object *secondsp,
 	    struct outcome *outcome)
 {
   struct object_list *p;
-  struct object *firstsym, *secondsym, *first, *second, *cons;
+  struct object *firstsym = NULL, *secondsym = NULL, *first = NULL, *second = NULL,
+    *oldfirst, *oldsecond, *cons;
   int ret = 0;
 
   if (firstsp->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (firstsp)))
@@ -17977,45 +18090,72 @@ is_subtype (struct object *firstsp, struct object *secondsp,
   else if (IS_SYMBOL (secondsp))
     secondsym = SYMBOL (secondsp);
 
-  if (((firstsp->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (firstsp)))
-       || IS_SYMBOL (firstsp))
-      && firstsym->value_ptr.symbol->is_type
-      && firstsym->value_ptr.symbol->typespec
-      && firstsym->value_ptr.symbol->typespec->type == TYPE_FUNCTION)
+
+  first = firstsp;
+  increment_refcount (first);
+
+  while (((first->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (first)))
+	  || IS_SYMBOL (first))
+	 && firstsym->value_ptr.symbol->is_type
+	 && firstsym->value_ptr.symbol->typespec
+	 && firstsym->value_ptr.symbol->typespec->type == TYPE_FUNCTION)
     {
+      oldfirst = first;
+
       first = call_function (firstsym->value_ptr.symbol->typespec,
-			     firstsp->type == TYPE_CONS_PAIR ? CDR (firstsp)
+			     oldfirst->type == TYPE_CONS_PAIR ? CDR (oldfirst)
 			     : &nil_object, 0, 0, 0, 0, 0, 1, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!first)
 	return -2;
-    }
-  else
-    {
-      first = firstsp;
-      increment_refcount (first);
+
+      decrement_refcount (oldfirst);
+
+      if (first->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (first)))
+	firstsym = SYMBOL (CAR (first));
+      else if (IS_SYMBOL (first))
+	firstsym = SYMBOL (first);
     }
 
-  if (((secondsp->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (secondsp)))
-       || IS_SYMBOL (secondsp))
-      && secondsym->value_ptr.symbol->is_type
-      && secondsym->value_ptr.symbol->typespec
-      && secondsym->value_ptr.symbol->typespec->type == TYPE_FUNCTION)
+
+  second = secondsp;
+  increment_refcount (second);
+
+  while (((second->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (second)))
+	  || IS_SYMBOL (second))
+	 && secondsym->value_ptr.symbol->is_type
+	 && secondsym->value_ptr.symbol->typespec
+	 && secondsym->value_ptr.symbol->typespec->type == TYPE_FUNCTION)
     {
+      oldsecond = second;
+
       second = call_function (secondsym->value_ptr.symbol->typespec,
-			      secondsp->type == TYPE_CONS_PAIR ? CDR (secondsp)
+			      oldsecond->type == TYPE_CONS_PAIR ? CDR (oldsecond)
 			      : &nil_object, 0, 0, 0, 0, 0, 1, env, outcome);
       CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
       if (!second)
 	return -2;
+
+      decrement_refcount (oldsecond);
+
+      if (second->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (second)))
+	secondsym = SYMBOL (CAR (second));
+      else if (IS_SYMBOL (second))
+	secondsym = SYMBOL (second);
     }
-  else
-    {
-      second = secondsp;
-      increment_refcount (second);
-    }
+
+
+  if (first->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (first)))
+    firstsym = SYMBOL (CAR (first));
+  else if (IS_SYMBOL (first))
+    firstsym = SYMBOL (first);
+
+  if (second->type == TYPE_CONS_PAIR && IS_SYMBOL (CAR (second)))
+    secondsym = SYMBOL (CAR (second));
+  else if (IS_SYMBOL (second))
+    secondsym = SYMBOL (second);
 
 
   if (SYMBOL (first) == &nil_object || SYMBOL (second) == &t_object
@@ -18079,6 +18219,16 @@ is_subtype (struct object *firstsp, struct object *secondsp,
 	  ret = 1;
 	  goto cleanup_and_leave;
 	}
+    }
+
+  if (firstsym == BUILTIN_SYMBOL ("INTEGER")
+      && secondsym == BUILTIN_SYMBOL ("INTEGER"))
+    {
+      ret = is_integer_subtype_of_integer
+	(first->type == TYPE_CONS_PAIR ? CDR (first) : &nil_object,
+	 second->type == TYPE_CONS_PAIR ? CDR (second) : &nil_object,
+	 env, outcome);
+      goto cleanup_and_leave;
     }
 
   if (first->type == TYPE_CONS_PAIR)
