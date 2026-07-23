@@ -5123,7 +5123,8 @@ complete_object_interactively (struct object *obj, int is_empty_list,
   size_t len;
 
   fresh_line (outstr);
-  line = read_line_interactively (outstr->file, instr->file, "> ");
+  line = read_line_interactively (outstr->otherfile ? outstr->otherfile
+				  : outstr->file, instr->file, "> ");
   len = strlen (line);
 
   read_out = read_object_continued (&obj, 0, is_empty_list, line, len, NULL, 0,
@@ -5141,7 +5142,8 @@ complete_object_interactively (struct object *obj, int is_empty_list,
 
       free (line);
       fresh_line (env->c_stdout->value_ptr.stream);
-      line = read_line_interactively (outstr->file, instr->file, "> ");
+      line = read_line_interactively (outstr->otherfile ? outstr->otherfile
+				      : outstr->file, instr->file, "> ");
       len = strlen (line);
 
       read_out = read_object_continued (&obj, 0,
