@@ -3398,6 +3398,14 @@ main (int argc, char *argv [])
   env.package_sym->value_ptr.symbol->value_cell = env.cluser_package;
 
 
+#ifdef HAVE_LIBREADLINE
+  c = read_history ("al_history");
+
+  if (c && c != ENOENT)
+    printf ("could not read line history from al_history: %s\n", strerror (c));
+#endif
+
+
   if (!quit_after_opts)
     print_welcome_message ();
 
@@ -3477,13 +3485,6 @@ main (int argc, char *argv [])
   if (quit_after_opts)
     exit (0);
 
-
-#ifdef HAVE_LIBREADLINE
-  c = read_history ("al_history");
-
-  if (c && c != ENOENT)
-    printf ("could not read line history from al_history: %s\n", strerror (c));
-#endif
 
 
   while (!end_repl)
