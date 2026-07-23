@@ -2083,6 +2083,10 @@ struct object *skip_prefix
 (struct object *prefix, int *num_backticks_before_last_comma, int *num_commas,
  struct object **last_prefix);
 
+long get_long_from_integer_array (const struct byte_array *seq, unsigned int ind);
+unsigned long get_unsigned_long_from_integer_array (const struct byte_array *seq,
+						    unsigned int ind);
+
 struct object *elt (struct object *seq, unsigned int ind);
 void set_elt (struct object *seq, unsigned int ind, struct object *val);
 fixnum sequence_length (const struct object *seq);
@@ -3251,6 +3255,8 @@ int print_array (const struct array *array, struct environment *env,
 		 struct stream *str);
 int print_bitarray (const struct byte_array *array, struct environment *env,
 		    struct stream *str);
+int print_integer_array (const struct byte_array *array, struct environment *env,
+			 struct stream *str);
 int print_function_or_macro (const struct object *obj, struct environment *env,
 			     struct stream *str);
 int print_method (const struct object *obj, struct environment *env,
@@ -13845,6 +13851,47 @@ skip_prefix (struct object *prefix, int *num_backticks_before_last_comma,
 }
 
 
+long
+get_long_from_integer_array (const struct byte_array *seq, unsigned int ind)
+{
+  switch (seq->step)
+    {
+    case 8:
+      return (*(signed char *)(seq->value+ind));
+    case 16:
+      return (*(short *)(seq->value+ind*2));
+    case 32:
+      return (*(int *)(seq->value+ind*4));
+    case 64:
+      return (*(long *)(seq->value+ind*8));
+    default:
+      return 0;
+    }
+}
+
+
+unsigned long
+get_unsigned_long_from_integer_array (const struct byte_array *seq,
+				      unsigned int ind)
+{
+  switch (seq->step)
+    {
+    case 1:
+      return (!!(seq->value [ind/8] & (1 << (ind%8))));
+    case 8:
+      return (*(unsigned char *)(seq->value+ind));
+    case 16:
+      return (*(unsigned short *)(seq->value+ind*2));
+    case 32:
+      return (*(unsigned int *)(seq->value+ind*4));
+    case 64:
+      return (*(unsigned long *)(seq->value+ind*8));
+    default:
+      return 0;
+    }
+}
+
+
 struct object *
 elt (struct object *seq, unsigned int ind)
 {
@@ -13856,13 +13903,16 @@ elt (struct object *seq, unsigned int ind)
 	{
 	  return create_character_from_char (seq->value_ptr.byte_array->value [ind]);
 	}
-      else if (seq->value_ptr.byte_array->step == 1)
+      else if (seq->value_ptr.byte_array->subtype == BYTE_ARRAY_SIGNED)
 	{
-	  return create_integer_from_long (!!(seq->value_ptr.byte_array->value [ind/8]
-					      & (1 << (ind%8))));
+	  return create_integer_from_long
+	    (get_long_from_integer_array (seq->value_ptr.byte_array, ind));
 	}
       else
-	return NULL;
+	{
+	  return create_integer_from_long
+	    (get_unsigned_long_from_integer_array (seq->value_ptr.byte_array, ind));
+	}
     }
   else if (seq->type == TYPE_ARRAY)
     return seq->value_ptr.array->value [ind];
@@ -13875,6 +13925,7 @@ void
 set_elt (struct object *seq, unsigned int ind, struct object *val)
 {
   struct object *cons;
+  long newval;
 
   if (IS_LIST (seq))
     {
@@ -13889,11 +13940,38 @@ set_elt (struct object *seq, unsigned int ind, struct object *val)
       seq->value_ptr.array->value [ind] = val;
       add_reference (seq, val, ind);
     }
-  else if (IS_BIT_VECTOR (seq))
+  else
     {
-      seq->value_ptr.byte_array->value [ind/8] =
-	WITH_CHANGED_BIT (seq->value_ptr.byte_array->value [ind/8], ind%8,
-			  !is_zero (val));
+      if (val->type == TYPE_INTEGER)
+	{
+	  newval = mpz_get_si (val->value_ptr.integer)
+	    & ((1 << seq->value_ptr.byte_array->step)-1);
+
+	  switch (seq->value_ptr.byte_array->step)
+	    {
+	    case 1:
+	      seq->value_ptr.byte_array->value [ind/8] =
+		WITH_CHANGED_BIT (seq->value_ptr.byte_array->value [ind/8], ind%8,
+				  !!newval);
+	      break;
+	    case 8:
+	      *(signed char *)(seq->value_ptr.byte_array->value+ind)
+		= (signed char) newval;
+	      break;
+	    case 16:
+	      *(short *)(seq->value_ptr.byte_array->value+ind*2)
+		= (short) newval;
+	      break;
+	    case 32:
+	      *(int *)(seq->value_ptr.byte_array->value+ind*4)
+		= (int) newval;
+	      break;
+	    case 64:
+	      *(long *)(seq->value_ptr.byte_array->value+ind*8)
+		= newval;
+	      break;
+	    }
+	}
     }
 }
 
@@ -20258,8 +20336,7 @@ builtin_aref (struct object *list, struct environment *env,
 	}
       else
 	{
-	  return create_integer_from_long (!!(arr->value_ptr.byte_array->value [ind/8]
-					      & (1 << (ind%8))));
+	  return elt (arr, ind);
 	}
     }
   else if (arr->type == TYPE_ARRAY)
@@ -26128,15 +26205,13 @@ builtin_setf_aref (struct object *list, struct environment *env,
 	}
       else
 	{
-	  if (newval->type != TYPE_INTEGER || !is_bit (newval))
+	  if (newval->type != TYPE_INTEGER)
 	    {
 	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	      return NULL;
 	    }
 
-	  CAR (list)->value_ptr.byte_array->value [ind/8]
-	    = WITH_CHANGED_BIT (CAR (list)->value_ptr.byte_array->value [ind/8],
-				ind%8, !is_zero (newval));
+	  set_elt (CAR (list), ind, newval);
 	}
     }
   else
@@ -26214,9 +26289,9 @@ builtin_setf_elt (struct object *list, struct environment *env,
       add_reference (CAR (list), newval, ind);
       CAR (list)->value_ptr.array->value [ind] = newval;
     }
-  else if (IS_BIT_VECTOR (CAR (list)))
+  else if (CAR (list)->type == TYPE_BYTE_ARRAY)
     {
-      if (newval->type != TYPE_INTEGER || !is_bit (newval))
+      if (newval->type != TYPE_INTEGER)
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
 	  return NULL;
@@ -26230,9 +26305,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      CAR (list)->value_ptr.byte_array->value [ind/8] =
-	WITH_CHANGED_BIT (CAR (list)->value_ptr.byte_array->value [ind/8], ind%8,
-			  !is_zero (newval));
+      set_elt (CAR (list), ind, newval);
     }
   else
     {
@@ -39528,6 +39601,112 @@ print_bitarray (const struct byte_array *array, struct environment *env,
 
 
 int
+print_integer_array (const struct byte_array *array, struct environment *env,
+		     struct stream *str)
+{
+  struct object *parr = inspect_variable (env->print_array_sym, env),
+    *pread = inspect_variable (env->print_readably_sym, env);
+  fixnum rk = array_rank (array->alloc_size), i,
+    totsize = array_total_size (array->alloc_size);
+  struct array_size *s;
+  int print_space;
+
+  if (SYMBOL (parr) != &nil_object || SYMBOL (pread) != &nil_object)
+    {
+      if (write_to_stream (str, "#", 1) < 0
+	  || (rk != 1 && (write_long_to_stream (str, rk) < 0
+			  || write_to_stream (str, "A", 1) < 0)))
+	{
+	  return -1;
+	}
+
+      for (i = 0; i < rk; i++)
+	{
+	  if (write_to_stream (str, "(", 1) < 0)
+	    return -1;
+	}
+
+      for (i = 0; i < (array->fill_pointer >= 0 ? array->fill_pointer : totsize);
+	   i++)
+	{
+	  if (i)
+	    {
+	      print_space = 0;
+
+	      s = array->alloc_size;
+
+	      while (s)
+		{
+		  if (!(i % array_total_size (s)))
+		    {
+		      if (write_to_stream (str, ")", 1) < 0)
+			return -1;
+
+		      print_space = 1;
+		    }
+
+		  s = s->next;
+		}
+
+	      if (print_space && write_to_stream (str, " ", 1) < 0)
+		return -1;
+
+	      s = array->alloc_size;
+	      print_space = 1;
+
+	      while (s)
+		{
+		  if (!(i % array_total_size (s)))
+		    {
+		      if (write_to_stream (str, "(", 1) < 0)
+			return -1;
+
+		      print_space = 0;
+		    }
+
+		  s = s->next;
+		}
+
+	      if (print_space && write_to_stream (str, " ", 1) < 0)
+		return -1;
+	    }
+
+	  if (array->subtype == BYTE_ARRAY_UNSIGNED)
+	    {
+	      if (write_long_to_stream
+		  (str, get_unsigned_long_from_integer_array (array, i)) < 0)
+		{
+		  return -1;
+		}
+	    }
+	  else
+	    {
+	      if (write_long_to_stream
+		  (str, get_long_from_integer_array (array, i)) < 0)
+		{
+		  return -1;
+		}
+	    }
+	}
+
+      for (i = 0; i < rk; i++)
+	{
+	  if (write_to_stream (str, ")", 1) < 0)
+	    return -1;
+	}
+
+      return 0;
+    }
+  else if (write_to_stream (str, "#<ARRAY, RANK ", strlen ("#<ARRAY, RANK ")) < 0
+	   || write_long_to_stream (str, rk) < 0
+	   || write_to_stream (str, ">", 1) < 0)
+    return -1;
+
+  return 0;
+}
+
+
+int
 print_function_or_macro (const struct object *obj, struct environment *env,
 			 struct stream *str)
 {
@@ -39750,6 +39929,8 @@ print_object (const struct object *obj, struct environment *env,
 	return print_array (obj->value_ptr.array, env, str);
       else if (IS_BIT_ARRAY (obj))
 	return print_bitarray (obj->value_ptr.byte_array, env, str);
+      else if (obj->type == TYPE_BYTE_ARRAY)
+	return print_integer_array (obj->value_ptr.byte_array, env, str);
       else if (obj->type == TYPE_HASHTABLE)
 	{
 	  if (write_to_stream (str, "#<HASH-TABLE ",
