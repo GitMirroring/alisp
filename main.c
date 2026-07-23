@@ -26210,8 +26210,7 @@ builtin_setf_aref (struct object *list, struct environment *env,
 	{
 	  if (newval->type != TYPE_INTEGER)
 	    {
-	      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	      return NULL;
+	      return raise_type_error (newval, "CL:INTEGER", env, outcome);
 	    }
 
 	  set_elt (CAR (list), ind, newval);
@@ -26245,11 +26244,14 @@ builtin_setf_elt (struct object *list, struct environment *env,
   newval = CAR (list);
   list = CDR (list);
 
-  if (!IS_SEQUENCE (CAR (list)) || SYMBOL (CAR (list)) == &nil_object
-      || CAR (CDR (list))->type != TYPE_INTEGER)
+  if (!IS_SEQUENCE (CAR (list)))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (list), "CL:SEQUENCE", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
     }
 
   ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
@@ -26296,8 +26298,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
     {
       if (newval->type != TYPE_INTEGER)
 	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
+	  return raise_type_error (newval, "CL:INTEGER", env, outcome);
 	}
 
       if (ind >= (CAR (list)->value_ptr.byte_array->fill_pointer >= 0
@@ -26314,7 +26315,7 @@ builtin_setf_elt (struct object *list, struct environment *env,
     {
       cons = nthcdr (ind, CAR (list));
 
-      if (!cons)
+      if (!cons || cons->type != TYPE_CONS_PAIR)
 	{
 	  outcome->type = OUT_OF_BOUND_INDEX;
 	  return NULL;
@@ -26725,8 +26726,8 @@ builtin_setf_al_next (struct object *list, struct environment *env,
 
   if (!IS_PREFIX (CAR (CDR (list))->type))
     {
-      outcome->type = WRONG_TYPE_OF_ARGUMENT;
-      return NULL;
+      return raise_type_error (CAR (CDR (list)), "(CL:OR AL:BACKQUOTE "
+			       "AL:COMMA AL:AT AL:DOT)", env, outcome);
     }
 
   delete_reference (CAR (CDR (list)), CAR (CDR (list))->value_ptr.next, 0);
@@ -37729,8 +37730,8 @@ builtin_al_next (struct object *list, struct environment *env,
       return CAR (list)->value_ptr.next;
     }
 
-  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-  return NULL;
+  return raise_type_error (CAR (list), "(CL:OR AL:BACKQUOTE AL:COMMA AL:AT "
+			   "AL:DOT)", env, outcome);
 }
 
 
