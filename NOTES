@@ -131,7 +131,7 @@ There are also some non-standard extensions of standard functions.
   information
 
 - the function STRING-INPUT-STREAM-STRING takes an input string stream and
-  returns a string with the characters left to read
+  returns a string with the remaining characters of the stream
 
 - the standard function MAKE-STRING-OUTPUT-STREAM takes an optional string
   argument; if provided, writing operations append to the string, also
@@ -210,6 +210,19 @@ There are also some non-standard extensions of standard functions.
   structure class) and returns the class precedence list of that class, as a
   list of class objects
 
+- the function CREATE-METHOD takes the same arguments as DEFMETHOD, but they are
+  evaluated.  It creates a method object and returns it
+
+- the function ADD-METHOD takes a generic function object and a method object;
+  it adds the latter to the former, then returns the function object
+
+- the special operator WITH-MACRO-ARGUMENTS is used for establishing bindings
+  based on a macro lambda list.  The first argument is the lambda list and it's
+  not evaluated.  The second and third arguments are evaluated and they yield an
+  environment object and an argument list.  After parsing the argument list
+  according to the lambda list and binding the environment object, the body is
+  executed
+
 - the special operators LOOPY-DESTRUCTURING-BIND and LOOPY-SETQ are similar to
   DESTRUCTURING-BIND and SETQ respectively, but they allow the kind of
   destructuring that LOOP uses, which has more lax rules than
@@ -228,9 +241,11 @@ alisp has the following non-standard types:
 
 - COMPILED-METHOD is a subtype of METHOD and represents a compiled method
 
+- the type BYTE-ARRAY represents a byte array, see "Arrays"
+
 - the types BACKQUOTE, COMMA, AT and DOT represent the respective elements in
   backquote notation.  You can call the NEXT function to reach the next element
-  when traversing them
+  when traversing them, or (SETF NEXT) to change it
 
 
 alisp defines these non-standard conditions:
@@ -295,6 +310,27 @@ globally and proclaimed special, so it is equivalent to a DEFPARAMETER.
 
 
 __Arrays__
+
+In alisp, there are two types of arrays: general arrays and byte arrays.  Both
+can have any rank and dimension.  You can tell them apart by checking for
+membership to AL:BYTE-ARRAY type.
+
+General arrays can hold any object.
+
+Byte arrays let you handle a portion of memory directly.  Byte arrays have a
+subtype, which can be unsigned, signed and character, based on what kind of data
+they contain.  They also have a step, which is the size in bits of each element.
+Not every combination of subtype and step is allowed.
+
+Character arrays, that is strings, may only have a step of 8 bits, which is
+meant for holding ASCII strings or maybe UTF-8 if you handle the parsing.  In
+the future a step of 32 bits will be supported for handling UTF-32 explicitly.
+Unsigned byte arrays can have a step of 1 (for bit arrays), 8, 16, 32, 64.
+Signed byte arrays support a step of 8, 16, 32, 64.
+
+In any case, alisp assumes a representation in two's complement in the
+underlying C toolchain.  That means that a signed byte array with n-bits
+elements can hold integers in the -2^(n-1), 2^(n-1)-1 range.
 
 All arrays are adjustable in alisp.  As long as it's an interpreter, there's no
 reason to do otherwise.
@@ -519,8 +555,11 @@ __Warnings__
 A warning is issued when a global function or macro is redefined with DEFUN,
 DEFMACRO or DEFGENERIC.  No warning is displayed when redefinition occurs with
 (SETF FDEFINITION), (SETF SYMBOL-FUNCTION), (SETF MACRO-FUNCTION) or
-ENSURE-GENERIC-FUNCTION, since those are considered more primitive.  Also local
+ENSURE-GENERIC-FUNCTION, since those are considered more primitive.  Local
 redefinition of a global function or macro, even repeated, is not reported.
+
+Doing SETQ or SETF on an undefined variable causes a warning; the variable is
+defined globally and proclaimed special.
 
 
 
