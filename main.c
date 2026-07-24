@@ -3013,10 +3013,6 @@ struct object *evaluate_and
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_or
 (struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_prog1
-(struct object *list, struct environment *env, struct outcome *outcome);
-struct object *evaluate_prog2
-(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_destructuring_bind
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *evaluate_deftype
@@ -4099,8 +4095,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("THE", env, evaluate_the, 1, NULL, 1);
   add_builtin_form ("AND", env, evaluate_and, 1, NULL, 0);
   add_builtin_form ("OR", env, evaluate_or, 1, NULL, 0);
-  add_builtin_form ("PROG1", env, evaluate_prog1, 1, NULL, 0);
-  add_builtin_form ("PROG2", env, evaluate_prog2, 1, NULL, 0);
   add_builtin_form ("DESTRUCTURING-BIND", env, evaluate_destructuring_bind,
 		    1, NULL, 0);
   add_builtin_form ("DEFTYPE", env, evaluate_deftype, 1, NULL, 0);
@@ -34182,66 +34176,6 @@ evaluate_or (struct object *list, struct environment *env,
     CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
 
   return val;
-}
-
-
-struct object *
-evaluate_prog1 (struct object *list, struct environment *env,
-		struct outcome *outcome)
-{
-  struct object *tmp, *ret;
-
-  if (!list_length (list))
-    {
-      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
-    }
-
-  ret = evaluate_object (CAR (list), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!ret)
-    return NULL;
-
-  tmp = evaluate_body (CDR (list), -1, 0, 0, NULL, env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  decrement_refcount (tmp);
-
-  return ret;
-}
-
-
-struct object *
-evaluate_prog2 (struct object *list, struct environment *env,
-		struct outcome *outcome)
-{
-  struct object *tmp, *ret;
-
-  if (list_length (list) < 2)
-    {
-      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
-    }
-
-  tmp = evaluate_object (CAR (list), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!tmp)
-    return NULL;
-
-  decrement_refcount (tmp);
-
-  ret = evaluate_object (CAR (CDR (list)), env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  if (!ret)
-    return NULL;
-
-  tmp = evaluate_body (CDR (CDR (list)), -1, 0, 0, NULL, env, outcome);
-  CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
-
-  decrement_refcount (tmp);
-
-  return ret;
 }
 
 

@@ -1142,6 +1142,23 @@
 
 
 
+(defmacro prog1 (first &rest body)
+  (let ((firstsym (gensym)))
+    `(let ((,firstsym ,first))
+       ,@body
+       ,firstsym)))
+
+
+(defmacro prog2 (first second &rest body)
+  (let ((firstsym (gensym))
+	(secondsym (gensym)))
+    `(let ((,firstsym ,first)
+	   (,secondsym ,second))
+       ,@body
+       ,secondsym)))
+
+
+
 (defmacro multiple-value-bind (vars valform &body forms)
   (let ((restsym (gensym)))
     `(multiple-value-call (lambda (&optional ,@vars &rest ,restsym)
@@ -4036,18 +4053,19 @@
            butlast nbutlast acons pairlis shiftf rotatef psetf defsetf when
            unless define-modify-macro incf decf defstruct defclass
            define-condition otherwise case ccase ecase typecase ctypecase
-           etypecase return multiple-value-bind multiple-value-setq prog prog*
-           multiple-value-prog1 every some notany notevery member member-if
-           member-if-not find find-if find-if-not assoc assoc-if assoc-if-not
-           rassoc rassoc-if rassoc-if-not position position-if position-if-not
-           count count-if count-if-not remove remove-if remove-if-not delete
-           delete-if delete-if-not remove-duplicates delete-duplicates
-           substitute substitute-if substitute-if-not nsubstitute nsubstitute-if
-           nsubstitute-if-not subst subst-if subst-if-not nsubst nsubst-if
-           nsubst-if-not nreverse revappend nreconc adjoin fill replace push
-           pushnew pop set-difference nset-difference union nunion intersection
-           nintersection set-exclusive-or nset-exclusive-or subsetp mismatch
-           search sort stable-sort array-rank array-dimension array-total-size
+           etypecase return prog1 prog2 multiple-value-bind multiple-value-setq
+           prog prog* multiple-value-prog1 every some notany notevery member
+           member-if member-if-not find find-if find-if-not assoc assoc-if
+           assoc-if-not rassoc rassoc-if rassoc-if-not position position-if
+           position-if-not count count-if count-if-not remove remove-if
+           remove-if-not delete delete-if delete-if-not remove-duplicates
+           delete-duplicates substitute substitute-if substitute-if-not
+           nsubstitute nsubstitute-if nsubstitute-if-not subst subst-if
+           subst-if-not nsubst nsubst-if nsubst-if-not nreverse revappend
+           nreconc adjoin fill replace push pushnew pop set-difference
+           nset-difference union nunion intersection nintersection
+           set-exclusive-or nset-exclusive-or subsetp mismatch search sort
+           stable-sort array-rank array-dimension array-total-size
            array-in-bounds-p array-element-type upgraded-array-element-type
            adjustable-array-p get get-properties remprop getf char schar bit
            sbit svref vector-pop vector-push vector-push-extend string= string/=
