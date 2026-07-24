@@ -28503,16 +28503,15 @@ builtin_expt (struct object *list, struct environment *env,
 
   if (ret->type == TYPE_INTEGER)
     {
-      mpz_set_si (ret->value_ptr.integer,
-		  pow (mpz_get_si (CAR (list)->value_ptr.integer), exp));
+      mpz_pow_ui (ret->value_ptr.integer, CAR (list)->value_ptr.integer, exp);
     }
   else
     {
-      mpz_set_si (mpq_numref (ret->value_ptr.ratio),
-		  pow (mpz_get_si (mpq_numref (ret->value_ptr.ratio)), exp));
+      mpz_pow_ui (mpq_numref (ret->value_ptr.ratio),
+		  mpq_numref (ret->value_ptr.ratio), exp);
       mpq_canonicalize (ret->value_ptr.ratio);
-      mpz_set_si (mpq_denref (ret->value_ptr.ratio),
-		  pow (mpz_get_si (mpq_denref (ret->value_ptr.ratio)), exp));
+      mpz_pow_ui (mpq_denref (ret->value_ptr.ratio),
+		  mpq_denref (ret->value_ptr.ratio), exp);
       mpq_canonicalize (ret->value_ptr.ratio);
     }
 
