@@ -110,7 +110,7 @@
 	      (eq (caadr form) 'lambda))
 	 (macroexpand-body (cddadr form)))
      form)
-    ((member (car form) '(if progn prog1 prog2 block tagbody multiple-value-call
+    ((member (car form) '(if progn block tagbody multiple-value-call
 			  multiple-value-prog1 and or catch throw progv
 			  unwind-protect locally) :test #'eq)
      (macroexpand-body (cdr form))
