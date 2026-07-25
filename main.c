@@ -13942,7 +13942,8 @@ set_elt (struct object *seq, unsigned int ind, struct object *val)
       if (val->type == TYPE_INTEGER)
 	{
 	  newval = mpz_get_si (val->value_ptr.integer)
-	    & ((1 << seq->value_ptr.byte_array->step)-1);
+	    & (seq->value_ptr.byte_array->step == 64 ? (unsigned long)-1
+	       : ((1 << seq->value_ptr.byte_array->step)-1));
 
 	  switch (seq->value_ptr.byte_array->step)
 	    {
