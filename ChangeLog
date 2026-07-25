@@ -1,3 +1,87 @@
+v1.8 (25-Jul-2026):
+
+- Byte arrays of integers are now actually supported: you can create them, read
+  and write elements, print them
+
+- The type AL:BYTE-ARRAY has been added
+
+- Many bugs in SUBTYPEP have been fixed: leaks have been closed, OR types were
+  buggy, also (AND) and (OR) now are handled explicitly
+
+- SUBTYPEP now handles INTEGER types with their arguments correctly
+
+- The type BIT has been moved to lisp code
+
+- MAKE-ARRAY now treats the requested ELEMENT-TYPE consistently in more cases
+
+- The minimal compiler performed its deep macro-expansion non-destructively;
+  this was seemingly not necessary, so now it operates destructively on forms
+
+- The deep macro-expansion now descends into many more forms (including
+  backquote expressions), so the performance of many parts of alisp has improved
+  a lot
+
+- Functions with non-exported names in cl.lisp and compiler.lisp weren't
+  compiled, now they are
+
+- All the compiler-related functions and macros have been moved to a separate
+  lisp file compiler.lisp; REQUIRE is now aware of this file
+
+- (SETF AL:NEXT) has been added
+
+- A function that sets its own body caused memory corruption in some cases.
+  This has been fixed, but it's still not guaranteed to work in all cases
+
+- The bitwise API is largely improved: LDB, LOGBITP, LDB-TEST and ASH have been
+  added
+
+- The CL::WHILE macro has been improved
+
+- EXPT was buggy, it didn't use bignums even when it could.  It's been fixed
+
+- The "marking" of constant data was problematic, so it's been temporarily
+  disabled.  Now modifying most constant data won't cause an error
+
+- Printing of warning messages has been made nicer and more readable
+
+- The warning system, that was already in place, has been put to some use: now a
+  warning is issued if a global function or macro is redefined, or if an
+  undefined variable is set
+
+- LOOP used some internal variables without establishing their bindings.  This
+  has been fixed
+
+- The remaining parameters to MAKE-HASH-TABLE (SIZE, REHASH-SIZE and
+  REHASH-THRESHOLD) have been added and are ignored
+
+- The directive ~C has been added to FORMAT
+
+- The ~( directive of FORMAT has been completed with all the options
+
+- STRING-CAPITALIZE was broken, it upcased the first letter but didn't downcase
+  the other letters.  Now it's fixed
+
+- Many output functions had a bug: they set the dirty_line bit even if the
+  output was empty.  This has been fixed
+
+- Continuation lines were not echoed in the debugger; this has been fixed
+
+- The readline history file now is loaded before loading cl.lisp, so that
+  history is available if cl.lisp enters the debugger
+
+- PROG1 and PROG2 have been moved to lisp code
+
+- TYPE-ERROR is raised in more places where it's appropriate
+
+- MAKE-SEQUENCE now works with bit vectors
+
+- The NOTES file has been expanded a lot
+
+Now every building block is in place, so I can finally start working on the
+bytecode compiler!
+
+
+
 v1.7 (1-Jul-2026):
 
 - All the names of alisp extensions have been moved from COMMON-LISP-USER to a
