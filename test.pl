@@ -777,7 +777,7 @@ make_test ("(make-string 4 :initial-element #\\ò)", "\"òòòò\"");
 make_test ("(make-sequence 'string 7 :initial-element #\\b)", "\"bbbbbbb\"");
 make_test ("(make-sequence 'list 3)", "(NIL NIL NIL)");
 make_test ("(make-sequence 'vector 5 :initial-element 2)", "#(2 2 2 2 2)");
-#make_test ("(make-sequence 'bit-vector 3)", "#*000");
+make_test ("(make-sequence 'bit-vector 3 :initial-element 1)", "#*111");
 make_test ("(intern \"hi\")", "|hi|\nNIL");
 make_test ("(intern \"hi\")", "|hi|\n:INTERNAL");
 make_test ("(intern \"hi\" 'keyword)", ":|hi|\nNIL");
