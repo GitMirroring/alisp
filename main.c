@@ -20969,7 +20969,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	}
       else
 	{
-	  ret = alloc_byte_vector (indx, subt, step, 1);
+	  ret = alloc_byte_vector (tot, subt, step, 1);
 	  ret->value_ptr.byte_array->alloc_size = size;
 	}
     }
