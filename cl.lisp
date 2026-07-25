@@ -2251,8 +2251,10 @@
   (let ((ret (cond
 	       ((subtypep restype 'string)
 		(make-string size))
+	       ((subtypep restype 'bit-vector)
+		(make-array size :element-type 'bit))
 	       ((subtypep restype 'vector)
-		(make-array size :element-type restype))
+		(make-array size))
 	       (t
 		(make-list size)))))
     (dotimes (i size)
