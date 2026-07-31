@@ -9996,7 +9996,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	      return NULL;
 	    }
 
-	  if (IS_STRING (seq) || IS_BIT_VECTOR (seq))
+	  if (seq->type == TYPE_BYTE_ARRAY)
 	    decrement_refcount (el);
 	}
     }
@@ -10007,7 +10007,7 @@ fill_axis_from_sequence (struct object *arr, struct object **axis, fixnum index,
 	  axis [i] = elt (seq, i);
 	  add_reference (arr, axis [i], index+i);
 
-	  if (IS_STRING (seq) || IS_BIT_VECTOR (seq))
+	  if (seq->type == TYPE_BYTE_ARRAY)
 	    decrement_refcount (axis [i]);
 	}
     }
@@ -10066,7 +10066,7 @@ create_array_from_sequence (struct object *seq, fixnum rank)
 				    size->next, rowsize, el))
 	return NULL;
 
-      if (IS_STRING (seq) || IS_BIT_VECTOR (seq))
+      if (seq->type == TYPE_BYTE_ARRAY)
 	decrement_refcount (el);
     }
 
@@ -21015,8 +21015,7 @@ builtin_make_array (struct object *list, struct environment *env,
 	      el = elt (initial_contents, i);
 	      set_elt (ret, i, el);
 
-	      if (IS_BIT_VECTOR (initial_contents)
-		  || IS_STRING (initial_contents))
+	      if (initial_contents->type == TYPE_BYTE_ARRAY)
 		decrement_refcount (el);
 	    }
 
@@ -21057,8 +21056,7 @@ builtin_make_array (struct object *list, struct environment *env,
 		  return NULL;
 		}
 
-	      if (IS_STRING (initial_contents)
-		  || IS_BIT_ARRAY (initial_contents))
+	      if (initial_contents->type == TYPE_BYTE_ARRAY)
 		{
 		  decrement_refcount (el);
 		}
@@ -25937,7 +25935,7 @@ builtin_map (struct object *list, struct environment *env,
 
       for (j = 2; j < l; j++)
 	{
-	  if (IS_STRING (nth (j, list)) || IS_BIT_VECTOR (nth (j, list)))
+	  if (nth (j, list)->type == TYPE_BYTE_ARRAY)
 	    {
 	      decrement_refcount (CAR (argscons));
 	    }
@@ -29095,7 +29093,7 @@ builtin_coerce (struct object *list, struct environment *env,
 
 	  set_elt (ret, i, el);
 
-	  if (IS_STRING (CAR (list)) || IS_BIT_ARRAY (CAR (list)))
+	  if (CAR (list)->type == TYPE_BYTE_ARRAY)
 	    decrement_refcount (el);
 	}
 
