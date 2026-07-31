@@ -382,6 +382,7 @@ make_test ("(setf (aref arr 2) \"aaa\")", "\"aaa\"");
 make_test ("arr", "#(NIL NIL \"aaa\")");
 make_test ("(let ((arr (make-array '(1 2 3)))) (setf (aref arr 0 1 2) 10) arr)", "#3A(((NIL NIL NIL) (NIL NIL 10)))");
 make_test ("(let ((v #*100010)) (setf (aref v 2) 1) v)", "#*101010");
+make_test ("(let ((arr (make-array '(2 3) :initial-contents '((1 2 3) (4 5 6))))) (setf (row-major-aref arr 4) 10) arr)", "#2A((1 2 3) (4 10 6))");
 make_test ("(let ((b 10)) b)", "10");
 make_test ("(let ((b 1)) (setf b 2) b)", "2");
 make_test ("b", "9");
