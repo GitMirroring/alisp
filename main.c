@@ -21259,9 +21259,18 @@ builtin_adjust_array (struct object *list, struct environment *env,
     ? mpz_get_si (CAR (CAR (CDR (list)))->value_ptr.integer)
     : mpz_get_si (CAR (CDR (list))->value_ptr.integer);
 
-  if (IS_STRING (CAR (list)))
+
+  if (CAR (list)->type == TYPE_BYTE_ARRAY && IS_VECTOR (CAR (list)))
     {
-      oldsz = CAR (list)->value_ptr.byte_array->alloc_size->size;
+      oldsz = CAR (list)->value_ptr.byte_array->alloc_size->size
+	* CAR (list)->value_ptr.byte_array->step / 8
+	+ (CAR (list)->value_ptr.byte_array->alloc_size->size
+	   * CAR (list)->value_ptr.byte_array->step % 8 > 0);
+
+      CAR (list)->value_ptr.byte_array->alloc_size->size = newsz;
+
+      newsz = newsz * CAR (list)->value_ptr.byte_array->step / 8
+	+ (newsz * CAR (list)->value_ptr.byte_array->step % 8 > 0);
 
       CAR (list)->value_ptr.byte_array->value =
 	realloc_and_check (CAR (list)->value_ptr.byte_array->value, newsz);
@@ -21270,8 +21279,6 @@ builtin_adjust_array (struct object *list, struct environment *env,
 	{
 	  CAR (list)->value_ptr.byte_array->value [i] = 0;
 	}
-
-      CAR (list)->value_ptr.byte_array->alloc_size->size = newsz;
     }
   else if (CAR (list)->type == TYPE_ARRAY)
     {
@@ -21358,15 +21365,6 @@ builtin_adjust_array (struct object *list, struct environment *env,
 	    realloc_and_check (CAR (list)->value_ptr.array->reference_strength_factor,
 			       newsz * sizeof (int));
 	}
-    }
-  else if (IS_BIT_ARRAY (CAR (list)))
-    {
-      if (!CAR (list)->value_ptr.array->alloc_size)
-	{
-	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
-	  return NULL;
-	}
-
     }
   else
     {
