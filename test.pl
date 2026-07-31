@@ -1156,6 +1156,9 @@ make_test ("(adjust-array #2a((a b c) (d e f)) '(3 4))", "#2A((A B C NIL) (D E F
 make_test ("(adjust-array #2a((a b c) (d e f)) '(2 2))", "#2A((A B) (D E))");
 make_test ("(adjust-array #2a((a b c d) (e f g h) (i j k l)) '(2 3))", "#2A((A B C) (E F G))");
 make_test ("(adjust-array #3a(((a b) (c d) (e f)) ((g h) (i j) (k l))) '(3 4 3))", "#3A(((A B NIL) (C D NIL) (E F NIL) (NIL NIL NIL)) ((G H NIL) (I J NIL) (K L NIL) (NIL NIL NIL)) ((NIL NIL NIL) (NIL NIL NIL) (NIL NIL NIL) (NIL NIL NIL)))");
+make_test ("(adjust-array #*01001 7)", "#*0100100");
+make_test ("(adjust-array (make-array 4 :element-type '(signed-byte 8) :initial-contents '(1 2 3 4)) 6)", "#(1 2 3 4 0 0)");
+make_test ("(adjust-array (make-array 4 :element-type '(signed-byte 32) :initial-contents '(1 2 3 4)) 7)", "#(1 2 3 4 0 0 0)");
 make_test ("(defparameter tbl (make-hash-table))", "TBL");
 make_test ("tbl", "#<HASH-TABLE EQL 0/1024>");
 make_test ("(hash-table-size tbl)", "1024");
