@@ -328,9 +328,15 @@ the future a step of 32 bits will be supported for handling UTF-32 explicitly.
 Unsigned byte arrays can have a step of 1 (for bit arrays), 8, 16, 32, 64.
 Signed byte arrays support a step of 8, 16, 32, 64.
 
-In any case, alisp assumes a representation in two's complement in the
+In all cases, alisp assumes a representation in two's complement in the
 underlying C toolchain.  That means that a signed byte array with n-bits
 elements can hold integers in the -2^(n-1), 2^(n-1)-1 range.
+
+Strings and bit vectors have a special read and print syntax, as required by
+ANSI.  Other byte arrays are printed like general arrays.  There's no read
+notation for such byte arrays either; you need MAKE-ARRAY to create them, for
+example requesting an element type of (UNSIGNED-BYTE n) or (SIGNED-BYTE n)
+respectively for unsigned and signed byte arrays of step n.
 
 All arrays are adjustable in alisp.  As long as it's an interpreter, there's no
 reason to do otherwise.
