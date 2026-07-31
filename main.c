@@ -2599,6 +2599,9 @@ struct object *builtin_setf_nth (struct object *list, struct environment *env,
 				 struct outcome *outcome);
 struct object *builtin_setf_aref (struct object *list, struct environment *env,
 				  struct outcome *outcome);
+struct object *builtin_setf_row_major_aref (struct object *list,
+					    struct environment *env,
+					    struct outcome *outcome);
 struct object *builtin_setf_elt (struct object *list, struct environment *env,
 				 struct outcome *outcome);
 struct object *builtin_setf_fill_pointer (struct object *list,
@@ -3886,7 +3889,7 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("AREF", env, builtin_aref, 0, builtin_setf_aref,
 		    0);
   add_builtin_form ("ROW-MAJOR-AREF", env, builtin_row_major_aref, 0,
-		    NULL, 0);
+		    builtin_setf_row_major_aref, 0);
   add_builtin_form ("COPY-LIST", env, builtin_copy_list, 0, NULL, 0);
   add_builtin_form ("COPY-SEQ", env, builtin_copy_seq, 0, NULL, 0);
   add_builtin_form ("SUBSEQ", env, builtin_subseq, 0, NULL, 0);
@@ -26216,6 +26219,49 @@ builtin_setf_aref (struct object *list, struct environment *env,
       add_reference (CAR (list), newval, ind);
       CAR (list)->value_ptr.array->value [ind] = newval;
     }
+
+  increment_refcount (newval);
+  return newval;
+}
+
+
+struct object *
+builtin_setf_row_major_aref (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *newval;
+  int ind;
+
+  if (list_length (list) != 3)
+    {
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
+    }
+
+  newval = CAR (list);
+  list = CDR (list);
+
+  if (!IS_ARRAY (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "CL:ARRAY", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+    }
+
+  ind = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+  if (ind < 0
+      || ind >= array_total_size (CAR (list)->type == TYPE_ARRAY
+				  ? CAR (list)->value_ptr.array->alloc_size
+				  : CAR (list)->value_ptr.byte_array->alloc_size))
+    {
+      outcome->type = OUT_OF_BOUND_INDEX;
+      return NULL;
+    }
+
+  set_elt (CAR (list), ind, newval);
 
   increment_refcount (newval);
   return newval;
