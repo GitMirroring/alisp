@@ -13927,6 +13927,7 @@ set_elt (struct object *seq, unsigned int ind, struct object *val)
   if (IS_LIST (seq))
     {
       cons = nthcdr (ind, seq);
+      delete_reference (cons, CAR (cons), 0);
       cons->value_ptr.cons_pair->car = val;
       add_reference (cons, val, 0);
     }
@@ -13934,6 +13935,7 @@ set_elt (struct object *seq, unsigned int ind, struct object *val)
     seq->value_ptr.byte_array->value [ind] = *val->value_ptr.character;
   else if (seq->type == TYPE_ARRAY)
     {
+      delete_reference (seq, seq->value_ptr.array->value [ind], ind);
       seq->value_ptr.array->value [ind] = val;
       add_reference (seq, val, ind);
     }
