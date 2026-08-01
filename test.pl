@@ -530,16 +530,16 @@ make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 make_test ("(defmacro mac3 (&key k &environment env) k)", "MAC3");
 make_test ("(mac3)", "NIL");
 
-make_test ("(gensym)", "#:G125");
-make_test ("(gensym)", "#:G126");
-make_test ("(gensym 5)", "#:G5");
-make_test ("(gensym \"A\")", "#:A127");
 make_test ("(gensym)", "#:G128");
+make_test ("(gensym)", "#:G129");
+make_test ("(gensym 5)", "#:G5");
+make_test ("(gensym \"A\")", "#:A130");
+make_test ("(gensym)", "#:G131");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
-make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G129)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G129)\n(FOO2)");
-make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G130)\n(SETQ A #:G130)\nA");
-make_test ("(get-setf-expansion '(w a b))", "(#:G131 #:G132)\n(A B)\n(#:G133)\n(FUNCALL (FUNCTION (SETF W)) #:G133 #:G131 #:G132)\n(W #:G131 #:G132)");
+make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G132)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G132)\n(FOO2)");
+make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G133)\n(SETQ A #:G133)\nA");
+make_test ("(get-setf-expansion '(w a b))", "(#:G134 #:G135)\n(A B)\n(#:G136)\n(FUNCALL (FUNCTION (SETF W)) #:G136 #:G134 #:G135)\n(W #:G134 #:G135)");
 make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
 make_test ("(defmacro setf-mac nil 'setfvar)", "SETF-MAC");
 make_test ("(let ((setfvar 0)) (setf (setf-mac) 1) setfvar)", "1");
@@ -2024,6 +2024,7 @@ make_test ("(simple-condition-format-control (make-condition 'simple-condition))
 make_test ("(simple-condition-format-control (make-condition 'simple-error))", "NIL");
 make_test ("(simple-condition-format-control (make-condition 'simple-condition :format-control \"aaa\"))", "\"aaa\"");
 make_test ("(arithmetic-error-operation (make-condition 'arithmetic-error))", "NIL");
+
 make_test ("(define-compiler-macro foo (x) x)", "FOO");
 make_test ("(funcall (compiler-macro-function 'foo) '(foo 0) nil)", "0");
 make_test ("(compiler-macro-function 'bar)", "NIL");
@@ -2031,10 +2032,15 @@ make_test ("(define-compiler-macro foo (x) 10)", "FOO");
 make_test ("(funcall (compiler-macro-function 'foo) '(foo 0) nil)", "10");
 make_test ("(define-compiler-macro (setf foo) (x y) (list y x))", "(SETF FOO)");
 make_test ("(funcall (compiler-macro-function '(setf foo)) '(setf (foo 10) 11) nil)", "(11 (FOO 10))");
+make_test ("(cl::expand-compiler-macro '(setf (foo 20) 21))", "(21 (FOO 20))");
 make_test ("(define-compiler-macro + (&whole form &rest args) (if (every #'numberp args) (apply '+ args) form))", "+");
 make_test ("(defun compadd (x y) (+ x 0) (+ 1 2))", "COMPADD");
 make_test ("(compile 'compadd)", "COMPADD\nNIL\nNIL");
 make_test ("(al:function-body #'compadd)", "((+ X 0) 3)");
+make_test ("(define-compiler-macro bar (&whole wh x) (list wh x))", "BAR");
+make_test ("(funcall (compiler-macro-function 'bar) '(funcall 'bar 100) nil)", "((FUNCALL 'BAR 100) 100)");
+make_test ("(cl::expand-compiler-macro '(funcall #'bar 101))", "((FUNCALL #'BAR 101) 101)");
+
 make_test ("(declaim (optimize speed (safety 0) (debug 3)))", "T");
 make_test ("(declaim (ignorable a) (ignore b c) (inline e) (notinline d f))", "T");
 make_test ("(declaim (type list a) (ftype (function nil nil) b))", "T");
