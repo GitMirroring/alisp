@@ -38,14 +38,22 @@
 
 
 (defmacro define-compiler-macro (name lambdal &body body)
-  `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (progn
-       (setf (compiler-macro-function ',name)
-	     (lambda (form env)
-	       (al:with-macro-arguments ,lambdal
-		 env form
-		 . ,body)))
-       ',name)))
+  (let (wholevar)
+    (if (eq (car lambdal) '&whole)
+	(setq wholevar (cadr lambdal) lambdal (cddr lambdal)))
+    `(eval-when (:compile-toplevel :load-toplevel :execute)
+       (progn
+	 (setf (compiler-macro-function ',name)
+	       (lambda (form env)
+		 (let ((args form))
+		   (if (eq (car form) 'funcall)
+		       (setq args (cdr args)))
+		   (let ,(if wholevar
+			     `((,wholevar form)))
+		     (al:with-macro-arguments ,lambdal
+		       env args
+		       . ,body)))))
+	 ',name))))
 
 
 
@@ -89,14 +97,36 @@
     form))
 
 
-(defun macroexpand-form-deeply (form)
+(defun expand-compiler-macro (form)
   (if (and
-       al:*expand-compiler-macros*
        (consp form)
        (symbolp (car form)))
-      (let ((compmac (compiler-macro-function (car form))))
-	(if compmac
-	    (setq form (funcall compmac form nil)))))
+      (cond
+	((eq (car form) 'setf)
+	 (if (and
+	      (consp (cadr form))
+	      (symbolp (caadr form)))
+	     (let ((compmac (compiler-macro-function (list 'setf (caadr form)))))
+	       (if compmac
+		   (setq form (funcall compmac form nil))))))
+	((eq (car form) 'funcall)
+	 (if (and
+	      (consp (cadr form))
+	      (or (eq (caadr form) 'quote)
+		  (eq (caadr form) 'function)))
+	     (let ((compmac (compiler-macro-function (cadadr form))))
+	       (if compmac
+		   (setq form (funcall compmac form nil))))))
+	(t
+	 (let ((compmac (compiler-macro-function (car form))))
+	   (if compmac
+	       (setq form (funcall compmac form nil)))))))
+  form)
+
+
+(defun macroexpand-form-deeply (form)
+  (if al:*expand-compiler-macros*
+      (setq form (expand-compiler-macro form)))
   (setq form (macroexpand form))
   (cond
     ((typep form 'al:backquote)
@@ -356,8 +386,9 @@
 
 
 
-(dolist (sym '(macroexpand-backquote macroexpand-body macroexpand-form-deeply
-	       write-preserving-similarity parse-toplevel-form-at-compile-time))
+(dolist (sym '(macroexpand-backquote macroexpand-body expand-compiler-macro
+	       macroexpand-form-deeply write-preserving-similarity
+	       parse-toplevel-form-at-compile-time))
   (compile sym))
 
 
