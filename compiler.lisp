@@ -166,7 +166,7 @@
      (macroexpand-body (cdddr form))
      form)
     ((member (car form) '(setq setf) :test #'eq)
-     (let ((cons (cdr form)))
+     (let ((cons (cddr form)))
        (while cons
 	 (setf (car cons) (macroexpand-form-deeply (car cons)))
 	 (setq cons (cddr cons))))
