@@ -337,8 +337,6 @@
 	((eq (car form) 'progn)
 	 (dolist (f (cdr form))
 	   (parse-toplevel-form-at-compile-time f)))
-	((member (car form) '(in-package) :test #'eq)
-	 (eval form))
 	((and
 	  (eq (car form) 'eval-when)
 	  (member :compile-toplevel (cadr form) :test #'eq))
