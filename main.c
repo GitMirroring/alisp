@@ -9734,64 +9734,64 @@ select_array_element_type (struct object *elemtype, struct environment *env,
       *step = 8;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 1)", env,
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 1)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_UNSIGNED;
       *step = 1;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 8)", env,
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -128 127)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_SIGNED;
       *step = 8;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 16)", env,
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -32768 32767)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_SIGNED;
       *step = 16;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 32)", env,
-				      outcome))
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -2147483648 2147483647)",
+				      env, outcome))
     {
       *subt = BYTE_ARRAY_SIGNED;
       *step = 32;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:SIGNED-BYTE 64)", env,
-				      outcome))
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -9223372036854775808 "
+				      "9223372036854775807)", env, outcome))
     {
       *subt = BYTE_ARRAY_SIGNED;
       *step = 64;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 8)", env,
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 255)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_UNSIGNED;
       *step = 8;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 16)", env,
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 65535)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_UNSIGNED;
       *step = 16;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 32)", env,
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 4294967295)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_UNSIGNED;
       *step = 32;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:UNSIGNED-BYTE 64)", env,
-				      outcome))
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 18446744073709551615)",
+				      env, outcome))
     {
       *subt = BYTE_ARRAY_UNSIGNED;
       *step = 64;
