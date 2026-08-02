@@ -84,7 +84,7 @@
   (when (and al:*compile-when-defining*
 	     (not (typep meth 'al:compiled-method)))
     (setf (al:function-body meth)
-	  (macroexpand-body (al:function-body meth)))
+	  (macroexpand-body (al:function-body meth) (list nil nil)))
     (setf (al:function-attributes meth) '(:compiled)))
   (al:add-method genfun meth))
 
