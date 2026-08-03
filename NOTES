@@ -514,6 +514,14 @@ environments are not used often and mostly at compile time, I didn't feel the
 need for a more specialized and efficient representation.  As an added benefit,
 using a list makes these objects very easy to inspect and modify.
 
+Environment objects are a list with two elements.  The first element is a list
+where each member is a list of two elements, a macro name and its macro
+function; these represent the local macro bindings and the more recent comes
+first.  The second element is a list and each of its members is a list; for
+variable bindings, it has only one element with the variable name; for a local
+symbol macro, it also has a second member with the expansion form; the more
+recent bindings come first.
+
 
 
 __Compilation__
@@ -618,6 +626,8 @@ __Known bugs and limitations__
 - Package locks and deletion of packages is still missing
 
 - Displaced arrays are not yet implemented
+
+- Load time values are not yet supported
 
 - Meeting an unexpected dotted list in some places will cause a crash
 
