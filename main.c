@@ -974,6 +974,9 @@ function
   struct go_tag_frame *encl_tags;
 
 
+  struct object *bytecode;
+  struct object *objvector;
+
   struct object *body;
 
   enum function_flags flags;
@@ -1011,6 +1014,10 @@ method
     (struct object *list, struct environment *env, struct outcome *outcome);
 
   int is_compiled;
+
+  struct object *bytecode;
+  struct object *objvector;
+
   struct object *body;
 };
 
@@ -2631,6 +2638,12 @@ struct object *builtin_setf_al_next (struct object *list,
 struct object *builtin_setf_al_function_name (struct object *list,
 					      struct environment *env,
 					      struct outcome *outcome);
+struct object *builtin_setf_al_function_bytecode (struct object *list,
+						  struct environment *env,
+						  struct outcome *outcome);
+struct object *builtin_setf_al_function_objvector (struct object *list,
+						   struct environment *env,
+						   struct outcome *outcome);
 struct object *builtin_setf_al_function_body (struct object *list,
 					      struct environment *env,
 					      struct outcome *outcome);
@@ -2995,6 +3008,10 @@ struct object *evaluate_psetq
 struct object *evaluate_setf
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_function_name
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_function_bytecode
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_function_objvector
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_function_body
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4713,6 +4730,10 @@ add_standard_definitions (struct environment *env)
 
   add_builtin_form ("FUNCTION-NAME", env, builtin_al_function_name,
 		    0, builtin_setf_al_function_name, 0);
+  add_builtin_form ("FUNCTION-BYTECODE", env, builtin_al_function_bytecode,
+		    0, builtin_setf_al_function_bytecode, 0);
+  add_builtin_form ("FUNCTION-OBJVECTOR", env, builtin_al_function_objvector,
+		    0, builtin_setf_al_function_objvector, 0);
   add_builtin_form ("FUNCTION-BODY", env, builtin_al_function_body,
 		    0, builtin_setf_al_function_body, 0);
   add_builtin_form ("FUNCTION-ATTRIBUTES", env, builtin_al_function_attributes,
@@ -8009,6 +8030,8 @@ alloc_function (void)
   fun->lex_funcs = &nil_object;
   fun->encl_blocks = NULL;
   fun->encl_tags = NULL;
+  fun->bytecode = &nil_object;
+  fun->objvector = &nil_object;
   fun->body = NULL;
   fun->flags = 0;
   fun->methods = NULL;
@@ -13693,6 +13716,8 @@ define_generic_function (char *name, struct environment *env,
       m->lambda_list = copy_lambda_list (lambda_list, 1);
       m->builtin_method = default_method;
       m->is_compiled = 1;
+      m->bytecode = &nil_object;
+      m->objvector = &nil_object;
       m->body = NULL;
 
       ml = malloc_and_check (sizeof (*ml));
@@ -26816,6 +26841,96 @@ builtin_setf_al_function_name (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_setf_al_function_bytecode (struct object *list, struct environment *env,
+				   struct outcome *outcome)
+{
+  struct object *newval;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  newval = CAR (list);
+
+  if (CAR (CDR (list))->type != TYPE_FUNCTION
+      && CAR (CDR (list))->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:FUNCTION CL:METHOD)",
+			       env, outcome);
+    }
+
+  if (CAR (CDR (list))->type == TYPE_FUNCTION)
+    {
+      delete_reference (CAR (CDR (list)),
+			CAR (CDR (list))->value_ptr.function->bytecode, 4);
+      CAR (CDR (list))->value_ptr.function->bytecode = newval;
+      add_reference (CAR (CDR (list)), newval, 4);
+    }
+  else
+    {
+      delete_reference (CAR (CDR (list)),
+			CAR (CDR (list))->value_ptr.method->bytecode, 2);
+      CAR (CDR (list))->value_ptr.method->bytecode = newval;
+      add_reference (CAR (CDR (list)), newval, 2);
+    }
+
+  increment_refcount (newval);
+  return newval;
+}
+
+
+struct object *
+builtin_setf_al_function_objvector (struct object *list, struct environment *env,
+				    struct outcome *outcome)
+{
+  struct object *newval;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (!IS_LIST (CAR (list)))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  newval = CAR (list);
+
+  if (CAR (CDR (list))->type != TYPE_FUNCTION
+      && CAR (CDR (list))->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:FUNCTION CL:METHOD)",
+			       env, outcome);
+    }
+
+  if (CAR (CDR (list))->type == TYPE_FUNCTION)
+    {
+      delete_reference (CAR (CDR (list)),
+			CAR (CDR (list))->value_ptr.function->objvector, 5);
+      CAR (CDR (list))->value_ptr.function->objvector = newval;
+      add_reference (CAR (CDR (list)), newval, 5);
+    }
+  else
+    {
+      delete_reference (CAR (CDR (list)),
+			CAR (CDR (list))->value_ptr.method->objvector, 3);
+      CAR (CDR (list))->value_ptr.method->objvector = newval;
+      add_reference (CAR (CDR (list)), newval, 3);
+    }
+
+  increment_refcount (newval);
+  return newval;
+}
+
+
+struct object *
 builtin_setf_al_function_body (struct object *list, struct environment *env,
 			       struct outcome *outcome)
 {
@@ -33902,6 +34017,58 @@ builtin_al_function_name (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_al_function_bytecode (struct object *list, struct environment *env,
+			      struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION && CAR (list)->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (list), "(CL:OR CL:FUNCTION CL:METHOD)", env,
+			       outcome);
+    }
+
+  ret = CAR (list)->type == TYPE_FUNCTION
+    ? CAR (list)->value_ptr.function->bytecode
+    : CAR (list)->value_ptr.method->bytecode;
+
+  increment_refcount (ret);
+  return ret;
+}
+
+
+struct object *
+builtin_al_function_objvector (struct object *list, struct environment *env,
+			       struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION && CAR (list)->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (list), "(CL:OR CL:FUNCTION CL:METHOD)", env,
+			       outcome);
+    }
+
+  ret = CAR (list)->type == TYPE_FUNCTION
+    ? CAR (list)->value_ptr.function->objvector
+    : CAR (list)->value_ptr.method->objvector;
+
+  increment_refcount (ret);
+  return ret;
+}
+
+
+struct object *
 builtin_al_function_body (struct object *list, struct environment *env,
 			  struct outcome *outcome)
 {
@@ -35585,7 +35752,7 @@ builtin_ensure_generic_function (struct object *list, struct environment *env,
       if (found_amp_key)
 	fun->value_ptr.function->flags |= FOUND_AMP_KEY;
 
-      i = 4;
+      i = 8;
       free_lambda_list_content (fun, fun->value_ptr.function->lambda_list, &i,
 				0);
       free_lambda_list_structure (fun->value_ptr.function->lambda_list);
@@ -35682,6 +35849,8 @@ builtin_al_create_method (struct object *list, struct environment *env,
   m->generic_func = NULL;
   m->qualifier = q;
   m->is_compiled = 0;
+  m->bytecode = &nil_object;
+  m->objvector = &nil_object;
   m->body = NULL;
 
   outcome->type = EVAL_OK;
@@ -35786,13 +35955,13 @@ builtin_al_add_method (struct object *list, struct environment *env,
       ml->meth = CAR (CDR (list));
       ml->next = CAR (list)->value_ptr.function->methods;
       CAR (list)->value_ptr.function->methods = ml;
-      add_reference (CAR (list), ml->meth, 8);
+      add_reference (CAR (list), ml->meth, 12);
     }
   else
     {
-      delete_reference (CAR (list), ml->meth, 8+ind*8);
+      delete_reference (CAR (list), ml->meth, 12+ind*8);
       ml->meth = CAR (CDR (list));
-      add_reference (CAR (list), ml->meth, 8+ind*8);
+      add_reference (CAR (list), ml->meth, 12+ind*8);
     }
 
   increment_refcount (CAR (list));
@@ -35845,7 +36014,7 @@ builtin_remove_method (struct object *list, struct environment *env,
 		       struct outcome *outcome)
 {
   struct method_list *ml, *prev = NULL;
-  int i = 8;
+  int i = 12;
 
   if (list_length (list) != 2)
     {
@@ -40836,19 +41005,19 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
     }
   else if (src->type == TYPE_FUNCTION)
     {
-      if (ind <= 3)
+      if (ind < 8)
 	{
 	  return !(src->flags & (0x1 << ind))
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
 
-      ind -= 4;
+      ind -= 8;
 
       if (ind % 8 == 4)
 	{
 	  ml = src->value_ptr.function->methods;
 
-	  while (ind > 7)
+	  while (ind >= 8)
 	    {
 	      ind -= 8;
 	      ml = ml->next;
@@ -40865,16 +41034,16 @@ is_reference_weak (struct object *src, int ind, struct object *dest)
     }
   else if (src->type == TYPE_METHOD)
     {
-      if (ind <= 1)
+      if (ind < 4)
 	{
 	  return !(src->flags & (0x1 << ind))
 	    != !STRENGTH_FACTOR_OF_OBJECT (dest);
 	}
 
-      ind -= 2;
+      ind -= 4;
       par = src->value_ptr.method->lambda_list;
 
-      while (ind > 3)
+      while (ind >= 4)
 	{
 	  ind -= 4;
 	  par = par->next;
@@ -40935,20 +41104,20 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
     }
   else if (src->type == TYPE_FUNCTION)
     {
-      if (ind <= 3)
+      if (ind < 8)
 	{
 	  src->flags = (src->flags & ~(1 << ind))
 	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
 	}
       else
 	{
-	  ind -= 4;
+	  ind -= 8;
 
 	  if (ind % 8 == 4)
 	    {
 	      ml = src->value_ptr.function->methods;
 
-	      while (ind > 7)
+	      while (ind >= 8)
 		{
 		  ind -= 8;
 		  ml = ml->next;
@@ -40970,17 +41139,17 @@ set_reference_strength_factor (struct object *src, int ind, struct object *dest,
     }
   else if (src->type == TYPE_METHOD)
     {
-      if (ind <= 1)
+      if (ind < 4)
 	{
 	  src->flags = (src->flags & ~(1 << ind))
 	    | ((!new_weakness != !STRENGTH_FACTOR_OF_OBJECT (dest)) << ind);
 	}
       else
 	{
-	  ind -= 2;
+	  ind -= 4;
 	  par = src->value_ptr.method->lambda_list;
 
-	  while (ind > 3)
+	  while (ind >= 4)
 	    {
 	      ind -= 4;
 	      par = par->next;
@@ -41281,14 +41450,18 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 
       rest_inv_at_edge (node->value_ptr.function->lex_funcs, 3);
 
+      rest_inv_at_edge (node->value_ptr.function->bytecode, 4);
+
+      rest_inv_at_edge (node->value_ptr.function->objvector, 5);
+
 
       par = node->value_ptr.function->lambda_list;
-      i = 4;
+      i = 8;
 
       restore_invariants_at_lambda_list (par, node, &i, root, depth);
 
       ml = node->value_ptr.function->methods;
-      i = 8;
+      i = 12;
 
       while (ml)
 	{
@@ -41303,8 +41476,12 @@ restore_invariants_at_node (struct object *node, struct object *root, int *depth
 
       rest_inv_at_edge (node->value_ptr.method->body, 1);
 
+      rest_inv_at_edge (node->value_ptr.method->bytecode, 2);
+
+      rest_inv_at_edge (node->value_ptr.method->objvector, 3);
+
       par = node->value_ptr.method->lambda_list;
-      i = 2;
+      i = 4;
 
       while (par)
 	{
@@ -41764,18 +41941,20 @@ free_method_list (struct object *fun, struct method_list *ml, int ind)
 void
 free_function_or_macro (struct object *obj)
 {
-  int i = 4;
+  int i = 8;
 
   delete_reference (obj, obj->value_ptr.function->name, 0);
   delete_reference (obj, obj->value_ptr.function->body, 1);
   delete_reference (obj, obj->value_ptr.function->lex_vars, 2);
   delete_reference (obj, obj->value_ptr.function->lex_funcs, 3);
+  delete_reference (obj, obj->value_ptr.function->bytecode, 4);
+  delete_reference (obj, obj->value_ptr.function->objvector, 5);
 
   free_lambda_list_content (obj, obj->value_ptr.function->lambda_list, &i, 0);
   free_lambda_list_structure (obj->value_ptr.function->lambda_list);
   obj->value_ptr.function->lambda_list = NULL;
 
-  free_method_list (obj, obj->value_ptr.function->methods, 8);
+  free_method_list (obj, obj->value_ptr.function->methods, 12);
   obj->value_ptr.function->methods = NULL;
 
   if (obj->value_ptr.function->encl_blocks)
@@ -41794,10 +41973,12 @@ free_function_or_macro (struct object *obj)
 void
 free_method (struct object *obj)
 {
-  int i = 2;
+  int i = 4;
 
   delete_reference (obj, obj->value_ptr.method->generic_func, 0);
   delete_reference (obj, obj->value_ptr.method->body, 1);
+  delete_reference (obj, obj->value_ptr.method->bytecode, 2);
+  delete_reference (obj, obj->value_ptr.method->objvector, 3);
 
   free_lambda_list_content (obj, obj->value_ptr.method->lambda_list, &i, 1);
   free_lambda_list_structure (obj->value_ptr.method->lambda_list);
