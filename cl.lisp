@@ -55,17 +55,45 @@
 
 
 
+(defmacro while (cond &rest body)
+  (let ((tag (gensym)))
+    `(tagbody
+	,tag
+	(if ,cond
+	    (progn
+	      ,@body
+	      (go ,tag))))))
+
+
+
 (defmacro defun (name lambdal &body body)
-  `(progn
-     (if (fboundp ',name)
-	 (warn (format nil "redefining ~a globally as a function" ',name)))
-     (setf (fdefinition ',name)
-	   (if al:*compile-when-defining*
-	       (compile nil (lambda ,lambdal . ,body))
-	       (function (lambda ,lambdal . ,body))))
-     (setf (al:function-name (fdefinition ',name))
-	   ',name)
-     ',name))
+  (let ((block-name (if (typep name 'symbol)
+			name
+			(nth 1 name)))
+	(form body)
+	found-docstring
+	last-doc-or-decl)
+    (while (or (and (typep (car form) 'string)
+		    (not found-docstring))
+	       (and (typep (car form) 'cons)
+		    (eq (car (car form)) 'declare)))
+      (if (typep (car form) 'string)
+	  (setq found-docstring t))
+      (setq last-doc-or-decl form form (cdr form)))
+    (if last-doc-or-decl
+	(if (cdr last-doc-or-decl)
+	    (setf (cdr last-doc-or-decl) (cons `(block ,block-name . ,(cdr last-doc-or-decl)) nil)))
+	(setq body (cons `(block ,block-name . ,body) nil)))
+    `(progn
+       (if (fboundp ',name)
+	   (warn (format nil "redefining ~a globally as a function" ',name)))
+       (setf (fdefinition ',name)
+	     (if al:*compile-when-defining*
+		 (compile nil (lambda ,lambdal . ,body))
+		 (function (lambda ,lambdal . ,body))))
+       (setf (al:function-name (fdefinition ',name))
+	     ',name)
+       ',name)))
 
 
 (defmacro defgeneric (name lambdal &rest args)
@@ -254,17 +282,6 @@
 		  (setf (car l) cl l (cddr (cdaddr cl)))
 		  (setf ret cl l (cddr (cdaddr cl))))))))
     ret))
-
-
-
-(defmacro while (cond &rest body)
-  (let ((tag (gensym)))
-    `(tagbody
-	,tag
-	(if ,cond
-	    (progn
-	      ,@body
-	      (go ,tag))))))
 
 
 
