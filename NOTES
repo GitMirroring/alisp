@@ -13,6 +13,7 @@ Some notes on design choices, portability and ANSI conformance of alisp.
 
 __Index__
 
+- Using alisp on non-Posix systems
 - Floating point arithmetic
 - Type checking
 - Stack overflows
@@ -45,6 +46,24 @@ __Index__
 - Known bugs and limitations
 - Policy on use of Large Language Models
 - Minor details
+
+
+
+__Using alisp on non-Posix systems__
+
+Although alisp aims to work on as many systems as feasible, at present I'm
+prioritising Posix systems, which include Gnu+Linux, the BSDs and possibly
+macOS.
+
+Support for non-Posix systems will arrive in due time, but it shouldn't be hard:
+the biggest part that must change is the pathname subsystem, particularly the
+conversion of logical pathnames into physical ones.  This is implemented in C
+now, but will be moved to lisp.
+
+Some alisp extensions need modifications too: AL:PATHNAME-DIRECTORY,
+AL:LIST-DIRECTORY, AL:DIRECTORYP, AL:GETCWD.
+
+The rest of alisp is C89 or C99.
 
 
 
@@ -628,6 +647,8 @@ __Known bugs and limitations__
 - Displaced arrays are not yet implemented
 
 - Load time values are not yet supported
+
+- Changing the default type of method combination is not yet supported
 
 - Meeting an unexpected dotted list in some places will cause a crash
 
