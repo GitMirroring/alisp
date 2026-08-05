@@ -529,6 +529,8 @@ make_test ("(defmacro mac2 (&whole wh &rest args) wh)", "MAC2");
 make_test ("(macroexpand-1 '(mac2 0))", "(MAC2 0)\nT");
 make_test ("(defmacro mac3 (&key k &environment env) k)", "MAC3");
 make_test ("(mac3)", "NIL");
+make_test ("(defmacro mac4 (x y) (declare (ignore x)) \"testing\" (declare (ignore y)) (return-from mac4 '(+)))", "MAC4");
+make_test ("(mac4 10 11)", "0");
 
 make_test ("(gensym)", "#:G521");
 make_test ("(gensym)", "#:G522");
@@ -1985,7 +1987,7 @@ make_test ("(defmethod genfun12 ((x number) &key &allow-other-keys))", "#<STANDA
 make_test ("(defmethod genfun12 ((x real) &key) (write 'here))", "#<STANDARD-METHOD GENFUN12 (REAL)>");
 make_test ("(genfun12 0 :other 1)", "HERE\nHERE");
 make_test ("(defgeneric genfun13 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN13>");
-make_test ("(defmethod genfun13 (x) \"doc\" (declare (special x)) (f))", "#<STANDARD-METHOD GENFUN13 (T)>");
+make_test ("(defmethod genfun13 (x) (declare (special x)) \"doc\" (declare (special x)) (f))", "#<STANDARD-METHOD GENFUN13 (T)>");
 make_test ("(defun f nil x)", "warning: redefining F globally as a function\nF");
 make_test ("(genfun13 0)", "0");
 make_test ("(defgeneric genfun14 (x))", "#<STANDARD-GENERIC-FUNCTION GENFUN14>");
