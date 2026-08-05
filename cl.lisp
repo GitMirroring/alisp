@@ -32,15 +32,32 @@
 
 (setf (macro-function 'defmacro)
       #'(lambda (defmacroform defmacroenv)
-	  `(eval-when (:compile-toplevel :load-toplevel :execute)
-	     (if (fboundp ',(nth 1 defmacroform))
-		 (warn (format nil "redefining ~a globally as a macro" ',(nth 1 defmacroform))))
-	     (setf (macro-function ',(nth 1 defmacroform))
-		   #'(lambda (form env)
-		       (al:with-macro-arguments ,(nth 2 defmacroform)
-			 env form
-			 . ,(nthcdr 3 defmacroform))))
-	     ',(nth 1 defmacroform))))
+	  (let* ((name (nth 1 defmacroform))
+		 (body (nthcdr 3 defmacroform))
+		 (form body)
+		 found-docstring
+		 last-doc-or-decl)
+	    (do nil
+		((not (or (and (typep (car form) 'string)
+			       (not found-docstring))
+			  (and (typep (car form) 'cons)
+			       (eq (car (car form)) 'declare)))))
+	      (if (typep (car form) 'string)
+		  (setq found-docstring t))
+	      (setq last-doc-or-decl form form (cdr form)))
+	    (if last-doc-or-decl
+		(if (cdr last-doc-or-decl)
+		    (setf (cdr last-doc-or-decl) (cons `(block ,name . ,(cdr last-doc-or-decl)) nil)))
+		(setq body (cons `(block ,name . ,body) nil)))
+	    `(eval-when (:compile-toplevel :load-toplevel :execute)
+	       (if (fboundp ',name)
+		   (warn (format nil "redefining ~a globally as a macro" ',name)))
+	       (setf (macro-function ',name)
+		     #'(lambda (form env)
+			 (al:with-macro-arguments ,(nth 2 defmacroform)
+			   env form
+			   . ,body)))
+	       ',name))))
 
 
 
@@ -118,28 +135,31 @@
 
 
 (defmacro defmethod (&rest args)
-  (let ((name (car args))
-	newargs)
-    (setq args (cdr args))
-    (while (not (typep (car args) 'list))
-      (setq newargs (cons (car args) newargs))
-      (setq args (cdr args)))
-    (setq newargs (cons (car args) newargs))
-    (setq args (cdr args))
-    (when (typep (car args) 'string)
-      (setq newargs (cons (car args) newargs))
-      (setq args (cdr args)))
-    (while (and
-	    (typep (car args) 'cons)
-	    (eq (caar args) 'declare))
-      (setq newargs (cons (car args) newargs))
-      (setq args (cdr args)))
-    (setq newargs (cons `(block ,(if (typep name 'symbol)
-				     name
-				     (cadr name))
-			   . ,args) newargs))
-    (setq newargs (reverse newargs))
-    `(let ((meth (apply 'al:create-method ',name ',newargs)))
+  (let* ((name (car args))
+	 (block-name (if (typep name 'symbol)
+			 name
+			 (nth 1 name)))
+	 lambda-list-cons
+	 (body (cdr args))
+	 form
+	 found-docstring
+	 last-doc-or-decl)
+    (while (not (typep (car body) 'list))
+      (setq body (cdr body)))
+    (setq lambda-list-cons body body (cdr body) form body)
+    (while (or (and (typep (car form) 'string)
+		    (not found-docstring))
+	       (and (typep (car form) 'cons)
+		    (eq (car (car form)) 'declare)))
+      (if (typep (car form) 'string)
+	  (setq found-docstring t))
+      (setq last-doc-or-decl form form (cdr form)))
+    (if last-doc-or-decl
+	(if (cdr last-doc-or-decl)
+	    (setf (cdr last-doc-or-decl) (cons `(block ,block-name . ,(cdr last-doc-or-decl)) nil)))
+	(setq body (cons `(block ,block-name . ,body) nil)))
+    (setf (cdr lambda-list-cons) body)
+    `(let ((meth (apply 'al:create-method ',name ',(cdr args))))
        (add-method #',name meth)
        meth)))
 
