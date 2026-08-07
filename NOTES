@@ -656,6 +656,11 @@ __Known bugs and limitations__
 
 - A function that changes its own body may cause memory corruption sometimes
 
+- Documentation strings are ignored, they are not stored anywhere
+
+- Recompiling a compiled function does nothing, even if some of the macros
+  called in the function body were redefined since the previous compilation
+
 
 
 __Policy on use of Large Language Models__
