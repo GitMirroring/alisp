@@ -986,12 +986,18 @@
 			       (apply 'al:make-structure
 				      ',name
 				      ,(let (args)
-					 (mapcar
-					  (lambda (a)
-					    (setq args (list* (intern (string a) 'keyword)
-							      a
-							      args)))
-					  (cadr constr))
+                                         (mapcar
+                                          (lambda (a)
+					    (unless (member a '(&optional &rest &aux &key &allow-other-keys)
+							    :test 'eq)
+                                              (setq args (if (consp a)
+							     (list* (intern (string (car a)) 'keyword)
+								    (car a)
+								    args)
+							     (list* (intern (string a) 'keyword)
+								    a
+								    args)))))
+                                          (cadr constr))
 					 (cons 'list args))))
 			    constrdefs))))
     (unless copier
