@@ -406,10 +406,37 @@
 
 
 
+(defun generate-pseudo-bytecode-for-form (form)
+  (cond
+    (t (error "don't know how to compile that"))))
+
+
+(defun generate-pseudo-bytecode-for-body (body bcode last-bc-cons)
+  (while body
+    (let* ((newbc (generate-pseudo-bytecode-for-form (car body)))
+	   (new-last-bc-cons (last newbc)))
+      (if bcode
+	  (setf (cdr last-bc-cons) newbc)
+	  (setf bcode newbc))
+      (setq last-bc-cons new-last-bc-cons)
+      (setq body (cdr body))))
+  (values bcode last-bc-cons))
+
+
+(defun generate-pseudo-bytecode-for-function (fun)
+  (let ((body (al:function-body fun))
+	out cons)
+    (generate-pseudo-bytecode-for-body body nil nil)))
+
+
+
 
 (dolist (sym '(macroexpand-backquote macroexpand-body expand-compiler-macro
 	       macroexpand-form-deeply write-preserving-similarity
-	       parse-toplevel-form-at-compile-time))
+	       parse-toplevel-form-at-compile-time
+	       generate-pseudo-bytecode-for-form
+	       generate-pseudo-bytecode-for-body
+	       generate-pseudo-bytecode-for-function))
   (compile sym))
 
 

@@ -934,6 +934,21 @@ parameter
 
 
 enum
+bytecode_instruction
+  {
+    BCODE_RETURN,
+
+    BCODE_JUMP,
+    BCODE_JUMP_IF,
+
+    BCODE_RESOLVE_FUNCTION_NAME,
+    BCODE_RESOLVE_FUNCTION_NAME_IN_GLOBAL_ENV,
+
+    BCODE_CALL_FUNCTION
+  };
+
+
+enum
 function_flags
   {
     GENERIC_FUNCTION = 1,
@@ -2182,6 +2197,11 @@ void restore_lexical_functions (struct environment *env, struct object *funcs,
 				int *num_funcs);
 
 struct object *build_environment_object (struct environment *env);
+
+struct object *execute_bytecode (struct object *bytecode,
+				 struct object *objvector,
+				 struct environment *env,
+				 struct outcome *outcome);
 
 struct object *call_function (struct object *func, struct object *arglist,
 			      int eval_args, int pass_form_and_env,
@@ -16481,6 +16501,48 @@ build_environment_object (struct environment *env)
 
 
 struct object *
+execute_bytecode (struct object *bytecode, struct object *objvector,
+		  struct environment *env, struct outcome *outcome)
+{
+  unsigned char *bcode = bytecode->value_ptr.byte_array->value;
+  /*struct object **objvec = objvector->value_ptr.array->value;*/
+  struct object **regs;
+  unsigned instr, arg;
+
+  regs = malloc_and_check (sizeof (*regs)*512);
+
+  while (1)
+    {
+      instr = *(unsigned *)bcode;
+      bcode += sizeof (instr);
+
+      switch (instr)
+	{
+	case BCODE_RETURN:
+	  arg = *(unsigned *)bcode;
+	  return regs [arg];
+	  break;
+
+	case BCODE_JUMP:
+	  bcode = bytecode->value_ptr.byte_array->value+*(unsigned *)bcode;
+	  break;
+
+	case BCODE_CALL_FUNCTION:
+	  bcode = bytecode->value_ptr.byte_array->value+*(unsigned *)bcode;
+	  break;
+
+	default:
+	  printf ("unknown bytecode instruction at %ld: %d\n",
+		  bcode-bytecode->value_ptr.byte_array->value-1, instr);
+	  break;
+	}
+    }
+
+  return &nil_object;
+}
+
+
+struct object *
 call_function (struct object *func, struct object *arglist,
 	       int eval_args, int pass_form_and_env,
 	       int also_pass_name, int create_new_lex_env,
@@ -16490,7 +16552,8 @@ call_function (struct object *func, struct object *arglist,
   struct binding *bins;
   struct block *prevblocks;
   struct go_tag_frame *prevf;
-  struct object *ret, *ret2, *args = NULL, *body, *funcbody, *lastcdr;
+  struct object *ret, *ret2, *args = NULL, *body, *funcbody, *funcbytecode,
+    *funcobjvector, *lastcdr;
   int argsnum, closnum, funcsnum, prev_lex_bin_num = env->lex_env_vars_boundary,
     prev_lex_funcs_num = env->lex_env_funcs_boundary,
     stepping_over_this_macroexp = env->stepping_flags & STEP_OVER_EXPANSION
@@ -16617,99 +16680,133 @@ call_function (struct object *func, struct object *arglist,
 
   env->only_lexical = expand_and_eval;
 
-  if (parse_argument_list (arglist, func->value_ptr.function->lambda_list,
-			   eval_args, also_pass_name, is_typespec,
-			   func->value_ptr.function->flags & FOUND_AMP_KEY,
-			   func->value_ptr.function->allow_other_keys,
-			   func->value_ptr.function->lex_vars,
-			   create_new_lex_env, func->value_ptr.function->body,
-			   env, outcome, &bins, &argsnum, &closnum))
+
+  if (eval_args)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	{
+	  env->stack_depth--;
+	  return NULL;
+	}
+    }
+  else
+    args = arglist;
+
+
+  if (env->is_profiling && func->value_ptr.function->name)
+    {
+      isprof = 1;
+      time = clock ();
+    }
+
+  prevblocks = env->blocks;
+  env->blocks = func->value_ptr.function->encl_blocks;
+
+  prevf = env->go_tag_stack;
+  env->go_tag_stack = func->value_ptr.function->encl_tags;
+
+
+  if (func->value_ptr.function->bytecode != &nil_object)
+    {
+      funcbytecode = func->value_ptr.function->bytecode;
+      increment_refcount (funcbytecode);
+
+      funcobjvector = func->value_ptr.function->objvector;
+      increment_refcount (funcobjvector);
+
+      ret = execute_bytecode (funcbytecode, funcobjvector, env, outcome);
+
+      decrement_refcount (funcbytecode);
+      decrement_refcount (funcobjvector);
+    }
+  else
     {
       restore_lexical_functions (env, func->value_ptr.function->lex_funcs,
 				 &funcsnum);
       env->lex_env_funcs_boundary = funcsnum;
 
-      if (func->value_ptr.function->flags & TRACED_FUNCTION
-	  || (env->stepping_flags &&
-	      !(env->stepping_flags & STEPPING_OVER_FORM)))
+      if (parse_argument_list (args, func->value_ptr.function->lambda_list,
+			       0, also_pass_name, is_typespec,
+			       func->value_ptr.function->flags & FOUND_AMP_KEY,
+			       func->value_ptr.function->allow_other_keys,
+			       func->value_ptr.function->lex_vars,
+			       create_new_lex_env, func->value_ptr.function->body,
+			       env, outcome, &bins, &argsnum, &closnum))
 	{
-	  print_tracing_message (func, NULL, argsnum, NULL, env);
-	}
+	  if (func->value_ptr.function->flags & TRACED_FUNCTION
+	      || (env->stepping_flags &&
+		  !(env->stepping_flags & STEPPING_OVER_FORM)))
+	    {
+	      print_tracing_message (func, NULL, argsnum, NULL, env);
+	    }
 
-      env->call_stack = add_call_frame (func, 0, arglist, env, argsnum,
-					env->call_stack);
+	  env->call_stack = add_call_frame (func, 0, args, env, argsnum,
+					    env->call_stack);
 
-      if (env->is_profiling && func->value_ptr.function->name)
-	{
-	  isprof = 1;
-	  time = clock ();
-	}
 
-      funcbody = func->value_ptr.function->body;
-      increment_refcount (funcbody);
+	  funcbody = func->value_ptr.function->body;
+	  increment_refcount (funcbody);
 
-      if (!parse_declarations (funcbody, env,
-			       argsnum+closnum, 1, outcome, &body))
-	{
-	  ret = NULL;
+	  if (!parse_declarations (funcbody, env,
+				   argsnum+closnum, 1, outcome, &body))
+	    {
+	      ret = NULL;
+	    }
+	  else
+	    {
+	      ret = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
+	    }
+
+	  undo_special_declarations (funcbody, env);
+
+	  decrement_refcount (funcbody);
+
+
+	  env->call_stack = remove_call_frame (env->call_stack);
+
+	  if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
+		      || (env->stepping_flags
+			  && !(env->stepping_flags & STEPPING_OVER_FORM))
+		      || (env->continue_till_end_of_function
+			  && !continue_till_end_of_function)))
+	    {
+	      print_tracing_message (func, NULL, -1, ret, env);
+
+	      if (env->continue_till_end_of_function && !continue_till_end_of_function)
+		{
+		  env->continue_till_end_of_function = 0;
+		  env->stepping_flags = STEP_INSIDE_FORM;
+		}
+	    }
+
+	  env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
+	  env->lex_env_vars_boundary = prev_lex_bin_num;
 	}
       else
 	{
-	  prevblocks = env->blocks;
-	  env->blocks = func->value_ptr.function->encl_blocks;
-
-	  prevf = env->go_tag_stack;
-	  env->go_tag_stack = func->value_ptr.function->encl_tags;
-
-	  ret = evaluate_body (body, -1, 0, 0, NULL, env, outcome);
-
-	  env->go_tag_stack = prevf;
-
-	  env->blocks = prevblocks;
-	}
-
-      undo_special_declarations (funcbody, env);
-
-      decrement_refcount (funcbody);
-
-      if (isprof)
-	{
-	  time = clock () - time;
-	}
-
-      env->call_stack = remove_call_frame (env->call_stack);
-
-      if (ret && ((func->value_ptr.function->flags & TRACED_FUNCTION)
-		  || (env->stepping_flags
-		      && !(env->stepping_flags & STEPPING_OVER_FORM))
-		  || (env->continue_till_end_of_function
-		      && !continue_till_end_of_function)))
-	{
-	  print_tracing_message (func, NULL, -1, ret, env);
-
-	  if (env->continue_till_end_of_function && !continue_till_end_of_function)
-	    {
-	      env->continue_till_end_of_function = 0;
-	      env->stepping_flags = STEP_INSIDE_FORM;
-	    }
+	  ret = NULL;
 	}
 
       env->funcs = remove_function_bindings (env->funcs, funcsnum);
       env->lex_env_funcs_boundary = prev_lex_funcs_num;
-
-      env->vars = remove_bindings (env->vars, argsnum+closnum, 1);
-      env->lex_env_vars_boundary = prev_lex_bin_num;
     }
-  else
+
+
+  env->go_tag_stack = prevf;
+
+  env->blocks = prevblocks;
+
+  if (isprof)
     {
-      ret = NULL;
+      time = clock () - time;
     }
-
 
   env->only_lexical = onlylex;
 
 
-  if (pass_form_and_env)
+  if (pass_form_and_env || eval_args)
     decrement_refcount (args);
 
 
