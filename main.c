@@ -2654,6 +2654,9 @@ struct object *builtin_setf_fdefinition (struct object *list,
 struct object *builtin_setf_macro_function (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
+struct object *builtin_setf_readtable_case (struct object *list,
+					    struct environment *env,
+					    struct outcome *outcome);
 struct object *builtin_setf_al_next (struct object *list,
 				     struct environment *env,
 				     struct outcome *outcome);
@@ -2932,6 +2935,9 @@ struct object *builtin_do_external_symbols (struct object *list,
 					    struct outcome *outcome);
 
 struct object *builtin_copy_readtable (struct object *list,
+				       struct environment *env,
+				       struct outcome *outcome);
+struct object *builtin_readtable_case (struct object *list,
 				       struct environment *env,
 				       struct outcome *outcome);
 
@@ -4302,6 +4308,8 @@ add_standard_definitions (struct environment *env)
 		    1, NULL, 0);
 
   add_builtin_form ("COPY-READTABLE", env, builtin_copy_readtable, 0, NULL, 0);
+  add_builtin_form ("READTABLE-CASE", env, builtin_readtable_case, 0,
+		    builtin_setf_readtable_case, 0);
 
   add_builtin_form ("TIME", env, builtin_time, 1, NULL, 0);
   add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
@@ -26855,6 +26863,44 @@ builtin_setf_macro_function (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_setf_readtable_case (struct object *list, struct environment *env,
+			     struct outcome *outcome)
+{
+  struct object *newval;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  newval = CAR (list);
+  list = CDR (list);
+
+  if (CAR (list)->type != TYPE_READTABLE)
+    {
+      return raise_type_error (CAR (list), "CL:READTABLE", env, outcome);
+    }
+
+  if (symbol_equals (newval, ":UPCASE", env))
+    CAR (list)->value_ptr.readtable->readcase = CASE_UPCASE;
+  else if (symbol_equals (newval, ":DOWNCASE", env))
+    CAR (list)->value_ptr.readtable->readcase = CASE_DOWNCASE;
+  else if (symbol_equals (newval, ":PRESERVE", env))
+    CAR (list)->value_ptr.readtable->readcase = CASE_PRESERVE;
+  else if (symbol_equals (newval, ":INVERT", env))
+    CAR (list)->value_ptr.readtable->readcase = CASE_INVERT;
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  increment_refcount (newval);
+  return newval;
+}
+
+
+struct object *
 builtin_setf_al_next (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
@@ -32254,6 +32300,43 @@ builtin_copy_readtable (struct object *list, struct environment *env,
     }
 
   return out;
+}
+
+
+struct object *
+builtin_readtable_case (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  struct object *ret;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_READTABLE)
+    {
+      return raise_type_error (CAR (list), "CL:READTABLE", env, outcome);
+    }
+
+  switch (CAR (list)->value_ptr.readtable->readcase)
+    {
+    case CASE_UPCASE:
+      ret = KEYWORD (":UPCASE");
+      break;
+    case CASE_DOWNCASE:
+      ret = KEYWORD (":DOWNCASE");
+      break;
+    case CASE_PRESERVE:
+      ret = KEYWORD (":PRESERVE");
+      break;
+    case CASE_INVERT:
+      ret = KEYWORD (":INVERT");
+      break;
+    }
+
+  increment_refcount (ret);
+  return ret;
 }
 
 
