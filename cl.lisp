@@ -2386,6 +2386,9 @@
 (defun packagep (obj)
   (typep obj 'package))
 
+(defun readtablep (obj)
+  (typep obj 'readtable))
+
 (defun integerp (obj)
   (typep obj 'integer))
 
@@ -3895,10 +3898,6 @@
 
 
 
-(defparameter *readtable* nil)
-
-
-
 (require 'compiler)
 
 
@@ -4122,8 +4121,8 @@
            nstring-upcase nstring-downcase nstring-capitalize string-left-trim
            string-right-trim string-trim make-sequence defpackage signed-byte
            unsigned-byte extended-char consp listp symbolp keywordp
-           compiled-function-p functionp packagep integerp rationalp floatp
-           complexp random-state-p characterp standard-char-p vectorp
+           compiled-function-p functionp packagep readtablep integerp rationalp
+           floatp complexp random-state-p characterp standard-char-p vectorp
            simple-vector-p arrayp sequencep stringp simple-string-p bit-vector-p
            simple-bit-vector-p hash-table-p pathnamep streamp realp numberp
            check-type assert macroexpand equal complement mapc mapcan maplist

@@ -779,10 +779,10 @@ environment
   struct object *package_sym, *random_state_sym, *std_in_sym, *std_out_sym,
     *err_out_sym, *trace_out_sym, *debug_io_sym, *print_escape_sym, *print_readably_sym,
     *print_base_sym, *print_radix_sym, *print_array_sym, *print_gensym_sym,
-    *print_case_sym, *print_pretty_sym, *print_pprint_dispatch_sym, *read_eval_sym,
-    *read_base_sym, *read_suppress_sym, *load_pathname_sym, *load_truename_sym,
-    *break_on_signals_sym, *plus_sym, *plus2_sym, *plus3_sym, *minus_sym,
-    *star2_sym, *star3_sym, *slash_sym, *slash2_sym, *slash3_sym;
+    *print_case_sym, *print_pretty_sym, *print_pprint_dispatch_sym, *readtable_sym,
+    *read_eval_sym, *read_base_sym, *read_suppress_sym, *load_pathname_sym,
+    *load_truename_sym, *break_on_signals_sym, *plus_sym, *plus2_sym, *plus3_sym,
+    *minus_sym, *star2_sym, *star3_sym, *slash_sym, *slash2_sym, *slash3_sym;
 
   struct object *abort_sym;
 
@@ -1362,6 +1362,13 @@ sharp_macro_call
 };
 
 
+struct
+readtable
+{
+  enum readtable_case readcase;
+};
+
+
 enum
 rounding_behavior
   {
@@ -1434,7 +1441,8 @@ object_type
     TYPE_STANDARD_OBJECT,
     TYPE_FUNCTION,
     TYPE_METHOD,
-    TYPE_SHARP_MACRO_CALL
+    TYPE_SHARP_MACRO_CALL,
+    TYPE_READTABLE
   };
 
 
@@ -1471,6 +1479,7 @@ object_ptr_union
   struct function *function;
   struct method *method;
   struct sharp_macro_call *sharp_macro_call;
+  struct readtable *readtable;
 };
 
 
@@ -2387,6 +2396,8 @@ int type_synonym_stream (const struct object *obj, const struct object *typespec
 int type_broadcast_stream (const struct object *obj,
 			   const struct object *typespec,
 			   struct environment *env, struct outcome *outcome);
+int type_readtable (const struct object *obj, const struct object *typespec,
+		    struct environment *env, struct outcome *outcome);
 int type_standard_object (const struct object *obj, const struct object *typespec,
 			  struct environment *env, struct outcome *outcome);
 int type_method (const struct object *obj, const struct object *typespec,
@@ -2919,6 +2930,10 @@ struct object *builtin_do_symbols (struct object *list, struct environment *env,
 struct object *builtin_do_external_symbols (struct object *list,
 					    struct environment *env,
 					    struct outcome *outcome);
+
+struct object *builtin_copy_readtable (struct object *list,
+				       struct environment *env,
+				       struct outcome *outcome);
 
 struct object *builtin_time (struct object *list, struct environment *env,
 			     struct outcome *outcome);
@@ -3832,7 +3847,7 @@ parse_command_line (int argc, char *argv [], int *load_cl, int *quit)
 void
 add_standard_definitions (struct environment *env)
 {
-  struct object *rs, *stdobjsym, *stdobjcl, *bidir_str;
+  struct object *rs, *stdobjsym, *stdobjcl, *bidir_str, *readtable;
   struct package_record *rec;
   struct parameter *lambdal;
 
@@ -4285,6 +4300,9 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DO-SYMBOLS", env, builtin_do_symbols, 1, NULL, 0);
   add_builtin_form ("DO-EXTERNAL-SYMBOLS", env, builtin_do_external_symbols,
 		    1, NULL, 0);
+
+  add_builtin_form ("COPY-READTABLE", env, builtin_copy_readtable, 0, NULL, 0);
+
   add_builtin_form ("TIME", env, builtin_time, 1, NULL, 0);
   add_builtin_form ("GET-INTERNAL-RUN-TIME", env, builtin_get_internal_run_time,
 		    0, NULL, 0);
@@ -4370,6 +4388,7 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("SYNONYM-STREAM", env, type_synonym_stream, 1, "STREAM",
 		    (char *)NULL);
+  add_builtin_type ("READTABLE", env, type_readtable, 1, (char *)NULL);
   add_builtin_type ("STANDARD-GENERIC-FUNCTION", env, type_generic_function, 1,
 		    "GENERIC-FUNCTION", (char *)NULL);
   add_builtin_type ("GENERIC-FUNCTION", env, type_generic_function, 1,
@@ -4613,6 +4632,14 @@ add_standard_definitions (struct environment *env)
   env->print_pretty_sym = define_variable ("*PRINT-PRETTY*", &nil_object, env);
   env->print_pprint_dispatch_sym = define_variable ("*PRINT-PPRINT-DISPATCH*",
 						    &nil_object, env);
+
+  readtable = alloc_object ();
+  readtable->type = TYPE_READTABLE;
+  readtable->value_ptr.readtable =
+    malloc_and_check (sizeof (*readtable->value_ptr.readtable));
+  readtable->value_ptr.readtable->readcase = CASE_UPCASE;
+
+  env->readtable_sym = define_variable ("*READTABLE*", readtable, env);
 
   env->read_eval_sym = define_variable ("*READ-EVAL*", &t_object, env);
   env->read_base_sym = define_variable ("*READ-BASE*",
@@ -19783,6 +19810,14 @@ type_broadcast_stream (const struct object *obj, const struct object *typespec,
 
 
 int
+type_readtable (const struct object *obj, const struct object *typespec,
+		struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_READTABLE;
+}
+
+
+int
 type_standard_object (const struct object *obj, const struct object *typespec,
 		      struct environment *env, struct outcome *outcome)
 {
@@ -32168,6 +32203,59 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_copy_readtable (struct object *list, struct environment *env,
+			struct outcome *outcome)
+{
+  int l = list_length (list);
+  struct object *out;
+
+  if (l > 2)
+    {
+      return raise_al_wrong_number_of_arguments (0, 2, env, outcome);
+    }
+
+  if (l < 2 || SYMBOL (CAR (CDR (list))) == &nil_object)
+    {
+      out = alloc_object ();
+      out->type = TYPE_READTABLE;
+      out->value_ptr.readtable =
+	malloc_and_check (sizeof (*out->value_ptr.readtable));
+    }
+  else if (CAR (CDR (list))->type == TYPE_READTABLE)
+    {
+      out = CAR (CDR (list));
+      increment_refcount (out);
+    }
+  else
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:READTABLE", env,
+			       outcome);
+    }
+
+  if (!l)
+    {
+      out->value_ptr.readtable->readcase
+	= inspect_variable (env->readtable_sym, env)->value_ptr.readtable->readcase;
+    }
+  else if (l && SYMBOL (CAR (list)) == &nil_object)
+    {
+      out->value_ptr.readtable->readcase = CASE_UPCASE;
+    }
+  else if (CAR (list)->type == TYPE_READTABLE)
+    {
+      out->value_ptr.readtable->readcase
+	= CAR (list)->value_ptr.readtable->readcase;
+    }
+  else
+    {
+      return raise_type_error (CAR (list), "CL:READTABLE", env, outcome);
+    }
+
+  return out;
+}
+
+
+struct object *
 builtin_time (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
@@ -40180,6 +40268,9 @@ print_object (const struct object *obj, struct environment *env,
 
 	  return 0;
 	}
+      else if (obj->type == TYPE_READTABLE)
+	return write_to_stream (str, "#<READTABLE ...>",
+				strlen ("#<READTABLE ...>"));
       else if (obj->type == TYPE_ENVIRONMENT)
 	return write_to_stream (str, "#<ENVIRONMENT ?>",
 				strlen ("#<ENVIRONMENT ?>"));
@@ -41649,6 +41740,11 @@ free_object (struct object *obj)
 	}
 
       free (obj->value_ptr.stream);
+      free (obj);
+    }
+  else if (obj->type == TYPE_READTABLE)
+    {
+      free (obj->value_ptr.readtable);
       free (obj);
     }
 
