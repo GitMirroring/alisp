@@ -15607,7 +15607,7 @@ parse_declaration_specifier (struct object *spec, int is_local,
 
       while (form->type == TYPE_CONS_PAIR)
 	{
-	  if (!IS_SYMBOL (CAR (form)))
+	  if (!IS_FUNCTION_NAME (CAR (form)))
 	    {
 	      outcome->type = WRONG_SYNTAX_IN_DECLARATION;
 	      return 0;
