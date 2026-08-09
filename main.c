@@ -4388,6 +4388,8 @@ add_standard_definitions (struct environment *env)
 		    (char *)NULL);
   add_builtin_type ("SYNONYM-STREAM", env, type_synonym_stream, 1, "STREAM",
 		    (char *)NULL);
+  add_builtin_type ("BROADCAST-STREAM", env, type_broadcast_stream, 1, "STREAM",
+		    (char *)NULL);
   add_builtin_type ("READTABLE", env, type_readtable, 1, (char *)NULL);
   add_builtin_type ("STANDARD-GENERIC-FUNCTION", env, type_generic_function, 1,
 		    "GENERIC-FUNCTION", (char *)NULL);
