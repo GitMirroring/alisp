@@ -683,6 +683,7 @@ make_test ("(typep #p\"\" 'logical-pathname)", "NIL");
 make_test ("(typep (open #p\"README\") 'stream)", "T");
 make_test ("(typep (open #p\"README\") 'file-stream)", "T");
 make_test ("(typep (make-string-input-stream \"hello\") 'string-stream)", "T");
+make_test ("(typep (make-broadcast-stream) 'broadcast-stream)", "T");
 make_test ("(typep 0 '(or integer string))", "T");
 make_test ("(typep 0 '(and integer string))", "NIL");
 make_test ("(typep 0 '(not string))", "T");
