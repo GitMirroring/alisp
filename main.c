@@ -26972,9 +26972,9 @@ builtin_setf_al_function_bytecode (struct object *list, struct environment *env,
       return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
-  if (!IS_LIST (CAR (list)))
+  if (CAR (list)->type != TYPE_BYTE_ARRAY)
     {
-      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+      return raise_type_error (CAR (list), "AL:BYTE-ARRAY", env, outcome);
     }
 
   newval = CAR (list);
@@ -27017,9 +27017,9 @@ builtin_setf_al_function_objvector (struct object *list, struct environment *env
       return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
     }
 
-  if (!IS_LIST (CAR (list)))
+  if (!IS_VECTOR (CAR (list)))
     {
-      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+      return raise_type_error (CAR (list), "CL:VECTOR", env, outcome);
     }
 
   newval = CAR (list);
