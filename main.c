@@ -944,6 +944,10 @@ bytecode_instruction
     BCODE_RESOLVE_FUNCTION_NAME,
     BCODE_RESOLVE_FUNCTION_NAME_IN_GLOBAL_ENV,
 
+    BCODE_EVAL_VAR,
+
+    BCODE_DECREMENT_REFCOUNT,
+
     BCODE_CALL_FUNCTION
   };
 
@@ -2207,6 +2211,9 @@ void restore_lexical_functions (struct environment *env, struct object *funcs,
 
 struct object *build_environment_object (struct environment *env);
 
+struct object *get_object_from_register_or_immediate (unsigned ind,
+						      struct object **regs,
+						      struct object **objvector);
 struct object *execute_bytecode (struct object *bytecode,
 				 struct object *objvector,
 				 struct environment *env,
@@ -16538,39 +16545,108 @@ build_environment_object (struct environment *env)
 
 
 struct object *
+get_object_from_register_or_immediate (unsigned ind,
+				       struct object **regs,
+				       struct object **objvector)
+{
+  if (ind & 0x80000000)
+    return objvector [ind & ~0x80000000];
+  else
+    return regs [ind];
+}
+
+
+struct object *
 execute_bytecode (struct object *bytecode, struct object *objvector,
 		  struct environment *env, struct outcome *outcome)
 {
-  unsigned char *bcode = bytecode->value_ptr.byte_array->value;
-  /*struct object **objvec = objvector->value_ptr.array->value;*/
-  struct object **regs;
-  unsigned instr, arg;
+  unsigned *bcode = (unsigned *)bytecode->value_ptr.byte_array->value;
+  struct object **objvec = objvector->value_ptr.array->value;
+  struct object **regs, *func, *args, *cons, *sym, *ret, *obj;
+  unsigned instr, arg, retind;
+  int ismac;
+
 
   regs = malloc_and_check (sizeof (*regs)*512);
 
   while (1)
     {
-      instr = *(unsigned *)bcode;
-      bcode += sizeof (instr);
+      instr = *bcode;
+      bcode++;
 
       switch (instr)
 	{
 	case BCODE_RETURN:
-	  arg = *(unsigned *)bcode;
-	  return regs [arg];
+	  arg = *bcode;
+	  ret = regs [arg];
+	  free (regs);
+	  return ret;
 	  break;
 
 	case BCODE_JUMP:
-	  bcode = bytecode->value_ptr.byte_array->value+*(unsigned *)bcode;
+	  bcode = (unsigned *)bytecode->value_ptr.byte_array->value+*bcode;
+	  break;
+
+	case BCODE_RESOLVE_FUNCTION_NAME:
+	  retind = *bcode;
+	  bcode++;
+	  sym = get_object_from_register_or_immediate (*bcode, regs, objvec);
+	  regs [retind] = get_function (sym, env, 1, 0, 0, 0, &ismac);
+	  bcode++;
+	  break;
+
+	case BCODE_EVAL_VAR:
+	  retind = *bcode;
+	  bcode++;
+	  sym = get_object_from_register_or_immediate (*bcode, regs, objvec);
+	  regs [retind] = evaluate_object (sym, env, outcome);
+	  bcode++;
+	  break;
+
+	case BCODE_DECREMENT_REFCOUNT:
+	  obj = get_object_from_register_or_immediate (*bcode, regs, objvec);
+	  decrement_refcount (obj);
+	  bcode++;
 	  break;
 
 	case BCODE_CALL_FUNCTION:
-	  bcode = bytecode->value_ptr.byte_array->value+*(unsigned *)bcode;
+	  retind = *bcode;
+	  bcode++;
+	  func = get_object_from_register_or_immediate (*bcode, regs, objvec);
+	  bcode++;
+	  cons = &nil_object;
+
+	  while (*bcode)
+	    {
+	      if (cons == &nil_object)
+		args = cons = alloc_empty_cons_pair ();
+	      else
+		{
+		  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+		  cons = CDR (cons);
+		}
+
+	      cons->value_ptr.cons_pair->car
+		= get_object_from_register_or_immediate (*bcode, regs, objvec);
+	      add_reference (cons, CAR (cons), 0);
+
+	      bcode++;
+	    }
+
+	  if (cons != &nil_object)
+	    cons->value_ptr.cons_pair->cdr = &nil_object;
+
+	  regs [retind] = call_function (func, args, 0, 0, 0, 1, 0, 0, env,
+					 outcome);
+	  decrement_refcount (args);
+	  bcode++;
 	  break;
 
 	default:
 	  printf ("unknown bytecode instruction at %ld: %d\n",
-		  bcode-bytecode->value_ptr.byte_array->value-1, instr);
+		  (unsigned char *)bcode-bytecode->value_ptr.byte_array->value-1,
+		  instr);
+	  bcode++;
 	  break;
 	}
     }

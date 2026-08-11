@@ -406,27 +406,121 @@
 
 
 
-(defun generate-pseudo-bytecode-for-form (form)
+(defun add-to-objvector-and-get-index (obj objvec)
+  (or (position obj objvec :test 'eq)
+      (vector-push-extend obj objvec)))
+
+
+(defmacro append-to-list (list last-cons newcar)
+  (let ((newcarsym (gensym)))
+    `(let ((,newcarsym ,newcar))
+       (if ,list
+	   (setf (cdr ,last-cons) (cons ,newcarsym nil) ,last-cons (cdr ,last-cons))
+	   (setf ,list (cons ,newcarsym nil) ,last-cons ,list)))))
+
+
+(defun immediatep (obj)
+  (typep obj '(and (not cons) (not symbol))))
+
+
+(defun generate-pseudo-bytecode-for-form (form bcode last-bc-cons objvec next-reg last-in-func-p is-funcall)
   (cond
-    (t (error "don't know how to compile that"))))
+    ((find (car form) '(if progn tagbody go block do do* dolist dotimes let let*) :test 'eq)
+     (error "don't know how to compile that"))
+    ((symbolp form)
+     (let ((ind (add-to-objvector-and-get-index form objvec)))
+       (append-to-list bcode last-bc-cons `(eval-var (reg ,next-reg) (imm ,ind))))
+     (incf next-reg))
+    ((consp form)
+     (let ((retreg next-reg)
+	   (ind (add-to-objvector-and-get-index (car form) objvec))
+	   funcreg funcall-args regs-to-decrement-refcount)
+       (incf next-reg)
+       (append-to-list bcode last-bc-cons `(resolve-function-name (reg ,next-reg)
+								  (imm ,ind)))
+       (setq funcreg next-reg)
+       (incf next-reg)
+       (dolist (arg (cdr form))
+	 (if (immediatep arg)
+	     (setq funcall-args (cons `(imm ,(add-to-objvector-and-get-index arg objvec)) funcall-args))
+	     (progn
+	       (setq funcall-args (cons `(reg ,next-reg) funcall-args))
+	       (setq regs-to-decrement-refcount (cons next-reg regs-to-decrement-refcount))
+	       (multiple-value-setq (bcode last-bc-cons next-reg)
+		 (generate-pseudo-bytecode-for-form arg bcode last-bc-cons objvec next-reg nil nil)))))
+       (setq funcall-args (reverse funcall-args))
+       (append-to-list bcode last-bc-cons `(call-function (reg ,retreg) (reg ,funcreg) . ,funcall-args))
+       (dolist (reg regs-to-decrement-refcount)
+	 (append-to-list bcode last-bc-cons `(decrement-refcount (reg ,reg))))))
+    (t
+     (if last-in-func-p
+	 (let ((ind (add-to-objvector-and-get-index form objvec)))
+	   (append-to-list bcode last-bc-cons `(return (imm ,ind)))))))
+  (values
+   bcode
+   last-bc-cons
+   next-reg))
 
 
-(defun generate-pseudo-bytecode-for-body (body bcode last-bc-cons)
+(defun generate-pseudo-bytecode-for-body (body bcode last-bc-cons objvec next-reg)
   (while body
-    (let* ((newbc (generate-pseudo-bytecode-for-form (car body)))
-	   (new-last-bc-cons (last newbc)))
-      (if bcode
-	  (setf (cdr last-bc-cons) newbc)
-	  (setf bcode newbc))
-      (setq last-bc-cons new-last-bc-cons)
-      (setq body (cdr body))))
-  (values bcode last-bc-cons))
+    (multiple-value-setq (bcode last-bc-cons) ;; next-reg)
+      (generate-pseudo-bytecode-for-form (car body) bcode last-bc-cons objvec next-reg nil nil))
+    (if (cdr body)
+	(append-to-list bcode last-bc-cons '(decrement-refcount (reg 1))))
+    (setq body (cdr body)))
+  (setf (cdr last-bc-cons) (cons '(return (reg 1)) nil))
+  (values
+   bcode
+   last-bc-cons
+   next-reg))
 
 
-(defun generate-pseudo-bytecode-for-function (fun)
-  (let ((body (al:function-body fun))
-	out cons)
-    (generate-pseudo-bytecode-for-body body nil nil)))
+(defun translate-register-or-immediate-to-bytecode (place)
+  (if (eq (car place) 'reg)
+      (cadr place)
+      (logior (cadr place) (ash 1 31))))
+
+
+(defconstant +return+ 0)
+(defconstant +jump+ 1)
+(defconstant +jump-if+ 2)
+(defconstant +resolve-function-name+ 3)
+(defconstant +resolve-function-name-in-global-env+ 4)
+(defconstant +eval-var+ 5)
+(defconstant +decrement-refcount+ 6)
+(defconstant +call-function+ 7)
+
+(defun translate-pseudo-bytecode-to-bytecode (bcode)
+  (let ((out (make-array 512 :element-type '(unsigned-byte 32) :fill-pointer 0)))
+    (dolist (instr bcode)
+      (case (car instr)
+	(return
+	  (vector-push-extend +return+ out)
+	  (vector-push-extend (translate-register-or-immediate-to-bytecode (cadr instr)) out))
+	(resolve-function-name
+	 (vector-push-extend +resolve-function-name+ out)
+	 (vector-push-extend (translate-register-or-immediate-to-bytecode (cadr instr)) out)
+	 (vector-push-extend (translate-register-or-immediate-to-bytecode (caddr instr)) out))
+	(decrement-refcount
+	 (vector-push-extend +decrement-refcount+ out)
+	 (vector-push-extend (translate-register-or-immediate-to-bytecode (cadr instr)) out))
+	(call-function
+	 (vector-push-extend +call-function+ out)
+	 (dolist (arg (cdr instr))
+	   (vector-push-extend (translate-register-or-immediate-to-bytecode arg) out))
+	 (vector-push-extend 0 out))))
+    out))
+
+
+(defun compile-function-to-bytecode (fun)
+  (let* ((body (cddar (al:function-body fun)))
+	 (objvec (make-array 16 :fill-pointer 0))
+	 (bcode (translate-pseudo-bytecode-to-bytecode
+		 (generate-pseudo-bytecode-for-body body nil nil objvec 1))))
+    (setf (al:function-bytecode fun) bcode)
+    (setf (al:function-objvector fun) objvec)
+    fun))
 
 
 
@@ -434,9 +528,12 @@
 (dolist (sym '(macroexpand-backquote macroexpand-body expand-compiler-macro
 	       macroexpand-form-deeply write-preserving-similarity
 	       parse-toplevel-form-at-compile-time
+	       add-to-objvector-and-get-index append-to-list immediatep
 	       generate-pseudo-bytecode-for-form
 	       generate-pseudo-bytecode-for-body
-	       generate-pseudo-bytecode-for-function))
+	       translate-register-or-immediate-to-bytecode
+	       translate-pseudo-bytecode-to-bytecode
+	       compile-function-to-bytecode))
   (compile sym))
 
 
