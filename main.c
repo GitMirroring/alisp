@@ -9819,10 +9819,24 @@ select_array_element_type (struct object *elemtype, struct environment *env,
       *step = 8;
       return TYPE_BYTE_ARRAY;
     }
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 255)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
+      *step = 8;
+      return TYPE_BYTE_ARRAY;
+    }
   else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -32768 32767)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_SIGNED;
+      *step = 16;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 65535)", env,
+				      outcome))
+    {
+      *subt = BYTE_ARRAY_UNSIGNED;
       *step = 16;
       return TYPE_BYTE_ARRAY;
     }
@@ -9833,32 +9847,18 @@ select_array_element_type (struct object *elemtype, struct environment *env,
       *step = 32;
       return TYPE_BYTE_ARRAY;
     }
-  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -9223372036854775808 "
-				      "9223372036854775807)", env, outcome))
-    {
-      *subt = BYTE_ARRAY_SIGNED;
-      *step = 64;
-      return TYPE_BYTE_ARRAY;
-    }
-  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 255)", env,
-				      outcome))
-    {
-      *subt = BYTE_ARRAY_UNSIGNED;
-      *step = 8;
-      return TYPE_BYTE_ARRAY;
-    }
-  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 65535)", env,
-				      outcome))
-    {
-      *subt = BYTE_ARRAY_UNSIGNED;
-      *step = 16;
-      return TYPE_BYTE_ARRAY;
-    }
   else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 4294967295)", env,
 				      outcome))
     {
       *subt = BYTE_ARRAY_UNSIGNED;
       *step = 32;
+      return TYPE_BYTE_ARRAY;
+    }
+  else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER -9223372036854775808 "
+				      "9223372036854775807)", env, outcome))
+    {
+      *subt = BYTE_ARRAY_SIGNED;
+      *step = 64;
       return TYPE_BYTE_ARRAY;
     }
   else if (is_subtype_by_read_object (elemtype, "(CL:INTEGER 0 18446744073709551615)",
