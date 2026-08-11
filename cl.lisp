@@ -4137,11 +4137,11 @@
            do-all-symbols find-all-symbols apropos apropos-list with-slots
            with-accessors with-package-iterator with-hash-table-iterator loop
            loop-finish format formatter encode-universal-time
-           decode-universal-time get-universal-time *readtable*
-           with-standard-io-syntax handler-case restart-case with-simple-restart
-           find-restart cerror package-error-package unbound-slot-instance
-           cell-error-name type-error-datum type-error-expected-type
-           file-error-pathname stream-error-stream arithmetic-error-operation
+           decode-universal-time get-universal-time with-standard-io-syntax
+           handler-case restart-case with-simple-restart find-restart cerror
+           package-error-package unbound-slot-instance cell-error-name
+           type-error-datum type-error-expected-type file-error-pathname
+           stream-error-stream arithmetic-error-operation
            arithmetic-error-operands simple-condition-format-control
            simple-condition-format-arguments break ignore-errors abort continue
            muffle-warning variable structure compiler-macro documentation))
