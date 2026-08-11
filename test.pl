@@ -534,16 +534,16 @@ make_test ("(mac3)", "NIL");
 make_test ("(defmacro mac4 (x y) (declare (ignore x)) \"testing\" (declare (ignore y)) (return-from mac4 '(+)))", "MAC4");
 make_test ("(mac4 10 11)", "0");
 
-make_test ("(gensym)", "#:G526");
-make_test ("(gensym)", "#:G527");
+make_test ("(gensym)", "#:G547");
+make_test ("(gensym)", "#:G548");
 make_test ("(gensym 5)", "#:G5");
-make_test ("(gensym \"A\")", "#:A528");
-make_test ("(gensym)", "#:G529");
+make_test ("(gensym \"A\")", "#:A549");
+make_test ("(gensym)", "#:G550");
 make_test ("(define-setf-expander foo ())", "FOO");
 make_test ("(get-setf-expansion '(foo))", "NIL");
-make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G530)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G530)\n(FOO2)");
-make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G531)\n(SETQ A #:G531)\nA");
-make_test ("(get-setf-expansion '(w a b))", "(#:G532 #:G533)\n(A B)\n(#:G534)\n(FUNCALL (FUNCTION (SETF W)) #:G534 #:G532 #:G533)\n(W #:G532 #:G533)");
+make_test ("(get-setf-expansion '(foo2))", "NIL\nNIL\n(#:G551)\n(FUNCALL (FUNCTION (SETF FOO2)) #:G551)\n(FOO2)");
+make_test ("(get-setf-expansion 'a)", "NIL\nNIL\n(#:G552)\n(SETQ A #:G552)\nA");
+make_test ("(get-setf-expansion '(w a b))", "(#:G553 #:G554)\n(A B)\n(#:G555)\n(FUNCALL (FUNCTION (SETF W)) #:G555 #:G553 #:G554)\n(W #:G553 #:G554)");
 make_test ("(define-setf-expander foo10 ((x y) z &environment env))", "FOO10");
 make_test ("(defmacro setf-mac nil 'setfvar)", "SETF-MAC");
 make_test ("(let ((setfvar 0)) (setf (setf-mac) 1) setfvar)", "1");
@@ -2049,6 +2049,10 @@ make_test ("(al:function-body #'compadd)", "((BLOCK COMPADD (+ X 0) 3))");
 make_test ("(define-compiler-macro bar (&whole wh x) (list wh x))", "BAR");
 make_test ("(funcall (compiler-macro-function 'bar) '(funcall 'bar 100) nil)", "((FUNCALL 'BAR 100) 100)");
 make_test ("(cl::expand-compiler-macro '(funcall #'bar 101))", "((FUNCALL #'BAR 101) 101)");
+
+make_test ("(defun bc nil (+ 1 (* 2 3) 4) (- 1 (* 4 5)))", "BC");
+make_test ("(cl::compile-function-to-bytecode #'bc)", "#<FUNCTION BC>");
+make_test ("(bc)", "-19");
 
 make_test ("(declaim (optimize speed (safety 0) (debug 3)))", "T");
 make_test ("(declaim (ignorable a) (ignore b c) (inline e) (notinline d f))", "T");
