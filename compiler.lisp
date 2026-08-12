@@ -283,6 +283,21 @@
 		   :type "alc")))
 
 
+(defgeneric make-load-form (obj &optional env))
+
+(defun make-load-form-saving-slots (obj &key slot-names environment)
+  (typecase obj
+    (structure-object
+     (let (args)
+       (dolist (slot (mapcar #'car (al:dump-fields obj)))
+	 (setq args (list* (intern (string slot) 'keyword)
+			   `(quote ,(slot-value obj slot))
+			   args)))
+       `(al:make-structure ',(type-of obj) . ,args)))
+    (t
+     (error "not yet implemented!"))))
+
+
 (defun write-preserving-similarity (obj str gensyms)
   (typecase obj
     (cons
@@ -540,7 +555,8 @@
 (dolist (sym '(compiler-macro-function define-compiler-macro
 	       with-compilation-unit *compile-file-truename*
 	       *compile-file-pathname* *compile-print* *compile-verbose*
-	       compile-file-pathname compile-file compile))
+	       compile-file-pathname make-load-form make-load-form-saving-slots
+	       compile-file compile))
   (export sym)
   (if (fboundp sym)
       (compile sym)))
