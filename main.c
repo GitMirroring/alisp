@@ -2416,6 +2416,8 @@ int type_generic_function (const struct object *obj, const struct object *typesp
 			   struct environment *env, struct outcome *outcome);
 int type_class (const struct object *obj, const struct object *typespec,
 		struct environment *env, struct outcome *outcome);
+int type_structure_object (const struct object *obj, const struct object *typespec,
+			   struct environment *env, struct outcome *outcome);
 int type_structure_class (const struct object *obj, const struct object *typespec,
 			  struct environment *env, struct outcome *outcome);
 int type_standard_class (const struct object *obj, const struct object *typespec,
@@ -4416,6 +4418,8 @@ add_standard_definitions (struct environment *env)
 		    "STANDARD-OBJECT", (char *)NULL);
   add_builtin_type ("METHOD", env, type_method, 1, (char *)NULL);
   add_builtin_type ("CLASS", env, type_class, 1, "STANDARD-OBJECT", (char *)NULL);
+  add_builtin_type ("STRUCTURE-OBJECT", env, type_structure_object, 1,
+		    (char *)NULL);
   add_builtin_type ("STRUCTURE-CLASS", env, type_structure_class, 1,
 		    (char *)NULL);
   add_builtin_type ("STANDARD-CLASS", env, type_standard_class, 1, "CLASS",
@@ -19956,6 +19960,14 @@ type_class (const struct object *obj, const struct object *typespec,
 	    struct environment *env, struct outcome *outcome)
 {
   return obj->type == TYPE_STANDARD_CLASS || obj->type == TYPE_STRUCTURE_CLASS;
+}
+
+
+int
+type_structure_object (const struct object *obj, const struct object *typespec,
+		       struct environment *env, struct outcome *outcome)
+{
+  return obj->type == TYPE_STRUCTURE;
 }
 
 
