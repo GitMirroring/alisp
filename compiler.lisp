@@ -330,6 +330,8 @@
      (format str "#.(CL:FUNCTION ~s)" (nth-value 2 (function-lambda-expression obj))))
     (package
      (format str "#.(CL:FIND-PACKAGE ~s)" (package-name obj)))
+    (structure-object
+     (format str "#.~s" (make-load-form obj)))
     (al:backquote
      (write-string "`" str)
      (setq gensyms (write-preserving-similarity (al:next obj) str gensyms)))
