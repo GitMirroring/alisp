@@ -3098,6 +3098,8 @@ struct object *builtin_method_make_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_allocate_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_method_shared_initialize
+(struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_initialize_instance
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_reinitialize_instance
@@ -3862,7 +3864,7 @@ add_standard_definitions (struct environment *env)
 {
   struct object *rs, *stdobjsym, *stdobjcl, *bidir_str, *readtable;
   struct package_record *rec;
-  struct parameter *lambdal;
+  struct parameter *lambdal, *shinlambdal;
 
   env->keyword_package = create_package_from_c_strings ("KEYWORD", (char *)NULL);
   prepend_object_to_obj_list (env->keyword_package, &env->packages);
@@ -4709,6 +4711,18 @@ add_standard_definitions (struct environment *env)
   define_generic_function ("ALLOCATE-INSTANCE", env,
 			   copy_lambda_list (lambdal, 0),
 			   builtin_method_allocate_instance);
+
+  shinlambdal = create_lambda_list (env, "INSTANCE", "SLOT-NAMES", (char *)NULL);
+  shinlambdal->next->next = alloc_parameter (REST_PARAM, NULL);
+  shinlambdal->next->next->name =
+    intern_symbol_by_char_vector ("INITARGS", strlen ("INITARGS"), 1,
+				  INTERNAL_VISIBILITY, 0, env->cl_package, 0, 0);
+  shinlambdal->next->next->reference_strength_factor
+    = !STRENGTH_FACTOR_OF_OBJECT (shinlambdal->next->next->name);
+  INC_WEAK_REFCOUNT (shinlambdal->next->next->name);
+
+  define_generic_function ("SHARED-INITIALIZE", env, shinlambdal,
+			   builtin_method_shared_initialize);
 
   define_generic_function ("INITIALIZE-INSTANCE", env,
 			   copy_lambda_list (lambdal, 0),
@@ -35422,6 +35436,87 @@ builtin_method_allocate_instance (struct object *list, struct environment *env,
   allocate_object_fields (ret, CAR (list));
 
   return ret;
+}
+
+
+struct object *
+builtin_method_shared_initialize (struct object *list, struct environment *env,
+				  struct outcome *outcome)
+{
+  struct object *cons;
+  struct class_field *f;
+  int do_init;
+
+  if (list_length (list) < 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, -1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_STANDARD_OBJECT)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  fill_object_fields_by_initargs (CAR (list),
+				  CAR (list)->value_ptr.standard_object->
+				  class, CDR (CDR (list)), env, outcome);
+
+  f = CAR (list)->value_ptr.standard_object->fields;
+
+  while (f)
+    {
+      do_init = 0;
+      cons = CAR (CDR (list));
+
+      if (SYMBOL (cons) == &t_object)
+	do_init = 1;
+
+      while (cons->type == TYPE_CONS_PAIR)
+	{
+	  if (SYMBOL (CAR (cons)) == f->name)
+	    {
+	      do_init = 1;
+	      break;
+	    }
+
+	  cons = CDR (cons);
+	}
+
+      if (!do_init)
+	{
+	  f = f->next;
+	  continue;
+	}
+
+      if (f->alloc_type == CLASS_ALLOCATION)
+	{
+	  if (!f->decl->value && f->decl->initform)
+	    {
+	      f->decl->value = evaluate_object (f->decl->initform, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!f->decl->value)
+		return NULL;
+	    }
+	}
+      else
+	{
+	  if (!f->value && f->decl->initform)
+	    {
+	      f->value = evaluate_object (f->decl->initform, env, outcome);
+	      CLEAR_MULTIPLE_OR_NO_VALUES (*outcome);
+
+	      if (!f->value)
+		return NULL;
+	    }
+	}
+
+      f = f->next;
+    }
+
+  increment_refcount (CAR (list));
+  return CAR (list);
 }
 
 
