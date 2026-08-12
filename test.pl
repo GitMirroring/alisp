@@ -1688,6 +1688,7 @@ make_test ("(class-name (class-of s1))", "SHIP");
 make_test ("(type-of s1)", "SHIP");
 make_test ("(typep s1 'ship)", "T");
 make_test ("(typep 0 'ship)", "NIL");
+make_test ("(typep s1 'structure-object)", "T");
 make_test ("(ship-p s1)", "T");
 make_test ("(ship-p 0)", "NIL");
 make_test ("(ship-x s1)", "NIL");
