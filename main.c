@@ -31775,7 +31775,7 @@ builtin_use_package (struct object *list, struct environment *env,
 
       use = inspect_package_by_designator (des, env);
 
-      if (!des)
+      if (!use)
 	{
 	  return raise_package_error (des, env, outcome);
 	}
@@ -31865,7 +31865,7 @@ builtin_unuse_package (struct object *list, struct environment *env,
 
       use = inspect_package_by_designator (des, env);
 
-      if (!des)
+      if (!use)
 	{
 	  return raise_package_error (des, env, outcome);
 	}
