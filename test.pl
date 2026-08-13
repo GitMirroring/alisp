@@ -2142,6 +2142,7 @@ make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (a
 make_test ("(handler-bind ((undefined-function (lambda (e) (write 'undefined) (abort)))) (setf (whatever) 0))", "UNDEFINED");
 make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (car 0))", "WRONGTYPE");
 make_test ("(handler-bind ((type-error (lambda (e) (write 'wrongtype) (abort)))) (pathname 0))", "WRONGTYPE");
+make_test ("(handler-bind ((package-error (lambda (e) (write 'packagenotfound) (abort)))) (use-package :foo))", "PACKAGENOTFOUND");
 make_test ("(handler-bind ((al:unknown-keyword-argument (lambda (e) (write 'invalidkeyword) (abort)))) (count 0 nil :foo 0))", "INVALIDKEYWORD");
 make_test ("(handler-bind ((al:odd-number-of-arguments-in-keyword-part-of-form (lambda (e) (write 'oddargs) (abort)))) (write 0 :stream))", "ODDARGS");
 make_test ("(handler-bind ((program-error (lambda (e) (write 'wrongnumargs) (abort)))) (car))", "WRONGNUMARGS");
