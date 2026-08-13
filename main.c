@@ -2009,6 +2009,8 @@ struct object *raise_file_error (struct object *fn, const char *fs,
 struct object *raise_division_by_zero (struct object *n1, struct object *n2,
 				       struct environment *env,
 				       struct outcome *outcome);
+struct object *raise_package_error (struct object *pack, struct environment *env,
+				    struct outcome *outcome);
 struct object *raise_al_maximum_stack_depth_exceeded (int maxdepth,
 						      struct environment *env,
 						      struct outcome *outcome);
@@ -12568,6 +12570,30 @@ raise_division_by_zero (struct object *n1, struct object *n2,
 
   cond->value_ptr.standard_object->fields->next->value
     = create_list (BUILTIN_SYMBOL ("/"), (struct object *) NULL);
+
+  ret = handle_condition (cond, env, outcome);
+
+  if (!ret)
+    {
+      decrement_refcount (cond);
+      return NULL;
+    }
+
+  return enter_debugger (cond, env, outcome);
+}
+
+
+struct object *
+raise_package_error (struct object *pack, struct environment *env,
+		     struct outcome *outcome)
+{
+  struct object *cond = create_empty_condition_by_c_string ("PACKAGE-ERROR",
+							    env->cluser_package,
+							    env),
+    *ret;
+
+  cond->value_ptr.standard_object->fields->value = pack;
+  increment_refcount (pack);
 
   ret = handle_condition (cond, env, outcome);
 
@@ -29717,8 +29743,7 @@ builtin_intern (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -29785,8 +29810,7 @@ builtin_find_symbol (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -29847,8 +29871,7 @@ builtin_unintern (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -30978,8 +31001,7 @@ builtin_package_name (struct object *list, struct environment *env,
 
   if (!pack)
     {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
+      return raise_package_error (CAR (list), env, outcome);
     }
 
   return create_string_copying_char_vector (pack->value_ptr.package->name,
@@ -31009,8 +31031,7 @@ builtin_package_nicknames (struct object *list, struct environment *env,
 
   if (!pack)
     {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
+      return raise_package_error (CAR (list), env, outcome);
     }
 
   n = pack->value_ptr.package->nicks;
@@ -31088,8 +31109,7 @@ builtin_rename_package (struct object *list, struct environment *env,
 
   if (!pack)
     {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
+      return raise_package_error (CAR (list), env, outcome);
     }
 
   if (CAR (CDR (list))->type == TYPE_PACKAGE)
@@ -31204,8 +31224,7 @@ builtin_package_use_list (struct object *list, struct environment *env,
 
   if (!pack)
     {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
+      return raise_package_error (CAR (list), env, outcome);
     }
 
   n = pack->value_ptr.package->uses;
@@ -31251,8 +31270,7 @@ builtin_package_used_by_list (struct object *list, struct environment *env,
 
   if (!pack)
     {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
+      return raise_package_error (CAR (list), env, outcome);
     }
 
   n = pack->value_ptr.package->used_by;
@@ -31460,8 +31478,7 @@ builtin_import (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -31539,8 +31556,7 @@ builtin_export (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -31643,8 +31659,7 @@ builtin_unexport (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -31726,8 +31741,7 @@ builtin_use_package (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -31763,8 +31777,7 @@ builtin_use_package (struct object *list, struct environment *env,
 
       if (!des)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (des, env, outcome);
 	}
 
       if (use == env->keyword_package)
@@ -31818,8 +31831,7 @@ builtin_unuse_package (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -31855,8 +31867,7 @@ builtin_unuse_package (struct object *list, struct environment *env,
 
       if (!des)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (des, env, outcome);
 	}
 
       if (use == env->keyword_package)
@@ -31910,8 +31921,7 @@ builtin_shadow (struct object *list, struct environment *env,
 
       if (!pack)
 	{
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (CAR (CDR (list)), env, outcome);
 	}
     }
   else
@@ -32010,8 +32020,7 @@ builtin_package_shadowing_symbols (struct object *list, struct environment *env,
 
   if (!pack)
     {
-      outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-      return NULL;
+      return raise_package_error (CAR (list), env, outcome);
     }
 
   for (i = 0; i < SYMTABLE_SIZE; i++)
@@ -32077,8 +32086,7 @@ builtin_do_symbols (struct object *list, struct environment *env,
       if (!pack)
 	{
 	  env->blocks = unreference_block (env->blocks);
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (des, env, outcome);
 	}
 
       decrement_refcount (des);
@@ -32240,8 +32248,7 @@ builtin_do_external_symbols (struct object *list, struct environment *env,
       if (!pack)
 	{
 	  env->blocks = unreference_block (env->blocks);
-	  outcome->type = PACKAGE_NOT_FOUND_IN_EVAL;
-	  return NULL;
+	  return raise_package_error (des, env, outcome);
 	}
 
       decrement_refcount (des);
