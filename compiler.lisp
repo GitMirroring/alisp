@@ -327,7 +327,7 @@
 		   (setq gensyms (nconc gensyms (list obj)))
 		   (format str "#~s=~s" (1- (length gensyms)) obj)))))))
     (function
-     (format str "#.(CL:FUNCTION ~s)" (nth-value 2 (function-lambda-expression obj))))
+     (error "function objects can't be dumped in a compiled file"))
     (package
      (format str "#.(CL:FIND-PACKAGE ~s)" (package-name obj)))
     (structure-object
@@ -344,7 +344,10 @@
     (al:dot
      (write-string "." str)
      (setq gensyms (write-preserving-similarity (al:next obj) str gensyms)))
-    (otherwise (write obj :stream str)))
+    ((or vector number character pathname)
+     (write obj :stream str))
+    (otherwise
+     (error "don't know how to dump that type of object in a compiled file")))
   gensyms)
 
 
