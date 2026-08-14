@@ -2438,6 +2438,9 @@ make_test ("(copy-readtable nil)", "#<READTABLE ...>");
 make_test ("(copy-readtable (copy-readtable nil) (copy-readtable nil))", "#<READTABLE ...>");
 make_test ("(copy-readtable)", "#<READTABLE ...>");
 make_test ("(let ((readt (copy-readtable nil))) (setf (readtable-case readt) :invert) (readtable-case readt))", ":INVERT");
+make_test ("(setf (readtable-case *readtable*) :preserve)", ":PRESERVE");
+make_test ("'abCDef", "abCDef");
+make_test ("(SETF (READTABLE-CASE *READTABLE*) :UPCASE)", ":UPCASE");
 
 make_test ("(encode-universal-time 10 10 10 1 2 1900 0)", "2715010");
 make_test ("(encode-universal-time 10 11 12 19 8 2004 0)", "3301906270");
