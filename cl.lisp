@@ -436,6 +436,15 @@
 	    (setq num (/ num num2)))
 	(* #c(0 -1) (log (* (1+ (* num #c(0 1))) (sqrt (/ 1 (+ 1 (expt num 2))))))))))
 
+(defun asinh (num)
+  (log (+ num (sqrt (1+ (expt num 2))))))
+
+(defun acosh (num)
+  (* 2 (log (+ (sqrt (/ (1+ num) 2)) (sqrt (/ (1- num) 2))))))
+
+(defun atanh (num)
+  (/ (- (log (1+ num)) (log (- 1 num))) 2))
+
 
 (defun logand (&rest ints)
   (lognot (apply 'logior (mapcar #'lognot ints))))
@@ -4124,10 +4133,10 @@
            cdaddr cddaar cddadr cdddar cddddr cond identity constantly
            *read-default-float-format* pi 1+ 1- minusp plusp abs phase zerop
            signum mod rem evenp oddp rationalize gcd lcm isqrt conjugate cis
-           upgraded-complex-part-type log asin acos atan logand logandc1
-           logandc2 logeqv lognand lognor logorc1 logorc2 logxor logbitp
-           ldb-test boole-1 boole-2 boole-andc1 boole-andc2 boole-and boole-c1
-           boole-c2 boole-clr boole-eqv boole-ior boole-nand boole-nor
+           upgraded-complex-part-type log asin acos atan asinh acosh atanh
+           logand logandc1 logandc2 logeqv lognand lognor logorc1 logorc2 logxor
+           logbitp ldb-test boole-1 boole-2 boole-andc1 boole-andc2 boole-and
+           boole-c1 boole-c2 boole-clr boole-eqv boole-ior boole-nand boole-nor
            boole-orc1 boole-orc2 boole-set boole-xor boole integer-length ash
            *gensym-counter* gensym gentemp make-list copy-alist copy-tree
            tree-equal sublis nsublis endp butlast nbutlast acons pairlis shiftf
