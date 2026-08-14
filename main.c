@@ -1646,6 +1646,8 @@ int is_object_in_obj_list (const struct object *obj,
 void free_object_list (struct object_list *list);
 void free_object_list_structure (struct object_list *list);
 
+enum readtable_case query_read_case (struct environment *env);
+
 enum outcome_type read_object
 (struct object **obj, int backts_commas_balance, const char *input, size_t size,
  FILE *stream, int preserve_whitespace, int ends_with_eof,
@@ -5161,7 +5163,7 @@ read_object_continued (struct object **obj, int backts_commas_balance,
 
       out = read_symbol_name (&ob, input ? input : token, tokenlength,
 			      input == NULL, preserve_whitespace, obj_end,
-			      CASE_UPCASE, outcome);
+			      query_read_case (env), outcome);
 
       if (!input)
 	free (token);
@@ -5690,6 +5692,15 @@ free_object_list_structure (struct object_list *list)
 }
 
 
+enum readtable_case
+query_read_case (struct environment *env)
+{
+  struct object *readc = inspect_variable (env->readtable_sym, env);
+
+  return readc->value_ptr.readtable->readcase;
+}
+
+
 enum outcome_type
 read_object (struct object **obj, int backts_commas_balance, const char *input,
 	     size_t size, FILE *stream, int preserve_whitespace,
@@ -5918,8 +5929,8 @@ read_object (struct object **obj, int backts_commas_balance, const char *input,
 	    {
 	      out = read_symbol_name (&ob, input ? input : token, tokenlength,
 				      input == NULL || ends_with_eof,
-				      preserve_whitespace, obj_end, CASE_UPCASE,
-				      outcome);
+				      preserve_whitespace, obj_end,
+				      query_read_case (env), outcome);
 
 	      if (!input)
 		free (token);
@@ -6635,7 +6646,7 @@ read_sharp_macro_call (struct object **obj, const char *input, size_t size,
       outcome->single_escape = 1;
       out = read_symbol_name (&call->obj, input ? input : token, tokenlength,
 			      input == NULL, preserve_whitespace, macro_end,
-			      CASE_UPCASE, outcome);
+			      query_read_case (env), outcome);
 
       if (!input)
 	free (token);
