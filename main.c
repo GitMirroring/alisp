@@ -39613,6 +39613,8 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
   enum object_type t;
   const char *ne, *te;
   struct object *p_case = SYMBOL (inspect_variable (env->print_case_sym, env));
+  enum readtable_case rcase = query_read_case (env);
+
 
   sz = len;
 
@@ -39628,7 +39630,8 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 	  if ((strchr (need_multiple_escape, sym [i]) || !sym [i]
 	       || isspace ((unsigned char)sym [i])
 	       || islower ((unsigned char)sym [i]))
-	      && !do_need_multiple_escape)
+	      && !do_need_multiple_escape
+	      && rcase != CASE_PRESERVE && rcase != CASE_INVERT)
 	    {
 	      do_need_multiple_escape = 1;
 
@@ -39665,7 +39668,8 @@ print_as_symbol (const char *sym, size_t len, int print_escapes,
 	  && write_to_stream (str, "\\", 1) < 0)
 	return -1;
 
-      if (!do_need_multiple_escape && isupper ((unsigned char)sym [i]))
+      if (!do_need_multiple_escape && isupper ((unsigned char)sym [i])
+	  && rcase != CASE_PRESERVE)
 	{
 	  if (p_case == KEYWORD (":DOWNCASE"))
 	    {
