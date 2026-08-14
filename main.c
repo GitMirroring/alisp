@@ -2784,6 +2784,8 @@ struct object *builtin_cos (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_tan (struct object *list, struct environment *env,
 			    struct outcome *outcome);
+struct object *builtin_al_atan (struct object *list, struct environment *env,
+				struct outcome *outcome);
 struct object *builtin_sinh (struct object *list, struct environment *env,
 			     struct outcome *outcome);
 struct object *builtin_cosh (struct object *list, struct environment *env,
@@ -2794,8 +2796,8 @@ struct object *builtin_exp (struct object *list, struct environment *env,
 			    struct outcome *outcome);
 struct object *builtin_expt (struct object *list, struct environment *env,
 			     struct outcome *outcome);
-struct object *builtin_log (struct object *list, struct environment *env,
-			    struct outcome *outcome);
+struct object *builtin_al_log (struct object *list, struct environment *env,
+			       struct outcome *outcome);
 struct object *builtin_lognot (struct object *list, struct environment *env,
 			       struct outcome *outcome);
 struct object *builtin_logior (struct object *list, struct environment *env,
@@ -4122,7 +4124,6 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("TANH", env, builtin_tanh, 0, NULL, 0);
   add_builtin_form ("EXP", env, builtin_exp, 0, NULL, 0);
   add_builtin_form ("EXPT", env, builtin_expt, 0, NULL, 0);
-  add_builtin_form ("LOG", env, builtin_log, 0, NULL, 0);
   add_builtin_form ("LOGNOT", env, builtin_lognot, 0, NULL, 0);
   add_builtin_form ("LOGIOR", env, builtin_logior, 0, NULL, 0);
   add_builtin_form ("LOGCOUNT", env, builtin_logcount, 0, NULL, 0);
@@ -4782,6 +4783,9 @@ add_standard_definitions (struct environment *env)
 
   env->package_sym->value_ptr.symbol->value_cell = env->al_package;
 
+
+  add_builtin_form ("LOG", env, builtin_al_log, 0, NULL, 0);
+  add_builtin_form ("ATAN", env, builtin_al_atan, 0, NULL, 0);
 
   add_builtin_form ("WITH-MACRO-ARGUMENTS", env, evaluate_al_with_macro_arguments,
 		    1, NULL, 0);
@@ -28775,6 +28779,41 @@ builtin_tan (struct object *list, struct environment *env,
 
 
 struct object *
+builtin_al_atan (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  int l = list_length (list);
+
+  if (!l || l > 2)
+    {
+      return raise_al_wrong_number_of_arguments (1, 2, env, outcome);
+    }
+
+  if (!IS_REAL (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "CL:REAL", env, outcome);
+    }
+
+  if (l == 2 && !IS_REAL (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:REAL", env, outcome);
+    }
+
+  if (l == 1)
+    {
+      return create_floating_from_double
+	(atan (convert_number_to_double (CAR (list))));
+    }
+  else
+    {
+      return create_floating_from_double
+	(atan2 (convert_number_to_double (CAR (list)),
+		convert_number_to_double (CAR (CDR (list)))));
+    }
+}
+
+
+struct object *
 builtin_sinh (struct object *list, struct environment *env,
 	      struct outcome *outcome)
 {
@@ -28940,7 +28979,7 @@ builtin_expt (struct object *list, struct environment *env,
 
 
 struct object *
-builtin_log (struct object *list, struct environment *env,
+builtin_al_log (struct object *list, struct environment *env,
 	     struct outcome *outcome)
 {
   int l = list_length (list);
