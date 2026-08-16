@@ -2271,6 +2271,10 @@ struct object *find_method (struct object *func, enum method_qualifier qualifier
 			    struct parameter *l_specifiers,
 			    struct method_list **mlist, int *ind,
 			    struct environment *env, struct outcome *outcome);
+struct method_list *compute_applicable_methods (struct object *args,
+						struct method_list *ml,
+						struct environment *env,
+						struct outcome *outcome);
 struct object *dispatch_generic_function_call (struct object *func,
 					       struct object *arglist,
 					       int eval_args,
@@ -3115,6 +3119,10 @@ struct object *builtin_method_reinitialize_instance
 struct object *builtin_method_make_instances_obsolete
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_method_change_class
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_method_compute_applicable_methods
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_method_function_keywords
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_class_of
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -4776,6 +4784,14 @@ add_standard_definitions (struct environment *env)
 
   define_generic_function ("CHANGE-CLASS", env, lambdal,
 			   builtin_method_change_class);
+
+  define_generic_function ("COMPUTE-APPLICABLE-METHODS", env,
+			   create_lambda_list (env, "GENFUN", "ARGS", (char *)NULL),
+			   builtin_method_compute_applicable_methods);
+
+  define_generic_function ("FUNCTION-KEYWORDS", env,
+			   create_lambda_list (env, "METH", (char *)NULL),
+			   builtin_method_function_keywords);
 
 
   env->al_package = create_package_from_c_strings ("ALISP", "AL", (char *)NULL);
@@ -17902,43 +17918,13 @@ find_method (struct object *func, enum method_qualifier qualifier,
 }
 
 
-struct object *
-dispatch_generic_function_call (struct object *func, struct object *arglist,
-				int eval_args, struct environment *env,
-				struct outcome *outcome)
+struct method_list *
+compute_applicable_methods (struct object *args, struct method_list *ml,
+			    struct environment *env, struct outcome *outcome)
 {
-  struct object *args, *ret = NULL, *res, *tmp, *margs;
-  struct method_list *applm = NULL, *lapplm, *mlist,
-    *ml = func->value_ptr.function->methods;
-  int applnum = 0, i, found_primary = 0, isprof = 0, isappl,
-    continue_till_end_of_function = env->continue_till_end_of_function;
-  clock_t time;
-
-  if (eval_args)
-    {
-      args = evaluate_through_list (arglist, env, outcome);
-
-      if (!args)
-	return NULL;
-    }
-  else
-    {
-      increment_refcount (arglist);
-      args = arglist;
-    }
-
-  if (func->value_ptr.function->flags & TRACED_FUNCTION
-      || (env->stepping_flags &&
-	  !(env->stepping_flags & STEPPING_OVER_FORM)))
-    {
-      print_tracing_message (func, args, -1, NULL, env);
-    }
-
-  if (env->is_profiling)
-    {
-      isprof = 1;
-      time = clock ();
-    }
+  int isappl, found_primary = 0, applnum = 0, i;
+  struct method_list *applm = NULL, *lapplm;
+  struct object *tmp;
 
   while (ml)
     {
@@ -18009,6 +17995,49 @@ dispatch_generic_function_call (struct object *func, struct object *arglist,
       applnum--;
     }
 
+  return applm;
+}
+
+
+struct object *
+dispatch_generic_function_call (struct object *func, struct object *arglist,
+				int eval_args, struct environment *env,
+				struct outcome *outcome)
+{
+  struct object *args, *ret = NULL, *res, *margs;
+  struct method_list *applm = NULL, *lapplm, *mlist,
+    *ml = func->value_ptr.function->methods;
+  int isprof = 0,
+    continue_till_end_of_function = env->continue_till_end_of_function;
+  clock_t time;
+
+  if (eval_args)
+    {
+      args = evaluate_through_list (arglist, env, outcome);
+
+      if (!args)
+	return NULL;
+    }
+  else
+    {
+      increment_refcount (arglist);
+      args = arglist;
+    }
+
+  if (func->value_ptr.function->flags & TRACED_FUNCTION
+      || (env->stepping_flags &&
+	  !(env->stepping_flags & STEPPING_OVER_FORM)))
+    {
+      print_tracing_message (func, args, -1, NULL, env);
+    }
+
+  if (env->is_profiling)
+    {
+      isprof = 1;
+      time = clock ();
+    }
+
+  applm = compute_applicable_methods (args, ml, env, outcome);
 
   margs = env->method_args;
   mlist = env->method_list;
@@ -35797,6 +35826,113 @@ builtin_method_change_class (struct object *list, struct environment *env,
   increment_refcount (obj);
 
   return fill_object_fields (obj, newcl, CDR (CDR (list)), env, outcome);
+}
+
+
+struct object *
+builtin_method_compute_applicable_methods (struct object *list,
+					   struct environment *env,
+					   struct outcome *outcome)
+{
+  struct method_list *ml, *nml;
+  struct object *cons, *ret = &nil_object;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_FUNCTION
+      || !(CAR (list)->value_ptr.function->flags & GENERIC_FUNCTION))
+    {
+      return raise_type_error (CAR (list), "CL:GENERIC-FUNCTION", env, outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR ((list)))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:LIST", env, outcome);
+    }
+
+  ml = compute_applicable_methods (CAR (CDR (list)),
+				   CAR (list)->value_ptr.function->methods, env,
+				   outcome);
+
+  if (!ml)
+    return NULL;
+
+  while (ml)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car = ml->meth;
+      add_reference (cons, CAR (cons), 0);
+
+      nml = ml->next;
+      free (ml);
+      ml = nml;
+    }
+
+  cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  return ret;
+}
+
+
+struct object *
+builtin_method_function_keywords (struct object *list, struct environment *env,
+				  struct outcome *outcome)
+{
+  struct parameter *ll;
+  struct object *ret = &nil_object, *cons;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_METHOD)
+    {
+      return raise_type_error (CAR (list), "CL:METHOD", env, outcome);
+    }
+
+  ll = CAR (list)->value_ptr.method->lambda_list;
+
+  while (ll && ll->type != KEYWORD_PARAM)
+    ll = ll->next;
+
+  while (ll && ll->type == KEYWORD_PARAM)
+    {
+      if (ret == &nil_object)
+	ret = cons = alloc_empty_cons_pair ();
+      else
+	{
+	  cons->value_ptr.cons_pair->cdr = alloc_empty_cons_pair ();
+	  cons = CDR (cons);
+	}
+
+      cons->value_ptr.cons_pair->car =
+	intern_symbol_by_char_vector (ll->name->value_ptr.symbol->name,
+				      ll->name->value_ptr.symbol->name_len, 1,
+				      EXTERNAL_VISIBILITY, 1,
+				      env->keyword_package, 1, 0);
+      add_reference (cons, CAR (cons), 0);
+
+      ll = ll->next;
+    }
+
+  if (ret != &nil_object)
+    cons->value_ptr.cons_pair->cdr = &nil_object;
+
+  prepend_object_to_obj_list (CAR (list)->value_ptr.method->allow_other_keys
+			      ? &t_object : &nil_object, &outcome->other_values);
+
+  return ret;
 }
 
 
