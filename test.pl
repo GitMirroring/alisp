@@ -1941,6 +1941,7 @@ make_test ("(genfun3 \"\" 0 nil)", "SECOND\nSECOND");
 make_test ("(defmethod genfun3 ((x string) (y integer) (z symbol)) (write 'fourth))", "#<STANDARD-METHOD GENFUN3 (STRING INTEGER SYMBOL)>");
 make_test ("(genfun3 \"\" 0 nil)", "FOURTH\nFOURTH");
 make_test ("(al:dump-methods #'genfun3)", "(#<STANDARD-METHOD GENFUN3 (STRING NUMBER T)> #<STANDARD-METHOD GENFUN3 (STRING INTEGER T)> #<STANDARD-METHOD GENFUN3 (STRING REAL T)> #<STANDARD-METHOD GENFUN3 (STRING INTEGER SYMBOL)>)");
+make_test ("(compute-applicable-methods #'genfun3 '(\"\" 0 hi))", "(#<STANDARD-METHOD GENFUN3 (STRING INTEGER SYMBOL)> #<STANDARD-METHOD GENFUN3 (STRING INTEGER T)> #<STANDARD-METHOD GENFUN3 (STRING REAL T)> #<STANDARD-METHOD GENFUN3 (STRING NUMBER T)>)");
 make_test ("(defgeneric genfun4 (x y z))", "#<STANDARD-GENERIC-FUNCTION GENFUN4>");
 make_test ("(defmethod genfun4 ((x string) (y number) z) (if (next-method-p) (write 'okay)) (list x y z))", "#<STANDARD-METHOD GENFUN4 (STRING NUMBER T)>");
 make_test ("(defmethod genfun4 ((x string) (y real) z) (call-next-method \"hi\" 30 z))", "#<STANDARD-METHOD GENFUN4 (STRING REAL T)>");
@@ -1985,6 +1986,7 @@ make_test ("(add-method #'genfun8 meth)", "#<STANDARD-GENERIC-FUNCTION GENFUN8>"
 make_test ("(find-method #'genfun8 '(:before) '(integer))", "#<STANDARD-METHOD GENFUN8 :BEFORE (INTEGER)>");
 make_test ("(defgeneric genfun9 (x &key))", "#<STANDARD-GENERIC-FUNCTION GENFUN9>");
 make_test ("(defmethod genfun9 (x &key y))", "#<STANDARD-METHOD GENFUN9 (T)>");
+make_test ("(function-keywords (defmethod genfun9 ((x string) &key z w &allow-other-keys)))", "(:Z :W)\nT");
 make_test ("(defun genfun10 nil)", "GENFUN10");
 make_test ("(defgeneric (setf genfun10) (x y z))", "#<STANDARD-GENERIC-FUNCTION (SETF GENFUN10)>");
 make_test ("(defmethod (setf genfun10) (x y z) (list x y z))", "#<STANDARD-METHOD (SETF GENFUN10) (T T T)>");
