@@ -44,12 +44,12 @@ AC_FUNC_REALLOC
 AC_CHECK_FUNCS([memchr memmem strchr strerror])
 
 
+
 AC_ARG_WITH([readline],
             [AS_HELP_STRING([--with-readline],
-              [support command line editing @<:@default=check@:>@])],
+              [support command line editing through libreadline @<:@default=check@:>@])],
             [],
             [with_readline=check])
-
 
 LIBREADLINE=
 
@@ -64,6 +64,29 @@ AS_IF([test "x$with_readline" != xno],
                             [user gave --with-readline, but GNU readline wasn't found])
                           fi
 		          ], )])
+
+
+
+AC_ARG_WITH([ffi],
+            [AS_HELP_STRING([--with-ffi],
+              [support foreign function interface through libffi @<:@default=check@:>@])],
+            [],
+            [with_ffi=check])
+
+LIBFFI=
+
+AS_IF([test "x$with_ffi" != xno],
+      [AC_SEARCH_LIBS([ffi_call], [ffi],
+                        [AC_SUBST([LIBFFI], ["-lffi"])
+                         AC_DEFINE([HAVE_LIBFFI], [1],
+                                     [Define if you have libffi])
+                        ],
+                        [if test "x$with_ffi" != xcheck; then
+                          AC_MSG_FAILURE(
+                            [user gave --with-ffi, but libffi wasn't found])
+                          fi
+		          ], )])
+
 
 
 AC_SEARCH_LIBS([__gmpz_init], [gmp], , [AC_MSG_ERROR([GNU mp not found])])

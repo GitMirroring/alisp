@@ -39,9 +39,16 @@
 
 #include <gmp.h>
 
+
 #ifdef HAVE_LIBREADLINE
 #include <readline/readline.h>
 #include <readline/history.h>
+#endif
+
+
+#ifdef HAVE_LIBFFI
+#include <ffi.h>
+#include <dlfcn.h>
 #endif
 
 
@@ -1410,6 +1417,29 @@ bytespec
 };
 
 
+#ifdef HAVE_LIBFFI
+
+struct
+c_library
+{
+  void *data;
+};
+
+
+struct
+c_function
+{
+  void *func;
+
+  ffi_cif *cif;
+  ffi_type *ret_type;
+  int num_args;
+  ffi_type **arg_types;
+};
+
+#endif
+
+
 /* a slight abuse of terminology: commas, quotes, backquotes, ats and dots
  * are not Lisp objects.  But treating them as objects of type prefix,
  * we can implement them as a linked list before the proper object */
@@ -1446,7 +1476,12 @@ object_type
     TYPE_FUNCTION,
     TYPE_METHOD,
     TYPE_SHARP_MACRO_CALL,
-    TYPE_READTABLE
+    TYPE_READTABLE,
+
+#ifdef HAVE_LIBFFI
+    TYPE_C_LIBRARY,
+    TYPE_C_FUNCTION,
+#endif
   };
 
 
@@ -1484,6 +1519,11 @@ object_ptr_union
   struct method *method;
   struct sharp_macro_call *sharp_macro_call;
   struct readtable *readtable;
+
+#ifdef HAVE_LIBFFI
+  struct c_library *c_library;
+  struct c_function *c_function;
+#endif
 };
 
 
@@ -3258,6 +3298,18 @@ struct object *builtin_al_print_no_warranty
 struct object *builtin_al_print_terms_and_conditions
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+#ifdef HAVE_LIBFFI
+ffi_type *resolve_primitive_c_type (struct object *type, struct environment *env);
+size_t sizeof_primitive_c_type (ffi_type *type);
+
+struct object *builtin_al_load_c_library
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_make_c_function
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_c_funcall
+(struct object *list, struct environment *env, struct outcome *outcome);
+#endif
+
 struct object *builtin_al_list_directory
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_directoryp
@@ -4877,6 +4929,14 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("PRINT-TERMS-AND-CONDITIONS", env,
 		    builtin_al_print_terms_and_conditions, 0, NULL,
 		    0);
+
+#ifdef HAVE_LIBFFI
+  add_builtin_form ("LOAD-C-LIBRARY", env, builtin_al_load_c_library, 0, NULL,
+		    0);
+  add_builtin_form ("MAKE-C-FUNCTION", env, builtin_al_make_c_function, 0, NULL,
+		    0);
+  add_builtin_form ("C-FUNCALL", env, builtin_al_c_funcall, 0, NULL, 0);
+#endif
 
   add_builtin_form ("PATHNAME-DIRECTORY", env, builtin_al_pathname_directory,
 		    0, NULL, 0);
@@ -39042,6 +39102,268 @@ builtin_al_print_terms_and_conditions (struct object *list,
 
   return &t_object;
 }
+
+
+#ifdef HAVE_LIBFFI
+
+ffi_type *
+resolve_primitive_c_type (struct object *type, struct environment *env)
+{
+  if (type->type == TYPE_CONS_PAIR && symbol_equals (CAR (type), "*", env))
+    return &ffi_type_pointer;
+  else if (symbol_equals (type, "VOID", env))
+    return &ffi_type_void;
+  else if (symbol_equals (type, "FLOAT", env))
+    return &ffi_type_float;
+  else if (symbol_equals (type, "DOUBLE", env))
+    return &ffi_type_double;
+  else if (symbol_equals (type, "UINT8", env))
+    return &ffi_type_uint8;
+  else if (symbol_equals (type, "SINT8", env))
+    return &ffi_type_sint8;
+  else if (symbol_equals (type, "UINT16", env))
+    return &ffi_type_uint16;
+  else if (symbol_equals (type, "SINT16", env))
+    return &ffi_type_sint16;
+  else if (symbol_equals (type, "UINT32", env))
+    return &ffi_type_uint32;
+  else if (symbol_equals (type, "SINT32", env))
+    return &ffi_type_sint32;
+  else if (symbol_equals (type, "UINT64", env))
+    return &ffi_type_uint64;
+  else if (symbol_equals (type, "SINT64", env))
+    return &ffi_type_sint64;
+  else if (symbol_equals (type, "UCHAR", env))
+    return &ffi_type_uchar;
+  else if (symbol_equals (type, "SCHAR", env))
+    return &ffi_type_schar;
+  else if (symbol_equals (type, "USHORT", env))
+    return &ffi_type_ushort;
+  else if (symbol_equals (type, "SSHORT", env))
+    return &ffi_type_sshort;
+  else if (symbol_equals (type, "UINT", env))
+    return &ffi_type_uint;
+  else if (symbol_equals (type, "SINT", env))
+    return &ffi_type_sint;
+  else if (symbol_equals (type, "ULONG", env))
+    return &ffi_type_ulong;
+  else if (symbol_equals (type, "SLONG", env))
+    return &ffi_type_slong;
+
+  return NULL;
+}
+
+
+size_t
+sizeof_primitive_c_type (ffi_type *type)
+{
+  if (type == &ffi_type_pointer)
+    return sizeof (int *);
+  else if (type == &ffi_type_float)
+    return sizeof (float);
+  else if (type == &ffi_type_double)
+    return sizeof (double);
+  else
+    return 0;
+}
+
+
+struct object *
+builtin_al_load_c_library (struct object *list, struct environment *env,
+			   struct outcome *outcome)
+{
+  struct object *ret;
+  char *name;
+  void *data;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (!IS_STRING (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
+    }
+
+  name = copy_string_to_c_string (CAR (list)->value_ptr.byte_array);
+
+  if (!(data = dlopen (name, RTLD_LAZY | RTLD_GLOBAL)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  free (name);
+
+  ret = alloc_object ();
+  ret->type = TYPE_C_LIBRARY;
+  ret->value_ptr.c_library
+    = malloc_and_check (sizeof (*ret->value_ptr.c_library));
+  ret->value_ptr.c_library->data = data;
+
+  return ret;
+}
+
+
+struct object *
+builtin_al_make_c_function (struct object *list, struct environment *env,
+			    struct outcome *outcome)
+{
+  ffi_type *rtype, *argtype, **args = NULL;
+  ffi_cif *cif;
+  struct object *cons, *ret;
+  void *func;
+  char *name;
+  int numargs = 0, alloc_args = 8;
+
+  if (list_length (list) != 3)
+    {
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
+    }
+
+  if (!IS_STRING (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "CL:STRING", env, outcome);
+    }
+
+  if (!IS_SYMBOL (CAR (CDR (list))) && CAR (CDR (list))->type != TYPE_CONS_PAIR)
+    {
+      return raise_type_error (CAR (CDR (list)), "(CL:OR CL:SYMBOL CL:LIST)",
+			       env, outcome);
+    }
+
+  if (!IS_LIST (CAR (CDR (CDR (list)))))
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:LIST", env, outcome);
+    }
+
+
+  name = copy_string_to_c_string (CAR (list)->value_ptr.byte_array);
+
+  if (!(func = dlsym (RTLD_DEFAULT, name)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  free (name);
+
+  if (!(rtype = resolve_primitive_c_type (CAR (CDR (list)), env)))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  args = calloc_and_check (alloc_args, sizeof (*args));
+  cons = CAR (CDR (CDR (list)));
+
+  while (cons->type == TYPE_CONS_PAIR)
+    {
+      if (numargs == alloc_args)
+	{
+	  alloc_args *= 2;
+	  args = realloc_and_check (args, alloc_args * sizeof (*args));
+	}
+
+      if (!(argtype = resolve_primitive_c_type (SYMBOL (CAR (cons)), env)))
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
+	}
+
+      args [numargs] = argtype;
+
+      numargs++;
+      cons = CDR (cons);
+    }
+
+  cif = malloc_and_check (sizeof (*cif));
+  ffi_prep_cif (cif, FFI_DEFAULT_ABI, numargs, rtype, args);
+
+  ret = alloc_object ();
+  ret->type = TYPE_C_FUNCTION;
+  ret->value_ptr.c_function
+    = malloc_and_check (sizeof (*ret->value_ptr.c_function));
+
+  ret->value_ptr.c_function->func = func;
+  ret->value_ptr.c_function->cif = cif;
+  ret->value_ptr.c_function->ret_type = rtype;
+  ret->value_ptr.c_function->num_args = numargs;
+  ret->value_ptr.c_function->arg_types = args;
+
+  return ret;
+}
+
+
+struct object *
+builtin_al_c_funcall (struct object *list, struct environment *env,
+		      struct outcome *outcome)
+{
+  ffi_cif *cif;
+  void *ret, **args;
+  int i = 0;
+  struct object *func, *retobj;
+
+  if (!list_length (list))
+    {
+      return raise_al_wrong_number_of_arguments (1, -1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_C_FUNCTION)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  func = CAR (list);
+  cif = CAR (list)->value_ptr.c_function->cif;
+
+  ret = malloc_and_check
+    (sizeof_primitive_c_type (CAR (list)->value_ptr.c_function->ret_type));
+
+  args = calloc_and_check (CAR (list)->value_ptr.c_function->num_args,
+			   sizeof (void *));
+
+  list = CDR (list);
+
+  while (list->type == TYPE_CONS_PAIR)
+    {
+      if (i >= func->value_ptr.c_function->num_args)
+	{
+	  outcome->type = TOO_MANY_ARGUMENTS;
+	  return NULL;
+	}
+
+      if (CAR (list)->type != TYPE_FLOAT)
+	{
+	  return raise_type_error (CAR (list), "CL:DOUBLE-FLOAT", env, outcome);
+	}
+
+      args [i] = CAR (list)->value_ptr.floating;
+
+      i++;
+      list = CDR (list);
+    }
+
+  if (i != func->value_ptr.c_function->num_args)
+    {
+      outcome->type = TOO_FEW_ARGUMENTS;
+      return NULL;
+    }
+
+  ffi_call (cif, func->value_ptr.c_function->func, ret, args);
+
+  free (args);
+
+  retobj = create_floating_from_double (*(double *)ret);
+
+  free (ret);
+
+  return retobj;
+}
+
+#endif
 
 
 struct object *
