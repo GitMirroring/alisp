@@ -2436,6 +2436,10 @@ make_test ("`(#+foo ,@'(\"\"))", "NIL");
 make_test ("(list `(#+foo ,@'(\"\")))", "(NIL)");
 make_test ("`(+ #-foo ,0)", "(+ 0)");
 
+make_test ("(defparameter mathlib (al:load-c-library \"libm.so.6\"))", "MATHLIB");
+make_test ("(defparameter csin (al:make-c-function \"sin\" :double '(:double)))", "CSIN");
+make_test ("(al:c-funcall csin 1.0)", "0.841470984807896504876");
+
 make_test ("(copy-readtable nil)", "#<READTABLE ...>");
 make_test ("(copy-readtable (copy-readtable nil) (copy-readtable nil))", "#<READTABLE ...>");
 make_test ("(copy-readtable)", "#<READTABLE ...>");
