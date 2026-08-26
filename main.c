@@ -3300,7 +3300,7 @@ struct object *builtin_al_print_terms_and_conditions
 
 #ifdef HAVE_LIBFFI
 ffi_type *resolve_primitive_c_type (struct object *type, struct environment *env);
-size_t sizeof_primitive_c_type (ffi_type *type);
+size_t sizeof_primitive_c_type (ffi_type *type, int at_least_register_size);
 
 struct object *builtin_al_load_c_library
 (struct object *list, struct environment *env, struct outcome *outcome);
@@ -39119,19 +39119,23 @@ resolve_primitive_c_type (struct object *type, struct environment *env)
     return &ffi_type_double;
   else if (symbol_equals (type, "UINT8", env))
     return &ffi_type_uint8;
-  else if (symbol_equals (type, "SINT8", env))
+  else if (symbol_equals (type, "SINT8", env)
+	   || symbol_equals (type, "INT8", env))
     return &ffi_type_sint8;
   else if (symbol_equals (type, "UINT16", env))
     return &ffi_type_uint16;
-  else if (symbol_equals (type, "SINT16", env))
+  else if (symbol_equals (type, "SINT16", env)
+	   || symbol_equals (type, "INT16", env))
     return &ffi_type_sint16;
   else if (symbol_equals (type, "UINT32", env))
     return &ffi_type_uint32;
-  else if (symbol_equals (type, "SINT32", env))
+  else if (symbol_equals (type, "SINT32", env)
+	   || symbol_equals (type, "INT32", env))
     return &ffi_type_sint32;
   else if (symbol_equals (type, "UINT64", env))
     return &ffi_type_uint64;
-  else if (symbol_equals (type, "SINT64", env))
+  else if (symbol_equals (type, "SINT64", env)
+	   || symbol_equals (type, "INT64", env))
     return &ffi_type_sint64;
   else if (symbol_equals (type, "UCHAR", env))
     return &ffi_type_uchar;
@@ -39139,15 +39143,18 @@ resolve_primitive_c_type (struct object *type, struct environment *env)
     return &ffi_type_schar;
   else if (symbol_equals (type, "USHORT", env))
     return &ffi_type_ushort;
-  else if (symbol_equals (type, "SSHORT", env))
+  else if (symbol_equals (type, "SSHORT", env)
+	   || symbol_equals (type, "SHORT", env))
     return &ffi_type_sshort;
   else if (symbol_equals (type, "UINT", env))
     return &ffi_type_uint;
-  else if (symbol_equals (type, "SINT", env))
+  else if (symbol_equals (type, "SINT", env)
+	   || symbol_equals (type, "INT", env))
     return &ffi_type_sint;
   else if (symbol_equals (type, "ULONG", env))
     return &ffi_type_ulong;
-  else if (symbol_equals (type, "SLONG", env))
+  else if (symbol_equals (type, "SLONG", env)
+	   || symbol_equals (type, "LONG", env))
     return &ffi_type_slong;
 
   return NULL;
@@ -39155,16 +39162,25 @@ resolve_primitive_c_type (struct object *type, struct environment *env)
 
 
 size_t
-sizeof_primitive_c_type (ffi_type *type)
+sizeof_primitive_c_type (ffi_type *type, int at_least_register_size)
 {
+  int ret;
+
   if (type == &ffi_type_pointer)
-    return sizeof (int *);
+    ret = sizeof (int *);
   else if (type == &ffi_type_float)
-    return sizeof (float);
+    ret = sizeof (float);
   else if (type == &ffi_type_double)
-    return sizeof (double);
+    ret = sizeof (double);
+  else if (type == &ffi_type_sint || type == &ffi_type_uint)
+    ret = sizeof (int);
   else
     return 0;
+
+  if (at_least_register_size && ret < sizeof (ffi_arg))
+    return sizeof (ffi_arg);
+
+  return ret;
 }
 
 
@@ -39301,9 +39317,10 @@ builtin_al_c_funcall (struct object *list, struct environment *env,
 		      struct outcome *outcome)
 {
   ffi_cif *cif;
+  ffi_type *ret_type;
   void *ret, **args;
   int i = 0;
-  struct object *func, *retobj;
+  struct object *func, *retobj, *cons;
 
   if (!list_length (list))
     {
@@ -39320,14 +39337,14 @@ builtin_al_c_funcall (struct object *list, struct environment *env,
   cif = CAR (list)->value_ptr.c_function->cif;
 
   ret = malloc_and_check
-    (sizeof_primitive_c_type (CAR (list)->value_ptr.c_function->ret_type));
+    (sizeof_primitive_c_type (CAR (list)->value_ptr.c_function->ret_type, 1));
 
   args = calloc_and_check (CAR (list)->value_ptr.c_function->num_args,
 			   sizeof (void *));
 
-  list = CDR (list);
+  cons = CDR (list);
 
-  while (list->type == TYPE_CONS_PAIR)
+  while (cons->type == TYPE_CONS_PAIR)
     {
       if (i >= func->value_ptr.c_function->num_args)
 	{
@@ -39335,15 +39352,23 @@ builtin_al_c_funcall (struct object *list, struct environment *env,
 	  return NULL;
 	}
 
-      if (CAR (list)->type != TYPE_FLOAT)
+      if (CAR (cons)->type == TYPE_FLOAT)
 	{
-	  return raise_type_error (CAR (list), "CL:DOUBLE-FLOAT", env, outcome);
+	  args [i] = CAR (cons)->value_ptr.floating;
+	}
+      else if (CAR (cons)->type == TYPE_INTEGER)
+	{
+	  args [i] = malloc_and_check (sizeof (int));
+	  *(int *) args [i] = mpz_get_si (CAR (cons)->value_ptr.integer);
+	}
+      else
+	{
+	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
+	  return NULL;
 	}
 
-      args [i] = CAR (list)->value_ptr.floating;
-
       i++;
-      list = CDR (list);
+      cons = CDR (cons);
     }
 
   if (i != func->value_ptr.c_function->num_args)
@@ -39352,11 +39377,35 @@ builtin_al_c_funcall (struct object *list, struct environment *env,
       return NULL;
     }
 
+
   ffi_call (cif, func->value_ptr.c_function->func, ret, args);
+
+
+  cons = CDR (list);
+  i = 0;
+
+  while (cons->type == TYPE_CONS_PAIR)
+    {
+      if (CAR (cons)->type == TYPE_INTEGER)
+	free (args [i]);
+
+      i++;
+      cons = CDR (cons);
+    }
 
   free (args);
 
-  retobj = create_floating_from_double (*(double *)ret);
+  ret_type = func->value_ptr.c_function->ret_type;
+
+  if (ret_type == &ffi_type_float || ret_type == &ffi_type_double)
+    retobj = create_floating_from_double (*(double *) ret);
+  else if (ret_type == &ffi_type_sint)
+    retobj = create_integer_from_long (*(int *) ret);
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
 
   free (ret);
 
