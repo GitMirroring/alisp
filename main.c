@@ -39111,6 +39111,8 @@ resolve_primitive_c_type (struct object *type, struct environment *env)
 {
   if (type->type == TYPE_CONS_PAIR && symbol_equals (CAR (type), "*", env))
     return &ffi_type_pointer;
+  else if (symbol_equals (type, "STRING", env))
+    return &ffi_type_pointer;
   else if (symbol_equals (type, "VOID", env))
     return &ffi_type_void;
   else if (symbol_equals (type, "FLOAT", env))
@@ -39361,6 +39363,12 @@ builtin_al_c_funcall (struct object *list, struct environment *env,
 	  args [i] = malloc_and_check (sizeof (int));
 	  *(int *) args [i] = mpz_get_si (CAR (cons)->value_ptr.integer);
 	}
+      else if (IS_STRING (CAR (cons)))
+	{
+	  args [i] = malloc_and_check (sizeof (char *));
+	  *(char **) args [i] =
+	    copy_string_to_c_string (CAR (cons)->value_ptr.byte_array);
+	}
       else
 	{
 	  outcome->type = WRONG_TYPE_OF_ARGUMENT;
@@ -39388,6 +39396,11 @@ builtin_al_c_funcall (struct object *list, struct environment *env,
     {
       if (CAR (cons)->type == TYPE_INTEGER)
 	free (args [i]);
+      else if (IS_STRING (CAR (cons)))
+	{
+	  free (*(char **) args [i]);
+	  free (args [i]);
+	}
 
       i++;
       cons = CDR (cons);
