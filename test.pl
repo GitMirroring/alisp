@@ -2441,6 +2441,8 @@ make_test ("(defparameter csin (al:make-c-function \"sin\" :double '(:double)))"
 make_test ("(al:c-funcall csin 1.0)", "0.841470984807896504876");
 make_test ("(defparameter cabs (al:make-c-function \"abs\" :int '(:int)))", "CABS");
 make_test ("(al:c-funcall cabs -2)", "2");
+make_test ("(defparameter cstrlen (al:make-c-function \"strlen\" :int '(:string)))", "CSTRLEN");
+make_test ("(al:c-funcall cstrlen \"hello\")", "5");
 
 make_test ("(copy-readtable nil)", "#<READTABLE ...>");
 make_test ("(copy-readtable (copy-readtable nil) (copy-readtable nil))", "#<READTABLE ...>");
