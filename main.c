@@ -58,6 +58,11 @@
 #include <unistd.h>
 
 
+#include <sys/socket.h>
+#include <sys/types.h>
+#include <netinet/in.h>
+#include <netdb.h>
+
 
 #ifndef HAVE_MEMMEM
 #define memmem al_memmem
@@ -1228,6 +1233,13 @@ stream
 
 
 struct
+socket
+{
+  int fd;
+};
+
+
+struct
 structure_field_decl
 {
   struct object *name;
@@ -1469,6 +1481,7 @@ object_type
     TYPE_PACKAGE,
     TYPE_FILENAME,
     TYPE_STREAM,
+    TYPE_SOCKET,
     TYPE_STRUCTURE_CLASS,
     TYPE_STRUCTURE,
     TYPE_STANDARD_CLASS,
@@ -1511,6 +1524,7 @@ object_ptr_union
   struct package *package;
   struct filename *filename;
   struct stream *stream;
+  struct socket *socket;
   struct structure_class *structure_class;
   struct structure *structure;
   struct standard_class *standard_class;
@@ -3317,6 +3331,15 @@ struct object *builtin_al_directoryp
 struct object *builtin_al_getcwd
 (struct object *list, struct environment *env, struct outcome *outcome);
 
+struct object *builtin_al_socket
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_bind
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_connect
+(struct object *list, struct environment *env, struct outcome *outcome);
+struct object *builtin_al_listen
+(struct object *list, struct environment *env, struct outcome *outcome);
+
 struct object *builtin_al_getenv
 (struct object *list, struct environment *env, struct outcome *outcome);
 struct object *builtin_al_system
@@ -4945,6 +4968,11 @@ add_standard_definitions (struct environment *env)
   add_builtin_form ("DIRECTORYP", env, builtin_al_directoryp, 0,
 		    NULL, 0);
   add_builtin_form ("GETCWD", env, builtin_al_getcwd, 0, NULL, 0);
+
+  add_builtin_form ("SOCKET", env, builtin_al_socket, 0, NULL, 0);
+  add_builtin_form ("BIND", env, builtin_al_bind, 0, NULL, 0);
+  add_builtin_form ("CONNECT", env, builtin_al_connect, 0, NULL, 0);
+  add_builtin_form ("LISTEN", env, builtin_al_listen, 0, NULL, 0);
 
   add_builtin_form ("GETENV", env, builtin_al_getenv, 0, NULL, 0);
   add_builtin_form ("SYSTEM", env, builtin_al_system, 0, NULL, 0);
@@ -39571,6 +39599,168 @@ builtin_al_getcwd (struct object *list, struct environment *env,
   ret->value_ptr.byte_array->fill_pointer = -1;
 
   return ret;
+}
+
+
+struct object *
+builtin_al_socket (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  struct object *ret;
+  int sockfd;
+
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (!IS_SYMBOL (CAR (list)))
+    {
+      return raise_type_error (CAR (list), "CL:SYMBOL", env, outcome);
+    }
+
+  if (symbol_equals (CAR (list), ":STREAM", env))
+    {
+      sockfd = socket (AF_INET, SOCK_STREAM, 0);
+    }
+  else if (symbol_equals (CAR (list), ":DGRAM", env))
+    {
+      sockfd = socket (AF_INET, SOCK_DGRAM, 0);
+    }
+  else
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (sockfd == -1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  ret = alloc_object ();
+
+  ret->type = TYPE_SOCKET;
+  ret->value_ptr.socket = malloc_and_check (sizeof (*ret->value_ptr.socket));
+
+  ret->value_ptr.socket->fd = sockfd;
+
+  return ret;
+}
+
+
+struct object *
+builtin_al_bind (struct object *list, struct environment *env,
+		 struct outcome *outcome)
+{
+  int port;
+  struct sockaddr_in addr;
+
+  if (list_length (list) != 2)
+    {
+      return raise_al_wrong_number_of_arguments (2, 2, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_SOCKET)
+    {
+      return raise_type_error (CAR (list), "AL:SOCKET", env, outcome);
+    }
+
+  if (CAR (CDR (list))->type != TYPE_INTEGER)
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:INTEGER", env, outcome);
+    }
+
+  port = mpz_get_si (CAR (CDR (list))->value_ptr.integer);
+
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons (port);
+  addr.sin_addr.s_addr = htonl (INADDR_ANY);
+
+  if (bind (CAR (list)->value_ptr.socket->fd, (struct sockaddr *) &addr,
+	    sizeof (addr)) == -1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_connect (struct object *list, struct environment *env,
+		    struct outcome *outcome)
+{
+  struct addrinfo *addr;
+  char *node, *serv;
+
+  if (list_length (list) != 3)
+    {
+      return raise_al_wrong_number_of_arguments (3, 3, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_SOCKET)
+    {
+      return raise_type_error (CAR (list), "AL:SOCKET", env, outcome);
+    }
+
+  if (!IS_STRING (CAR (CDR (list))))
+    {
+      return raise_type_error (CAR (CDR (list)), "CL:STRING", env, outcome);
+    }
+
+  if (!IS_STRING (CAR (CDR (CDR (list)))))
+    {
+      return raise_type_error (CAR (CDR (CDR (list))), "CL:STRING", env, outcome);
+    }
+
+  node = copy_string_to_c_string (CAR (CDR (list))->value_ptr.byte_array);
+
+  serv = copy_string_to_c_string (CAR (CDR (CDR (list)))->value_ptr.byte_array);
+
+  if (getaddrinfo (node, serv, NULL, &addr))
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  if (connect (CAR (list)->value_ptr.socket->fd, addr->ai_addr,
+	       sizeof (addr->ai_addr)) == -1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  free (node);
+  free (serv);
+
+  return &t_object;
+}
+
+
+struct object *
+builtin_al_listen (struct object *list, struct environment *env,
+		   struct outcome *outcome)
+{
+  if (list_length (list) != 1)
+    {
+      return raise_al_wrong_number_of_arguments (1, 1, env, outcome);
+    }
+
+  if (CAR (list)->type != TYPE_SOCKET)
+    {
+      return raise_type_error (CAR (list), "AL:SOCKET", env, outcome);
+    }
+
+  if (listen (CAR (list)->value_ptr.socket->fd, 128) == -1)
+    {
+      outcome->type = WRONG_TYPE_OF_ARGUMENT;
+      return NULL;
+    }
+
+  return &t_object;
 }
 
 
