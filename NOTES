@@ -225,6 +225,10 @@ There are also some non-standard extensions of standard functions.
   slot of an object is represented as a symbol with its name, if it is unbound,
   or as a name-value pair, if it is bound; for classes, only the name is present
 
+- the function MAKE-STRUCTURE takes a name of structure class as first argument;
+  it creates a structure object of that type and fills its slots according to
+  the keyword arguments
+
 - the function CLASS-PRECEDENCE-LIST takes a standard class object (not for a
   structure class) and returns the class precedence list of that class, as a
   list of class objects
