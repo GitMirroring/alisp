@@ -1,3 +1,66 @@
+v1.9 (12-Sep-2026):
+
+- Various bugs and leaks about integer arrays have been fixed
+
+- ADJUST-ARRAY has been made to work with all kind of vectors
+
+- (SETF ROW-MAJOR-AREF) has been added
+
+- Compiler macros have been made to work in all cases, including SETF and
+  FUNCALL forms
+
+- SETF and SETQ weren't deep-macroexpanded correctly, this has been fixed
+
+- When doing deep macroexpansion, local macros defined with MACROLET are also
+  recognised and expanded
+
+- The fields 'bytecode' and 'objvector' have been added to function objects to
+  start supporting bytecode
+
+- The implementation of BLOCKs has been rewritten to make it cleaner (and
+  possibly more correct).  Also the block surrounding the body of functions
+  defined with DEFUN is put in lisp code, not C
+
+- Now DEFMACRO and DEFMETHOD also surround their body with a block
+
+- Support for boa constructors in DEFSTRUCT has been improved
+
+- When calling a function, captured lexical functions are restored earlier
+
+- Minimal support for readtables has been added, including COPY-READTABLE and
+  READTABLE-CASE
+
+- The lisp type BROADCAST-STREAM has been added
+
+- FTYPE declarations now accept (and still ignore) setf function names
+
+- SHARED-INITIALIZE, COMPUTE-APPLICABLE-METHODS and FUNCTION-KEYWORDS have been
+  added
+
+- Type STRUCTURE-OBJECT has been added
+
+- DESCRIBE-OBJECT has been converted to a generic (still no-op) function
+
+- MAKE-LOAD-FORM and MAKE-LOAD-FORM-SAVING-SLOTS have been partially added
+
+- Some support for dumping structure objects in compiled files has been added
+
+- PACKAGE-ERROR now is raised in more places where it's appropriate
+
+- Various math functions have been added, including ASINH, ACOSH and ATANH
+
+- Some basic support for foreign function calls has been added (still not
+  documented)
+
+- Some basic machinery for BSD sockets has been added
+
+- Other minor bugfixes
+
+Now I'll work a bit on the reader and on streams to support custom reader macros
+and sockets!
+
+
+
 v1.8 (25-Jul-2026):
 
 - Byte arrays of integers are now actually supported: you can create them, read
